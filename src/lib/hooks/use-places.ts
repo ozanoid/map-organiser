@@ -11,6 +11,7 @@ async function fetchPlaces(filters: PlaceFilters): Promise<Place[]> {
   if (filters.tag_ids?.length) params.set("tags", filters.tag_ids.join(","));
   if (filters.list_id) params.set("list", filters.list_id);
   if (filters.rating_min) params.set("rating", String(filters.rating_min));
+  if (filters.google_rating_min) params.set("google_rating", String(filters.google_rating_min));
   if (filters.visit_status) params.set("status", filters.visit_status);
   if (filters.search) params.set("q", filters.search);
 

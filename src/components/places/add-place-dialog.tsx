@@ -275,11 +275,21 @@ export function AddPlaceDialog({ open, onOpenChange }: AddPlaceDialogProps) {
               </label>
               <div className="flex items-center gap-2">
                 <Select
-                  value={categoryId}
+                  value={categoryId || undefined}
                   onValueChange={(v) => setCategoryId(v ?? "")}
                 >
                   <SelectTrigger className="cursor-pointer flex-1">
-                    <SelectValue placeholder="Select a category..." />
+                    <SelectValue placeholder="Select a category...">
+                      {categoryId && categories.find(c => c.id === categoryId) && (
+                        <>
+                          <span
+                            className="inline-block w-2.5 h-2.5 rounded-full mr-1"
+                            style={{ backgroundColor: categories.find(c => c.id === categoryId)!.color }}
+                          />
+                          {categories.find(c => c.id === categoryId)!.name}
+                        </>
+                      )}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {categories.map((cat) => (

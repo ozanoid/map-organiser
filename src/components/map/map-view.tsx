@@ -202,15 +202,16 @@ export function MapView({ places, onPlaceClick, className }: MapViewProps) {
         };
         const statusInfo = props.visitStatus ? visitStatusLabels[props.visitStatus] : null;
 
-        new mapboxgl.Popup({ offset: 12, closeButton: false, maxWidth: "240px" })
+        const popup = new mapboxgl.Popup({ offset: 12, closeButton: false, maxWidth: "260px" })
           .setLngLat(coordinates)
           .setHTML(
-            `<div style="font-family:Inter,sans-serif">
+            `<a href="/places/${props.id}" style="font-family:Inter,sans-serif;text-decoration:none;color:inherit;display:block;cursor:pointer">
               <p style="font-weight:600;font-size:14px;margin:0 0 4px">${props.name}</p>
               ${props.address ? `<p style="font-size:12px;color:#666;margin:0 0 4px">${props.address}</p>` : ""}
               ${ratingStars ? `<p style="font-size:12px;color:#F97316;margin:0 0 4px">${ratingStars}</p>` : ""}
-              ${statusInfo ? `<p style="font-size:11px;color:${statusInfo.color};font-weight:500;margin:0">${statusInfo.label}</p>` : ""}
-            </div>`
+              ${statusInfo ? `<p style="font-size:11px;color:${statusInfo.color};font-weight:500;margin:0 0 4px">${statusInfo.label}</p>` : ""}
+              <p style="font-size:11px;color:#059669;margin:0;font-weight:500">View details →</p>
+            </a>`
           )
           .addTo(map.current!);
 

@@ -96,6 +96,7 @@ export interface PlaceFilters {
   tag_ids?: string[];
   list_id?: string;
   rating_min?: number;
+  google_rating_min?: number;
   visit_status?: VisitStatus;
   search?: string;
 }

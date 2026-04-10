@@ -19,8 +19,9 @@ export async function GET(request: NextRequest) {
   const categoryId = searchParams.get("category");
   const tagIds = searchParams.get("tags")?.split(",").filter(Boolean);
   const listId = searchParams.get("list");
-  const visitStatus = searchParams.get("visit_status");
+  const visitStatus = searchParams.get("status");
   const ratingMin = searchParams.get("rating");
+  const googleRatingMin = searchParams.get("google_rating");
   const search = searchParams.get("q");
 
   let query = supabase
@@ -42,8 +43,18 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  // If filtering by tags, do a secondary filter
   let filteredPlaces = places || [];
+
+  // Filter by Google rating (stored in JSONB, can't filter at query level)
+  if (googleRatingMin) {
+    const min = parseFloat(googleRatingMin);
+    filteredPlaces = filteredPlaces.filter((p: any) => {
+      const gr = p.google_data?.rating;
+      return gr && gr >= min;
+    });
+  }
+
+  // If filtering by tags, do a secondary filter
 
   if (tagIds && tagIds.length > 0) {
     const { data: taggedPlaceIds } = await supabase

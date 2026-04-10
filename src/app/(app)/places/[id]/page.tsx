@@ -7,9 +7,16 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+} from "@/components/ui/popover";
+import {
   VisitStatusToggle,
   VisitStatusBadge,
 } from "@/components/places/visit-status-toggle";
+import { InlineTagInput } from "@/components/places/inline-tag-input";
+import { useLists } from "@/lib/hooks/use-lists";
 import {
   ArrowLeft,
   Star,
@@ -21,6 +28,7 @@ import {
   ExternalLink,
   RefreshCw,
   Plus,
+  Check,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { Place, VisitStatus } from "@/lib/types";
@@ -35,6 +43,9 @@ export default function PlaceDetailPage() {
   const [editingNotes, setEditingNotes] = useState(false);
   const [notesValue, setNotesValue] = useState("");
   const [savingNotes, setSavingNotes] = useState(false);
+  const [listPopoverOpen, setListPopoverOpen] = useState(false);
+  const [tagPopoverOpen, setTagPopoverOpen] = useState(false);
+  const { data: allLists = [] } = useLists();
 
   const fetchPlace = useCallback(() => {
     fetch(`/api/places/${params.id}`)
@@ -119,6 +130,77 @@ export default function PlaceDetailPage() {
       toast.error("Failed to save notes");
     } finally {
       setSavingNotes(false);
+    }
+  }
+
+  async function handleRatingClick(star: number) {
+    const newRating = place?.rating === star ? null : star;
+    // Optimistic update
+    setPlace((prev) => (prev ? { ...prev, rating: newRating } : prev));
+    try {
+      const res = await fetch(`/api/places/${params.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rating: newRating }),
+      });
+      if (res.ok) {
+        queryClient.invalidateQueries({ queryKey: ["places"] });
+        toast.success(newRating ? `Rated ${newRating} star${newRating > 1 ? "s" : ""}` : "Rating cleared");
+      } else {
+        // Revert on failure
+        setPlace((prev) => (prev ? { ...prev, rating: place?.rating ?? null } : prev));
+        toast.error("Failed to update rating");
+      }
+    } catch {
+      setPlace((prev) => (prev ? { ...prev, rating: place?.rating ?? null } : prev));
+      toast.error("Failed to update rating");
+    }
+  }
+
+  async function handleToggleList(listId: string) {
+    if (!place) return;
+    const currentListIds = (place.lists || []).map((l) => l.id);
+    const isInList = currentListIds.includes(listId);
+    const newListIds = isInList
+      ? currentListIds.filter((id) => id !== listId)
+      : [...currentListIds, listId];
+
+    try {
+      const res = await fetch(`/api/places/${params.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ list_ids: newListIds }),
+      });
+      if (res.ok) {
+        queryClient.invalidateQueries({ queryKey: ["places"] });
+        queryClient.invalidateQueries({ queryKey: ["lists"] });
+        fetchPlace();
+        toast.success(isInList ? "Removed from list" : "Added to list");
+      } else {
+        toast.error("Failed to update lists");
+      }
+    } catch {
+      toast.error("Failed to update lists");
+    }
+  }
+
+  async function handleTagsChange(tagIds: string[]) {
+    try {
+      const res = await fetch(`/api/places/${params.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tag_ids: tagIds }),
+      });
+      if (res.ok) {
+        queryClient.invalidateQueries({ queryKey: ["places"] });
+        queryClient.invalidateQueries({ queryKey: ["tags"] });
+        fetchPlace();
+        toast.success("Tags updated");
+      } else {
+        toast.error("Failed to update tags");
+      }
+    } catch {
+      toast.error("Failed to update tags");
     }
   }
 
@@ -232,21 +314,27 @@ export default function PlaceDetailPage() {
               )}
             </div>
           )}
-          {place.rating && (
-            <div className="flex items-center gap-1 text-sm">
-              <span className="text-xs text-muted-foreground mr-0.5">Your rating:</span>
-              {Array.from({ length: 5 }).map((_, i) => (
+          <div className="flex items-center gap-1 text-sm">
+            <span className="text-xs text-muted-foreground mr-0.5">
+              {place.rating ? "Your rating:" : "Add rating:"}
+            </span>
+            {Array.from({ length: 5 }).map((_, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => handleRatingClick(i + 1)}
+                className="cursor-pointer p-0 bg-transparent border-none hover:scale-110 transition-transform"
+              >
                 <Star
-                  key={i}
                   className={`h-3.5 w-3.5 ${
-                    i < place.rating!
+                    place.rating && i < place.rating
                       ? "fill-emerald-500 text-emerald-500"
-                      : "text-gray-300"
+                      : "text-gray-300 hover:text-emerald-300"
                   }`}
                 />
-              ))}
-            </div>
-          )}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Opening hours */}
@@ -391,15 +479,46 @@ export default function PlaceDetailPage() {
       <section className="space-y-2">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold">Lists</h2>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="cursor-pointer gap-1 text-xs text-muted-foreground"
-            onClick={() => toast.info("Add to list coming soon")}
-          >
-            <Plus className="h-3.5 w-3.5" />
-            Add to list
-          </Button>
+          <Popover open={listPopoverOpen} onOpenChange={setListPopoverOpen}>
+            <PopoverTrigger
+              className="inline-flex items-center justify-center gap-1 text-xs text-muted-foreground cursor-pointer rounded-md px-2.5 py-1.5 hover:bg-accent hover:text-accent-foreground transition-colors"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Add to list
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-56 p-2">
+              {allLists.length === 0 ? (
+                <p className="text-xs text-muted-foreground p-2 text-center">
+                  No lists yet. Create one first.
+                </p>
+              ) : (
+                <div className="max-h-48 overflow-y-auto space-y-0.5">
+                  {allLists.map((list) => {
+                    const isInList = (place.lists || []).some((l) => l.id === list.id);
+                    return (
+                      <button
+                        key={list.id}
+                        type="button"
+                        onClick={() => handleToggleList(list.id)}
+                        className="w-full flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent cursor-pointer transition-colors"
+                      >
+                        <div
+                          className="h-4 w-4 rounded border flex items-center justify-center shrink-0"
+                          style={{
+                            backgroundColor: isInList ? list.color : "transparent",
+                            borderColor: list.color,
+                          }}
+                        >
+                          {isInList && <Check className="h-3 w-3 text-white" />}
+                        </div>
+                        <span className="truncate">{list.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </PopoverContent>
+          </Popover>
         </div>
         {place.lists && place.lists.length > 0 ? (
           <div className="flex flex-wrap gap-1.5">
@@ -427,15 +546,20 @@ export default function PlaceDetailPage() {
       <section className="space-y-2">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold">Tags</h2>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="cursor-pointer gap-1 text-xs text-muted-foreground"
-            onClick={() => toast.info("Add tag coming soon")}
-          >
-            <Plus className="h-3.5 w-3.5" />
-            Add tag
-          </Button>
+          <Popover open={tagPopoverOpen} onOpenChange={setTagPopoverOpen}>
+            <PopoverTrigger
+              className="inline-flex items-center justify-center gap-1 text-xs text-muted-foreground cursor-pointer rounded-md px-2.5 py-1.5 hover:bg-accent hover:text-accent-foreground transition-colors"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Add tag
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-64 p-3">
+              <InlineTagInput
+                selectedTagIds={(place.tags || []).map((t) => t.id)}
+                onChange={handleTagsChange}
+              />
+            </PopoverContent>
+          </Popover>
         </div>
         {place.tags && place.tags.length > 0 ? (
           <div className="flex flex-wrap gap-1.5">

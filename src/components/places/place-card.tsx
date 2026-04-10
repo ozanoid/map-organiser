@@ -4,7 +4,7 @@ import type { Place } from "@/lib/types";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { VisitStatusBadge } from "@/components/places/visit-status-toggle";
-import { Star } from "lucide-react";
+import { Star, ExternalLink } from "lucide-react";
 import Link from "next/link";
 
 export function PlaceCard({ place }: { place: Place }) {
@@ -111,6 +111,19 @@ export function PlaceCard({ place }: { place: Place }) {
               <span className="text-[10px] text-muted-foreground">
                 {place.city ? `${place.city}, ${place.country}` : place.country}
               </span>
+            )}
+
+            {place.google_data?.url && (
+              <a
+                href={place.google_data.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="inline-flex items-center gap-0.5 text-[10px] text-emerald-600 hover:underline ml-auto"
+              >
+                <ExternalLink className="h-2.5 w-2.5" />
+                Maps
+              </a>
             )}
           </div>
         </div>

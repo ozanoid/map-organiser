@@ -4,21 +4,35 @@ import { Suspense, useState } from "react";
 import { MapView } from "@/components/map/map-view";
 import { AddPlaceDialog } from "@/components/places/add-place-dialog";
 import { FilterSheet } from "@/components/filters/filter-sheet";
+import { FilterPanel } from "@/components/filters/filter-panel";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { usePlaces } from "@/lib/hooks/use-places";
 import { useFilters } from "@/lib/hooks/use-filters";
+import { useRouter } from "next/navigation";
 import { SlidersHorizontal, Plus } from "lucide-react";
+import type { Place } from "@/lib/types";
 
 function MapContent() {
   const { filters, hasActiveFilters } = useFilters();
   const { data: places = [], isLoading } = usePlaces(filters);
   const [addOpen, setAddOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
+  const router = useRouter();
+
+  function handlePlaceClick(place: Place) {
+    router.push(`/places/${place.id}`);
+  }
 
   return (
-    <div className="relative h-full">
-      <MapView places={places} className="w-full h-full" />
+    <div className="flex h-full">
+      {/* Desktop filter sidebar */}
+      <aside className="hidden lg:block w-64 shrink-0 border-r p-4 overflow-y-auto">
+        <FilterPanel />
+      </aside>
+
+      <div className="relative flex-1">
+      <MapView places={places} onPlaceClick={handlePlaceClick} className="w-full h-full" />
 
       {/* Floating action buttons */}
       <div className="absolute top-4 left-4 z-10 flex gap-2">
@@ -57,6 +71,7 @@ function MapContent() {
 
       <AddPlaceDialog open={addOpen} onOpenChange={setAddOpen} />
       <FilterSheet open={filterOpen} onOpenChange={setFilterOpen} />
+      </div>
     </div>
   );
 }

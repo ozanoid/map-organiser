@@ -21,6 +21,9 @@ export function useFilters() {
       rating_min: searchParams.get("rating")
         ? Number(searchParams.get("rating"))
         : undefined,
+      google_rating_min: searchParams.get("google_rating")
+        ? Number(searchParams.get("google_rating"))
+        : undefined,
       visit_status: (status as PlaceFilters["visit_status"]) || undefined,
       search: searchParams.get("q") || undefined,
     };
@@ -38,11 +41,13 @@ export function useFilters() {
               ? "tags"
               : key === "rating_min"
                 ? "rating"
-                : key === "visit_status"
-                  ? "status"
-                  : key === "search"
-                    ? "q"
-                    : key;
+                : key === "google_rating_min"
+                  ? "google_rating"
+                  : key === "visit_status"
+                    ? "status"
+                    : key === "search"
+                      ? "q"
+                      : key;
 
         if (value === undefined || value === null || value === "") {
           params.delete(paramKey);
