@@ -75,6 +75,7 @@ export function MapView({ places, onPlaceClick, className }: MapViewProps) {
           categoryColor: place.category?.color || CATEGORY_COLORS.default,
           categoryIcon: place.category?.icon || "map-pin",
           visitStatus: place.visit_status || "",
+          googleUrl: place.google_data?.url || "",
         },
       })),
     };
@@ -202,23 +203,32 @@ export function MapView({ places, onPlaceClick, className }: MapViewProps) {
         };
         const statusInfo = props.visitStatus ? visitStatusLabels[props.visitStatus] : null;
 
-        const popup = new mapboxgl.Popup({ offset: 12, closeButton: false, maxWidth: "260px" })
-          .setLngLat(coordinates)
-          .setHTML(
-            `<a href="/places/${props.id}" style="font-family:Inter,sans-serif;text-decoration:none;color:inherit;display:block;cursor:pointer">
-              <p style="font-weight:600;font-size:14px;margin:0 0 4px">${props.name}</p>
-              ${props.address ? `<p style="font-size:12px;color:#666;margin:0 0 4px">${props.address}</p>` : ""}
-              ${ratingStars ? `<p style="font-size:12px;color:#F97316;margin:0 0 4px">${ratingStars}</p>` : ""}
-              ${statusInfo ? `<p style="font-size:11px;color:${statusInfo.color};font-weight:500;margin:0 0 4px">${statusInfo.label}</p>` : ""}
-              <p style="font-size:11px;color:#059669;margin:0;font-weight:500">View details →</p>
-            </a>`
-          )
-          .addTo(map.current!);
+        const popupEl = document.createElement("div");
+        popupEl.style.fontFamily = "Inter, sans-serif";
+        popupEl.innerHTML = `
+          <p style="font-weight:600;font-size:14px;margin:0 0 4px">${props.name}</p>
+          ${props.address ? `<p style="font-size:12px;color:#666;margin:0 0 4px">${props.address}</p>` : ""}
+          ${ratingStars ? `<p style="font-size:12px;color:#F97316;margin:0 0 4px">${ratingStars}</p>` : ""}
+          ${statusInfo ? `<p style="font-size:11px;color:${statusInfo.color};font-weight:500;margin:0 0 4px">${statusInfo.label}</p>` : ""}
+          <div style="display:flex;gap:12px;margin-top:6px;align-items:center">
+            <span class="popup-details" style="font-size:11px;color:#059669;font-weight:500;cursor:pointer">View details →</span>
+            ${props.googleUrl ? `<a href="${props.googleUrl}" target="_blank" rel="noopener noreferrer" style="font-size:11px;color:#3B82F6;text-decoration:none;font-weight:500" onclick="event.stopPropagation()">Maps ↗</a>` : ""}
+          </div>
+        `;
 
-        if (onPlaceClick) {
-          const place = places.find((p) => p.id === props.id);
-          if (place) onPlaceClick(place);
+        // "View details" click → trigger onPlaceClick (no navigation)
+        const detailsLink = popupEl.querySelector(".popup-details");
+        if (detailsLink && onPlaceClick) {
+          detailsLink.addEventListener("click", () => {
+            const place = places.find((p) => p.id === props.id);
+            if (place) onPlaceClick(place);
+          });
         }
+
+        new mapboxgl.Popup({ offset: 12, closeButton: false, maxWidth: "260px" })
+          .setLngLat(coordinates)
+          .setDOMContent(popupEl)
+          .addTo(map.current!);
       });
 
       // Cursor pointer on hover

@@ -299,6 +299,22 @@ export default function PlaceDetailPage() {
         )}
       </div>
 
+      {/* Address + Google Maps */}
+      {place.address && (
+        <p className="text-sm text-muted-foreground">{place.address}</p>
+      )}
+      {googleData.url && (
+        <a
+          href={googleData.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 text-sm text-emerald-600 hover:underline cursor-pointer"
+        >
+          <ExternalLink className="h-3.5 w-3.5" />
+          View on Google Maps
+        </a>
+      )}
+
       {/* Details Section */}
       <section className="space-y-3">
         {/* Google rating + personal rating */}

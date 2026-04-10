@@ -49,19 +49,21 @@ export function CountryCityFilter({
   return (
     <div className="space-y-2">
       <Select
-        value={country || "all"}
+        value={country || "__all__"}
         onValueChange={(v) => {
-          onCountryChange(!v || v === "all" ? undefined : v);
+          onCountryChange(!v || v === "__all__" ? undefined : v);
           onCityChange(undefined);
         }}
       >
         <SelectTrigger className="cursor-pointer">
-          <SelectValue placeholder="All countries" />
+          <SelectValue placeholder="All countries">
+            {country || "All countries"}
+          </SelectValue>
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="all" className="cursor-pointer">All countries</SelectItem>
+          <SelectItem value="__all__" className="cursor-pointer">All countries</SelectItem>
           {countries.map((c) => (
-            <SelectItem key={c} value={c!} className="cursor-pointer">
+            <SelectItem key={c} value={c} className="cursor-pointer">
               {c}
             </SelectItem>
           ))}
@@ -70,16 +72,18 @@ export function CountryCityFilter({
 
       {country && cities.length > 0 && (
         <Select
-          value={city || "all"}
-          onValueChange={(v) => onCityChange(!v || v === "all" ? undefined : v)}
+          value={city || "__all__"}
+          onValueChange={(v) => onCityChange(!v || v === "__all__" ? undefined : v)}
         >
           <SelectTrigger className="cursor-pointer">
-            <SelectValue placeholder="All cities" />
+            <SelectValue placeholder="All cities">
+              {city || "All cities"}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all" className="cursor-pointer">All cities</SelectItem>
+            <SelectItem value="__all__" className="cursor-pointer">All cities</SelectItem>
             {cities.map((c) => (
-              <SelectItem key={c} value={c!} className="cursor-pointer">
+              <SelectItem key={c} value={c} className="cursor-pointer">
                 {c}
               </SelectItem>
             ))}
