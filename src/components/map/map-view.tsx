@@ -74,6 +74,7 @@ export function MapView({ places, onPlaceClick, className }: MapViewProps) {
           rating: place.rating,
           categoryColor: place.category?.color || CATEGORY_COLORS.default,
           categoryIcon: place.category?.icon || "map-pin",
+          visitStatus: place.visit_status || "",
         },
       })),
     };
@@ -130,7 +131,7 @@ export function MapView({ places, onPlaceClick, className }: MapViewProps) {
         },
       });
 
-      // Individual markers
+      // Individual markers with visit status differentiation
       map.current.addLayer({
         id: "unclustered-point",
         type: "circle",
@@ -139,8 +140,24 @@ export function MapView({ places, onPlaceClick, className }: MapViewProps) {
         paint: {
           "circle-color": ["get", "categoryColor"],
           "circle-radius": 8,
-          "circle-stroke-width": 2,
-          "circle-stroke-color": "#ffffff",
+          "circle-stroke-width": [
+            "match",
+            ["get", "visitStatus"],
+            "visited", 3,
+            "favorite", 3,
+            "booked", 3,
+            "want_to_go", 2.5,
+            2,
+          ],
+          "circle-stroke-color": [
+            "match",
+            ["get", "visitStatus"],
+            "visited", "#22C55E",
+            "favorite", "#EF4444",
+            "booked", "#3B82F6",
+            "want_to_go", "#F59E0B",
+            "#ffffff",
+          ],
         },
       });
 
@@ -177,13 +194,22 @@ export function MapView({ places, onPlaceClick, className }: MapViewProps) {
           ? "★".repeat(props.rating) + "☆".repeat(5 - props.rating)
           : "";
 
+        const visitStatusLabels: Record<string, { label: string; color: string }> = {
+          want_to_go: { label: "Want to Go", color: "#F59E0B" },
+          booked: { label: "Booked", color: "#3B82F6" },
+          visited: { label: "Visited", color: "#22C55E" },
+          favorite: { label: "Favorite", color: "#EF4444" },
+        };
+        const statusInfo = props.visitStatus ? visitStatusLabels[props.visitStatus] : null;
+
         new mapboxgl.Popup({ offset: 12, closeButton: false, maxWidth: "240px" })
           .setLngLat(coordinates)
           .setHTML(
             `<div style="font-family:Inter,sans-serif">
               <p style="font-weight:600;font-size:14px;margin:0 0 4px">${props.name}</p>
               ${props.address ? `<p style="font-size:12px;color:#666;margin:0 0 4px">${props.address}</p>` : ""}
-              ${ratingStars ? `<p style="font-size:12px;color:#F97316;margin:0">${ratingStars}</p>` : ""}
+              ${ratingStars ? `<p style="font-size:12px;color:#F97316;margin:0 0 4px">${ratingStars}</p>` : ""}
+              ${statusInfo ? `<p style="font-size:11px;color:${statusInfo.color};font-weight:500;margin:0">${statusInfo.label}</p>` : ""}
             </div>`
           )
           .addTo(map.current!);

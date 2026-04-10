@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { resolveCategoryId } from "@/lib/google/category-mapping";
 
 // GET /api/places - List all places for current user with filters
 export async function GET(request: NextRequest) {
@@ -18,6 +19,7 @@ export async function GET(request: NextRequest) {
   const categoryId = searchParams.get("category");
   const tagIds = searchParams.get("tags")?.split(",").filter(Boolean);
   const listId = searchParams.get("list");
+  const visitStatus = searchParams.get("visit_status");
   const ratingMin = searchParams.get("rating");
   const search = searchParams.get("q");
 
@@ -30,6 +32,7 @@ export async function GET(request: NextRequest) {
   if (country) query = query.eq("country", country);
   if (city) query = query.eq("city", city);
   if (categoryId) query = query.eq("category_id", categoryId);
+  if (visitStatus) query = query.eq("visit_status", visitStatus);
   if (ratingMin) query = query.gte("rating", parseInt(ratingMin));
   if (search) query = query.or(`name.ilike.%${search}%,address.ilike.%${search}%`);
 
@@ -90,7 +93,7 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  const { name, address, country, city, lat, lng, category_id, rating, notes, google_place_id, google_data, source, tag_ids, list_ids } = body;
+  const { name, address, country, city, lat, lng, category_id, rating, notes, google_place_id, google_data, source, tag_ids, list_ids, visit_status } = body;
 
   if (!name || lat === undefined || lng === undefined) {
     return NextResponse.json(
@@ -116,6 +119,30 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  // Auto-categorize from Google types if no category provided
+  let resolvedCategoryId = category_id || null;
+  const googleTypes: string[] = google_data?.types || [];
+  if (!resolvedCategoryId && googleTypes.length > 0) {
+    const { data: userCategories } = await supabase
+      .from("categories")
+      .select("*")
+      .eq("user_id", user.id);
+
+    if (userCategories && userCategories.length > 0) {
+      resolvedCategoryId = resolveCategoryId(googleTypes, userCategories, name);
+    }
+  }
+
+  // Set date fields based on visit status
+  const visited_at = visit_status === "visited" ? new Date().toISOString() : null;
+  const booked_at = visit_status === "booked" ? new Date().toISOString() : null;
+
+  // Build google_data with extended fields
+  const savedGoogleData: Record<string, unknown> = { ...(google_data || {}) };
+  if (google_data?.reviews) savedGoogleData.reviews = google_data.reviews;
+  if (google_data?.editorialSummary) savedGoogleData.editorial_summary = google_data.editorialSummary;
+  if (google_data?.priceLevel !== undefined && google_data?.priceLevel !== null) savedGoogleData.price_level = google_data.priceLevel;
+
   const { data: place, error } = await supabase
     .from("places")
     .insert({
@@ -125,12 +152,15 @@ export async function POST(request: NextRequest) {
       country,
       city,
       location: `POINT(${lng} ${lat})`,
-      category_id: category_id || null,
+      category_id: resolvedCategoryId,
       rating: rating || null,
       notes: notes || null,
       google_place_id: google_place_id || null,
-      google_data: google_data || {},
+      google_data: savedGoogleData,
       source: source || "manual",
+      visit_status: visit_status || null,
+      visited_at,
+      booked_at,
     })
     .select("*, category:categories(*)")
     .single();

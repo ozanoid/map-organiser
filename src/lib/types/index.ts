@@ -1,3 +1,5 @@
+export type VisitStatus = "want_to_go" | "booked" | "visited" | "favorite";
+
 export interface Place {
   id: string;
   user_id: string;
@@ -10,6 +12,9 @@ export interface Place {
   category_id: string | null;
   rating: number | null;
   notes: string | null;
+  visit_status: VisitStatus | null;
+  visited_at: string | null;
+  booked_at: string | null;
   google_data: GooglePlaceData;
   source: "manual" | "import" | "link";
   created_at: string;
@@ -17,6 +22,7 @@ export interface Place {
   // Joined
   category?: Category;
   tags?: Tag[];
+  lists?: PlaceList[];
 }
 
 export interface Category {
@@ -26,6 +32,7 @@ export interface Category {
   color: string;
   icon: string;
   sort_order: number;
+  is_default: boolean;
   created_at: string;
 }
 
@@ -33,6 +40,7 @@ export interface Tag {
   id: string;
   user_id: string;
   name: string;
+  color: string | null;
   created_at: string;
 }
 
@@ -55,6 +63,15 @@ export interface PlacePhoto {
   created_at: string;
 }
 
+export interface GoogleReview {
+  rating: number;
+  text: string;
+  author_name: string;
+  author_photo?: string;
+  relative_time: string;
+  publish_time?: string;
+}
+
 export interface GooglePlaceData {
   types?: string[];
   photos?: string[];
@@ -68,6 +85,8 @@ export interface GooglePlaceData {
   phone?: string;
   price_level?: number;
   url?: string;
+  reviews?: GoogleReview[];
+  editorial_summary?: string;
 }
 
 export interface PlaceFilters {
@@ -77,6 +96,7 @@ export interface PlaceFilters {
   tag_ids?: string[];
   list_id?: string;
   rating_min?: number;
+  visit_status?: VisitStatus;
   search?: string;
 }
 
@@ -94,4 +114,7 @@ export interface ParsedPlaceData {
   openingHours: { weekday_text?: string[]; open_now?: boolean } | null;
   website: string | null;
   phone: string | null;
+  reviews?: GoogleReview[];
+  editorialSummary?: string | null;
+  priceLevel?: number | null;
 }

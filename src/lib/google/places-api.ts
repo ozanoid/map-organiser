@@ -3,7 +3,7 @@
  * Server-side only — never expose the API key to the client.
  */
 
-import type { ParsedPlaceData } from "@/lib/types";
+import type { ParsedPlaceData, GoogleReview } from "@/lib/types";
 
 const API_KEY = process.env.GOOGLE_PLACES_API_KEY!;
 const BASE_URL = "https://places.googleapis.com/v1";
@@ -24,12 +24,26 @@ const FIELD_MASK = [
   "photos",
   "priceLevel",
   "googleMapsUri",
+  "reviews",
+  "editorialSummary",
 ].join(",");
 
 interface AddressComponent {
   longText: string;
   shortText: string;
   types: string[];
+}
+
+function extractReviews(reviews: any[] | undefined): GoogleReview[] {
+  if (!reviews) return [];
+  return reviews.slice(0, 5).map((r: any) => ({
+    rating: r.rating || 0,
+    text: r.text?.text || r.originalText?.text || "",
+    author_name: r.authorAttribution?.displayName || "Anonymous",
+    author_photo: r.authorAttribution?.photoUri || undefined,
+    relative_time: r.relativePublishTimeDescription || "",
+    publish_time: r.publishTime || "",
+  }));
 }
 
 function extractCountryAndCity(components: AddressComponent[]): {
@@ -104,7 +118,22 @@ export async function getPlaceDetails(
       : null,
     website: data.websiteUri || null,
     phone: data.nationalPhoneNumber || null,
+    reviews: extractReviews(data.reviews),
+    editorialSummary: data.editorialSummary?.text || null,
+    priceLevel: data.priceLevel ? parsePriceLevel(data.priceLevel) : null,
   };
+}
+
+function parsePriceLevel(level: string | number): number | null {
+  if (typeof level === "number") return level;
+  const map: Record<string, number> = {
+    PRICE_LEVEL_FREE: 0,
+    PRICE_LEVEL_INEXPENSIVE: 1,
+    PRICE_LEVEL_MODERATE: 2,
+    PRICE_LEVEL_EXPENSIVE: 3,
+    PRICE_LEVEL_VERY_EXPENSIVE: 4,
+  };
+  return map[level] ?? null;
 }
 
 /**
@@ -176,5 +205,8 @@ export async function searchPlace(
       : null,
     website: place.websiteUri || null,
     phone: place.nationalPhoneNumber || null,
+    reviews: extractReviews(place.reviews),
+    editorialSummary: place.editorialSummary?.text || null,
+    priceLevel: place.priceLevel ? parsePriceLevel(place.priceLevel) : null,
   };
 }

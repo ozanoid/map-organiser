@@ -1,8 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParseLink, useCreatePlace } from "@/lib/hooks/use-places";
-import { useCategories, useCreateCategory } from "@/lib/hooks/use-categories";
+import { useCategories } from "@/lib/hooks/use-categories";
+import { useLists } from "@/lib/hooks/use-lists";
+import { resolveCategoryId } from "@/lib/google/category-mapping";
 import {
   Dialog,
   DialogContent,
@@ -21,6 +23,10 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { InlineCategoryCreator } from "@/components/places/inline-category-creator";
+import { InlineListCreator } from "@/components/places/inline-list-creator";
+import { InlineTagInput } from "@/components/places/inline-tag-input";
+import { VisitStatusToggle } from "@/components/places/visit-status-toggle";
 import {
   Link2,
   MapPin,
@@ -33,7 +39,7 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
-import type { ParsedPlaceData } from "@/lib/types";
+import type { ParsedPlaceData, VisitStatus } from "@/lib/types";
 
 interface AddPlaceDialogProps {
   open: boolean;
@@ -46,10 +52,30 @@ export function AddPlaceDialog({ open, onOpenChange }: AddPlaceDialogProps) {
   const [categoryId, setCategoryId] = useState<string>("");
   const [notes, setNotes] = useState("");
   const [rating, setRating] = useState<number>(0);
+  const [selectedListIds, setSelectedListIds] = useState<string[]>([]);
+  const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
+  const [visitStatus, setVisitStatus] = useState<VisitStatus | null>(
+    "want_to_go"
+  );
 
   const parseLink = useParseLink();
   const createPlace = useCreatePlace();
-  const { data: categories } = useCategories();
+  const { data: categories = [] } = useCategories();
+  const { data: lists = [] } = useLists();
+
+  // Auto-resolve category when placeData arrives
+  useEffect(() => {
+    if (placeData?.types && placeData.types.length > 0 && categories.length > 0) {
+      const resolved = resolveCategoryId(
+        placeData.types,
+        categories,
+        placeData.name
+      );
+      if (resolved) {
+        setCategoryId(resolved);
+      }
+    }
+  }, [placeData, categories]);
 
   function reset() {
     setUrl("");
@@ -57,6 +83,9 @@ export function AddPlaceDialog({ open, onOpenChange }: AddPlaceDialogProps) {
     setCategoryId("");
     setNotes("");
     setRating(0);
+    setSelectedListIds([]);
+    setSelectedTagIds([]);
+    setVisitStatus("want_to_go");
     parseLink.reset();
     createPlace.reset();
   }
@@ -92,8 +121,13 @@ export function AddPlaceDialog({ open, onOpenChange }: AddPlaceDialogProps) {
           opening_hours: placeData.openingHours,
           website: placeData.website,
           phone: placeData.phone,
+          reviews: placeData.reviews,
+          editorialSummary: placeData.editorialSummary,
         },
         source: "link",
+        visit_status: visitStatus || undefined,
+        tag_ids: selectedTagIds.length > 0 ? selectedTagIds : undefined,
+        list_ids: selectedListIds.length > 0 ? selectedListIds : undefined,
       },
       {
         onSuccess: () => {
@@ -103,6 +137,14 @@ export function AddPlaceDialog({ open, onOpenChange }: AddPlaceDialogProps) {
         },
         onError: (err) => toast.error(err.message),
       }
+    );
+  }
+
+  function toggleList(listId: string) {
+    setSelectedListIds((prev) =>
+      prev.includes(listId)
+        ? prev.filter((id) => id !== listId)
+        : [...prev, listId]
     );
   }
 
@@ -216,31 +258,96 @@ export function AddPlaceDialog({ open, onOpenChange }: AddPlaceDialogProps) {
               </div>
             </div>
 
+            {/* Visit Status */}
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Status</label>
+              <VisitStatusToggle
+                value={visitStatus}
+                onChange={setVisitStatus}
+                size="sm"
+              />
+            </div>
+
             {/* Category */}
             <div>
               <label className="text-sm font-medium mb-1.5 block">
                 Category
               </label>
-              <Select value={categoryId} onValueChange={(v) => setCategoryId(v ?? "")}>
-                <SelectTrigger className="cursor-pointer">
-                  <SelectValue placeholder="Select a category..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {categories?.map((cat) => (
-                    <SelectItem
-                      key={cat.id}
-                      value={cat.id}
-                      className="cursor-pointer"
-                    >
-                      <span
-                        className="inline-block w-2.5 h-2.5 rounded-full mr-2"
-                        style={{ backgroundColor: cat.color }}
-                      />
-                      {cat.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="flex items-center gap-2">
+                <Select
+                  value={categoryId}
+                  onValueChange={(v) => setCategoryId(v ?? "")}
+                >
+                  <SelectTrigger className="cursor-pointer flex-1">
+                    <SelectValue placeholder="Select a category..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categories.map((cat) => (
+                      <SelectItem
+                        key={cat.id}
+                        value={cat.id}
+                        className="cursor-pointer"
+                      >
+                        <span
+                          className="inline-block w-2.5 h-2.5 rounded-full mr-2"
+                          style={{ backgroundColor: cat.color }}
+                        />
+                        {cat.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <InlineCategoryCreator
+                  onCreated={(id) => setCategoryId(id)}
+                />
+              </div>
+            </div>
+
+            {/* Lists */}
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Lists</label>
+              <div className="space-y-1.5">
+                {lists.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {lists.map((list) => {
+                      const isSelected = selectedListIds.includes(list.id);
+                      return (
+                        <button
+                          key={list.id}
+                          type="button"
+                          onClick={() => toggleList(list.id)}
+                          className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded-full border cursor-pointer transition-all ${
+                            isSelected
+                              ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+                              : "border-gray-200 text-gray-600 hover:border-gray-300"
+                          }`}
+                        >
+                          <span
+                            className="w-2 h-2 rounded-full"
+                            style={{ backgroundColor: list.color }}
+                          />
+                          {list.name}
+                          {isSelected && <Check className="h-3 w-3" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+                <InlineListCreator
+                  onCreated={(id) =>
+                    setSelectedListIds((prev) => [...prev, id])
+                  }
+                />
+              </div>
+            </div>
+
+            {/* Tags */}
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Tags</label>
+              <InlineTagInput
+                selectedTagIds={selectedTagIds}
+                onChange={setSelectedTagIds}
+              />
             </div>
 
             {/* Rating */}

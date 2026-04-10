@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import type { Place, PlaceFilters, ParsedPlaceData } from "@/lib/types";
+import type { Place, PlaceFilters, ParsedPlaceData, VisitStatus } from "@/lib/types";
 
 async function fetchPlaces(filters: PlaceFilters): Promise<Place[]> {
   const params = new URLSearchParams();
@@ -11,6 +11,7 @@ async function fetchPlaces(filters: PlaceFilters): Promise<Place[]> {
   if (filters.tag_ids?.length) params.set("tags", filters.tag_ids.join(","));
   if (filters.list_id) params.set("list", filters.list_id);
   if (filters.rating_min) params.set("rating", String(filters.rating_min));
+  if (filters.visit_status) params.set("status", filters.visit_status);
   if (filters.search) params.set("q", filters.search);
 
   const res = await fetch(`/api/places?${params}`);
@@ -57,6 +58,7 @@ interface CreatePlaceInput {
   source?: string;
   tag_ids?: string[];
   list_ids?: string[];
+  visit_status?: string;
 }
 
 export function useCreatePlace() {
@@ -72,6 +74,54 @@ export function useCreatePlace() {
       if (!res.ok) {
         const data = await res.json();
         throw new Error(data.error || "Failed to create place");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["places"] });
+    },
+  });
+}
+
+export function useUpdateVisitStatus() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      placeId,
+      visit_status,
+    }: {
+      placeId: string;
+      visit_status: VisitStatus | null;
+    }): Promise<Place> => {
+      const res = await fetch(`/api/places/${placeId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ visit_status }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to update visit status");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["places"] });
+    },
+  });
+}
+
+export function useRefreshGoogleData() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (placeId: string): Promise<Place> => {
+      const res = await fetch(`/api/places/${placeId}/refresh-google-data`, {
+        method: "POST",
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to refresh Google data");
       }
       return res.json();
     },

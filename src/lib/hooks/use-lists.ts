@@ -100,3 +100,16 @@ export function useRemoveFromList() {
     },
   });
 }
+
+export function usePlaceLists(placeId: string | undefined) {
+  return useQuery({
+    queryKey: ["place-lists", placeId],
+    queryFn: async (): Promise<PlaceList[]> => {
+      const res = await fetch(`/api/places/${placeId}`);
+      if (!res.ok) throw new Error("Failed to fetch place");
+      const place = await res.json();
+      return place.lists || [];
+    },
+    enabled: !!placeId,
+  });
+}

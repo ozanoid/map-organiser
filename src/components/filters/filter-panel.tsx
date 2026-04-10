@@ -4,6 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { CountryCityFilter } from "./country-city-filter";
 import { CategoryFilter } from "./category-filter";
+import { VisitStatusFilter } from "./visit-status-filter";
+import { TagFilter } from "./tag-filter";
+import { ListFilter } from "./list-filter";
 import { useFilters } from "@/lib/hooks/use-filters";
 import { Search, X } from "lucide-react";
 
@@ -25,6 +28,14 @@ export function FilterPanel() {
             Clear
           </Button>
         )}
+      </div>
+
+      {/* Visit Status */}
+      <div>
+        <label className="text-xs font-medium mb-1.5 block text-muted-foreground">
+          Status
+        </label>
+        <VisitStatusFilter />
       </div>
 
       {/* Search */}
@@ -67,6 +78,22 @@ export function FilterPanel() {
           selected={filters.category_id}
           onChange={(category_id) => setFilters({ category_id })}
         />
+      </div>
+
+      {/* Tags */}
+      <div>
+        <label className="text-xs font-medium mb-1.5 block text-muted-foreground">
+          Tags
+        </label>
+        <TagFilter />
+      </div>
+
+      {/* List */}
+      <div>
+        <label className="text-xs font-medium mb-1.5 block text-muted-foreground">
+          List
+        </label>
+        <ListFilter />
       </div>
 
       {/* Rating */}

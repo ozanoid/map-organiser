@@ -11,6 +11,7 @@ export function useFilters() {
 
   const filters: PlaceFilters = useMemo(() => {
     const tagIds = searchParams.get("tags");
+    const status = searchParams.get("status");
     return {
       country: searchParams.get("country") || undefined,
       city: searchParams.get("city") || undefined,
@@ -20,6 +21,7 @@ export function useFilters() {
       rating_min: searchParams.get("rating")
         ? Number(searchParams.get("rating"))
         : undefined,
+      visit_status: (status as PlaceFilters["visit_status"]) || undefined,
       search: searchParams.get("q") || undefined,
     };
   }, [searchParams]);
@@ -36,9 +38,11 @@ export function useFilters() {
               ? "tags"
               : key === "rating_min"
                 ? "rating"
-                : key === "search"
-                  ? "q"
-                  : key;
+                : key === "visit_status"
+                  ? "status"
+                  : key === "search"
+                    ? "q"
+                    : key;
 
         if (value === undefined || value === null || value === "") {
           params.delete(paramKey);

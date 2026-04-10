@@ -5,6 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { CountryCityFilter } from "./country-city-filter";
 import { CategoryFilter } from "./category-filter";
+import { VisitStatusFilter } from "./visit-status-filter";
+import { TagFilter } from "./tag-filter";
+import { ListFilter } from "./list-filter";
 import { useFilters } from "@/lib/hooks/use-filters";
 import { Search, X } from "lucide-react";
 
@@ -35,6 +38,12 @@ export function FilterSheet({ open, onOpenChange }: FilterSheetProps) {
         </SheetHeader>
 
         <div className="space-y-6 mt-4 overflow-y-auto pb-8">
+          {/* Visit Status */}
+          <div>
+            <label className="text-sm font-medium mb-2 block">Status</label>
+            <VisitStatusFilter />
+          </div>
+
           {/* Search */}
           <div>
             <label className="text-sm font-medium mb-2 block">Search</label>
@@ -67,6 +76,18 @@ export function FilterSheet({ open, onOpenChange }: FilterSheetProps) {
               selected={filters.category_id}
               onChange={(category_id) => setFilters({ category_id })}
             />
+          </div>
+
+          {/* Tags */}
+          <div>
+            <label className="text-sm font-medium mb-2 block">Tags</label>
+            <TagFilter />
+          </div>
+
+          {/* List */}
+          <div>
+            <label className="text-sm font-medium mb-2 block">List</label>
+            <ListFilter />
           </div>
 
           {/* Rating */}
