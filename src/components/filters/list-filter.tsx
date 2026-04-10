@@ -2,13 +2,6 @@
 
 import { useLists } from "@/lib/hooks/use-lists";
 import { useFilters } from "@/lib/hooks/use-filters";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 
 export function ListFilter() {
   const { data: lists = [] } = useLists();
@@ -19,26 +12,30 @@ export function ListFilter() {
   }
 
   return (
-    <Select
-      value={filters.list_id ?? undefined}
-      onValueChange={(value) =>
-        setFilters({ list_id: value || undefined })
-      }
-    >
-      <SelectTrigger size="sm" className="w-full cursor-pointer text-xs">
-        <SelectValue placeholder="All lists" />
-      </SelectTrigger>
-      <SelectContent>
+    <div className="relative">
+      <select
+        value={filters.list_id || ""}
+        onChange={(e) =>
+          setFilters({ list_id: e.target.value || undefined })
+        }
+        className="w-full h-9 px-3 pr-8 text-sm border border-input rounded-md bg-background cursor-pointer appearance-none focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1"
+      >
+        <option value="">All lists</option>
         {lists.map((list) => (
-          <SelectItem key={list.id} value={list.id} className="cursor-pointer">
-            <span
-              className="inline-block w-2 h-2 rounded-full mr-1.5 shrink-0"
-              style={{ backgroundColor: list.color }}
-            />
-            {list.name}
-          </SelectItem>
+          <option key={list.id} value={list.id}>
+            {list.name} ({list.place_count || 0})
+          </option>
         ))}
-      </SelectContent>
-    </Select>
+      </select>
+      <svg
+        className="absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={2}
+      >
+        <path d="m6 9 6 6 6-6" />
+      </svg>
+    </div>
   );
 }

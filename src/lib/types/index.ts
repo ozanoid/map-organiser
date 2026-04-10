@@ -118,4 +118,5 @@ export interface ParsedPlaceData {
   reviews?: GoogleReview[];
   editorialSummary?: string | null;
   priceLevel?: number | null;
+  googleMapsUrl?: string | null;
 }

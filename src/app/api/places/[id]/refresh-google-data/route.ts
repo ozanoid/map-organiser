@@ -60,6 +60,7 @@ export async function POST(
     reviews: details.reviews,
     editorial_summary: details.editorialSummary,
     price_level: details.priceLevel,
+    url: details.googleMapsUrl,
   };
 
   // Update the place in the database

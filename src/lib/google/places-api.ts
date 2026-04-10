@@ -121,6 +121,7 @@ export async function getPlaceDetails(
     reviews: extractReviews(data.reviews),
     editorialSummary: data.editorialSummary?.text || null,
     priceLevel: data.priceLevel ? parsePriceLevel(data.priceLevel) : null,
+    googleMapsUrl: data.googleMapsUri || null,
   };
 }
 
@@ -208,5 +209,6 @@ export async function searchPlace(
     reviews: extractReviews(place.reviews),
     editorialSummary: place.editorialSummary?.text || null,
     priceLevel: place.priceLevel ? parsePriceLevel(place.priceLevel) : null,
+    googleMapsUrl: place.googleMapsUri || null,
   };
 }

@@ -21,23 +21,33 @@ export function FilterSheet({ open, onOpenChange }: FilterSheetProps) {
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className="h-[70vh] rounded-t-2xl">
-        <SheetHeader className="flex flex-row items-center justify-between">
+      <SheetContent side="bottom" className="max-h-[65dvh] rounded-t-2xl flex flex-col">
+        <SheetHeader className="flex flex-row items-center justify-between shrink-0">
           <SheetTitle>Filters</SheetTitle>
-          {hasActiveFilters && (
+          <div className="flex items-center gap-2">
+            {hasActiveFilters && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={clearFilters}
+                className="cursor-pointer text-xs"
+              >
+                <X className="h-3 w-3 mr-1" />
+                Clear
+              </Button>
+            )}
             <Button
-              variant="ghost"
+              variant="outline"
               size="sm"
-              onClick={clearFilters}
+              onClick={() => onOpenChange(false)}
               className="cursor-pointer text-xs"
             >
-              <X className="h-3 w-3 mr-1" />
-              Clear all
+              Done
             </Button>
-          )}
+          </div>
         </SheetHeader>
 
-        <div className="space-y-6 mt-4 overflow-y-auto pb-8">
+        <div className="space-y-6 mt-4 overflow-y-auto flex-1 pb-safe-area-inset-bottom" style={{ paddingBottom: "env(safe-area-inset-bottom, 16px)" }}>
           {/* Visit Status */}
           <div>
             <label className="text-sm font-medium mb-2 block">Status</label>
