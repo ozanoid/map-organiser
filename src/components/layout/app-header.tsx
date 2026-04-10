@@ -11,15 +11,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { AddPlaceDialog } from "@/components/places/add-place-dialog";
 import { Plus, Search, LogOut, Settings, MapPin } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 
-export function AppHeader({
-  onAddPlace,
-}: {
-  onAddPlace?: () => void;
-}) {
+export function AppHeader() {
+  const [addOpen, setAddOpen] = useState(false);
   const router = useRouter();
   const supabase = createClient();
   const [user, setUser] = useState<User | null>(null);
@@ -56,7 +54,7 @@ export function AppHeader({
           variant="outline"
           size="sm"
           className="gap-1.5 cursor-pointer"
-          onClick={onAddPlace}
+          onClick={() => setAddOpen(true)}
         >
           <Plus className="h-4 w-4" />
           <span className="hidden sm:inline">Add Place</span>
@@ -90,6 +88,8 @@ export function AppHeader({
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+
+      <AddPlaceDialog open={addOpen} onOpenChange={setAddOpen} />
     </header>
   );
 }

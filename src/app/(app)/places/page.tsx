@@ -6,6 +6,7 @@ import { useFilters } from "@/lib/hooks/use-filters";
 import { PlaceCard } from "@/components/places/place-card";
 import { AddPlaceDialog } from "@/components/places/add-place-dialog";
 import { FilterSheet } from "@/components/filters/filter-sheet";
+import { FilterPanel } from "@/components/filters/filter-panel";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -18,7 +19,13 @@ function PlacesContent() {
   const [filterOpen, setFilterOpen] = useState(false);
 
   return (
-    <div className="p-4 lg:p-6 space-y-4">
+    <div className="flex">
+      {/* Desktop filter sidebar */}
+      <aside className="hidden lg:block w-64 shrink-0 border-r p-4 overflow-y-auto h-[calc(100vh-3.5rem)]">
+        <FilterPanel />
+      </aside>
+
+      <div className="flex-1 p-4 lg:p-6 space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">Places</h1>
@@ -83,6 +90,7 @@ function PlacesContent() {
 
       <AddPlaceDialog open={addOpen} onOpenChange={setAddOpen} />
       <FilterSheet open={filterOpen} onOpenChange={setFilterOpen} />
+      </div>
     </div>
   );
 }

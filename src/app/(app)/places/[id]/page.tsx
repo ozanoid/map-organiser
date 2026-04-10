@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -21,6 +22,7 @@ import type { Place } from "@/lib/types";
 export default function PlaceDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [place, setPlace] = useState<Place | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -39,6 +41,7 @@ export default function PlaceDetailPage() {
 
     const res = await fetch(`/api/places/${params.id}`, { method: "DELETE" });
     if (res.ok) {
+      queryClient.invalidateQueries({ queryKey: ["places"] });
       toast.success("Place deleted");
       router.push("/places");
     } else {

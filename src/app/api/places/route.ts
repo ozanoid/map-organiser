@@ -167,15 +167,38 @@ export async function POST(request: NextRequest) {
 
 /**
  * Parse PostGIS geography point to {lat, lng}.
- * PostGIS returns POINT(lng lat) or a hex-encoded WKB.
+ * Supabase REST API returns geography as hex EWKB string.
  */
+function parseEWKB(hex: string): { lat: number; lng: number } | null {
+  try {
+    const buf = Buffer.from(hex, "hex");
+    // EWKB: byte_order(1) + type(4) + srid(4) + x(8) + y(8)
+    // Little-endian (01) or big-endian (00)
+    const le = buf[0] === 1;
+    const lng = le ? buf.readDoubleLE(9) : buf.readDoubleBE(9);
+    const lat = le ? buf.readDoubleLE(17) : buf.readDoubleBE(17);
+    if (isFinite(lat) && isFinite(lng)) return { lat, lng };
+  } catch {}
+  return null;
+}
+
 function parsePostgisPoint(location: unknown): { lat: number; lng: number } {
   if (typeof location === "string") {
+    // Hex EWKB format (from Supabase REST API)
+    if (/^[0-9a-fA-F]+$/.test(location) && location.length > 20) {
+      const parsed = parseEWKB(location);
+      if (parsed) return parsed;
+    }
     // WKT format: POINT(lng lat)
     const match = location.match(/POINT\((-?\d+\.?\d*)\s+(-?\d+\.?\d*)\)/);
     if (match) {
       return { lng: parseFloat(match[1]), lat: parseFloat(match[2]) };
     }
+    // GeoJSON string
+    try {
+      const geo = JSON.parse(location);
+      if (geo.coordinates) return { lng: geo.coordinates[0], lat: geo.coordinates[1] };
+    } catch {}
   }
 
   if (typeof location === "object" && location !== null) {
