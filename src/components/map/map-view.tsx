@@ -22,6 +22,12 @@ export function MapView({ places, onPlaceClick, className }: MapViewProps) {
   const map = useRef<mapboxgl.Map | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
 
+  // Keep refs stable for Mapbox event handlers
+  const placesRef = useRef(places);
+  const onPlaceClickRef = useRef(onPlaceClick);
+  placesRef.current = places;
+  onPlaceClickRef.current = onPlaceClick;
+
   // Initialize map
   useEffect(() => {
     if (!mapContainer.current || map.current) return;
@@ -218,10 +224,10 @@ export function MapView({ places, onPlaceClick, className }: MapViewProps) {
 
         // "View details" click → trigger onPlaceClick (no navigation)
         const detailsLink = popupEl.querySelector(".popup-details");
-        if (detailsLink && onPlaceClick) {
+        if (detailsLink) {
           detailsLink.addEventListener("click", () => {
-            const place = places.find((p) => p.id === props.id);
-            if (place) onPlaceClick(place);
+            const place = placesRef.current.find((p) => p.id === props.id);
+            if (place && onPlaceClickRef.current) onPlaceClickRef.current(place);
           });
         }
 

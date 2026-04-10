@@ -26,11 +26,7 @@ export function ListFilter() {
       }
     >
       <SelectTrigger size="sm" className="w-full cursor-pointer text-xs">
-        <SelectValue placeholder="All lists">
-          {filters.list_id
-            ? lists.find((l) => l.id === filters.list_id)?.name || "All lists"
-            : "All lists"}
-        </SelectValue>
+        <SelectValue placeholder="All lists" />
       </SelectTrigger>
       <SelectContent>
         <SelectItem value="__all__">All lists</SelectItem>

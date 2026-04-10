@@ -67,7 +67,6 @@ export async function POST(
     .from("places")
     .update({
       google_data: updatedGoogleData,
-      rating: details.rating || undefined,
       updated_at: new Date().toISOString(),
     })
     .eq("id", id)

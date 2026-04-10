@@ -56,9 +56,7 @@ export function CountryCityFilter({
         }}
       >
         <SelectTrigger className="cursor-pointer">
-          <SelectValue placeholder="All countries">
-            {country || "All countries"}
-          </SelectValue>
+          <SelectValue placeholder="All countries" />
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="__all__" className="cursor-pointer">All countries</SelectItem>
@@ -76,9 +74,7 @@ export function CountryCityFilter({
           onValueChange={(v) => onCityChange(!v || v === "__all__" ? undefined : v)}
         >
           <SelectTrigger className="cursor-pointer">
-            <SelectValue placeholder="All cities">
-              {city || "All cities"}
-            </SelectValue>
+            <SelectValue placeholder="All cities" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="__all__" className="cursor-pointer">All cities</SelectItem>
