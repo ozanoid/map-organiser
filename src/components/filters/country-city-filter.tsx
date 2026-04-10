@@ -49,9 +49,9 @@ export function CountryCityFilter({
   return (
     <div className="space-y-2">
       <Select
-        value={country || "__all__"}
+        value={country ?? undefined}
         onValueChange={(v) => {
-          onCountryChange(!v || v === "__all__" ? undefined : v);
+          onCountryChange(v || undefined);
           onCityChange(undefined);
         }}
       >
@@ -59,7 +59,6 @@ export function CountryCityFilter({
           <SelectValue placeholder="All countries" />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="__all__" className="cursor-pointer">All countries</SelectItem>
           {countries.map((c) => (
             <SelectItem key={c} value={c} className="cursor-pointer">
               {c}
@@ -70,14 +69,13 @@ export function CountryCityFilter({
 
       {country && cities.length > 0 && (
         <Select
-          value={city || "__all__"}
-          onValueChange={(v) => onCityChange(!v || v === "__all__" ? undefined : v)}
+          value={city ?? undefined}
+          onValueChange={(v) => onCityChange(v || undefined)}
         >
           <SelectTrigger className="cursor-pointer">
             <SelectValue placeholder="All cities" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="__all__" className="cursor-pointer">All cities</SelectItem>
             {cities.map((c) => (
               <SelectItem key={c} value={c} className="cursor-pointer">
                 {c}

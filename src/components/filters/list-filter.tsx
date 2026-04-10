@@ -20,16 +20,15 @@ export function ListFilter() {
 
   return (
     <Select
-      value={filters.list_id || "__all__"}
+      value={filters.list_id ?? undefined}
       onValueChange={(value) =>
-        setFilters({ list_id: !value || value === "__all__" ? undefined : value })
+        setFilters({ list_id: value || undefined })
       }
     >
       <SelectTrigger size="sm" className="w-full cursor-pointer text-xs">
         <SelectValue placeholder="All lists" />
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value="__all__">All lists</SelectItem>
         {lists.map((list) => (
           <SelectItem key={list.id} value={list.id} className="cursor-pointer">
             <span
