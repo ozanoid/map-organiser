@@ -20,9 +20,10 @@ export interface ParsedUrl {
 }
 
 /**
- * Resolve short links (goo.gl, maps.app.goo.gl) by following redirects server-side.
+ * Resolve short links and full Google Maps URLs by following redirects.
+ * This gets us the final URL with coordinates.
  */
-async function resolveShortLink(url: string): Promise<string> {
+async function resolveUrl(url: string): Promise<string> {
   try {
     const response = await fetch(url, {
       method: "HEAD",
@@ -30,30 +31,38 @@ async function resolveShortLink(url: string): Promise<string> {
     });
     return response.url;
   } catch {
-    // If HEAD fails, try GET
-    const response = await fetch(url, { redirect: "follow" });
-    return response.url;
+    try {
+      const response = await fetch(url, { redirect: "follow" });
+      return response.url;
+    } catch {
+      return url;
+    }
   }
 }
 
 /**
- * Extract Place ID from a full Google Maps URL.
+ * Extract ChIJ-format Place ID from a full Google Maps URL.
+ * Only returns ChIJ format IDs that work with the New Places API.
  */
-function extractPlaceId(url: string): string | null {
-  // Format: ...data=!...!1sChIJ... or !1s0x...:0x...
-  const placeIdMatch = url.match(/!1s(ChIJ[a-zA-Z0-9_-]+)/);
-  if (placeIdMatch) return placeIdMatch[1];
+function extractChIJPlaceId(url: string): string | null {
+  // Format: ...data=!...!1sChIJ...
+  const match = url.match(/!1s(ChIJ[a-zA-Z0-9_-]+)/);
+  if (match) return match[1];
 
   // Format: place_id=ChIJ...
-  const paramMatch = url.match(/place_id=([^&]+)/);
+  const paramMatch = url.match(/place_id=(ChIJ[^&]+)/);
   if (paramMatch) return decodeURIComponent(paramMatch[1]);
 
-  // Format: /maps/place/.../@lat,lng/data=...!3m1!4b1!...
-  // Sometimes the ftid contains it
-  const ftidMatch = url.match(/ftid=(0x[a-f0-9]+:0x[a-f0-9]+)/);
-  if (ftidMatch) return ftidMatch[1];
-
   return null;
+}
+
+/**
+ * Check if URL contains an FTid (0x...:0x...) which is NOT compatible
+ * with the New Places API but indicates a specific place.
+ */
+function hasFtid(url: string): boolean {
+  return /!1s(0x[a-f0-9]+:0x[a-f0-9]+)/.test(url) ||
+    /ftid=(0x[a-f0-9]+:0x[a-f0-9]+)/.test(url);
 }
 
 /**
@@ -121,11 +130,11 @@ export async function parseMapsUrl(rawUrl: string): Promise<ParsedUrl> {
     url.includes("maps.app.goo.gl/") ||
     url.includes("maps.google.com/goo.gl")
   ) {
-    url = await resolveShortLink(url);
+    url = await resolveUrl(url);
   }
 
-  // Step 2: Try to extract Place ID
-  const placeId = extractPlaceId(url);
+  // Step 2: Try to extract ChIJ Place ID (works with New API)
+  const placeId = extractChIJPlaceId(url);
   if (placeId) {
     const coords = extractCoordinates(url);
     return {
@@ -136,7 +145,27 @@ export async function parseMapsUrl(rawUrl: string): Promise<ParsedUrl> {
     };
   }
 
-  // Step 3: Try CID
+  // Step 3: If URL has FTid (0x...) but no coordinates,
+  // follow the URL to get the redirected version with coordinates
+  if (hasFtid(url) && !extractCoordinates(url)) {
+    const resolved = await resolveUrl(url);
+    if (resolved !== url) {
+      url = resolved;
+      // Check if resolved URL now has a ChIJ Place ID
+      const resolvedPlaceId = extractChIJPlaceId(url);
+      if (resolvedPlaceId) {
+        const coords = extractCoordinates(url);
+        return {
+          type: "place_id",
+          placeId: resolvedPlaceId,
+          lat: coords?.lat,
+          lng: coords?.lng,
+        };
+      }
+    }
+  }
+
+  // Step 4: Try CID
   const cid = extractCid(url);
   if (cid) {
     const coords = extractCoordinates(url);
@@ -148,7 +177,7 @@ export async function parseMapsUrl(rawUrl: string): Promise<ParsedUrl> {
     };
   }
 
-  // Step 4: Search URL
+  // Step 5: Search URL with coordinates from FTid resolution or URL
   const query = extractSearchQuery(url);
   const coords = extractCoordinates(url);
 
@@ -161,7 +190,7 @@ export async function parseMapsUrl(rawUrl: string): Promise<ParsedUrl> {
     };
   }
 
-  // Step 5: Just coordinates
+  // Step 6: Just coordinates
   if (coords) {
     return {
       type: "coordinates",
