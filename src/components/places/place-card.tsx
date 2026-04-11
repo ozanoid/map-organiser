@@ -8,7 +8,7 @@ import { Star, ExternalLink } from "lucide-react";
 import Link from "next/link";
 
 export function PlaceCard({ place }: { place: Place }) {
-  const googlePhoto = place.google_data?.photos?.[0];
+  const googlePhoto = place.google_data?.photo_storage_url || place.google_data?.photos?.[0];
   const googleRating = place.google_data?.rating;
   const tags = place.tags ?? [];
   const visibleTags = tags.slice(0, 2);

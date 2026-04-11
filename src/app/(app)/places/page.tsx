@@ -27,7 +27,7 @@ function SelectablePlaceCard({
   isSelected: boolean;
   onToggle: () => void;
 }) {
-  const googlePhoto = place.google_data?.photos?.[0];
+  const googlePhoto = place.google_data?.photo_storage_url || place.google_data?.photos?.[0];
   const googleRating = place.google_data?.rating;
   const tags = place.tags ?? [];
   const visibleTags = tags.slice(0, 2);

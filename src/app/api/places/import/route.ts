@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { parseTakeoutGeoJson, parseTakeoutCsv } from "@/lib/google/takeout-parser";
 import { parseMapsUrl } from "@/lib/google/parse-maps-url";
-import { getPlaceDetails, searchPlace } from "@/lib/google/places-api";
+import { getPlaceDetails, searchPlace, downloadAndStorePhoto } from "@/lib/google/places-api";
 import { resolveCategoryId } from "@/lib/google/category-mapping";
 
 export async function POST(request: NextRequest) {
@@ -83,16 +83,15 @@ export async function POST(request: NextRequest) {
             lng = details.lng || lng;
             googleData = {
               types: details.types,
-              photos: details.photos,
               rating: details.rating,
               opening_hours: details.openingHours,
               website: details.website,
               phone: details.phone,
-              reviews: details.reviews,
-              editorial_summary: details.editorialSummary,
               price_level: details.priceLevel,
               url: details.googleMapsUrl,
             };
+            // Store photoRef for download after insert
+            (googleData as Record<string, unknown>)._photoRef = details.photoRef;
             enriched++;
 
             // Auto-categorize
@@ -125,7 +124,12 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        const { error } = await supabase.from("places").insert({
+        // Extract photoRef before insert (and remove from googleData)
+        const photoRef = (googleData as Record<string, unknown>)?._photoRef as string | null;
+        const cleanGoogleData = { ...googleData };
+        delete (cleanGoogleData as Record<string, unknown>)._photoRef;
+
+        const { data: insertedPlace, error } = await supabase.from("places").insert({
           user_id: user.id,
           name: p.name,
           address,
@@ -134,16 +138,26 @@ export async function POST(request: NextRequest) {
           location: `POINT(${lng} ${lat})`,
           notes: p.note,
           google_place_id: googlePlaceId,
-          google_data: googleData,
+          google_data: cleanGoogleData,
           category_id: categoryId,
           source: "import",
-        });
+        }).select("id").single();
 
-        if (error) {
+        if (error || !insertedPlace) {
           failed++;
-          skipped.push({ name: p.name, url: p.googleMapsUrl, reason: error.message });
-          console.error("Import place error:", error.message);
+          skipped.push({ name: p.name, url: p.googleMapsUrl, reason: error?.message || "Insert failed" });
+          console.error("Import place error:", error?.message);
         } else {
+          // Download 1 photo to Supabase Storage
+          if (photoRef) {
+            const storageUrl = await downloadAndStorePhoto(photoRef, insertedPlace.id, user.id);
+            if (storageUrl) {
+              await supabase
+                .from("places")
+                .update({ google_data: { ...cleanGoogleData, photo_storage_url: storageUrl } })
+                .eq("id", insertedPlace.id);
+            }
+          }
           imported++;
         }
 

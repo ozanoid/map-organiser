@@ -56,6 +56,7 @@ interface CreatePlaceInput {
   notes?: string;
   google_place_id?: string;
   google_data?: Record<string, unknown>;
+  photoRef?: string | null;
   source?: string;
   tag_ids?: string[];
   list_ids?: string[];

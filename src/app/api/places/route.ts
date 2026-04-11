@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { resolveCategoryId } from "@/lib/google/category-mapping";
+import { downloadAndStorePhoto } from "@/lib/google/places-api";
 
 // GET /api/places - List all places for current user with filters
 export async function GET(request: NextRequest) {
@@ -117,7 +118,7 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  const { name, address, country, city, lat, lng, category_id, rating, notes, google_place_id, google_data, source, tag_ids, list_ids, visit_status } = body;
+  const { name, address, country, city, lat, lng, category_id, rating, notes, google_place_id, google_data, source, tag_ids, list_ids, visit_status, photoRef } = body;
 
   if (!name || lat === undefined || lng === undefined) {
     return NextResponse.json(
@@ -161,11 +162,13 @@ export async function POST(request: NextRequest) {
   const visited_at = visit_status === "visited" ? new Date().toISOString() : null;
   const booked_at = visit_status === "booked" ? new Date().toISOString() : null;
 
-  // Build google_data with extended fields
+  // Build google_data - strip reviews (fetched on demand) and editorialSummary (removed)
   const savedGoogleData: Record<string, unknown> = { ...(google_data || {}) };
-  if (google_data?.reviews) savedGoogleData.reviews = google_data.reviews;
-  if (google_data?.editorialSummary) savedGoogleData.editorial_summary = google_data.editorialSummary;
-  if (google_data?.priceLevel !== undefined && google_data?.priceLevel !== null) savedGoogleData.price_level = google_data.priceLevel;
+  delete savedGoogleData.reviews;
+  delete savedGoogleData.editorialSummary;
+  delete savedGoogleData.editorial_summary;
+  // Keep only essential photo data - actual image stored in Supabase Storage
+  delete savedGoogleData.photos;
 
   const { data: place, error } = await supabase
     .from("places")
@@ -191,6 +194,19 @@ export async function POST(request: NextRequest) {
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  // Download photo to Supabase Storage (1 photo only, $7/1K requests)
+  if (photoRef) {
+    const storageUrl = await downloadAndStorePhoto(photoRef, place.id, user.id);
+    if (storageUrl) {
+      await supabase
+        .from("places")
+        .update({
+          google_data: { ...savedGoogleData, photo_storage_url: storageUrl },
+        })
+        .eq("id", place.id);
+    }
   }
 
   // Add tags if provided

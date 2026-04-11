@@ -1,14 +1,24 @@
 /**
  * Google Places API (New) wrapper.
  * Server-side only — never expose the API key to the client.
+ *
+ * COST TIERS (based on highest field in mask):
+ *   Essentials ($5/1K):  id, displayName, formattedAddress, addressComponents, location, types
+ *   Pro ($17/1K):        + rating, userRatingCount, openingHours, websiteUri, phone, priceLevel, googleMapsUri, photos (refs only)
+ *   Enterprise ($20/1K): + reviews
+ *   Photos ($7/1K):      each media URL fetch
+ *
+ * Default mask uses PRO tier. Reviews fetched separately via getPlaceReviews().
  */
 
 import type { ParsedPlaceData, GoogleReview } from "@/lib/types";
+import { createClient } from "@/lib/supabase/server";
 
 const API_KEY = process.env.GOOGLE_PLACES_API_KEY!;
 const BASE_URL = "https://places.googleapis.com/v1";
 
-const FIELD_MASK = [
+// PRO tier ($17/1K) - used for place details and search
+const FIELD_MASK_PRO = [
   "id",
   "displayName",
   "formattedAddress",
@@ -24,9 +34,10 @@ const FIELD_MASK = [
   "photos",
   "priceLevel",
   "googleMapsUri",
-  "reviews",
-  "editorialSummary",
 ].join(",");
+
+// ENTERPRISE tier ($20/1K) - used only for reviews refresh
+const FIELD_MASK_REVIEWS = "reviews";
 
 interface AddressComponent {
   longText: string;
@@ -69,63 +80,6 @@ function extractCountryAndCity(components: AddressComponent[]): {
   return { country, city };
 }
 
-/**
- * Fetch place details by Place ID using the new Places API.
- */
-export async function getPlaceDetails(
-  placeId: string
-): Promise<ParsedPlaceData | null> {
-  const res = await fetch(`${BASE_URL}/places/${placeId}`, {
-    method: "GET",
-    headers: {
-      "X-Goog-Api-Key": API_KEY,
-      "X-Goog-FieldMask": FIELD_MASK,
-    },
-    next: { revalidate: 86400 }, // Cache 24 hours
-  });
-
-  if (!res.ok) {
-    console.error("Places API error:", res.status, await res.text());
-    return null;
-  }
-
-  const data = await res.json();
-
-  const { country, city } = extractCountryAndCity(
-    data.addressComponents || []
-  );
-
-  const photos =
-    data.photos?.slice(0, 5).map((p: { name: string }) => {
-      return `${BASE_URL}/${p.name}/media?maxHeightPx=400&maxWidthPx=400&key=${API_KEY}`;
-    }) || [];
-
-  return {
-    placeId: data.id || placeId,
-    name: data.displayName?.text || "",
-    address: data.formattedAddress || "",
-    country,
-    city,
-    lat: data.location?.latitude || 0,
-    lng: data.location?.longitude || 0,
-    types: data.types || [],
-    photos,
-    rating: data.rating || null,
-    openingHours: data.regularOpeningHours
-      ? {
-          weekday_text: data.regularOpeningHours.weekdayDescriptions,
-          open_now: data.currentOpeningHours?.openNow,
-        }
-      : null,
-    website: data.websiteUri || null,
-    phone: data.nationalPhoneNumber || null,
-    reviews: extractReviews(data.reviews),
-    editorialSummary: data.editorialSummary?.text || null,
-    priceLevel: data.priceLevel ? parsePriceLevel(data.priceLevel) : null,
-    googleMapsUrl: data.googleMapsUri || null,
-  };
-}
-
 function parsePriceLevel(level: string | number): number | null {
   if (typeof level === "number") return level;
   const map: Record<string, number> = {
@@ -139,7 +93,108 @@ function parsePriceLevel(level: string | number): number | null {
 }
 
 /**
- * Search for a place by text query, optionally biased to coordinates.
+ * Download a Google Places photo and upload to Supabase Storage.
+ * Returns the public Supabase Storage URL, or null on failure.
+ */
+export async function downloadAndStorePhoto(
+  photoName: string,
+  placeId: string,
+  userId: string
+): Promise<string | null> {
+  try {
+    const googleUrl = `${BASE_URL}/${photoName}/media?maxHeightPx=600&maxWidthPx=600&key=${API_KEY}`;
+    const res = await fetch(googleUrl);
+    if (!res.ok) return null;
+
+    const blob = await res.blob();
+    const buffer = Buffer.from(await blob.arrayBuffer());
+    const ext = blob.type === "image/png" ? "png" : blob.type === "image/webp" ? "webp" : "jpg";
+    const fileName = `${userId}/${placeId}.${ext}`;
+
+    const supabase = await createClient();
+
+    // Upload (overwrite if exists)
+    const { error } = await supabase.storage
+      .from("place-photos")
+      .upload(fileName, buffer, {
+        contentType: blob.type || "image/jpeg",
+        upsert: true,
+      });
+
+    if (error) {
+      console.error("Storage upload error:", error.message);
+      return null;
+    }
+
+    // Get public URL
+    const { data: urlData } = supabase.storage
+      .from("place-photos")
+      .getPublicUrl(fileName);
+
+    return urlData.publicUrl;
+  } catch (e) {
+    console.error("Photo download error:", e);
+    return null;
+  }
+}
+
+/**
+ * Fetch place details by Place ID. Uses PRO tier ($17/1K).
+ * Returns 1 photo reference (not URL) for later storage.
+ */
+export async function getPlaceDetails(
+  placeId: string
+): Promise<ParsedPlaceData | null> {
+  const res = await fetch(`${BASE_URL}/places/${placeId}`, {
+    method: "GET",
+    headers: {
+      "X-Goog-Api-Key": API_KEY,
+      "X-Goog-FieldMask": FIELD_MASK_PRO,
+    },
+    next: { revalidate: 86400 },
+  });
+
+  if (!res.ok) {
+    console.error("Places API error:", res.status, await res.text());
+    return null;
+  }
+
+  const data = await res.json();
+
+  const { country, city } = extractCountryAndCity(
+    data.addressComponents || []
+  );
+
+  // Only take first photo REFERENCE (not media URL — that costs $7/1K)
+  const photoRef = data.photos?.[0]?.name || null;
+
+  return {
+    placeId: data.id || placeId,
+    name: data.displayName?.text || "",
+    address: data.formattedAddress || "",
+    country,
+    city,
+    lat: data.location?.latitude || 0,
+    lng: data.location?.longitude || 0,
+    types: data.types || [],
+    photos: [], // Empty — photo stored via downloadAndStorePhoto separately
+    photoRef, // Raw reference for later download
+    rating: data.rating || null,
+    openingHours: data.regularOpeningHours
+      ? {
+          weekday_text: data.regularOpeningHours.weekdayDescriptions,
+          open_now: data.currentOpeningHours?.openNow,
+        }
+      : null,
+    website: data.websiteUri || null,
+    phone: data.nationalPhoneNumber || null,
+    priceLevel: data.priceLevel ? parsePriceLevel(data.priceLevel) : null,
+    googleMapsUrl: data.googleMapsUri || null,
+  };
+}
+
+/**
+ * Search for a place by text query. Uses PRO tier ($17/1K).
  */
 export async function searchPlace(
   query: string,
@@ -165,7 +220,7 @@ export async function searchPlace(
     headers: {
       "Content-Type": "application/json",
       "X-Goog-Api-Key": API_KEY,
-      "X-Goog-FieldMask": `places.${FIELD_MASK.split(",").join(",places.")}`,
+      "X-Goog-FieldMask": `places.${FIELD_MASK_PRO.split(",").join(",places.")}`,
     },
     body: JSON.stringify(body),
   });
@@ -183,10 +238,7 @@ export async function searchPlace(
     place.addressComponents || []
   );
 
-  const photos =
-    place.photos?.slice(0, 5).map((p: { name: string }) => {
-      return `${BASE_URL}/${p.name}/media?maxHeightPx=400&maxWidthPx=400&key=${API_KEY}`;
-    }) || [];
+  const photoRef = place.photos?.[0]?.name || null;
 
   return {
     placeId: place.id || "",
@@ -197,7 +249,8 @@ export async function searchPlace(
     lat: place.location?.latitude || 0,
     lng: place.location?.longitude || 0,
     types: place.types || [],
-    photos,
+    photos: [],
+    photoRef,
     rating: place.rating || null,
     openingHours: place.regularOpeningHours
       ? {
@@ -207,9 +260,28 @@ export async function searchPlace(
       : null,
     website: place.websiteUri || null,
     phone: place.nationalPhoneNumber || null,
-    reviews: extractReviews(place.reviews),
-    editorialSummary: place.editorialSummary?.text || null,
     priceLevel: place.priceLevel ? parsePriceLevel(place.priceLevel) : null,
     googleMapsUrl: place.googleMapsUri || null,
   };
+}
+
+/**
+ * Fetch reviews for a place. Uses ENTERPRISE tier ($20/1K).
+ * Call this ONLY when user explicitly requests reviews (refresh button).
+ */
+export async function getPlaceReviews(
+  placeId: string
+): Promise<GoogleReview[]> {
+  const res = await fetch(`${BASE_URL}/places/${placeId}`, {
+    method: "GET",
+    headers: {
+      "X-Goog-Api-Key": API_KEY,
+      "X-Goog-FieldMask": FIELD_MASK_REVIEWS,
+    },
+  });
+
+  if (!res.ok) return [];
+
+  const data = await res.json();
+  return extractReviews(data.reviews);
 }

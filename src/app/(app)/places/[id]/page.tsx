@@ -229,7 +229,7 @@ export default function PlaceDetailPage() {
   }
 
   const googleData = place.google_data || {};
-  const photos = googleData.photos || [];
+  const photoUrl = googleData.photo_storage_url || googleData.photos?.[0] || null;
   const reviews = googleData.reviews || [];
 
   return (
@@ -266,10 +266,10 @@ export default function PlaceDetailPage() {
       />
 
       {/* Photo */}
-      {photos.length > 0 && (
+      {photoUrl && (
         <div className="h-52 sm:h-64 rounded-xl overflow-hidden bg-muted">
           <img
-            src={photos[0]}
+            src={photoUrl}
             alt={place.name}
             className="w-full h-full object-cover"
           />
@@ -406,13 +406,6 @@ export default function PlaceDetailPage() {
               {"$".repeat(4 - googleData.price_level)}
             </span>
           </div>
-        )}
-
-        {/* Editorial summary */}
-        {googleData.editorial_summary && (
-          <p className="text-sm text-muted-foreground italic border-l-2 border-emerald-200 pl-3">
-            {googleData.editorial_summary}
-          </p>
         )}
 
         {/* Google Maps link */}

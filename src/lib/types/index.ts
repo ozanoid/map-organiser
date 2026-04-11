@@ -75,6 +75,7 @@ export interface GoogleReview {
 export interface GooglePlaceData {
   types?: string[];
   photos?: string[];
+  photo_storage_url?: string; // Supabase Storage URL (replaces Google photo URLs)
   rating?: number;
   user_ratings_total?: number;
   opening_hours?: {
@@ -86,7 +87,6 @@ export interface GooglePlaceData {
   price_level?: number;
   url?: string;
   reviews?: GoogleReview[];
-  editorial_summary?: string;
 }
 
 export interface PlaceFilters {
@@ -115,8 +115,7 @@ export interface ParsedPlaceData {
   openingHours: { weekday_text?: string[]; open_now?: boolean } | null;
   website: string | null;
   phone: string | null;
-  reviews?: GoogleReview[];
-  editorialSummary?: string | null;
+  photoRef?: string | null; // Google photo reference name (for download)
   priceLevel?: number | null;
   googleMapsUrl?: string | null;
 }

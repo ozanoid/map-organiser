@@ -89,7 +89,7 @@ function MapContent() {
   }
 
   const googleData = detailData?.google_data || {};
-  const photos = googleData.photos || [];
+  const photoUrl = googleData.photo_storage_url || googleData.photos?.[0] || null;
   const reviews = googleData.reviews || [];
 
   return (
@@ -169,10 +169,10 @@ function MapContent() {
             ) : detailData ? (
               <div className="p-4 space-y-4">
                 {/* Photo */}
-                {photos[0] && (
+                {photoUrl && (
                   <div className="h-40 rounded-lg overflow-hidden bg-gray-100">
                     <img
-                      src={photos[0]}
+                      src={photoUrl}
                       alt={detailData.name}
                       className="w-full h-full object-cover"
                     />

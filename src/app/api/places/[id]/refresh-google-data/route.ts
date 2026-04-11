@@ -1,8 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { getPlaceDetails } from "@/lib/google/places-api";
+import { getPlaceReviews, getPlaceDetails, downloadAndStorePhoto } from "@/lib/google/places-api";
 
-// POST /api/places/[id]/refresh-google-data
+/**
+ * POST /api/places/[id]/refresh-google-data
+ *
+ * Refreshes Google data for a place:
+ * - PRO tier ($17/1K): basic info, hours, website, phone, price
+ * - ENTERPRISE tier ($20/1K): reviews (separate call)
+ * - PHOTOS ($7/1K): re-downloads 1 photo to Supabase Storage
+ */
 export async function POST(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -17,7 +24,6 @@ export async function POST(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Fetch the place to get google_place_id
   const { data: place, error: fetchError } = await supabase
     .from("places")
     .select("google_place_id, google_data")
@@ -36,34 +42,40 @@ export async function POST(
     );
   }
 
-  // Fetch fresh data from Google Places API
+  const existingData = (place.google_data as Record<string, unknown>) || {};
+
+  // 1. Fetch fresh basic data (PRO tier - $17/1K)
   const details = await getPlaceDetails(place.google_place_id);
 
-  if (!details) {
-    return NextResponse.json(
-      { error: "Failed to fetch data from Google Places API" },
-      { status: 502 }
-    );
+  // 2. Fetch reviews separately (ENTERPRISE tier - $20/1K)
+  const reviews = await getPlaceReviews(place.google_place_id);
+
+  // 3. Re-download photo if available (PHOTOS - $7/1K)
+  let photoStorageUrl = existingData.photo_storage_url as string | undefined;
+  if (details?.photoRef) {
+    const newUrl = await downloadAndStorePhoto(details.photoRef, id, user.id);
+    if (newUrl) photoStorageUrl = newUrl;
   }
 
-  // Merge fresh Google data into existing google_data
-  const existingData = (place.google_data as Record<string, unknown>) || {};
   const updatedGoogleData = {
     ...existingData,
-    types: details.types,
-    photos: details.photos,
-    rating: details.rating,
-    user_ratings_total: undefined, // will be set below if available
-    opening_hours: details.openingHours,
-    website: details.website,
-    phone: details.phone,
-    reviews: details.reviews,
-    editorial_summary: details.editorialSummary,
-    price_level: details.priceLevel,
-    url: details.googleMapsUrl,
+    types: details?.types || existingData.types,
+    rating: details?.rating || existingData.rating,
+    opening_hours: details?.openingHours || existingData.opening_hours,
+    website: details?.website || existingData.website,
+    phone: details?.phone || existingData.phone,
+    price_level: details?.priceLevel ?? existingData.price_level,
+    url: details?.googleMapsUrl || existingData.url,
+    photo_storage_url: photoStorageUrl,
+    reviews: reviews.length > 0 ? reviews : existingData.reviews,
   };
 
-  // Update the place in the database
+  // Remove legacy fields
+  const cleanData = updatedGoogleData as Record<string, unknown>;
+  delete cleanData.photos;
+  delete cleanData.editorial_summary;
+  delete cleanData.editorialSummary;
+
   const { data: updated, error: updateError } = await supabase
     .from("places")
     .update({
