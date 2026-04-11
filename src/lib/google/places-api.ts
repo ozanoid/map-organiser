@@ -54,14 +54,15 @@ function extractCountryAndCity(components: AddressComponent[]): {
   let city = "";
 
   for (const comp of components) {
-    if (comp.types.includes("country")) {
-      country = comp.longText;
+    const types = comp.types || [];
+    if (types.includes("country")) {
+      country = comp.longText || "";
     }
     if (
-      comp.types.includes("locality") ||
-      comp.types.includes("administrative_area_level_1")
+      types.includes("locality") ||
+      types.includes("administrative_area_level_1")
     ) {
-      if (!city) city = comp.longText;
+      if (!city) city = comp.longText || "";
     }
   }
 
