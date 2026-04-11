@@ -1,6 +1,5 @@
 /**
- * Parse Google Takeout GeoJSON export.
- * Takeout exports saved places as a GeoJSON FeatureCollection.
+ * Parse Google Takeout exports (GeoJSON or CSV).
  */
 
 export interface TakeoutPlace {
@@ -10,6 +9,81 @@ export interface TakeoutPlace {
   lng: number;
   googleMapsUrl: string | null;
   note: string | null;
+}
+
+/**
+ * Parse Google Takeout CSV export.
+ * CSV has columns: Title, Note, URL, Tags, Comment
+ * URL contains Google Maps place links with embedded Place IDs.
+ */
+export function parseTakeoutCsv(csvText: string): TakeoutPlace[] {
+  const lines = csvText.split("\n");
+  if (lines.length < 2) throw new Error("CSV file is empty or has no data rows");
+
+  // Parse header
+  const header = parseCsvLine(lines[0]);
+  const titleIdx = header.findIndex((h) => h.toLowerCase() === "title");
+  const noteIdx = header.findIndex((h) => h.toLowerCase() === "note");
+  const urlIdx = header.findIndex((h) => h.toLowerCase() === "url");
+  const commentIdx = header.findIndex((h) => h.toLowerCase() === "comment");
+
+  if (titleIdx === -1 || urlIdx === -1) {
+    throw new Error("CSV must have at least 'Title' and 'URL' columns");
+  }
+
+  const places: TakeoutPlace[] = [];
+
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+
+    const cols = parseCsvLine(line);
+    const title = cols[titleIdx]?.trim();
+    const url = cols[urlIdx]?.trim();
+    const note = cols[noteIdx]?.trim() || cols[commentIdx]?.trim() || null;
+
+    if (!title || !url) continue;
+
+    // Extract coordinates from URL if present (@lat,lng pattern)
+    const coordMatch = url.match(/@(-?\d+\.?\d*),(-?\d+\.?\d*)/);
+
+    places.push({
+      name: title,
+      address: null,
+      lat: coordMatch ? parseFloat(coordMatch[1]) : 0,
+      lng: coordMatch ? parseFloat(coordMatch[2]) : 0,
+      googleMapsUrl: url,
+      note,
+    });
+  }
+
+  return places;
+}
+
+/** Simple CSV line parser that handles quoted fields */
+function parseCsvLine(line: string): string[] {
+  const result: string[] = [];
+  let current = "";
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    if (char === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        current += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (char === "," && !inQuotes) {
+      result.push(current);
+      current = "";
+    } else {
+      current += char;
+    }
+  }
+  result.push(current);
+  return result;
 }
 
 export function parseTakeoutGeoJson(json: unknown): TakeoutPlace[] {

@@ -10,13 +10,13 @@ import { toast } from "sonner";
 export default function ImportPage() {
   const [file, setFile] = useState<File | null>(null);
   const [importing, setImporting] = useState(false);
-  const [result, setResult] = useState<{ imported: number; failed: number; total: number } | null>(null);
+  const [result, setResult] = useState<{ imported: number; failed: number; enriched?: number; total: number } | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const queryClient = useQueryClient();
 
   const handleFile = useCallback((f: File) => {
-    if (!f.name.endsWith(".json") && !f.name.endsWith(".geojson")) {
-      toast.error("Please upload a .json or .geojson file");
+    if (!f.name.endsWith(".json") && !f.name.endsWith(".geojson") && !f.name.endsWith(".csv")) {
+      toast.error("Please upload a .json, .geojson, or .csv file");
       return;
     }
     setFile(f);
@@ -74,9 +74,9 @@ export default function ImportPage() {
         <ol className="list-decimal list-inside space-y-1 text-muted-foreground text-xs">
           <li>Go to takeout.google.com</li>
           <li>Deselect all, then select only &quot;Saved&quot; (Maps)</li>
-          <li>Choose GeoJSON format</li>
-          <li>Export and download the file</li>
-          <li>Upload the .json file below</li>
+          <li>Export as GeoJSON or CSV</li>
+          <li>Download the file</li>
+          <li>Upload the .json or .csv file below</li>
         </ol>
       </Card>
 
@@ -126,7 +126,7 @@ export default function ImportPage() {
           <label className="cursor-pointer block">
             <Upload className="h-10 w-10 text-gray-300 mx-auto mb-3" />
             <p className="text-sm text-gray-500">
-              Drag & drop your GeoJSON file here
+              Drag & drop your GeoJSON or CSV file here
             </p>
             <p className="text-xs text-gray-400 mt-1">
               or click to browse
@@ -134,7 +134,7 @@ export default function ImportPage() {
             <input
               type="file"
               className="hidden"
-              accept=".json,.geojson"
+              accept=".json,.geojson,.csv"
               onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
             />
           </label>
@@ -156,7 +156,8 @@ export default function ImportPage() {
               </p>
               <p className="text-xs text-muted-foreground">
                 {result.imported} imported
-                {result.failed > 0 && `, ${result.failed} failed`}
+                {result.enriched ? `, ${result.enriched} enriched` : ""}
+                {result.failed > 0 ? `, ${result.failed} skipped` : ""}
                 {" "}out of {result.total} places
               </p>
             </div>
