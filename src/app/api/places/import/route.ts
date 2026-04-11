@@ -46,6 +46,7 @@ export async function POST(request: NextRequest) {
     let imported = 0;
     let failed = 0;
     let enriched = 0;
+    const skipped: { name: string; url: string | null; reason: string }[] = [];
 
     // For CSV imports, try to enrich each place via Google Places API
     // Process one by one to respect rate limits
@@ -104,6 +105,7 @@ export async function POST(request: NextRequest) {
         // Skip if no valid coordinates
         if (!lat || !lng) {
           failed++;
+          skipped.push({ name: p.name, url: p.googleMapsUrl, reason: "No coordinates" });
           continue;
         }
 
@@ -117,7 +119,8 @@ export async function POST(request: NextRequest) {
             .maybeSingle();
 
           if (existing) {
-            failed++; // Skip duplicate
+            failed++;
+            skipped.push({ name: p.name, url: p.googleMapsUrl, reason: "Already exists" });
             continue;
           }
         }
@@ -138,6 +141,7 @@ export async function POST(request: NextRequest) {
 
         if (error) {
           failed++;
+          skipped.push({ name: p.name, url: p.googleMapsUrl, reason: error.message });
           console.error("Import place error:", error.message);
         } else {
           imported++;
@@ -149,6 +153,7 @@ export async function POST(request: NextRequest) {
         }
       } catch {
         failed++;
+        skipped.push({ name: p.name, url: p.googleMapsUrl, reason: "Unknown error" });
       }
     }
 
@@ -157,6 +162,7 @@ export async function POST(request: NextRequest) {
       failed,
       enriched,
       total: places.length,
+      skipped,
     });
   } catch (error) {
     console.error("Import error:", error);

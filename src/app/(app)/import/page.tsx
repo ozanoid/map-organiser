@@ -10,7 +10,13 @@ import { toast } from "sonner";
 export default function ImportPage() {
   const [file, setFile] = useState<File | null>(null);
   const [importing, setImporting] = useState(false);
-  const [result, setResult] = useState<{ imported: number; failed: number; enriched?: number; total: number } | null>(null);
+  const [result, setResult] = useState<{
+    imported: number;
+    failed: number;
+    enriched?: number;
+    total: number;
+    skipped?: { name: string; url: string | null; reason: string }[];
+  } | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const queryClient = useQueryClient();
 
@@ -162,6 +168,40 @@ export default function ImportPage() {
               </p>
             </div>
           </div>
+
+          {/* Skipped places table */}
+          {result.skipped && result.skipped.length > 0 && (
+            <div className="mt-4 border-t pt-3">
+              <p className="text-xs font-medium text-muted-foreground mb-2">
+                Skipped places:
+              </p>
+              <div className="space-y-1.5">
+                {result.skipped.map((s, i) => (
+                  <div
+                    key={i}
+                    className="flex items-center justify-between text-xs bg-gray-50 rounded-md px-3 py-2"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <span className="font-medium">{s.name}</span>
+                      <span className="text-muted-foreground ml-2">
+                        ({s.reason})
+                      </span>
+                    </div>
+                    {s.url && (
+                      <a
+                        href={s.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:underline shrink-0 ml-2"
+                      >
+                        Maps
+                      </a>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </Card>
       )}
     </div>
