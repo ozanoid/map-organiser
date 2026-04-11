@@ -34,7 +34,7 @@ export function TagFilter() {
             className={cn(
               "px-2.5 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer flex items-center gap-1",
               isActive
-                ? "text-white"
+                ? "text-white bg-emerald-600"
                 : "bg-gray-100 text-gray-600 hover:bg-gray-200"
             )}
             style={

@@ -14,13 +14,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { InlineCategoryCreator } from "@/components/places/inline-category-creator";
@@ -65,17 +58,24 @@ export function AddPlaceDialog({ open, onOpenChange }: AddPlaceDialogProps) {
 
   // Auto-resolve category when placeData arrives
   useEffect(() => {
-    if (placeData?.types && placeData.types.length > 0 && categories.length > 0) {
-      const resolved = resolveCategoryId(
-        placeData.types,
-        categories,
-        placeData.name
+    if (!placeData || !placeData.types || categories.length === 0) return;
+    if (categoryId) return; // Don't override manual selection
+
+    const resolved = resolveCategoryId(
+      placeData.types,
+      categories,
+      placeData.name
+    );
+    if (resolved) {
+      setCategoryId(resolved);
+    } else {
+      // Fallback to "Other" category
+      const other = categories.find(
+        (c) => c.name.toLowerCase() === "other"
       );
-      if (resolved) {
-        setCategoryId(resolved);
-      }
+      if (other) setCategoryId(other.id);
     }
-  }, [placeData, categories]);
+  }, [placeData, categories, categoryId]);
 
   function reset() {
     setUrl("");
@@ -275,29 +275,21 @@ export function AddPlaceDialog({ open, onOpenChange }: AddPlaceDialogProps) {
                 Category
               </label>
               <div className="flex items-center gap-2">
-                <Select
-                  value={categoryId || undefined}
-                  onValueChange={(v) => setCategoryId(v ?? "")}
-                >
-                  <SelectTrigger className="cursor-pointer flex-1">
-                    <SelectValue placeholder="Select a category..." />
-                  </SelectTrigger>
-                  <SelectContent>
+                <div className="relative flex-1">
+                  <select
+                    value={categoryId}
+                    onChange={(e) => setCategoryId(e.target.value)}
+                    className="w-full h-9 px-3 pr-8 text-sm border border-input rounded-md bg-background cursor-pointer appearance-none focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1"
+                  >
+                    <option value="">Select a category...</option>
                     {categories.map((cat) => (
-                      <SelectItem
-                        key={cat.id}
-                        value={cat.id}
-                        className="cursor-pointer"
-                      >
-                        <span
-                          className="inline-block w-2.5 h-2.5 rounded-full mr-2"
-                          style={{ backgroundColor: cat.color }}
-                        />
+                      <option key={cat.id} value={cat.id}>
                         {cat.name}
-                      </SelectItem>
+                      </option>
                     ))}
-                  </SelectContent>
-                </Select>
+                  </select>
+                  <svg className="absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="m6 9 6 6 6-6" /></svg>
+                </div>
                 <InlineCategoryCreator
                   onCreated={(id) => setCategoryId(id)}
                 />
