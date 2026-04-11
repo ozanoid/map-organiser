@@ -167,26 +167,27 @@ export async function parseMapsUrl(rawUrl: string): Promise<ParsedUrl> {
     };
   }
 
-  // Step 3: If URL has FTid (0x...), decode S2 cell for coordinates
+  // Step 3: If URL has FTid (0x...), use S2 decode or URL coords for search
   const ftid = extractFtid(url);
   if (ftid) {
-    const ftidCoords = ftidToCoordinates(ftid);
+    const s2Coords = ftidToCoordinates(ftid);
+    const urlCoords = extractCoordinates(url);
+    const bestCoords = urlCoords || s2Coords; // URL coords are more precise
     const query = extractSearchQuery(url);
-    if (query && ftidCoords) {
+
+    if (query && bestCoords) {
       return {
         type: "search",
         query,
-        lat: ftidCoords.lat,
-        lng: ftidCoords.lng,
+        lat: bestCoords.lat,
+        lng: bestCoords.lng,
       };
     }
-    // If we got coords but no query, still useful
-    if (ftidCoords) {
-      const urlCoords = extractCoordinates(url);
+    if (bestCoords) {
       return {
         type: "coordinates",
-        lat: urlCoords?.lat || ftidCoords.lat,
-        lng: urlCoords?.lng || ftidCoords.lng,
+        lat: bestCoords.lat,
+        lng: bestCoords.lng,
       };
     }
   }
