@@ -180,21 +180,52 @@ FTid format: `0x48761da571b3e74b:0xdf82213aa7f76779`
 
 ### Google Places API (New)
 - **Base URL:** `https://places.googleapis.com/v1`
-- **Auth:** `X-Goog-Api-Key` header
-- **Field Mask:** id, displayName, formattedAddress, addressComponents, location, types, rating, userRatingCount, currentOpeningHours, regularOpeningHours, websiteUri, nationalPhoneNumber, photos, priceLevel, googleMapsUri, reviews, editorialSummary
+- **Auth:** `X-Goog-Api-Key` header (server-only, asla client'a gitmez)
+
+### Maliyet Tierleri
+
+| Tier | Field Mask | Fiyat/1K | Kullanim |
+|------|-----------|----------|----------|
+| **Essentials** | id, displayName, formattedAddress, addressComponents, location, types | $5 | - |
+| **Pro** (DEFAULT) | + rating, userRatingCount, openingHours, websiteUri, phone, photos (ref), priceLevel, googleMapsUri | **$17** | Mekan ekleme, import |
+| **Enterprise** | + reviews | **$20** | Sadece refresh butonu ile |
+| **Photos** | Her foto media indirme | **$7** | Mekan basina 1 foto, Supabase Storage'a kaydedilir |
+
+**Onemli:** `editorialSummary` sistemden tamamen kaldirildi (Enterprise+Atmosphere $25/1K tier tetikliyordu).
+
+**Ucretsiz kullanim:** Her SKU icin ayda 1,000 istek ucretsiz.
+
+### Foto Depolama Akisi
+```
+Google Places API → photoRef (referans, ucretsiz) →
+  GET /places/{ref}/media ($7/1K) → binary image →
+  Supabase Storage upload (place-photos bucket) →
+  Public URL → google_data.photo_storage_url olarak kaydedilir
+```
+Her mekan icin sadece 1 foto indirilir. Browser'da gosterildiginde Supabase'den servis edilir (Google'a istek gitmez).
 
 ### Fonksiyonlar
-| Fonksiyon | Input | Output | Aciklama |
-|-----------|-------|--------|----------|
-| `getPlaceDetails(placeId)` | ChIJ... string | ParsedPlaceData | Tek yer detayi |
-| `searchPlace(query, lat?, lng?)` | Text + optional coords | ParsedPlaceData | Metin aramasI, 5km radius bias |
-| `parseMapsUrl(rawUrl)` | Any Google Maps URL | ParsedUrl | URL → yapilandirilmis veri |
-| `resolveUrl(url)` | Short link URL | Full URL | Redirect takibi |
-| `ftidToCoordinates(ftid)` | 0x...:0x... | {lat, lng} | S2 cell decode |
-| `resolveCategoryName(types, name?)` | string[] | Category name | Type → kategori eslesmesi |
-| `resolveCategoryId(types, cats, name?)` | types + user cats | UUID | Kategori ID resolve |
-| `parseTakeoutCsv(text)` | CSV text | TakeoutPlace[] | CSV parser |
-| `parseTakeoutGeoJson(json)` | GeoJSON object | TakeoutPlace[] | GeoJSON parser |
+| Fonksiyon | Input | Output | Tier | Aciklama |
+|-----------|-------|--------|------|----------|
+| `getPlaceDetails(placeId)` | ChIJ... string | ParsedPlaceData | Pro ($17/1K) | Tek yer detayi (reviews haric) |
+| `searchPlace(query, lat?, lng?)` | Text + optional coords | ParsedPlaceData | Pro ($17/1K) | Metin aramasI, 5km radius bias |
+| `getPlaceReviews(placeId)` | ChIJ... string | GoogleReview[] | Enterprise ($20/1K) | Sadece yorumlar (on-demand) |
+| `downloadAndStorePhoto(ref, placeId, userId)` | Photo ref + IDs | Storage URL | Photos ($7/1K) | Foto indir → Supabase Storage |
+| `parseMapsUrl(rawUrl)` | Any Google Maps URL | ParsedUrl | Ucretsiz | URL → yapilandirilmis veri |
+| `resolveUrl(url)` | Short link URL | Full URL | Ucretsiz | Redirect takibi |
+| `ftidToCoordinates(ftid)` | 0x...:0x... | {lat, lng} | Ucretsiz | S2 cell decode |
+| `resolveCategoryName(types, name?)` | string[] | Category name | Ucretsiz | Type → kategori eslesmesi |
+| `resolveCategoryId(types, cats, name?)` | types + user cats | UUID | Ucretsiz | Kategori ID resolve |
+| `parseTakeoutCsv(text)` | CSV text | TakeoutPlace[] | Ucretsiz | CSV parser |
+| `parseTakeoutGeoJson(json)` | GeoJSON object | TakeoutPlace[] | Ucretsiz | GeoJSON parser |
+
+### Maliyet Ornekleri
+| Islem | API Cagrilari | Maliyet |
+|-------|--------------|---------|
+| 1 mekan ekleme (link) | 1 Text Search + 1 Photo | $0.024 |
+| 1 mekan refresh (reviews) | 1 Place Details + 1 Reviews + 1 Photo | $0.044 |
+| 100 mekan CSV import | 100 Text Search + 100 Photo | $2.40 |
+| Aylik 1000 istek (her SKU) | - | $0 (ucretsiz) |
 
 ### Auto-Kategorilendirme
 300+ Google Place type → 12 kategori mapping. Oncelik sirasi:
@@ -376,13 +407,23 @@ Google Takeout dosyalarini (CSV/GeoJSON) import etme, zenginlestirme, toplu kate
 2. Parse: parseTakeoutCsv() veya parseTakeoutGeoJson()
 3. Her yer icin:
    a. Google Maps URL varsa → parseMapsUrl() ile resolve
-   b. getPlaceDetails() veya searchPlace() ile zenginlestir
+   b. getPlaceDetails() veya searchPlace() ile zenginlestir (Pro tier $17/1K)
    c. resolveCategoryId() ile auto-kategorilendirme
    d. Duplikat kontrolu (google_place_id)
-   e. INSERT veya skip
-   f. 200ms rate limit delay
+   e. INSERT → places tablosu
+   f. photoRef varsa → downloadAndStorePhoto() → Supabase Storage ($7/1K)
+   g. google_data.photo_storage_url guncelle
+   h. 200ms rate limit delay
 4. Sonuc: {imported, failed, enriched, total, skipped[]}
 ```
+
+**Not:** Import sirasinda reviews ve editorialSummary cekilmez (maliyet optimizasyonu).
+
+### Photo Migration Endpoint
+`POST /api/places/migrate-photos` - Tek seferlik migration.
+- Mevcut Google foto URL'lerini Supabase Storage'a indirir
+- Sadece `google_data.photos` olan ama `photo_storage_url` olmayan mekanlari isler
+- Sonuc: `{total, migrated, failed, skipped}`
 
 ### CSV Format (Google Takeout)
 ```

@@ -155,7 +155,7 @@ src/
 ```json
 {
   "types": ["restaurant", "food"],
-  "photos": ["https://...media?maxHeightPx=400&key=..."],
+  "photo_storage_url": "https://[project].supabase.co/storage/v1/object/public/place-photos/[user_id]/[place_id].jpg",
   "rating": 4.5,
   "user_ratings_total": 1234,
   "opening_hours": {
@@ -164,21 +164,17 @@ src/
   },
   "website": "https://example.com",
   "phone": "+44 20 1234 5678",
-  "reviews": [
-    {
-      "rating": 5,
-      "text": "Amazing food...",
-      "author_name": "John D.",
-      "author_photo": "https://...",
-      "relative_time": "2 months ago",
-      "publish_time": "2026-02-01T..."
-    }
-  ],
-  "editorial_summary": "A vibrant restaurant...",
   "price_level": 2,
-  "url": "https://www.google.com/maps/place/..."
+  "url": "https://www.google.com/maps/place/...",
+  "reviews": [...]
 }
 ```
+
+**Onemli notlar:**
+- `photo_storage_url`: Fotograf Google'dan indirilip Supabase Storage'a kaydedilir. Google URL'leri tutulmaz.
+- `reviews`: Varsayilan olarak bos. Sadece kullanici "Refresh" butonuna tikladiginda cekilir (Enterprise tier, $20/1K).
+- `editorial_summary`: Sistemden tamamen kaldirildi (Enterprise+Atmosphere tier $25/1K tetikliyordu).
+- `photos` (eski Google URL dizisi): Deprecated. Yeni kayitlarda tutulmaz. `photo_storage_url` kullanilir.
 
 #### `categories`
 | Column | Type | Default | Description |

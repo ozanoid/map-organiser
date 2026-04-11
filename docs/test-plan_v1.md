@@ -83,7 +83,7 @@ Bu dokuman, Map Organiser uygulamasinin kullanici testi icin hazirlanmis senaryo
 | Adim | Beklenen Sonuc |
 |------|----------------|
 | /places/[id] sayfasina git | |
-| Foto gorulur | Google'dan cekilmis foto |
+| Foto gorulur | Supabase Storage'dan sunulan foto (ekleme sirasinda Google'dan indirilmis) |
 | Adres gorulur | Tam adres metni |
 | Kategori badge'i gorulur | Renkli badge ile kategori adi |
 | Google rating gorulur | Yildiz + puan + yorum sayisi |
@@ -296,7 +296,7 @@ Bu dokuman, Map Organiser uygulamasinin kullanici testi icin hazirlanmis senaryo
 | Adim | Beklenen Sonuc |
 |------|----------------|
 | CSV'deki mekanlar Google Maps URL iceriyorsa | enriched sayisi > 0 |
-| Import edilen mekanlarda foto gorulur | Google'dan cekilmis |
+| Import edilen mekanlarda foto gorulur | Supabase Storage'dan (import sirasinda indirilmis) |
 | Kategoriler otomatik atanmis | "Restaurant", "Cafe" vb. |
 | Duplikat mekanlar skip edilmis | "Already exists" sebebi |
 
@@ -451,3 +451,15 @@ Bu dokuman, Map Organiser uygulamasinin kullanici testi icin hazirlanmis senaryo
 3. **FTid Hassasiyeti:** S2 cell decode ~3km hassasiyet. Ayni sehirde cok subeli zincirlerde yanlis sube bulunabilir.
 4. **Base UI Select:** Native `<select>` kullaniliyor cunku Base UI Select guvenilir calismadi.
 5. **Offline:** PWA manifest var ama offline cache stratejisi henuz implement edilmedi.
+
+## Maliyet Bilgileri
+
+| Islem | Google API Maliyeti | Aciklama |
+|-------|-------------------|----------|
+| Mekan ekleme (link parse) | $0.024 | 1 Text Search ($17/1K) + 1 Photo ($7/1K) |
+| Reviews refresh | $0.020 | 1 Place Details ($20/1K, Enterprise tier) |
+| 100 mekan CSV import | ~$2.40 | 100 Search + 100 Photo |
+| Foto gosterme (app icinde) | $0 | Supabase Storage'dan sunulur, Google'a istek gitmez |
+| Ucretsiz kullanim | Ayda 1000/SKU | Her SKU icin 1000 istek ucretsiz |
+
+**Onemli:** `editorialSummary` sistemden cikarildi ($25/1K Enterprise+Atmosphere tier tetikliyordu). `reviews` sadece kullanici isteginde cekilir ($20/1K).
