@@ -57,12 +57,34 @@ function extractChIJPlaceId(url: string): string | null {
 }
 
 /**
- * Check if URL contains an FTid (0x...:0x...) which is NOT compatible
- * with the New Places API but indicates a specific place.
+ * Extract FTid (0x...:0x...) from URL. The first hex part is an S2 cell ID
+ * that encodes the place's approximate location.
  */
-function hasFtid(url: string): boolean {
-  return /!1s(0x[a-f0-9]+:0x[a-f0-9]+)/.test(url) ||
-    /ftid=(0x[a-f0-9]+:0x[a-f0-9]+)/.test(url);
+function extractFtid(url: string): string | null {
+  const match = url.match(/!1s(0x[a-f0-9]+:0x[a-f0-9]+)/) ||
+    url.match(/ftid=(0x[a-f0-9]+:0x[a-f0-9]+)/);
+  return match ? match[1] : null;
+}
+
+/**
+ * Decode approximate lat/lng from FTid's S2 cell ID.
+ * The first hex part (before ':') is an S2 cell ID.
+ */
+function ftidToCoordinates(ftid: string): { lat: number; lng: number } | null {
+  try {
+    const hexPart = ftid.split(":")[0]; // e.g. "0x48761da571b3e74b"
+    // Dynamic import would be better but we need sync here
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { S2 } = require("s2-geometry");
+    const cellId = BigInt(hexPart).toString();
+    const latlng = S2.idToLatLng(cellId);
+    if (latlng && isFinite(latlng.lat) && isFinite(latlng.lng)) {
+      return { lat: latlng.lat, lng: latlng.lng };
+    }
+  } catch {
+    // S2 decode failed
+  }
+  return null;
 }
 
 /**
@@ -145,23 +167,27 @@ export async function parseMapsUrl(rawUrl: string): Promise<ParsedUrl> {
     };
   }
 
-  // Step 3: If URL has FTid (0x...) but no coordinates,
-  // follow the URL to get the redirected version with coordinates
-  if (hasFtid(url) && !extractCoordinates(url)) {
-    const resolved = await resolveUrl(url);
-    if (resolved !== url) {
-      url = resolved;
-      // Check if resolved URL now has a ChIJ Place ID
-      const resolvedPlaceId = extractChIJPlaceId(url);
-      if (resolvedPlaceId) {
-        const coords = extractCoordinates(url);
-        return {
-          type: "place_id",
-          placeId: resolvedPlaceId,
-          lat: coords?.lat,
-          lng: coords?.lng,
-        };
-      }
+  // Step 3: If URL has FTid (0x...), decode S2 cell for coordinates
+  const ftid = extractFtid(url);
+  if (ftid) {
+    const ftidCoords = ftidToCoordinates(ftid);
+    const query = extractSearchQuery(url);
+    if (query && ftidCoords) {
+      return {
+        type: "search",
+        query,
+        lat: ftidCoords.lat,
+        lng: ftidCoords.lng,
+      };
+    }
+    // If we got coords but no query, still useful
+    if (ftidCoords) {
+      const urlCoords = extractCoordinates(url);
+      return {
+        type: "coordinates",
+        lat: urlCoords?.lat || ftidCoords.lat,
+        lng: urlCoords?.lng || ftidCoords.lng,
+      };
     }
   }
 
