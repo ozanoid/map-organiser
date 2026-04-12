@@ -102,9 +102,13 @@ export async function downloadAndStorePhoto(
   userId: string
 ): Promise<string | null> {
   try {
+    console.log(`[Google API] GET Photo | placeId=${placeId} | tier=PHOTOS ($7/1K)`);
     const googleUrl = `${BASE_URL}/${photoName}/media?maxHeightPx=600&maxWidthPx=600&key=${API_KEY}`;
     const res = await fetch(googleUrl);
-    if (!res.ok) return null;
+    if (!res.ok) {
+      console.error(`[Google API] FAIL Photo | placeId=${placeId} | status=${res.status}`);
+      return null;
+    }
 
     const blob = await res.blob();
     const buffer = Buffer.from(await blob.arrayBuffer());
@@ -145,6 +149,8 @@ export async function downloadAndStorePhoto(
 export async function getPlaceDetails(
   placeId: string
 ): Promise<ParsedPlaceData | null> {
+  console.log(`[Google API] GET Place Details | placeId=${placeId} | tier=PRO ($17/1K) | fields=${FIELD_MASK_PRO}`);
+
   const res = await fetch(`${BASE_URL}/places/${placeId}`, {
     method: "GET",
     headers: {
@@ -155,11 +161,13 @@ export async function getPlaceDetails(
   });
 
   if (!res.ok) {
-    console.error("Places API error:", res.status, await res.text());
+    const errorText = await res.text();
+    console.error(`[Google API] FAIL Place Details | placeId=${placeId} | status=${res.status} | error=${errorText}`);
     return null;
   }
 
   const data = await res.json();
+  console.log(`[Google API] OK Place Details | placeId=${placeId} | name="${data.displayName?.text}" | types=${data.types?.slice(0,3).join(",")}`);
 
   const { country, city } = extractCountryAndCity(
     data.addressComponents || []
@@ -215,6 +223,8 @@ export async function searchPlace(
     };
   }
 
+  console.log(`[Google API] POST Text Search | query="${query}" | coords=${lat ? `${lat},${lng}` : "none"} | tier=PRO ($17/1K)`);
+
   const res = await fetch(`${BASE_URL}/places:searchText`, {
     method: "POST",
     headers: {
@@ -226,12 +236,15 @@ export async function searchPlace(
   });
 
   if (!res.ok) {
-    console.error("Places search error:", res.status, await res.text());
+    const errorText = await res.text();
+    console.error(`[Google API] FAIL Text Search | query="${query}" | status=${res.status} | error=${errorText}`);
     return null;
   }
 
   const data = await res.json();
   const place = data.places?.[0];
+  console.log(`[Google API] OK Text Search | query="${query}" | found="${place?.displayName?.text || "none"}" | types=${place?.types?.slice(0,3).join(",") || "none"}`);
+
   if (!place) return null;
 
   const { country, city } = extractCountryAndCity(
@@ -272,6 +285,8 @@ export async function searchPlace(
 export async function getPlaceReviews(
   placeId: string
 ): Promise<GoogleReview[]> {
+  console.log(`[Google API] GET Reviews | placeId=${placeId} | tier=ENTERPRISE ($20/1K)`);
+
   const res = await fetch(`${BASE_URL}/places/${placeId}`, {
     method: "GET",
     headers: {
@@ -280,7 +295,10 @@ export async function getPlaceReviews(
     },
   });
 
-  if (!res.ok) return [];
+  if (!res.ok) {
+    console.error(`[Google API] FAIL Reviews | placeId=${placeId} | status=${res.status}`);
+    return [];
+  }
 
   const data = await res.json();
   return extractReviews(data.reviews);
