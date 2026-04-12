@@ -102,13 +102,11 @@ export async function downloadAndStorePhoto(
   userId: string
 ): Promise<string | null> {
   try {
-    console.log(`[Google API] GET Photo | placeId=${placeId} | tier=PHOTOS ($7/1K)`);
     const googleUrl = `${BASE_URL}/${photoName}/media?maxHeightPx=600&maxWidthPx=600&key=${API_KEY}`;
+    console.log(`[Google API REQUEST] curl -X GET "${BASE_URL}/${photoName}/media?maxHeightPx=600&maxWidthPx=600&key=${API_KEY.substring(0,8)}...${API_KEY.substring(API_KEY.length-4)}"`);
     const res = await fetch(googleUrl);
-    if (!res.ok) {
-      console.error(`[Google API] FAIL Photo | placeId=${placeId} | status=${res.status}`);
-      return null;
-    }
+    console.log(`[Google API RESPONSE] ${res.status} ${res.statusText} | content-type=${res.headers.get("content-type")} | content-length=${res.headers.get("content-length")}`);
+    if (!res.ok) return null;
 
     const blob = await res.blob();
     const buffer = Buffer.from(await blob.arrayBuffer());
@@ -149,25 +147,18 @@ export async function downloadAndStorePhoto(
 export async function getPlaceDetails(
   placeId: string
 ): Promise<ParsedPlaceData | null> {
-  console.log(`[Google API] GET Place Details | placeId=${placeId} | tier=PRO ($17/1K) | fields=${FIELD_MASK_PRO}`);
+  const url = `${BASE_URL}/places/${placeId}`;
+  const headers = { "X-Goog-Api-Key": API_KEY, "X-Goog-FieldMask": FIELD_MASK_PRO };
+  console.log(`[Google API REQUEST] curl -X GET "${url}" -H "X-Goog-Api-Key: ${API_KEY.substring(0,8)}...${API_KEY.substring(API_KEY.length-4)}" -H "X-Goog-FieldMask: ${FIELD_MASK_PRO}"`);
 
-  const res = await fetch(`${BASE_URL}/places/${placeId}`, {
-    method: "GET",
-    headers: {
-      "X-Goog-Api-Key": API_KEY,
-      "X-Goog-FieldMask": FIELD_MASK_PRO,
-    },
-    next: { revalidate: 86400 },
-  });
+  const res = await fetch(url, { method: "GET", headers, next: { revalidate: 86400 } });
+  const responseBody = await res.text();
 
-  if (!res.ok) {
-    const errorText = await res.text();
-    console.error(`[Google API] FAIL Place Details | placeId=${placeId} | status=${res.status} | error=${errorText}`);
-    return null;
-  }
+  console.log(`[Google API RESPONSE] ${res.status} ${res.statusText} | ${responseBody.substring(0, 1000)}${responseBody.length > 1000 ? "...[truncated]" : ""}`);
 
-  const data = await res.json();
-  console.log(`[Google API] OK Place Details | placeId=${placeId} | name="${data.displayName?.text}" | types=${data.types?.slice(0,3).join(",")}`);
+  if (!res.ok) return null;
+
+  const data = JSON.parse(responseBody);;
 
   const { country, city } = extractCountryAndCity(
     data.addressComponents || []
@@ -223,27 +214,21 @@ export async function searchPlace(
     };
   }
 
-  console.log(`[Google API] POST Text Search | query="${query}" | coords=${lat ? `${lat},${lng}` : "none"} | tier=PRO ($17/1K)`);
+  const url = `${BASE_URL}/places:searchText`;
+  const fieldMask = `places.${FIELD_MASK_PRO.split(",").join(",places.")}`;
+  const reqHeaders = { "Content-Type": "application/json", "X-Goog-Api-Key": API_KEY, "X-Goog-FieldMask": fieldMask };
+  const reqBody = JSON.stringify(body);
+  console.log(`[Google API REQUEST] curl -X POST "${url}" -H "Content-Type: application/json" -H "X-Goog-Api-Key: ${API_KEY.substring(0,8)}...${API_KEY.substring(API_KEY.length-4)}" -H "X-Goog-FieldMask: ${fieldMask}" -d '${reqBody}'`);
 
-  const res = await fetch(`${BASE_URL}/places:searchText`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Goog-Api-Key": API_KEY,
-      "X-Goog-FieldMask": `places.${FIELD_MASK_PRO.split(",").join(",places.")}`,
-    },
-    body: JSON.stringify(body),
-  });
+  const res = await fetch(url, { method: "POST", headers: reqHeaders, body: reqBody });
+  const responseBody = await res.text();
 
-  if (!res.ok) {
-    const errorText = await res.text();
-    console.error(`[Google API] FAIL Text Search | query="${query}" | status=${res.status} | error=${errorText}`);
-    return null;
-  }
+  console.log(`[Google API RESPONSE] ${res.status} ${res.statusText} | ${responseBody.substring(0, 1000)}${responseBody.length > 1000 ? "...[truncated]" : ""}`);
 
-  const data = await res.json();
+  if (!res.ok) return null;
+
+  const data = JSON.parse(responseBody);
   const place = data.places?.[0];
-  console.log(`[Google API] OK Text Search | query="${query}" | found="${place?.displayName?.text || "none"}" | types=${place?.types?.slice(0,3).join(",") || "none"}`);
 
   if (!place) return null;
 
@@ -285,21 +270,16 @@ export async function searchPlace(
 export async function getPlaceReviews(
   placeId: string
 ): Promise<GoogleReview[]> {
-  console.log(`[Google API] GET Reviews | placeId=${placeId} | tier=ENTERPRISE ($20/1K)`);
+  const url = `${BASE_URL}/places/${placeId}`;
+  console.log(`[Google API REQUEST] curl -X GET "${url}" -H "X-Goog-Api-Key: ${API_KEY.substring(0,8)}...${API_KEY.substring(API_KEY.length-4)}" -H "X-Goog-FieldMask: ${FIELD_MASK_REVIEWS}"`);
 
-  const res = await fetch(`${BASE_URL}/places/${placeId}`, {
-    method: "GET",
-    headers: {
-      "X-Goog-Api-Key": API_KEY,
-      "X-Goog-FieldMask": FIELD_MASK_REVIEWS,
-    },
-  });
+  const res = await fetch(url, { method: "GET", headers: { "X-Goog-Api-Key": API_KEY, "X-Goog-FieldMask": FIELD_MASK_REVIEWS } });
+  const responseBody = await res.text();
 
-  if (!res.ok) {
-    console.error(`[Google API] FAIL Reviews | placeId=${placeId} | status=${res.status}`);
-    return [];
-  }
+  console.log(`[Google API RESPONSE] ${res.status} ${res.statusText} | ${responseBody.substring(0, 500)}${responseBody.length > 500 ? "...[truncated]" : ""}`);
 
-  const data = await res.json();
+  if (!res.ok) return [];
+
+  const data = JSON.parse(responseBody);
   return extractReviews(data.reviews);
 }
