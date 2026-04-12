@@ -69,7 +69,7 @@ function ListsContent() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {lists.map((list) => (
-            <Link key={list.id} href={`/lists/${list.id}`}>
+            <Link key={list.id} href={`/lists/${list.id}`} prefetch={false}>
               <Card className="p-4 hover:shadow-md transition-shadow cursor-pointer">
                 <div className="flex items-start gap-3">
                   <div

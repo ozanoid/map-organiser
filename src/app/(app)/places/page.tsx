@@ -67,7 +67,7 @@ function SelectablePlaceCard({
         </div>
       </label>
 
-      <Link href={`/places/${place.id}`}>
+      <Link href={`/places/${place.id}`} prefetch={false}>
         <Card
           className={`overflow-hidden hover:shadow-md transition-shadow cursor-pointer ${
             isSelected ? "ring-2 ring-emerald-500" : ""

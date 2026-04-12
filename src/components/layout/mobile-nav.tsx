@@ -24,6 +24,7 @@ export function MobileNav() {
             <Link
               key={tab.href}
               href={tab.href}
+              prefetch={false}
               className={cn(
                 "flex flex-col items-center gap-0.5 px-4 py-1.5 cursor-pointer transition-colors",
                 isActive ? "text-emerald-600" : "text-gray-400"

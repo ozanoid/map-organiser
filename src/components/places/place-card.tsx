@@ -15,7 +15,7 @@ export function PlaceCard({ place }: { place: Place }) {
   const extraTagCount = tags.length - 2;
 
   return (
-    <Link href={`/places/${place.id}`}>
+    <Link href={`/places/${place.id}`} prefetch={false}>
       <Card className="overflow-hidden hover:shadow-md transition-shadow cursor-pointer">
         {/* Photo area with visit status badge */}
         {googlePhoto && (
