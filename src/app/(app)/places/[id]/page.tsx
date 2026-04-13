@@ -339,10 +339,11 @@ export default function PlaceDetailPage() {
                 key={i}
                 type="button"
                 onClick={() => handleRatingClick(i + 1)}
-                className="cursor-pointer p-0 bg-transparent border-none hover:scale-110 transition-transform"
+                className="cursor-pointer p-2 -m-0.5 bg-transparent border-none hover:scale-110 transition-transform"
+                aria-label={`Rate ${i + 1} star${i > 0 ? "s" : ""}`}
               >
                 <Star
-                  className={`h-3.5 w-3.5 ${
+                  className={`h-4 w-4 ${
                     place.rating && i < place.rating
                       ? "fill-emerald-500 text-emerald-500"
                       : "text-gray-300 hover:text-emerald-300"

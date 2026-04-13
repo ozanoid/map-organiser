@@ -1,6 +1,7 @@
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { AppHeader } from "@/components/layout/app-header";
 import { MobileNav } from "@/components/layout/mobile-nav";
+import { OfflineBanner } from "@/components/layout/offline-banner";
 
 export default function AppLayout({
   children,
@@ -8,10 +9,11 @@ export default function AppLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="flex h-dvh overflow-hidden">
       <AppSidebar />
       <div className="flex flex-1 flex-col min-w-0">
         <AppHeader />
+        <OfflineBanner />
         <main className="flex-1 overflow-auto pb-14 lg:pb-0">{children}</main>
         <MobileNav />
       </div>

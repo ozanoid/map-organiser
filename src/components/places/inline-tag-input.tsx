@@ -86,7 +86,8 @@ export function InlineTagInput({ selectedTagIds, onChange }: InlineTagInputProps
               <button
                 type="button"
                 onClick={() => removeTag(tag.id)}
-                className="cursor-pointer hover:text-red-500 transition-colors"
+                className="cursor-pointer hover:text-red-500 transition-colors p-1 -mr-0.5"
+                aria-label={`Remove tag ${tag.name}`}
               >
                 <X className="h-3 w-3" />
               </button>

@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useCallback, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { usePlaces } from "@/lib/hooks/use-places";
 import { useFilters } from "@/lib/hooks/use-filters";
 import { AddPlaceDialog } from "@/components/places/add-place-dialog";
@@ -10,7 +11,7 @@ import { FilterPanel } from "@/components/filters/filter-panel";
 import { Button } from "@/components/ui/button";
 import { DebouncedSearchInput } from "@/components/filters/debounced-search-input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { MapPin, Plus, SlidersHorizontal, CheckSquare, Square } from "lucide-react";
+import { MapPin, Plus, SlidersHorizontal, CheckSquare, Square, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -186,7 +187,8 @@ function SelectablePlaceCard({
 
 function PlacesContent() {
   const { filters, setFilters, hasActiveFilters } = useFilters();
-  const { data: places = [], isLoading } = usePlaces(filters);
+  const { data: places = [], isLoading, isFetching } = usePlaces(filters);
+  const queryClient = useQueryClient();
   const [addOpen, setAddOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -218,7 +220,7 @@ function PlacesContent() {
   return (
     <div className="flex">
       {/* Desktop filter sidebar */}
-      <aside className="hidden lg:block w-64 shrink-0 border-r p-4 overflow-y-auto h-[calc(100vh-3.5rem)]">
+      <aside className="hidden lg:block w-64 shrink-0 border-r p-4 overflow-y-auto h-[calc(100dvh-3.5rem)]">
         <FilterPanel />
       </aside>
 
@@ -227,6 +229,15 @@ function PlacesContent() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <h1 className="text-xl font-semibold">Places</h1>
+          <button
+            type="button"
+            onClick={() => queryClient.invalidateQueries({ queryKey: ["places"] })}
+            className="p-1.5 text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
+            title="Refresh places"
+            aria-label="Refresh places"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${isFetching ? "animate-spin" : ""}`} />
+          </button>
           {places.length > 0 && (
             <button
               type="button"

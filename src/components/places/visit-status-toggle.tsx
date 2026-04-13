@@ -62,9 +62,10 @@ export function VisitStatusToggle({
             key={status.value}
             type="button"
             onClick={() => onChange(isActive ? null : status.value)}
+            aria-pressed={isActive}
             className={cn(
               "flex items-center gap-1 border rounded-full cursor-pointer transition-all",
-              size === "sm" ? "px-2 py-0.5 text-xs" : "px-3 py-1 text-sm",
+              size === "sm" ? "px-2.5 py-1.5 text-xs" : "px-3 py-1.5 text-sm",
               isActive
                 ? `${status.activeBg} ${status.activeColor}`
                 : "border-gray-200 text-gray-500 hover:border-gray-300 hover:text-gray-700"

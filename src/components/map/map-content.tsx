@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { MapView } from "@/components/map/map-view";
 import { AddPlaceDialog } from "@/components/places/add-place-dialog";
 import { FilterSheet } from "@/components/filters/filter-sheet";
@@ -36,7 +36,12 @@ export function MapContent({ mapboxToken }: { mapboxToken: string }) {
   const [detailLoading, setDetailLoading] = useState(false);
   const queryClient = useQueryClient();
 
-  // When a place is selected from popup, fetch full details
+  // Close panel helper — shared by X button and popstate
+  const closePanel = useCallback(() => {
+    setSelectedPlace(null);
+  }, []);
+
+  // When a place is selected from popup, fetch full details + push history
   useEffect(() => {
     if (!selectedPlace) {
       setDetailData(null);
@@ -50,6 +55,20 @@ export function MapContent({ mapboxToken }: { mapboxToken: string }) {
         setDetailLoading(false);
       })
       .catch(() => setDetailLoading(false));
+
+    // Push a history entry so mobile back button closes the panel
+    window.history.pushState({ panel: selectedPlace.id }, "");
+  }, [selectedPlace]);
+
+  // Listen for browser back to close the detail panel
+  useEffect(() => {
+    function onPopState(e: PopStateEvent) {
+      if (selectedPlace) {
+        setSelectedPlace(null);
+      }
+    }
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
   }, [selectedPlace]);
 
   function handlePlaceClick(place: Place) {
@@ -122,16 +141,18 @@ export function MapContent({ mapboxToken }: { mapboxToken: string }) {
           </Button>
         </div>
 
-        {/* FAB */}
-        <div className="absolute bottom-20 right-4 z-10 lg:bottom-6">
-          <Button
-            size="lg"
-            className="rounded-full shadow-lg h-14 w-14 cursor-pointer"
-            onClick={() => setAddOpen(true)}
-          >
-            <Plus className="h-6 w-6" />
-          </Button>
-        </div>
+        {/* FAB — hidden when detail panel is open */}
+        {!selectedPlace && (
+          <div className="absolute bottom-20 right-4 z-10 lg:bottom-6">
+            <Button
+              size="lg"
+              className="rounded-full shadow-lg h-14 w-14 cursor-pointer"
+              onClick={() => setAddOpen(true)}
+            >
+              <Plus className="h-6 w-6" />
+            </Button>
+          </div>
+        )}
 
         {/* Place count */}
         {!isLoading && places.length > 0 && !selectedPlace && (
@@ -142,9 +163,34 @@ export function MapContent({ mapboxToken }: { mapboxToken: string }) {
           </div>
         )}
 
+        {/* Empty state CTA */}
+        {!isLoading && places.length === 0 && !selectedPlace && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
+            <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-lg p-6 text-center max-w-[260px] pointer-events-auto">
+              <MapPin className="h-10 w-10 text-gray-300 mx-auto mb-3" />
+              <p className="text-sm font-medium text-gray-700 mb-1">No places yet</p>
+              <p className="text-xs text-muted-foreground mb-4">
+                {hasActiveFilters
+                  ? "No places match your filters."
+                  : "Add your first place to see it on the map."}
+              </p>
+              {!hasActiveFilters && (
+                <Button
+                  size="sm"
+                  className="cursor-pointer gap-1.5"
+                  onClick={() => setAddOpen(true)}
+                >
+                  <Plus className="h-4 w-4" />
+                  Add Place
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Slide-in detail panel */}
         {selectedPlace && (
-          <div className="absolute top-0 right-0 bottom-0 w-full sm:w-96 z-20 bg-white border-l shadow-xl overflow-y-auto">
+          <div className="absolute top-0 right-0 bottom-0 w-full sm:w-96 z-20 bg-white border-l shadow-xl overflow-y-auto pb-14 lg:pb-0">
             {/* Close button */}
             <div className="sticky top-0 bg-white/95 backdrop-blur-sm z-10 flex items-center justify-between p-3 border-b">
               <h2 className="font-semibold text-sm truncate flex-1">
@@ -153,8 +199,8 @@ export function MapContent({ mapboxToken }: { mapboxToken: string }) {
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-7 w-7 p-0 cursor-pointer shrink-0"
-                onClick={() => setSelectedPlace(null)}
+                className="h-9 w-9 p-0 cursor-pointer shrink-0"
+                onClick={() => { window.history.back(); }}
               >
                 <X className="h-4 w-4" />
               </Button>
@@ -240,7 +286,8 @@ export function MapContent({ mapboxToken }: { mapboxToken: string }) {
                       <button
                         key={star}
                         onClick={() => handleRatingClick(star)}
-                        className="cursor-pointer p-0.5"
+                        className="cursor-pointer p-2 -m-1"
+                        aria-label={`Rate ${star} star${star > 1 ? "s" : ""}`}
                       >
                         <Star
                           className={`h-4 w-4 ${
