@@ -163,6 +163,31 @@ export function MapContent({ mapboxToken }: { mapboxToken: string }) {
           </div>
         )}
 
+        {/* Empty state CTA */}
+        {!isLoading && places.length === 0 && !selectedPlace && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
+            <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-lg p-6 text-center max-w-[260px] pointer-events-auto">
+              <MapPin className="h-10 w-10 text-gray-300 mx-auto mb-3" />
+              <p className="text-sm font-medium text-gray-700 mb-1">No places yet</p>
+              <p className="text-xs text-muted-foreground mb-4">
+                {hasActiveFilters
+                  ? "No places match your filters."
+                  : "Add your first place to see it on the map."}
+              </p>
+              {!hasActiveFilters && (
+                <Button
+                  size="sm"
+                  className="cursor-pointer gap-1.5"
+                  onClick={() => setAddOpen(true)}
+                >
+                  <Plus className="h-4 w-4" />
+                  Add Place
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Slide-in detail panel */}
         {selectedPlace && (
           <div className="absolute top-0 right-0 bottom-0 w-full sm:w-96 z-20 bg-white border-l shadow-xl overflow-y-auto pb-14 lg:pb-0">

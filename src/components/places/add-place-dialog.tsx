@@ -169,6 +169,8 @@ export function AddPlaceDialog({ open, onOpenChange }: AddPlaceDialogProps) {
           <div className="space-y-4">
             <div className="flex gap-2">
               <Input
+                type="url"
+                inputMode="url"
                 placeholder="Paste a Google Maps link..."
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
