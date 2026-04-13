@@ -39,15 +39,17 @@ export function useFilters() {
             ? "category"
             : key === "tag_ids"
               ? "tags"
-              : key === "rating_min"
-                ? "rating"
-                : key === "google_rating_min"
-                  ? "google_rating"
-                  : key === "visit_status"
-                    ? "status"
-                    : key === "search"
-                      ? "q"
-                      : key;
+              : key === "list_id"
+                ? "list"
+                : key === "rating_min"
+                  ? "rating"
+                  : key === "google_rating_min"
+                    ? "google_rating"
+                    : key === "visit_status"
+                      ? "status"
+                      : key === "search"
+                        ? "q"
+                        : key;
 
         if (value === undefined || value === null || value === "") {
           params.delete(paramKey);

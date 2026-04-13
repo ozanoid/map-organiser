@@ -7,10 +7,10 @@ import { AddPlaceDialog } from "@/components/places/add-place-dialog";
 import { BulkActionBar } from "@/components/places/bulk-action-bar";
 import { FilterSheet } from "@/components/filters/filter-sheet";
 import { FilterPanel } from "@/components/filters/filter-panel";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { DebouncedSearchInput } from "@/components/filters/debounced-search-input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { MapPin, Plus, Search, SlidersHorizontal, CheckSquare, Square } from "lucide-react";
+import { MapPin, Plus, SlidersHorizontal, CheckSquare, Square } from "lucide-react";
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -270,13 +270,10 @@ function PlacesContent() {
       </div>
 
       {/* Search */}
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Search places..."
-          value={filters.search || ""}
-          onChange={(e) => setFilters({ search: e.target.value || undefined })}
-          className="pl-9"
+      <div className="max-w-sm">
+        <DebouncedSearchInput
+          value={filters.search}
+          onSearch={(search) => setFilters({ search })}
         />
       </div>
 
