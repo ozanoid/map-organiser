@@ -218,7 +218,7 @@ function PlacesContent() {
   return (
     <div className="flex">
       {/* Desktop filter sidebar */}
-      <aside className="hidden lg:block w-64 shrink-0 border-r p-4 overflow-y-auto h-[calc(100vh-3.5rem)]">
+      <aside className="hidden lg:block w-64 shrink-0 border-r p-4 overflow-y-auto h-[calc(100dvh-3.5rem)]">
         <FilterPanel />
       </aside>
 

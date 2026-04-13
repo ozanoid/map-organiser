@@ -122,16 +122,18 @@ export function MapContent({ mapboxToken }: { mapboxToken: string }) {
           </Button>
         </div>
 
-        {/* FAB */}
-        <div className="absolute bottom-20 right-4 z-10 lg:bottom-6">
-          <Button
-            size="lg"
-            className="rounded-full shadow-lg h-14 w-14 cursor-pointer"
-            onClick={() => setAddOpen(true)}
-          >
-            <Plus className="h-6 w-6" />
-          </Button>
-        </div>
+        {/* FAB — hidden when detail panel is open */}
+        {!selectedPlace && (
+          <div className="absolute bottom-20 right-4 z-10 lg:bottom-6">
+            <Button
+              size="lg"
+              className="rounded-full shadow-lg h-14 w-14 cursor-pointer"
+              onClick={() => setAddOpen(true)}
+            >
+              <Plus className="h-6 w-6" />
+            </Button>
+          </div>
+        )}
 
         {/* Place count */}
         {!isLoading && places.length > 0 && !selectedPlace && (
@@ -144,7 +146,7 @@ export function MapContent({ mapboxToken }: { mapboxToken: string }) {
 
         {/* Slide-in detail panel */}
         {selectedPlace && (
-          <div className="absolute top-0 right-0 bottom-0 w-full sm:w-96 z-20 bg-white border-l shadow-xl overflow-y-auto">
+          <div className="absolute top-0 right-0 bottom-0 w-full sm:w-96 z-20 bg-white border-l shadow-xl overflow-y-auto pb-14 lg:pb-0">
             {/* Close button */}
             <div className="sticky top-0 bg-white/95 backdrop-blur-sm z-10 flex items-center justify-between p-3 border-b">
               <h2 className="font-semibold text-sm truncate flex-1">
@@ -153,7 +155,7 @@ export function MapContent({ mapboxToken }: { mapboxToken: string }) {
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-7 w-7 p-0 cursor-pointer shrink-0"
+                className="h-9 w-9 p-0 cursor-pointer shrink-0"
                 onClick={() => setSelectedPlace(null)}
               >
                 <X className="h-4 w-4" />
@@ -240,7 +242,8 @@ export function MapContent({ mapboxToken }: { mapboxToken: string }) {
                       <button
                         key={star}
                         onClick={() => handleRatingClick(star)}
-                        className="cursor-pointer p-0.5"
+                        className="cursor-pointer p-2 -m-1"
+                        aria-label={`Rate ${star} star${star > 1 ? "s" : ""}`}
                       >
                         <Star
                           className={`h-4 w-4 ${
