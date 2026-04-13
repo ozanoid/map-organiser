@@ -2,14 +2,14 @@
 
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { CountryCityFilter } from "./country-city-filter";
 import { CategoryFilter } from "./category-filter";
 import { VisitStatusFilter } from "./visit-status-filter";
 import { TagFilter } from "./tag-filter";
 import { ListFilter } from "./list-filter";
+import { DebouncedSearchInput } from "./debounced-search-input";
 import { useFilters } from "@/lib/hooks/use-filters";
-import { Search, X } from "lucide-react";
+import { X } from "lucide-react";
 
 interface FilterSheetProps {
   open: boolean;
@@ -57,15 +57,10 @@ export function FilterSheet({ open, onOpenChange }: FilterSheetProps) {
           {/* Search */}
           <div>
             <label className="text-sm font-medium mb-2 block">Search</label>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search places..."
-                value={filters.search || ""}
-                onChange={(e) => setFilters({ search: e.target.value || undefined })}
-                className="pl-9"
-              />
-            </div>
+            <DebouncedSearchInput
+              value={filters.search}
+              onSearch={(search) => setFilters({ search })}
+            />
           </div>
 
           {/* Country / City */}
@@ -74,7 +69,7 @@ export function FilterSheet({ open, onOpenChange }: FilterSheetProps) {
             <CountryCityFilter
               country={filters.country}
               city={filters.city}
-              onCountryChange={(country) => setFilters({ country })}
+              onCountryChange={(country) => setFilters({ country, city: undefined })}
               onCityChange={(city) => setFilters({ city })}
             />
           </div>
@@ -83,8 +78,8 @@ export function FilterSheet({ open, onOpenChange }: FilterSheetProps) {
           <div>
             <label className="text-sm font-medium mb-2 block">Category</label>
             <CategoryFilter
-              selected={filters.category_id}
-              onChange={(category_id) => setFilters({ category_id })}
+              selected={filters.category_ids}
+              onChange={(category_ids) => setFilters({ category_ids })}
             />
           </div>
 

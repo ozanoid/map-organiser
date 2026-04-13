@@ -2,6 +2,8 @@
 
 import { useLists } from "@/lib/hooks/use-lists";
 import { useFilters } from "@/lib/hooks/use-filters";
+import { Button } from "@/components/ui/button";
+import { X } from "lucide-react";
 
 export function ListFilter() {
   const { data: lists = [] } = useLists();
@@ -36,6 +38,19 @@ export function ListFilter() {
       >
         <path d="m6 9 6 6 6-6" />
       </svg>
+      {filters.list_id && (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="absolute right-7 top-1/2 -translate-y-1/2 h-5 w-5 p-0 cursor-pointer z-10"
+          onClick={(e) => {
+            e.stopPropagation();
+            setFilters({ list_id: undefined });
+          }}
+        >
+          <X className="h-3 w-3" />
+        </Button>
+      )}
     </div>
   );
 }
