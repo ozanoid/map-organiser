@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { resolveCategoryId } from "@/lib/google/category-mapping";
 import { downloadAndStorePhoto } from "@/lib/google/places-api";
+import { getUserApiKeys } from "@/lib/google/get-user-api-keys";
 
 // GET /api/places - List all places for current user with filters
 export async function GET(request: NextRequest) {
@@ -117,6 +118,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const { googleApiKey } = await getUserApiKeys(user.id);
+
   const body = await request.json();
   const { name, address, country, city, lat, lng, category_id, rating, notes, google_place_id, google_data, source, tag_ids, list_ids, visit_status, photoRef } = body;
 
@@ -197,8 +200,8 @@ export async function POST(request: NextRequest) {
   }
 
   // Download photo to Supabase Storage (1 photo only, $7/1K requests)
-  if (photoRef) {
-    const storageUrl = await downloadAndStorePhoto(photoRef, place.id, user.id);
+  if (photoRef && googleApiKey) {
+    const storageUrl = await downloadAndStorePhoto(photoRef, place.id, user.id, googleApiKey);
     if (storageUrl) {
       await supabase
         .from("places")

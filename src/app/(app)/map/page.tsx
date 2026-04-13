@@ -36,6 +36,15 @@ function MapContent() {
   const [detailData, setDetailData] = useState<Place | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const queryClient = useQueryClient();
+  const [mapboxToken, setMapboxToken] = useState("");
+
+  // Fetch user's Mapbox token
+  useEffect(() => {
+    fetch("/api/user/mapbox-token")
+      .then((r) => r.json())
+      .then((d) => setMapboxToken(d.token || ""))
+      .catch(() => {});
+  }, []);
 
   // When a place is selected from popup, fetch full details
   useEffect(() => {
@@ -103,6 +112,7 @@ function MapContent() {
         <MapView
           places={places}
           onPlaceClick={handlePlaceClick}
+          mapboxToken={mapboxToken}
           className="w-full h-full"
         />
 

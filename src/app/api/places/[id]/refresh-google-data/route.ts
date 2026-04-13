@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getPlaceReviews, getPlaceDetails, downloadAndStorePhoto } from "@/lib/google/places-api";
+import { getUserApiKeys } from "@/lib/google/get-user-api-keys";
 
 /**
  * POST /api/places/[id]/refresh-google-data
@@ -42,18 +43,26 @@ export async function POST(
     );
   }
 
+  const { googleApiKey } = await getUserApiKeys(user.id);
+  if (!googleApiKey) {
+    return NextResponse.json(
+      { error: "Please add your Google Places API key in Settings" },
+      { status: 400 }
+    );
+  }
+
   const existingData = (place.google_data as Record<string, unknown>) || {};
 
   // 1. Fetch fresh basic data (PRO tier - $17/1K)
-  const details = await getPlaceDetails(place.google_place_id);
+  const details = await getPlaceDetails(place.google_place_id, googleApiKey, user.id);
 
   // 2. Fetch reviews separately (ENTERPRISE tier - $20/1K)
-  const reviews = await getPlaceReviews(place.google_place_id);
+  const reviews = await getPlaceReviews(place.google_place_id, googleApiKey, user.id);
 
   // 3. Re-download photo if available (PHOTOS - $7/1K)
   let photoStorageUrl = existingData.photo_storage_url as string | undefined;
   if (details?.photoRef) {
-    const newUrl = await downloadAndStorePhoto(details.photoRef, id, user.id);
+    const newUrl = await downloadAndStorePhoto(details.photoRef, id, user.id, googleApiKey);
     if (newUrl) photoStorageUrl = newUrl;
   }
 

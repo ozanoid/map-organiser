@@ -9,12 +9,14 @@
  *   Photos ($7/1K):      each media URL fetch
  *
  * Default mask uses PRO tier. Reviews fetched separately via getPlaceReviews().
+ * All functions require apiKey + userId params for per-user billing and tracking.
  */
 
 import type { ParsedPlaceData, GoogleReview } from "@/lib/types";
 import { createClient } from "@/lib/supabase/server";
+import { trackUsage } from "@/lib/google/track-usage";
+import { maskApiKey } from "@/lib/google/get-user-api-keys";
 
-const API_KEY = process.env.GOOGLE_PLACES_API_KEY!;
 const BASE_URL = "https://places.googleapis.com/v1";
 
 // PRO tier ($17/1K) - used for place details and search
@@ -99,11 +101,12 @@ function parsePriceLevel(level: string | number): number | null {
 export async function downloadAndStorePhoto(
   photoName: string,
   placeId: string,
-  userId: string
+  userId: string,
+  apiKey: string
 ): Promise<string | null> {
   try {
-    const googleUrl = `${BASE_URL}/${photoName}/media?maxHeightPx=600&maxWidthPx=600&key=${API_KEY}`;
-    console.log(`[Google API REQUEST] curl -X GET "${BASE_URL}/${photoName}/media?maxHeightPx=600&maxWidthPx=600&key=${API_KEY.substring(0,8)}...${API_KEY.substring(API_KEY.length-4)}"`);
+    const googleUrl = `${BASE_URL}/${photoName}/media?maxHeightPx=600&maxWidthPx=600&key=${apiKey}`;
+    console.log(`[Google API REQUEST] curl -X GET "${BASE_URL}/${photoName}/media?maxHeightPx=600&maxWidthPx=600&key=${maskApiKey(apiKey)}"`);
     const res = await fetch(googleUrl);
     console.log(`[Google API RESPONSE] ${res.status} ${res.statusText} | content-type=${res.headers.get("content-type")} | content-length=${res.headers.get("content-length")}`);
     if (!res.ok) return null;
@@ -115,7 +118,6 @@ export async function downloadAndStorePhoto(
 
     const supabase = await createClient();
 
-    // Upload (overwrite if exists)
     const { error } = await supabase.storage
       .from("place-photos")
       .upload(fileName, buffer, {
@@ -128,11 +130,11 @@ export async function downloadAndStorePhoto(
       return null;
     }
 
-    // Get public URL
     const { data: urlData } = supabase.storage
       .from("place-photos")
       .getPublicUrl(fileName);
 
+    trackUsage(userId, "photos").catch(() => {});
     return urlData.publicUrl;
   } catch (e) {
     console.error("Photo download error:", e);
@@ -142,14 +144,15 @@ export async function downloadAndStorePhoto(
 
 /**
  * Fetch place details by Place ID. Uses PRO tier ($17/1K).
- * Returns 1 photo reference (not URL) for later storage.
  */
 export async function getPlaceDetails(
-  placeId: string
+  placeId: string,
+  apiKey: string,
+  userId: string
 ): Promise<ParsedPlaceData | null> {
   const url = `${BASE_URL}/places/${placeId}`;
-  const headers = { "X-Goog-Api-Key": API_KEY, "X-Goog-FieldMask": FIELD_MASK_PRO };
-  console.log(`[Google API REQUEST] curl -X GET "${url}" -H "X-Goog-Api-Key: ${API_KEY.substring(0,8)}...${API_KEY.substring(API_KEY.length-4)}" -H "X-Goog-FieldMask: ${FIELD_MASK_PRO}"`);
+  const headers = { "X-Goog-Api-Key": apiKey, "X-Goog-FieldMask": FIELD_MASK_PRO };
+  console.log(`[Google API REQUEST] curl -X GET "${url}" -H "X-Goog-Api-Key: ${maskApiKey(apiKey)}" -H "X-Goog-FieldMask: ${FIELD_MASK_PRO}"`);
 
   const res = await fetch(url, { method: "GET", headers, next: { revalidate: 86400 } });
   const responseBody = await res.text();
@@ -158,13 +161,13 @@ export async function getPlaceDetails(
 
   if (!res.ok) return null;
 
-  const data = JSON.parse(responseBody);;
+  const data = JSON.parse(responseBody);
+  trackUsage(userId, "place_details_pro").catch(() => {});
 
   const { country, city } = extractCountryAndCity(
     data.addressComponents || []
   );
 
-  // Only take first photo REFERENCE (not media URL — that costs $7/1K)
   const photoRef = data.photos?.[0]?.name || null;
 
   return {
@@ -176,8 +179,8 @@ export async function getPlaceDetails(
     lat: data.location?.latitude || 0,
     lng: data.location?.longitude || 0,
     types: data.types || [],
-    photos: [], // Empty — photo stored via downloadAndStorePhoto separately
-    photoRef, // Raw reference for later download
+    photos: [],
+    photoRef,
     rating: data.rating || null,
     openingHours: data.regularOpeningHours
       ? {
@@ -197,6 +200,8 @@ export async function getPlaceDetails(
  */
 export async function searchPlace(
   query: string,
+  apiKey: string,
+  userId: string,
   lat?: number,
   lng?: number
 ): Promise<ParsedPlaceData | null> {
@@ -216,9 +221,9 @@ export async function searchPlace(
 
   const url = `${BASE_URL}/places:searchText`;
   const fieldMask = `places.${FIELD_MASK_PRO.split(",").join(",places.")}`;
-  const reqHeaders = { "Content-Type": "application/json", "X-Goog-Api-Key": API_KEY, "X-Goog-FieldMask": fieldMask };
+  const reqHeaders = { "Content-Type": "application/json", "X-Goog-Api-Key": apiKey, "X-Goog-FieldMask": fieldMask };
   const reqBody = JSON.stringify(body);
-  console.log(`[Google API REQUEST] curl -X POST "${url}" -H "Content-Type: application/json" -H "X-Goog-Api-Key: ${API_KEY.substring(0,8)}...${API_KEY.substring(API_KEY.length-4)}" -H "X-Goog-FieldMask: ${fieldMask}" -d '${reqBody}'`);
+  console.log(`[Google API REQUEST] curl -X POST "${url}" -H "Content-Type: application/json" -H "X-Goog-Api-Key: ${maskApiKey(apiKey)}" -H "X-Goog-FieldMask: ${fieldMask}" -d '${reqBody}'`);
 
   const res = await fetch(url, { method: "POST", headers: reqHeaders, body: reqBody });
   const responseBody = await res.text();
@@ -229,6 +234,7 @@ export async function searchPlace(
 
   const data = JSON.parse(responseBody);
   const place = data.places?.[0];
+  trackUsage(userId, "text_search_pro").catch(() => {});
 
   if (!place) return null;
 
@@ -268,12 +274,14 @@ export async function searchPlace(
  * Call this ONLY when user explicitly requests reviews (refresh button).
  */
 export async function getPlaceReviews(
-  placeId: string
+  placeId: string,
+  apiKey: string,
+  userId: string
 ): Promise<GoogleReview[]> {
   const url = `${BASE_URL}/places/${placeId}`;
-  console.log(`[Google API REQUEST] curl -X GET "${url}" -H "X-Goog-Api-Key: ${API_KEY.substring(0,8)}...${API_KEY.substring(API_KEY.length-4)}" -H "X-Goog-FieldMask: ${FIELD_MASK_REVIEWS}"`);
+  console.log(`[Google API REQUEST] curl -X GET "${url}" -H "X-Goog-Api-Key: ${maskApiKey(apiKey)}" -H "X-Goog-FieldMask: ${FIELD_MASK_REVIEWS}"`);
 
-  const res = await fetch(url, { method: "GET", headers: { "X-Goog-Api-Key": API_KEY, "X-Goog-FieldMask": FIELD_MASK_REVIEWS } });
+  const res = await fetch(url, { method: "GET", headers: { "X-Goog-Api-Key": apiKey, "X-Goog-FieldMask": FIELD_MASK_REVIEWS } });
   const responseBody = await res.text();
 
   console.log(`[Google API RESPONSE] ${res.status} ${res.statusText} | ${responseBody.substring(0, 500)}${responseBody.length > 500 ? "...[truncated]" : ""}`);
@@ -281,5 +289,6 @@ export async function getPlaceReviews(
   if (!res.ok) return [];
 
   const data = JSON.parse(responseBody);
+  trackUsage(userId, "reviews_enterprise").catch(() => {});
   return extractReviews(data.reviews);
 }

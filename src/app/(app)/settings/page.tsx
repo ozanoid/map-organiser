@@ -8,8 +8,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { Plus, Trash2, Loader2, Tag, FolderOpen } from "lucide-react";
+import { Plus, Trash2, Loader2, Tag, FolderOpen, Shield } from "lucide-react";
 import { toast } from "sonner";
+import { ApiKeysManager } from "@/components/settings/api-keys-manager";
+import { CostTracker } from "@/components/settings/cost-tracker";
 
 const PRESET_COLORS = [
   "#EF4444", "#F97316", "#F59E0B", "#22C55E", "#06B6D4",
@@ -37,6 +39,10 @@ export default function SettingsPage() {
             <Tag className="h-4 w-4 mr-1.5" />
             Tags
           </TabsTrigger>
+          <TabsTrigger value="api" className="cursor-pointer">
+            <Shield className="h-4 w-4 mr-1.5" />
+            API & Usage
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="categories" className="mt-4">
@@ -44,6 +50,11 @@ export default function SettingsPage() {
         </TabsContent>
         <TabsContent value="tags" className="mt-4">
           <TagManager />
+        </TabsContent>
+        <TabsContent value="api" className="mt-4 space-y-6">
+          <ApiKeysManager />
+          <Separator />
+          <CostTracker />
         </TabsContent>
       </Tabs>
     </div>
