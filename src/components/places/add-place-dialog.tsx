@@ -155,7 +155,7 @@ export function AddPlaceDialog({ open, onOpenChange }: AddPlaceDialogProps) {
         onOpenChange(v);
       }}
     >
-      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-lg max-h-[90vh] flex flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <MapPin className="h-5 w-5 text-emerald-600" />
@@ -163,6 +163,7 @@ export function AddPlaceDialog({ open, onOpenChange }: AddPlaceDialogProps) {
           </DialogTitle>
         </DialogHeader>
 
+        <div className="flex-1 overflow-y-auto min-h-0">
         {/* Step 1: Paste link */}
         {!placeData && (
           <div className="space-y-4">
@@ -377,29 +378,33 @@ export function AddPlaceDialog({ open, onOpenChange }: AddPlaceDialogProps) {
               />
             </div>
 
-            {/* Actions */}
-            <div className="flex gap-2 pt-2">
-              <Button
-                variant="outline"
-                onClick={reset}
-                className="flex-1 cursor-pointer"
-              >
-                <X className="h-4 w-4 mr-1" />
-                Cancel
-              </Button>
-              <Button
-                onClick={handleSave}
-                disabled={createPlace.isPending}
-                className="flex-1 cursor-pointer"
-              >
-                {createPlace.isPending ? (
-                  <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                ) : (
-                  <Check className="h-4 w-4 mr-1" />
-                )}
-                Save Place
-              </Button>
-            </div>
+          </div>
+        )}
+        </div>
+
+        {/* Sticky actions — always visible at bottom */}
+        {placeData && (
+          <div className="flex gap-2 pt-3 border-t shrink-0">
+            <Button
+              variant="outline"
+              onClick={reset}
+              className="flex-1 cursor-pointer"
+            >
+              <X className="h-4 w-4 mr-1" />
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSave}
+              disabled={createPlace.isPending}
+              className="flex-1 cursor-pointer"
+            >
+              {createPlace.isPending ? (
+                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+              ) : (
+                <Check className="h-4 w-4 mr-1" />
+              )}
+              Save Place
+            </Button>
           </div>
         )}
       </DialogContent>

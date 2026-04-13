@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { MapView } from "@/components/map/map-view";
 import { AddPlaceDialog } from "@/components/places/add-place-dialog";
 import { FilterSheet } from "@/components/filters/filter-sheet";
@@ -36,7 +36,12 @@ export function MapContent({ mapboxToken }: { mapboxToken: string }) {
   const [detailLoading, setDetailLoading] = useState(false);
   const queryClient = useQueryClient();
 
-  // When a place is selected from popup, fetch full details
+  // Close panel helper — shared by X button and popstate
+  const closePanel = useCallback(() => {
+    setSelectedPlace(null);
+  }, []);
+
+  // When a place is selected from popup, fetch full details + push history
   useEffect(() => {
     if (!selectedPlace) {
       setDetailData(null);
@@ -50,6 +55,20 @@ export function MapContent({ mapboxToken }: { mapboxToken: string }) {
         setDetailLoading(false);
       })
       .catch(() => setDetailLoading(false));
+
+    // Push a history entry so mobile back button closes the panel
+    window.history.pushState({ panel: selectedPlace.id }, "");
+  }, [selectedPlace]);
+
+  // Listen for browser back to close the detail panel
+  useEffect(() => {
+    function onPopState(e: PopStateEvent) {
+      if (selectedPlace) {
+        setSelectedPlace(null);
+      }
+    }
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
   }, [selectedPlace]);
 
   function handlePlaceClick(place: Place) {
@@ -156,7 +175,7 @@ export function MapContent({ mapboxToken }: { mapboxToken: string }) {
                 variant="ghost"
                 size="sm"
                 className="h-9 w-9 p-0 cursor-pointer shrink-0"
-                onClick={() => setSelectedPlace(null)}
+                onClick={() => { window.history.back(); }}
               >
                 <X className="h-4 w-4" />
               </Button>

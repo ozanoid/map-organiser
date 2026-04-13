@@ -209,23 +209,25 @@ export function MapView({ places, onPlaceClick, mapboxToken, className }: MapVie
         };
         const statusInfo = props.visitStatus ? visitStatusLabels[props.visitStatus] : null;
 
-        const popupEl = document.createElement("div");
+        const popupEl = document.createElement("article");
+        popupEl.setAttribute("role", "dialog");
+        popupEl.setAttribute("aria-label", `Place: ${props.name}`);
         popupEl.style.fontFamily = "Inter, sans-serif";
         popupEl.innerHTML = `
           <p style="font-weight:600;font-size:14px;margin:0 0 4px">${props.name}</p>
           ${props.address ? `<p style="font-size:12px;color:#666;margin:0 0 4px">${props.address}</p>` : ""}
-          ${ratingStars ? `<p style="font-size:12px;color:#F97316;margin:0 0 4px">${ratingStars}</p>` : ""}
+          ${ratingStars ? `<p style="font-size:12px;color:#F97316;margin:0 0 4px" aria-label="Rating: ${props.rating} out of 5">${ratingStars}</p>` : ""}
           ${statusInfo ? `<p style="font-size:11px;color:${statusInfo.color};font-weight:500;margin:0 0 4px">${statusInfo.label}</p>` : ""}
           <div style="display:flex;gap:12px;margin-top:6px;align-items:center">
-            <span class="popup-details" style="font-size:11px;color:#059669;font-weight:500;cursor:pointer">View details →</span>
-            ${props.googleUrl ? `<a href="${props.googleUrl}" target="_blank" rel="noopener noreferrer" style="font-size:11px;color:#3B82F6;text-decoration:none;font-weight:500" onclick="event.stopPropagation()">Maps ↗</a>` : ""}
+            <button type="button" class="popup-details" style="font-size:12px;color:#059669;font-weight:500;cursor:pointer;background:none;border:none;padding:6px 2px;margin:-6px -2px;min-height:44px;display:flex;align-items:center" aria-label="View details for ${props.name}">View details →</button>
+            ${props.googleUrl ? `<a href="${props.googleUrl}" target="_blank" rel="noopener noreferrer" style="font-size:12px;color:#3B82F6;text-decoration:none;font-weight:500;padding:6px 2px;min-height:44px;display:flex;align-items:center" onclick="event.stopPropagation()" aria-label="Open ${props.name} in Google Maps">Maps ↗</a>` : ""}
           </div>
         `;
 
         // "View details" click → trigger onPlaceClick (no navigation)
-        const detailsLink = popupEl.querySelector(".popup-details");
-        if (detailsLink) {
-          detailsLink.addEventListener("click", () => {
+        const detailsBtn = popupEl.querySelector(".popup-details");
+        if (detailsBtn) {
+          detailsBtn.addEventListener("click", () => {
             const place = placesRef.current.find((p) => p.id === props.id);
             if (place && onPlaceClickRef.current) onPlaceClickRef.current(place);
           });
