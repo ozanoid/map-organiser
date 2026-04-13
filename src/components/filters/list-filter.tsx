@@ -43,7 +43,10 @@ export function ListFilter() {
           variant="ghost"
           size="sm"
           className="absolute right-7 top-1/2 -translate-y-1/2 h-5 w-5 p-0 cursor-pointer z-10"
-          onClick={() => setFilters({ list_id: undefined })}
+          onClick={(e) => {
+            e.stopPropagation();
+            setFilters({ list_id: undefined });
+          }}
         >
           <X className="h-3 w-3" />
         </Button>
