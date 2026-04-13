@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { MapView } from "@/components/map/map-view";
 import { AddPlaceDialog } from "@/components/places/add-place-dialog";
 import { FilterSheet } from "@/components/filters/filter-sheet";
@@ -30,7 +31,24 @@ export function MapContent({ mapboxToken }: { mapboxToken: string }) {
   const { filters, hasActiveFilters } = useFilters();
   const { data: places = [], isLoading } = usePlaces(filters);
   const [addOpen, setAddOpen] = useState(false);
+  const [sharedUrl, setSharedUrl] = useState<string | undefined>();
   const [filterOpen, setFilterOpen] = useState(false);
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const sharedHandled = useRef(false);
+
+  // Handle share target: ?add=encodedUrl
+  useEffect(() => {
+    const addParam = searchParams.get("add");
+    if (addParam && !sharedHandled.current) {
+      sharedHandled.current = true;
+      const decodedUrl = decodeURIComponent(addParam);
+      setSharedUrl(decodedUrl);
+      setAddOpen(true);
+      // Clean up the URL param
+      router.replace("/map");
+    }
+  }, [searchParams, router]);
   const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
   const [detailData, setDetailData] = useState<Place | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -388,7 +406,14 @@ export function MapContent({ mapboxToken }: { mapboxToken: string }) {
           </div>
         )}
 
-        <AddPlaceDialog open={addOpen} onOpenChange={setAddOpen} />
+        <AddPlaceDialog
+          open={addOpen}
+          onOpenChange={(v) => {
+            setAddOpen(v);
+            if (!v) setSharedUrl(undefined);
+          }}
+          initialUrl={sharedUrl}
+        />
         <FilterSheet open={filterOpen} onOpenChange={setFilterOpen} />
       </div>
     </div>
