@@ -78,8 +78,8 @@ export function FilterSheet({ open, onOpenChange }: FilterSheetProps) {
           <div>
             <label className="text-sm font-medium mb-2 block">Category</label>
             <CategoryFilter
-              selected={filters.category_id}
-              onChange={(category_id) => setFilters({ category_id })}
+              selected={filters.category_ids}
+              onChange={(category_ids) => setFilters({ category_ids })}
             />
           </div>
 

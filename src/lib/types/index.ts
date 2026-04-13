@@ -92,7 +92,7 @@ export interface GooglePlaceData {
 export interface PlaceFilters {
   country?: string;
   city?: string;
-  category_id?: string;
+  category_ids?: string[];
   tag_ids?: string[];
   list_id?: string;
   rating_min?: number;

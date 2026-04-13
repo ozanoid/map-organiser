@@ -7,7 +7,7 @@ async function fetchPlaces(filters: PlaceFilters): Promise<Place[]> {
   const params = new URLSearchParams();
   if (filters.country) params.set("country", filters.country);
   if (filters.city) params.set("city", filters.city);
-  if (filters.category_id) params.set("category", filters.category_id);
+  if (filters.category_ids?.length) params.set("category", filters.category_ids.join(","));
   if (filters.tag_ids?.length) params.set("tags", filters.tag_ids.join(","));
   if (filters.list_id) params.set("list", filters.list_id);
   if (filters.rating_min) params.set("rating", String(filters.rating_min));

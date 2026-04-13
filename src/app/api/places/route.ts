@@ -18,7 +18,8 @@ export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const country = searchParams.get("country");
   const city = searchParams.get("city");
-  const categoryId = searchParams.get("category");
+  const categoryParam = searchParams.get("category");
+  const categoryIds = categoryParam?.split(",").filter(Boolean);
   const tagIds = searchParams.get("tags")?.split(",").filter(Boolean);
   const listId = searchParams.get("list");
   const visitStatus = searchParams.get("status");
@@ -34,7 +35,7 @@ export async function GET(request: NextRequest) {
 
   if (country) query = query.eq("country", country);
   if (city) query = query.eq("city", city);
-  if (categoryId) query = query.eq("category_id", categoryId);
+  if (categoryIds?.length) query = query.in("category_id", categoryIds);
   if (visitStatus) query = query.eq("visit_status", visitStatus);
   if (ratingMin) query = query.gte("rating", parseInt(ratingMin));
   if (search) query = query.or(`name.ilike.%${search}%,address.ilike.%${search}%,notes.ilike.%${search}%`);

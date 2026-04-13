@@ -68,8 +68,8 @@ export function FilterPanel() {
           Category
         </label>
         <CategoryFilter
-          selected={filters.category_id}
-          onChange={(category_id) => setFilters({ category_id })}
+          selected={filters.category_ids}
+          onChange={(category_ids) => setFilters({ category_ids })}
         />
       </div>
 
