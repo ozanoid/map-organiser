@@ -37,9 +37,10 @@ import type { ParsedPlaceData, VisitStatus } from "@/lib/types";
 interface AddPlaceDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  initialUrl?: string;
 }
 
-export function AddPlaceDialog({ open, onOpenChange }: AddPlaceDialogProps) {
+export function AddPlaceDialog({ open, onOpenChange, initialUrl }: AddPlaceDialogProps) {
   const [url, setUrl] = useState("");
   const [placeData, setPlaceData] = useState<ParsedPlaceData | null>(null);
   const [categoryId, setCategoryId] = useState<string>("");
@@ -55,6 +56,17 @@ export function AddPlaceDialog({ open, onOpenChange }: AddPlaceDialogProps) {
   const createPlace = useCreatePlace();
   const { data: categories = [] } = useCategories();
   const { data: lists = [] } = useLists();
+
+  // Auto-parse when opened via share target with initialUrl
+  useEffect(() => {
+    if (open && initialUrl && !placeData && !parseLink.isPending) {
+      setUrl(initialUrl);
+      parseLink.mutate(initialUrl, {
+        onSuccess: (data) => setPlaceData(data),
+        onError: (err) => toast.error(err.message),
+      });
+    }
+  }, [open, initialUrl]);
 
   // Auto-resolve category when placeData arrives
   useEffect(() => {

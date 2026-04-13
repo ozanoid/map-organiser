@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
 import { Providers } from "@/lib/providers";
+import { ServiceWorkerRegister } from "@/components/sw-register";
 import "./globals.css";
 
 const inter = Inter({
@@ -12,6 +13,14 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "Map Organiser",
   description: "Organize your saved Google Maps locations",
+  icons: {
+    apple: "/icon-192.png",
+  },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Map Organiser",
+  },
 };
 
 export default function RootLayout({
@@ -25,6 +34,7 @@ export default function RootLayout({
         <Providers>
           {children}
           <Toaster />
+          <ServiceWorkerRegister />
         </Providers>
       </body>
     </html>
