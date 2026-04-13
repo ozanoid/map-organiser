@@ -1,12 +1,14 @@
 import crypto from "crypto";
 import { createClient } from "@/lib/supabase/server";
 
-const ENCRYPTION_SECRET = process.env.ENCRYPTION_SECRET || "";
 const ALGORITHM = "aes-256-gcm";
 
 function getEncryptionKey(): Buffer {
-  // Derive a 32-byte key from the secret
-  return crypto.scryptSync(ENCRYPTION_SECRET, "map-organiser-salt", 32);
+  const secret = process.env.ENCRYPTION_SECRET;
+  if (!secret) {
+    throw new Error("ENCRYPTION_SECRET environment variable is required");
+  }
+  return crypto.scryptSync(secret, "map-organiser-salt", 32);
 }
 
 export function encryptApiKey(plaintext: string): string {

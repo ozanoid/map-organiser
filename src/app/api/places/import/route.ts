@@ -180,6 +180,7 @@ export async function POST(request: NextRequest) {
       enriched,
       total: places.length,
       skipped,
+      enrichmentSkipped: !googleApiKey,
     });
   } catch (error) {
     console.error("Import error:", error);

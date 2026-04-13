@@ -50,11 +50,9 @@ export async function getMonthlyUsage(
 ): Promise<MonthlyUsage[]> {
   const supabase = await createClient();
 
-  // Get first day of current month
+  // Get first day of current month in UTC (matches Supabase timestamps)
   const now = new Date();
-  const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-    .toISOString()
-    .split("T")[0];
+  const firstOfMonth = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}-01`;
 
   const { data: rows } = await supabase
     .from("api_usage")
