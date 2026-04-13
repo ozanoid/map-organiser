@@ -139,11 +139,15 @@ Google Maps URL parsing, Places API entegrasyonu, yer zenginlestirme, S2 cell de
 | Dosya | Rol |
 |-------|-----|
 | `src/lib/google/places-api.ts` | Google Places API (New) wrapper |
+| `src/lib/google/get-user-api-keys.ts` | Per-user API key encrypt/decrypt + resolve |
+| `src/lib/google/track-usage.ts` | SKU-based usage tracking + monthly aggregation |
 | `src/lib/google/parse-maps-url.ts` | URL parser (5 format destekli) |
 | `src/lib/google/category-mapping.ts` | 300+ Google type → 12 kategori mapping |
 | `src/lib/google/takeout-parser.ts` | CSV + GeoJSON parser |
 | `src/app/api/places/parse-link/route.ts` | URL → place data API endpoint |
 | `src/app/api/places/[id]/refresh-google-data/route.ts` | Google data refresh endpoint |
+| `src/app/api/user/api-keys/route.ts` | GET (masked) + PUT (save encrypted) |
+| `src/app/api/user/usage/route.ts` | GET monthly usage stats |
 
 ### URL Parsing Pipeline
 ```
@@ -178,9 +182,24 @@ FTid format: `0x48761da571b3e74b:0xdf82213aa7f76779`
 - Hassasiyet: ~3km (sehir icindeki dogru subeysi bulmak icin yeterli)
 - Kullanim: Text search'te locationBias olarak
 
+### Per-User API Key System
+- Her kullanici kendi Google Places API key ve Mapbox token'ini Settings > API & Usage sekmesinden girer
+- Keyler AES-256-GCM ile sifrelenir (ENCRYPTION_SECRET env var'dan turetilmis key)
+- Admin hesaplari (is_admin flag) env var fallback kullanir
+- `getUserApiKeys(userId)` fonksiyonu: admin → env vars, diger → decrypt(profile.google_api_key_enc)
+- Mapbox token server-side fetch edilir (page.tsx server component), client'a prop olarak gecer
+
+### Usage Tracking
+- Her API cagrisi `trackUsage(userId, sku)` ile kaydedilir (fire-and-forget)
+- `api_usage` tablosu: user_id, sku, count, created_at
+- `increment_api_usage()` RPC fonksiyonu ile atomik artis
+- SKU tipleri: text_search_pro, place_details_pro, reviews_enterprise, photos, mapbox_load
+- Aylik kullanim: `getMonthlyUsage(userId)` → UTC ay bazinda aggregation
+- Cost tracker UI: progress bar (yesil/sari/kirmizi) + tahmini maliyet
+
 ### Google Places API (New)
 - **Base URL:** `https://places.googleapis.com/v1`
-- **Auth:** `X-Goog-Api-Key` header (server-only, asla client'a gitmez)
+- **Auth:** `X-Goog-Api-Key` header (per-user key, server-only)
 
 ### Maliyet Tierleri
 
@@ -207,10 +226,15 @@ Her mekan icin sadece 1 foto indirilir. Browser'da gosterildiginde Supabase'den 
 ### Fonksiyonlar
 | Fonksiyon | Input | Output | Tier | Aciklama |
 |-----------|-------|--------|------|----------|
-| `getPlaceDetails(placeId)` | ChIJ... string | ParsedPlaceData | Pro ($17/1K) | Tek yer detayi (reviews haric) |
-| `searchPlace(query, lat?, lng?)` | Text + optional coords | ParsedPlaceData | Pro ($17/1K) | Metin aramasI, 5km radius bias |
-| `getPlaceReviews(placeId)` | ChIJ... string | GoogleReview[] | Enterprise ($20/1K) | Sadece yorumlar (on-demand) |
-| `downloadAndStorePhoto(ref, placeId, userId)` | Photo ref + IDs | Storage URL | Photos ($7/1K) | Foto indir → Supabase Storage |
+| `getPlaceDetails(placeId, apiKey, userId)` | Place ID + API key + user | ParsedPlaceData | Pro ($17/1K) | Tek yer detayi (reviews haric) |
+| `searchPlace(query, apiKey, userId, lat?, lng?)` | Text + API key + user + optional coords | ParsedPlaceData | Pro ($17/1K) | Metin aramasI, 5km radius bias |
+| `getPlaceReviews(placeId, apiKey, userId)` | Place ID + API key + user | GoogleReview[] | Enterprise ($20/1K) | Sadece yorumlar (on-demand) |
+| `downloadAndStorePhoto(ref, placeId, userId, apiKey)` | Photo ref + IDs + API key | Storage URL | Photos ($7/1K) | Foto indir → Supabase Storage |
+| `getUserApiKeys(userId)` | User UUID | UserApiKeys | Ucretsiz | Admin → env, diger → decrypt |
+| `trackUsage(userId, sku)` | User UUID + SKU type | void | Ucretsiz | Fire-and-forget usage log |
+| `getMonthlyUsage(userId)` | User UUID | MonthlyUsage[] | Ucretsiz | Aylik SKU bazli aggregation |
+| `encryptApiKey(plaintext)` | Raw key string | Encrypted string | Ucretsiz | AES-256-GCM sifreleme |
+| `decryptApiKey(encrypted)` | iv:authTag:encrypted | Raw key string | Ucretsiz | AES-256-GCM cozme |
 | `parseMapsUrl(rawUrl)` | Any Google Maps URL | ParsedUrl | Ucretsiz | URL → yapilandirilmis veri |
 | `resolveUrl(url)` | Short link URL | Full URL | Ucretsiz | Redirect takibi |
 | `ftidToCoordinates(ftid)` | 0x...:0x... | {lat, lng} | Ucretsiz | S2 cell decode |
@@ -328,7 +352,8 @@ Mapbox harita gosterimi, marker yonetimi, clustering, popup'lar, detay paneli.
 | Dosya | Rol |
 |-------|-----|
 | `src/components/map/map-view.tsx` | Mapbox GL JS entegrasyonu |
-| `src/app/(app)/map/page.tsx` | Map page + filter sidebar + detail panel |
+| `src/components/map/map-content.tsx` | Client component: filters + detail panel + map |
+| `src/app/(app)/map/page.tsx` | Server component: mapbox token fetch + MapContent render |
 
 ### Mapbox Konfigurasyonu
 ```
@@ -414,7 +439,8 @@ Google Takeout dosyalarini (CSV/GeoJSON) import etme, zenginlestirme, toplu kate
    f. photoRef varsa → downloadAndStorePhoto() → Supabase Storage ($7/1K)
    g. google_data.photo_storage_url guncelle
    h. 200ms rate limit delay
-4. Sonuc: {imported, failed, enriched, total, skipped[]}
+4. Sonuc: {imported, failed, enriched, total, skipped[], enrichmentSkipped}
+   - enrichmentSkipped: API key yoksa true, UI'da amber uyari gosterir
 ```
 
 **Not:** Import sirasinda reviews ve editorialSummary cekilmez (maliyet optimizasyonu).
@@ -563,7 +589,10 @@ Base UI Select componentleri projede guvenilir calismadigindan (selection bozukl
 - CSV import: sequential (rate limit), parallelizable with queue system
 
 ### Security
-- GOOGLE_PLACES_API_KEY asla client'a gitmez (server-only env)
+- Per-user API keyleri AES-256-GCM ile sifrelenir (ENCRYPTION_SECRET env var zorunlu, yoksa throw)
+- Mapbox token server-side fetch edilir, client'a sadece prop olarak gecer
+- Admin hesaplari env var fallback kullanir, diger kullanicilar kendi keylerini girer
+- API key'ler GET endpoint'inde masked doner (ilk 8 + son 4 karakter)
 - Supabase anon key RLS ile sinirli (kullanici sadece kendi verisini gorur)
 - All API routes validate auth before any operation
 - Bulk operations verify ownership of all place_ids

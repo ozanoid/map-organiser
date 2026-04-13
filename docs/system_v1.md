@@ -79,13 +79,13 @@ src/
 │   │   └── signup/page.tsx     # Registration
 │   ├── (app)/                  # Protected app pages
 │   │   ├── layout.tsx          # Sidebar + Header + MobileNav
-│   │   ├── map/page.tsx        # Map view + filters + detail panel
+│   │   ├── map/page.tsx        # Server component: mapbox token fetch
 │   │   ├── places/page.tsx     # Card grid + filters + bulk actions
 │   │   ├── places/[id]/page.tsx# Place detail
 │   │   ├── lists/page.tsx      # List management
 │   │   ├── lists/[id]/page.tsx # List detail + map
 │   │   ├── import/page.tsx     # CSV/GeoJSON import
-│   │   └── settings/page.tsx   # Category + tag CRUD
+│   │   └── settings/page.tsx   # Category + tag CRUD + API & Usage tab
 │   └── api/
 │       ├── places/route.ts          # GET (list) + POST (create)
 │       ├── places/[id]/route.ts     # GET + PATCH + DELETE
@@ -93,11 +93,13 @@ src/
 │       ├── places/import/route.ts   # POST file import
 │       ├── places/parse-link/route.ts # POST URL → place data
 │       ├── places/[id]/refresh-google-data/route.ts
+│       ├── user/api-keys/route.ts   # GET (masked) + PUT (encrypted save)
+│       ├── user/usage/route.ts      # GET monthly usage stats
 │       └── share-target/route.ts    # PWA share receiver
 ├── components/
 │   ├── ui/                     # shadcn/ui primitives (~20 files)
 │   ├── layout/                 # App shell (sidebar, header, mobile nav)
-│   ├── map/                    # MapView (Mapbox GL JS)
+│   ├── map/                    # MapView + MapContent (Mapbox GL JS)
 │   ├── filters/                # Filter components (7 files)
 │   └── places/                 # Place components (7 files)
 ├── lib/
@@ -106,7 +108,7 @@ src/
 │   ├── providers.tsx           # QueryClientProvider
 │   ├── supabase/               # Supabase clients (browser, server, middleware)
 │   ├── hooks/                  # React Query hooks (5 files)
-│   └── google/                 # Google API integration (4 files)
+│   └── google/                 # Google API integration (6 files)
 └── middleware.ts               # Next.js middleware entry
 ```
 
@@ -118,8 +120,9 @@ src/
 |----------|-------|---------|
 | `NEXT_PUBLIC_SUPABASE_URL` | Public | Supabase project URL |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Public | Supabase anon JWT key |
-| `NEXT_PUBLIC_MAPBOX_TOKEN` | Public | Mapbox GL access token |
-| `GOOGLE_PLACES_API_KEY` | Server-only | Google Places API (New) key |
+| `NEXT_PUBLIC_MAPBOX_TOKEN` | Public | Mapbox GL access token (admin fallback) |
+| `GOOGLE_PLACES_API_KEY` | Server-only | Google Places API key (admin fallback) |
+| `ENCRYPTION_SECRET` | Server-only | AES-256-GCM key derivation secret (zorunlu) |
 
 ---
 
@@ -259,8 +262,22 @@ src/
 | id | uuid | PK + FK → auth.users (CASCADE) |
 | full_name | text | From Google or signup |
 | avatar_url | text | From Google OAuth |
+| is_admin | boolean | Admin flag (env var fallback for API keys) |
+| google_api_key_enc | text | AES-256-GCM encrypted Google API key |
+| mapbox_token_enc | text | AES-256-GCM encrypted Mapbox token |
 | created_at | timestamptz | - |
 | updated_at | timestamptz | - |
+
+#### `api_usage`
+| Column | Type | Description |
+|--------|------|-------------|
+| id | uuid | Primary key |
+| user_id | uuid | FK → auth.users |
+| sku | text | SKU type (text_search_pro, place_details_pro, etc.) |
+| count | integer | Daily request count |
+| created_at | timestamptz | Day of usage |
+
+**RPC:** `increment_api_usage(p_user_id, p_sku, p_cost)` → upsert daily counter
 
 **Trigger:** `on_auth_user_created` → `handle_new_user()` → creates profile
 **Trigger:** `on_profile_created_default_categories` → `create_default_categories()` → creates 12 categories
@@ -298,11 +315,13 @@ Tum tablolarda Row Level Security aktif. Her tablo icin:
 ```
 User pastes Google Maps URL
     → POST /api/places/parse-link {url}
+    → getUserApiKeys(userId) → resolve per-user or admin API key
     → parseMapsUrl(url)
         → resolveShortLink (if goo.gl)
         → extractChIJPlaceId / extractFtid / extractCoordinates
         → S2 cell decode (if FTid)
-    → getPlaceDetails(placeId) or searchPlace(query, lat, lng)
+    → getPlaceDetails(placeId, apiKey, userId) or searchPlace(query, apiKey, userId, lat, lng)
+    → trackUsage(userId, sku) (fire-and-forget)
     → Return ParsedPlaceData (name, address, photos, reviews, etc.)
     → Client shows preview
     → User selects category, tags, lists, status
@@ -332,13 +351,15 @@ User clicks filter in UI
 ```
 User uploads .csv file
     → POST /api/places/import (FormData)
+    → getUserApiKeys(userId) → resolve API key
     → parseTakeoutCsv(text)
     → For each place:
-        → parseMapsUrl(googleMapsUrl)
-        → getPlaceDetails() or searchPlace()
+        → parseMapsUrl(googleMapsUrl) (if googleApiKey exists)
+        → getPlaceDetails(id, apiKey, userId) or searchPlace(q, apiKey, userId)
+        → trackUsage(userId, sku)
         → resolveCategoryId(types, categories, name)
         → Check duplicate by google_place_id
         → Insert place
         → 200ms delay (rate limit)
-    → Return {imported, failed, enriched, total, skipped[]}
+    → Return {imported, failed, enriched, total, skipped[], enrichmentSkipped}
 ```

@@ -196,6 +196,10 @@
 | Cikis | `LogOut` | Sign out |
 | Klasor | `FolderOpen` | Kategori tab |
 | Etiket | `Tag` | Tag tab |
+| Kalkan | `Shield` | Admin badge, API & Usage tab |
+| Kilit | `Lock` | Encryption bilgisi |
+| Goz | `Eye`, `EyeOff` | API key goster/gizle |
+| Kaydet | `Save` | API key kaydetme |
 | Kare (secim) | `Square`, `CheckSquare` | Bulk select |
 | Yenile | `RefreshCw` | Google data refresh |
 
