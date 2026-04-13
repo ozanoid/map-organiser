@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { parseMapsUrl } from "@/lib/google/parse-maps-url";
 import { getPlaceDetails, searchPlace } from "@/lib/google/places-api";
+import { getUserApiKeys } from "@/lib/google/get-user-api-keys";
 
 export async function POST(request: NextRequest) {
-  // Auth check
   const supabase = await createClient();
   const {
     data: { user },
@@ -12,6 +12,14 @@ export async function POST(request: NextRequest) {
 
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { googleApiKey } = await getUserApiKeys(user.id);
+  if (!googleApiKey) {
+    return NextResponse.json(
+      { error: "Please add your Google Places API key in Settings" },
+      { status: 400 }
+    );
   }
 
   const body = await request.json();
@@ -22,24 +30,22 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    // Step 1: Parse the URL
     const parsed = await parseMapsUrl(url);
-
-    // Step 2: Fetch place details based on parsed result
     let placeData = null;
 
     switch (parsed.type) {
       case "place_id":
         if (parsed.placeId) {
-          placeData = await getPlaceDetails(parsed.placeId);
+          placeData = await getPlaceDetails(parsed.placeId, googleApiKey, user.id);
         }
         break;
 
       case "cid":
-        // CID doesn't work directly with new API, use search with coordinates
         if (parsed.lat && parsed.lng) {
           placeData = await searchPlace(
             `${parsed.lat},${parsed.lng}`,
+            googleApiKey,
+            user.id,
             parsed.lat,
             parsed.lng
           );
@@ -50,6 +56,8 @@ export async function POST(request: NextRequest) {
         if (parsed.query) {
           placeData = await searchPlace(
             parsed.query,
+            googleApiKey,
+            user.id,
             parsed.lat,
             parsed.lng
           );
@@ -58,9 +66,10 @@ export async function POST(request: NextRequest) {
 
       case "coordinates":
         if (parsed.lat && parsed.lng) {
-          // Reverse geocode via text search
           placeData = await searchPlace(
             `${parsed.lat},${parsed.lng}`,
+            googleApiKey,
+            user.id,
             parsed.lat,
             parsed.lng
           );

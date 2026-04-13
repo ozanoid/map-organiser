@@ -4,6 +4,7 @@ import { parseTakeoutGeoJson, parseTakeoutCsv } from "@/lib/google/takeout-parse
 import { parseMapsUrl } from "@/lib/google/parse-maps-url";
 import { getPlaceDetails, searchPlace, downloadAndStorePhoto } from "@/lib/google/places-api";
 import { resolveCategoryId } from "@/lib/google/category-mapping";
+import { getUserApiKeys } from "@/lib/google/get-user-api-keys";
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
@@ -43,6 +44,8 @@ export async function POST(request: NextRequest) {
       .select("*")
       .eq("user_id", user.id);
 
+    const { googleApiKey } = await getUserApiKeys(user.id);
+
     let imported = 0;
     let failed = 0;
     let enriched = 0;
@@ -61,17 +64,17 @@ export async function POST(request: NextRequest) {
         let lng = p.lng;
         let categoryId: string | null = null;
 
-        // Try to enrich from Google Maps URL
-        if (p.googleMapsUrl) {
+        // Try to enrich from Google Maps URL (requires API key)
+        if (p.googleMapsUrl && googleApiKey) {
           const parsed = await parseMapsUrl(p.googleMapsUrl);
           let details = null;
 
           if (parsed.type === "place_id" && parsed.placeId) {
-            details = await getPlaceDetails(parsed.placeId);
+            details = await getPlaceDetails(parsed.placeId, googleApiKey, user.id);
           } else if (parsed.type === "search" && parsed.query) {
-            details = await searchPlace(parsed.query, parsed.lat, parsed.lng);
+            details = await searchPlace(parsed.query, googleApiKey, user.id, parsed.lat, parsed.lng);
           } else if ((parsed.lat && parsed.lng) || (lat && lng)) {
-            details = await searchPlace(p.name, parsed.lat || lat, parsed.lng || lng);
+            details = await searchPlace(p.name, googleApiKey, user.id, parsed.lat || lat, parsed.lng || lng);
           }
 
           if (details) {
@@ -150,7 +153,7 @@ export async function POST(request: NextRequest) {
         } else {
           // Download 1 photo to Supabase Storage
           if (photoRef) {
-            const storageUrl = await downloadAndStorePhoto(photoRef, insertedPlace.id, user.id);
+            const storageUrl = await downloadAndStorePhoto(photoRef, insertedPlace.id, user.id, googleApiKey);
             if (storageUrl) {
               await supabase
                 .from("places")

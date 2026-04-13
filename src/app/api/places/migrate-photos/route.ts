@@ -1,9 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
-const API_KEY = process.env.GOOGLE_PLACES_API_KEY!;
-const BASE_URL = "https://places.googleapis.com/v1";
-
 /**
  * POST /api/places/migrate-photos
  *

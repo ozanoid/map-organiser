@@ -5,11 +5,10 @@ import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import type { Place } from "@/lib/types";
 
-mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN!;
-
 interface MapViewProps {
   places: Place[];
   onPlaceClick?: (place: Place) => void;
+  mapboxToken?: string;
   className?: string;
 }
 
@@ -17,7 +16,7 @@ const CATEGORY_COLORS: Record<string, string> = {
   default: "#059669",
 };
 
-export function MapView({ places, onPlaceClick, className }: MapViewProps) {
+export function MapView({ places, onPlaceClick, mapboxToken, className }: MapViewProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
@@ -32,6 +31,7 @@ export function MapView({ places, onPlaceClick, className }: MapViewProps) {
   useEffect(() => {
     if (!mapContainer.current || map.current) return;
 
+    mapboxgl.accessToken = mapboxToken || process.env.NEXT_PUBLIC_MAPBOX_TOKEN || "";
     map.current = new mapboxgl.Map({
       container: mapContainer.current,
       style: "mapbox://styles/mapbox/light-v11",
