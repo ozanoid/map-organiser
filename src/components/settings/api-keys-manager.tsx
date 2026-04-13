@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Eye, EyeOff, Save, Shield, Lock, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -109,12 +110,12 @@ export function ApiKeysManager() {
         </label>
         <div className="flex gap-2">
           <div className="relative flex-1">
-            <input
+            <Input
               type={showGoogle ? "text" : "password"}
               value={googleKey}
               onChange={(e) => setGoogleKey(e.target.value)}
               placeholder={data?.hasGoogleKey ? data.googleApiKey : "Enter your API key..."}
-              className="w-full h-9 px-3 pr-10 text-sm border border-input rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1 font-mono"
+              className="h-9 pr-10 font-mono"
             />
             <button
               type="button"
@@ -158,12 +159,12 @@ export function ApiKeysManager() {
         </label>
         <div className="flex gap-2">
           <div className="relative flex-1">
-            <input
+            <Input
               type={showMapbox ? "text" : "password"}
               value={mapboxKey}
               onChange={(e) => setMapboxKey(e.target.value)}
               placeholder={data?.hasMapboxToken ? data.mapboxToken : "Enter your token..."}
-              className="w-full h-9 px-3 pr-10 text-sm border border-input rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1 font-mono"
+              className="h-9 pr-10 font-mono"
             />
             <button
               type="button"

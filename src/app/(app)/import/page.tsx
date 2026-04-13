@@ -16,6 +16,7 @@ export default function ImportPage() {
     enriched?: number;
     total: number;
     skipped?: { name: string; url: string | null; reason: string }[];
+    enrichmentSkipped?: boolean;
   } | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const queryClient = useQueryClient();
@@ -168,6 +169,12 @@ export default function ImportPage() {
               </p>
             </div>
           </div>
+
+          {result.enrichmentSkipped && (
+            <p className="mt-3 text-xs text-amber-600">
+              Enrichment skipped — add your Google API key in Settings for richer imports.
+            </p>
+          )}
 
           {/* Skipped places table */}
           {result.skipped && result.skipped.length > 0 && (
