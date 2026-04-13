@@ -70,7 +70,7 @@ Mekan CRUD islemleri, filtreleme, siralama, PostGIS konum yonetimi.
 Query Params → Supabase Query Builder
   country    → .eq("country", value)
   city       → .eq("city", value)
-  category   → .eq("category_id", value)
+  category   → .in("category_id", values) (comma-separated, multi-select)
   status     → .eq("visit_status", value)
   rating     → .gte("rating", value)
   q          → .or("name.ilike.%q%,address.ilike.%q%,notes.ilike.%q%")
@@ -520,13 +520,15 @@ URL-tabanli filtre state yonetimi, filtre UI componentleri.
 ### Dosyalar
 | Dosya | Rol |
 |-------|-----|
-| `src/lib/hooks/use-filters.ts` | URL ↔ filter state cevirmeni |
+| `src/lib/hooks/use-filters.ts` | Local state + debounced URL sync |
+| `src/lib/hooks/use-debounce.ts` | Debounce utility hook |
 | `src/components/filters/filter-panel.tsx` | Desktop sidebar filtre UI |
 | `src/components/filters/filter-sheet.tsx` | Mobile bottom sheet filtre UI |
-| `src/components/filters/category-filter.tsx` | Kategori toggle pill'leri |
+| `src/components/filters/debounced-search-input.tsx` | Debounced arama input component |
+| `src/components/filters/category-filter.tsx` | Kategori multi-select pill'leri |
 | `src/components/filters/country-city-filter.tsx` | Ulke/sehir native select |
 | `src/components/filters/tag-filter.tsx` | Tag multi-select pill'leri |
-| `src/components/filters/list-filter.tsx` | Liste native select |
+| `src/components/filters/list-filter.tsx` | Liste native select (× temizleme butonu) |
 | `src/components/filters/visit-status-filter.tsx` | Status toggle pill'leri |
 
 ### PlaceFilters Interface
@@ -534,7 +536,7 @@ URL-tabanli filtre state yonetimi, filtre UI componentleri.
 interface PlaceFilters {
   country?: string;
   city?: string;
-  category_id?: string;
+  category_ids?: string[];
   tag_ids?: string[];
   list_id?: string;
   rating_min?: number;
@@ -545,11 +547,13 @@ interface PlaceFilters {
 ```
 
 ### URL Param Mapping
+Mapping `PARAM_MAP` objesi ile tanimlidir (`use-filters.ts`):
+
 | Filter Key | URL Param | Ornek |
 |-----------|-----------|-------|
 | country | country | ?country=Turkey |
 | city | city | ?city=Istanbul |
-| category_id | category | ?category=uuid |
+| category_ids | category | ?category=uuid1,uuid2 (coklu secim) |
 | tag_ids | tags | ?tags=uuid1,uuid2 |
 | list_id | list | ?list=uuid |
 | rating_min | rating | ?rating=4 |
@@ -557,9 +561,36 @@ interface PlaceFilters {
 | visit_status | status | ?status=visited |
 | search | q | ?q=coffee |
 
+### Filtre State Mimarisi (Local State + Debounced URL Sync)
+```
+Pill/dropdown tikla → setFilters() → [ANLIK] local state guncelle → usePlaces re-fetch
+                                          ↓ (300ms debounce)
+                                   router.push() → URL guncellenir (arka planda)
+
+Back/Forward butonu → URL degisir → useEffect → local state sync
+Page refresh → URL'den initial state oku
+```
+
+**Neden local state?** Onceki mimaride her filtre tiklama `router.push()` tetikliyordu → Next.js tam navigasyon → ~100-200ms gecikme. Yeni mimaride:
+- `setFilters()` local state'i **aninda** gunceller (gecikme yok)
+- URL 300ms debounce ile arka planda sync olur (bookmark/share/back-forward korunur)
+- `setFilters` callback'inde `searchParams` dependency yok → stale closure riski yok
+
+### Coklu Kategori Secimi
+Kategori filtresi tag filtresiyle ayni array toggle pattern'ini kullanir:
+- Pill'e tikla → array'e ekle/cikar
+- Birden fazla kategori secilebilir (OR mantigi)
+- API: `.in("category_id", ids)` ile DB seviyesinde filtreleme (junction table yok, dogrudan FK)
+
 ### Filtre Onceligi (Performance)
-1. **DB Level (hizli):** country, city, category_id, visit_status, rating_min, search (name/address/notes)
+1. **DB Level (hizli):** country, city, category_ids (`.in()`), visit_status, rating_min, search (name/address/notes)
 2. **JS Post-Filter (yavas ama gerekli):** google_rating_min (JSONB), tag_ids (junction), list_id (junction)
+
+### Search Debounce
+Arama input'u `DebouncedSearchInput` component'i kullanir:
+- Local state ile kullanici yazisini aninda gosterir
+- 400ms debounce ile `setFilters({ search })` cagrilir
+- Bu, her keystroke'ta API istegi gondermesini onler
 
 ### Native Select Karari
 Base UI Select componentleri projede guvenilir calismadigindan (selection bozuklugu, UUID gosterme, "All" geri secilememe), tum dropdown filtreler native `<select>` HTML elementi kullanir. Bu yaklasim:
@@ -567,6 +598,7 @@ Base UI Select componentleri projede guvenilir calismadigindan (selection bozukl
 - Erisilebilirlik (a11y) dahili
 - Mobilde native picker aciliyor
 - Stillendirilmis (appearance-none + custom chevron icon)
+- Country ve List dropdown'larinda × temizleme butonu var (stopPropagation ile select tiklamasindan izole)
 
 ---
 
@@ -587,6 +619,8 @@ Base UI Select componentleri projede guvenilir calismadigindan (selection bozukl
 - Clustering → buyuk veri setlerinde harita performansi
 - Junction tablo filtreleme → O(n) JS post-filter (gelecekte DB function ile optimize edilebilir)
 - CSV import: sequential (rate limit), parallelizable with queue system
+- Filtre interaksiyonlari: local state ile anlik UI guncelleme, URL 300ms debounce ile sync
+- Search input: 400ms debounce ile API istekleri optimize (her keystroke'ta fetch onlenir)
 
 ### Security
 - Per-user API keyleri AES-256-GCM ile sifrelenir (ENCRYPTION_SECRET env var zorunlu, yoksa throw)

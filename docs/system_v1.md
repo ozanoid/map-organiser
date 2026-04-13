@@ -100,14 +100,14 @@ src/
 │   ├── ui/                     # shadcn/ui primitives (~20 files)
 │   ├── layout/                 # App shell (sidebar, header, mobile nav)
 │   ├── map/                    # MapView + MapContent (Mapbox GL JS)
-│   ├── filters/                # Filter components (7 files)
+│   ├── filters/                # Filter components (9 files)
 │   └── places/                 # Place components (7 files)
 ├── lib/
 │   ├── types/index.ts          # All TypeScript interfaces
 │   ├── utils.ts                # cn() utility
 │   ├── providers.tsx           # QueryClientProvider
 │   ├── supabase/               # Supabase clients (browser, server, middleware)
-│   ├── hooks/                  # React Query hooks (5 files)
+│   ├── hooks/                  # React Query hooks + utilities (6 files)
 │   └── google/                 # Google API integration (6 files)
 └── middleware.ts               # Next.js middleware entry
 ```
@@ -334,17 +334,19 @@ User pastes Google Maps URL
 
 ### Filter Flow
 ```
-User clicks filter in UI
-    → setFilters({category_id: "xxx"})
-    → router.push("/map?category=xxx")
-    → useSearchParams() re-fires
-    → usePlaces(filters) re-queries
-    → GET /api/places?category=xxx
-    → Supabase query with .eq("category_id", xxx)
+User clicks filter pill/dropdown in UI
+    → setFilters({category_ids: ["xxx", "yyy"]})
+    → [INSTANT] local state updates → usePlaces(filters) re-queries
+    → [300ms DEBOUNCE] router.push("/map?category=xxx,yyy") (URL sync)
+    → GET /api/places?category=xxx,yyy
+    → Supabase query with .in("category_id", [xxx, yyy])
     → Post-filter for JSONB/junction (google_rating, tags, lists)
     → Transform PostGIS → {lat, lng}
     → Return Place[]
     → MapView/PlaceCard re-render
+
+Back/Forward button → URL changes → useEffect → local state syncs
+Page refresh → URL'den initial state okunur
 ```
 
 ### CSV Import Flow
