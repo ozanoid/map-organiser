@@ -256,12 +256,23 @@ Secili: ring-2 ring-emerald-500 (bulk select)
 | Outline | `border` | Konum badge |
 | Visit Status | Custom bg + border + text renkleri | Status badge |
 
-### Filter Pill
+### Filter Pill (Visit Status)
 
 ```
 Aktif: bg-emerald-50 text-emerald-700 border border-emerald-200
 Pasif: bg-gray-100 text-gray-600 hover:bg-gray-200
 Boyut: px-2.5 py-1 text-xs font-medium rounded-full
+```
+
+### Category Pill (Filter — Multi-Select)
+
+```
+Aktif: style={{ backgroundColor: cat.color }} text-white (kategori rengiyle dolar)
+Pasif: bg-gray-100 text-gray-600 hover:bg-gray-200
+"All" pill: bg-emerald-100 text-emerald-700 (hicbir kategori secili degilken)
+Boyut: px-2.5 py-1 text-xs font-medium rounded-full
+Coklu secim: birden fazla pill ayni anda aktif olabilir (orn: Restaurant + Bar)
+Renk noktasi: her pill'de w-2 h-2 rounded-full shrink-0 (kategori rengi)
 ```
 
 ### Tag Pill (Filter)
@@ -447,6 +458,19 @@ Base UI (shadcn/ui v2) Select componentleri projede su sorunlari cikardi:
   </svg>
 </div>
 ```
+
+**× Temizleme Butonu (Country + List dropdown):**
+```html
+{value && (
+  <Button className="absolute right-7 top-1/2 -translate-y-1/2 h-5 w-5 p-0 cursor-pointer z-10"
+    onClick={(e) => { e.stopPropagation(); clearFilter(); }}>
+    <X className="h-3 w-3" />
+  </Button>
+)}
+```
+- `z-10` ile select'in uzerinde render edilir
+- `stopPropagation()` ile select tiklamasindan izole edilir
+- Sadece filtre aktifken gorulur (`value &&`)
 
 **Istisna:** shadcn Dialog, Sheet, Popover, Tabs, Badge, Card gibi non-select componentler hala Base UI uzerinden calisir ve sorunsuzdur.
 
