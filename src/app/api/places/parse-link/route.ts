@@ -48,17 +48,12 @@ export async function POST(request: NextRequest) {
     if (googleApiKey) {
       let placeData = null;
 
+      // Google only works with place_id (direct lookup) and search (text query).
+      // CID and coordinates have no text query — skip Google, let DataForSEO handle them.
       switch (parsed.type) {
         case "place_id":
           if (parsed.placeId) {
             placeData = await getPlaceDetails(parsed.placeId, googleApiKey, user.id);
-          }
-          break;
-        case "cid":
-          if (parsed.lat && parsed.lng) {
-            placeData = await searchPlace(
-              `${parsed.lat},${parsed.lng}`, googleApiKey, user.id, parsed.lat, parsed.lng
-            );
           }
           break;
         case "search":
@@ -68,13 +63,7 @@ export async function POST(request: NextRequest) {
             );
           }
           break;
-        case "coordinates":
-          if (parsed.lat && parsed.lng) {
-            placeData = await searchPlace(
-              `${parsed.lat},${parsed.lng}`, googleApiKey, user.id, parsed.lat, parsed.lng
-            );
-          }
-          break;
+        // cid and coordinates: no text query available, fall through to DataForSEO
       }
 
       if (placeData) {
