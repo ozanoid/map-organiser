@@ -13,6 +13,7 @@ import type {
 export interface BusinessInfoRequest {
   keyword: string;
   location_code?: number;
+  location_coordinate?: string; // "latitude,longitude,radius" (radius min 199.9)
   language_code?: string;
 }
 
@@ -24,6 +25,7 @@ export async function fetchBusinessInfoLive(
     {
       keyword: request.keyword,
       ...(request.location_code && { location_code: request.location_code }),
+      ...(request.location_coordinate && { location_coordinate: request.location_coordinate }),
       language_code: request.language_code || "en",
     },
   ];
@@ -48,7 +50,6 @@ export async function fetchBusinessInfoLive(
       return null;
     }
 
-    // Return the first business info item
     return result.items[0];
   } catch (error) {
     console.error("[DataForSEO] Business info fetch error:", error);

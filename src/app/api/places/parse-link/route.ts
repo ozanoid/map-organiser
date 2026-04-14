@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { parseMapsUrl } from "@/lib/google/parse-maps-url";
 import { DataForSEOClient } from "@/lib/dataforseo/client";
 import { fetchBusinessInfoLive } from "@/lib/dataforseo/business-info";
+import type { BusinessInfoRequest } from "@/lib/dataforseo/business-info";
 import { transformBusinessInfoToPlaceData } from "@/lib/dataforseo/transform";
 import { trackUsage } from "@/lib/google/track-usage";
 
@@ -37,22 +38,46 @@ export async function POST(request: NextRequest) {
     const client = getDataForSEOClient();
     const parsed = await parseMapsUrl(url);
 
-    // Build DataForSEO keyword from parsed URL
-    let keyword: string | null = null;
+    console.log("[parse-link] Parsed URL:", JSON.stringify(parsed));
+
+    // Build DataForSEO request from parsed URL data
+    let req: BusinessInfoRequest | null = null;
 
     switch (parsed.type) {
       case "place_id":
-        if (parsed.placeId) keyword = `place_id:${parsed.placeId}`;
+        // ChIJ format PlaceID — DataForSEO accepts this directly
+        if (parsed.placeId) {
+          req = { keyword: `place_id:${parsed.placeId}` };
+        }
         break;
+
       case "cid":
-        if (parsed.cid) keyword = `cid:${parsed.cid}`;
+        // Google CID — DataForSEO accepts this natively
+        if (parsed.cid) {
+          req = { keyword: `cid:${parsed.cid}` };
+        }
         break;
+
       case "search":
-        keyword = parsed.query || null;
+        // Text search — use query + coordinate for geo-biasing
+        if (parsed.query) {
+          req = { keyword: parsed.query };
+          if (parsed.lat && parsed.lng) {
+            req.location_coordinate = `${parsed.lat},${parsed.lng},1000`;
+          }
+        }
         break;
+
       case "coordinates":
-        if (parsed.lat && parsed.lng) keyword = `${parsed.lat},${parsed.lng}`;
+        // Only coordinates — reverse search at that location
+        if (parsed.lat && parsed.lng) {
+          req = {
+            keyword: `${parsed.lat},${parsed.lng}`,
+            location_coordinate: `${parsed.lat},${parsed.lng},200`,
+          };
+        }
         break;
+
       default:
         return NextResponse.json(
           { error: "Could not parse this URL. Please try a different Google Maps link." },
@@ -60,14 +85,16 @@ export async function POST(request: NextRequest) {
         );
     }
 
-    if (!keyword) {
+    if (!req) {
       return NextResponse.json(
         { error: "Could not extract search parameters from this URL." },
         { status: 400 }
       );
     }
 
-    const raw = await fetchBusinessInfoLive(client, { keyword });
+    console.log("[parse-link] DataForSEO request:", JSON.stringify(req));
+
+    const raw = await fetchBusinessInfoLive(client, req);
     if (!raw) {
       return NextResponse.json(
         { error: "Could not find place details for this link." },
@@ -79,6 +106,8 @@ export async function POST(request: NextRequest) {
 
     const placeData = transformBusinessInfoToPlaceData(raw);
     const fetchTimeMs = Date.now() - startTime;
+
+    console.log(`[parse-link] Success: "${placeData.name}" in ${fetchTimeMs}ms via DataForSEO`);
 
     return NextResponse.json({
       ...placeData,
