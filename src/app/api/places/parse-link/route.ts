@@ -11,18 +11,16 @@ import {
   extractExtendedData,
 } from "@/lib/dataforseo/transform";
 import { trackUsage } from "@/lib/google/track-usage";
+import type { ParsedPlaceData } from "@/lib/types";
 
 /**
  * Extract CID from a resolved Google Maps URL's FTid.
- * FTid format: !1s0x{s2_cell}:0x{cid_hex} — second hex part is CID.
- * Used only for DataForSEO path (DataForSEO accepts cid: natively).
+ * Used only for DataForSEO (accepts cid: natively).
  */
 function extractCidFromUrl(url: string): string | null {
-  // ?cid= param (decimal)
   const cidParam = url.match(/[?&]cid=(\d+)/);
   if (cidParam) return cidParam[1];
 
-  // FTid hex → decimal
   const ftidMatch = url.match(/!1s0x[a-f0-9]+:(0x[a-f0-9]+)/) ||
     url.match(/ftid=0x[a-f0-9]+:(0x[a-f0-9]+)/);
   if (ftidMatch) {
@@ -36,6 +34,61 @@ function getDataForSEOClient(): DataForSEOClient | null {
   const password = process.env.DATAFORSEO_PASSWORD;
   if (!login || !password) return null;
   return new DataForSEOClient({ login, password });
+}
+
+/**
+ * Build a DataForSEO request from URL and parsed data.
+ */
+function buildDataForSEORequest(
+  url: string,
+  parsed: { type: string; placeId?: string; query?: string; lat?: number; lng?: number }
+): BusinessInfoRequest | null {
+  const cidFromUrl = extractCidFromUrl(url);
+  const locationCoord = parsed.lat && parsed.lng
+    ? `${parsed.lat},${parsed.lng},1000`
+    : undefined;
+
+  if (cidFromUrl) {
+    return { keyword: `cid:${cidFromUrl}`, location_coordinate: locationCoord };
+  }
+  if (parsed.type === "place_id" && parsed.placeId) {
+    return { keyword: `place_id:${parsed.placeId}`, location_coordinate: locationCoord };
+  }
+  if (parsed.type === "search" && parsed.query) {
+    return { keyword: parsed.query, location_coordinate: locationCoord };
+  }
+  if (parsed.lat && parsed.lng) {
+    return { keyword: `${parsed.lat},${parsed.lng}`, location_coordinate: `${parsed.lat},${parsed.lng},200` };
+  }
+  return null;
+}
+
+/**
+ * Run Google Places API parse (same logic as main branch).
+ */
+async function parseViaGoogle(
+  parsed: { type: string; placeId?: string; cid?: string; query?: string; lat?: number; lng?: number },
+  googleApiKey: string,
+  userId: string
+): Promise<ParsedPlaceData | null> {
+  switch (parsed.type) {
+    case "place_id":
+      if (parsed.placeId) return getPlaceDetails(parsed.placeId, googleApiKey, userId);
+      break;
+    case "cid":
+      if (parsed.lat && parsed.lng)
+        return searchPlace(`${parsed.lat},${parsed.lng}`, googleApiKey, userId, parsed.lat, parsed.lng);
+      break;
+    case "search":
+      if (parsed.query)
+        return searchPlace(parsed.query, googleApiKey, userId, parsed.lat, parsed.lng);
+      break;
+    case "coordinates":
+      if (parsed.lat && parsed.lng)
+        return searchPlace(`${parsed.lat},${parsed.lng}`, googleApiKey, userId, parsed.lat, parsed.lng);
+      break;
+  }
+  return null;
 }
 
 export async function POST(request: NextRequest) {
@@ -59,114 +112,100 @@ export async function POST(request: NextRequest) {
     const startTime = Date.now();
     const parsed = await parseMapsUrl(url);
     const { googleApiKey } = await getUserApiKeys(user.id);
+    const dfClient = getDataForSEOClient();
+    const dfReq = dfClient ? buildDataForSEORequest(url, parsed) : null;
 
     console.log("[parse-link] Parsed URL:", JSON.stringify(parsed));
+    console.log("[parse-link] Google key:", !!googleApiKey, "| DataForSEO:", !!dfReq);
 
-    // ─── FAST PATH: Google Places API (same logic as main branch) ───
-    if (googleApiKey) {
-      let placeData = null;
+    // ─── Google key exists: run both in parallel, return whichever is faster ───
+    if (googleApiKey && dfClient && dfReq) {
+      const googlePromise = parseViaGoogle(parsed, googleApiKey, user.id)
+        .catch((err) => { console.error("[parse-link] Google error:", err); return null; });
 
-      switch (parsed.type) {
-        case "place_id":
-          if (parsed.placeId) {
-            placeData = await getPlaceDetails(parsed.placeId, googleApiKey, user.id);
-          }
-          break;
-        case "cid":
-          if (parsed.lat && parsed.lng) {
-            placeData = await searchPlace(
-              `${parsed.lat},${parsed.lng}`, googleApiKey, user.id, parsed.lat, parsed.lng
-            );
-          }
-          break;
-        case "search":
-          if (parsed.query) {
-            placeData = await searchPlace(
-              parsed.query, googleApiKey, user.id, parsed.lat, parsed.lng
-            );
-          }
-          break;
-        case "coordinates":
-          if (parsed.lat && parsed.lng) {
-            placeData = await searchPlace(
-              `${parsed.lat},${parsed.lng}`, googleApiKey, user.id, parsed.lat, parsed.lng
-            );
-          }
-          break;
-      }
+      const dfPromise = fetchBusinessInfoLive(dfClient, dfReq)
+        .then((raw) => {
+          if (!raw) return null;
+          trackUsage(user.id, "dataforseo_business_info_live").catch(() => {});
+          return { placeData: transformBusinessInfoToPlaceData(raw), extended: extractExtendedData(raw) };
+        })
+        .catch((err) => { console.error("[parse-link] DataForSEO error:", err); return null; });
 
-      if (placeData) {
+      // Wait for Google first (fast), DataForSEO may or may not be done
+      const [googleResult, dfResult] = await Promise.all([googlePromise, dfPromise]);
+
+      // Google succeeded — use it as preview, attach DataForSEO extended if available
+      if (googleResult) {
         const fetchTimeMs = Date.now() - startTime;
-        console.log(`[parse-link] Success: "${placeData.name}" in ${fetchTimeMs}ms via Google`);
+        console.log(`[parse-link] Success: "${googleResult.name}" in ${fetchTimeMs}ms via Google` +
+          (dfResult ? " (DataForSEO also ready)" : " (DataForSEO pending)"));
 
         return NextResponse.json({
-          ...placeData,
-          photoRef: null, // Don't use Google photo ref — DataForSEO handles photos
+          ...googleResult,
+          photoRef: null, // DataForSEO handles photos in background enrichment
           _provider: "google",
           _fetchTimeMs: fetchTimeMs,
+          ...(dfResult ? { _extended: dfResult.extended } : {}),
         });
       }
-      console.log("[parse-link] Google returned no results, trying DataForSEO...");
-    }
 
-    // ─── SLOW PATH: DataForSEO ───
-    const dfClient = getDataForSEOClient();
-    if (!dfClient) {
-      return NextResponse.json(
-        { error: "No API credentials configured. Add a Google Places API key in Settings." },
-        { status: 400 }
-      );
-    }
+      // Google failed but DataForSEO succeeded
+      if (dfResult) {
+        const fetchTimeMs = Date.now() - startTime;
+        console.log(`[parse-link] Google failed, using DataForSEO: "${dfResult.placeData.name}" in ${fetchTimeMs}ms`);
 
-    // For DataForSEO, try CID first (most reliable), then other parsed data
-    const cidFromUrl = extractCidFromUrl(url);
-    const locationCoord = parsed.lat && parsed.lng
-      ? `${parsed.lat},${parsed.lng},1000`
-      : undefined;
+        return NextResponse.json({
+          ...dfResult.placeData,
+          _provider: "dataforseo",
+          _fetchTimeMs: fetchTimeMs,
+          _extended: dfResult.extended,
+        });
+      }
 
-    let req: BusinessInfoRequest | null = null;
-
-    if (cidFromUrl) {
-      req = { keyword: `cid:${cidFromUrl}`, location_coordinate: locationCoord };
-    } else if (parsed.type === "place_id" && parsed.placeId) {
-      req = { keyword: `place_id:${parsed.placeId}`, location_coordinate: locationCoord };
-    } else if (parsed.type === "search" && parsed.query) {
-      req = { keyword: parsed.query, location_coordinate: locationCoord };
-    } else if (parsed.lat && parsed.lng) {
-      req = { keyword: `${parsed.lat},${parsed.lng}`, location_coordinate: `${parsed.lat},${parsed.lng},200` };
-    }
-
-    if (!req) {
-      return NextResponse.json(
-        { error: "Could not parse this URL. Please try a different Google Maps link." },
-        { status: 400 }
-      );
-    }
-
-    console.log("[parse-link] DataForSEO request:", JSON.stringify(req));
-
-    const raw = await fetchBusinessInfoLive(dfClient, req);
-    if (!raw) {
+      // Both failed
       return NextResponse.json(
         { error: "Could not find place details for this link." },
         { status: 404 }
       );
     }
 
-    trackUsage(user.id, "dataforseo_business_info_live").catch(() => {});
+    // ─── Google key only (no DataForSEO) ───
+    if (googleApiKey) {
+      const placeData = await parseViaGoogle(parsed, googleApiKey, user.id);
+      if (placeData) {
+        const fetchTimeMs = Date.now() - startTime;
+        console.log(`[parse-link] Success: "${placeData.name}" in ${fetchTimeMs}ms via Google`);
+        return NextResponse.json({
+          ...placeData,
+          photoRef: null,
+          _provider: "google",
+          _fetchTimeMs: fetchTimeMs,
+        });
+      }
+    }
 
-    const placeData = transformBusinessInfoToPlaceData(raw);
-    const extended = extractExtendedData(raw);
-    const fetchTimeMs = Date.now() - startTime;
+    // ─── DataForSEO only (no Google key) ───
+    if (dfClient && dfReq) {
+      const raw = await fetchBusinessInfoLive(dfClient, dfReq);
+      if (raw) {
+        trackUsage(user.id, "dataforseo_business_info_live").catch(() => {});
+        const placeData = transformBusinessInfoToPlaceData(raw);
+        const extended = extractExtendedData(raw);
+        const fetchTimeMs = Date.now() - startTime;
+        console.log(`[parse-link] Success: "${placeData.name}" in ${fetchTimeMs}ms via DataForSEO`);
+        return NextResponse.json({
+          ...placeData,
+          _provider: "dataforseo",
+          _fetchTimeMs: fetchTimeMs,
+          _extended: extended,
+        });
+      }
+    }
 
-    console.log(`[parse-link] Success: "${placeData.name}" in ${fetchTimeMs}ms via DataForSEO`);
-
-    return NextResponse.json({
-      ...placeData,
-      _provider: "dataforseo",
-      _fetchTimeMs: fetchTimeMs,
-      _extended: extended,
-    });
+    return NextResponse.json(
+      { error: "Could not find place details for this link. Check your API credentials in Settings." },
+      { status: 404 }
+    );
   } catch (error) {
     console.error("Parse link error:", error);
     return NextResponse.json(
