@@ -12,6 +12,25 @@ import {
 } from "@/lib/dataforseo/transform";
 import { trackUsage } from "@/lib/google/track-usage";
 
+/**
+ * Extract CID from a resolved Google Maps URL's FTid.
+ * FTid format: !1s0x{s2_cell}:0x{cid_hex} — second hex part is CID.
+ * Used only for DataForSEO path (DataForSEO accepts cid: natively).
+ */
+function extractCidFromUrl(url: string): string | null {
+  // ?cid= param (decimal)
+  const cidParam = url.match(/[?&]cid=(\d+)/);
+  if (cidParam) return cidParam[1];
+
+  // FTid hex → decimal
+  const ftidMatch = url.match(/!1s0x[a-f0-9]+:(0x[a-f0-9]+)/) ||
+    url.match(/ftid=0x[a-f0-9]+:(0x[a-f0-9]+)/);
+  if (ftidMatch) {
+    try { return BigInt(ftidMatch[1]).toString(); } catch {}
+  }
+  return null;
+}
+
 function getDataForSEOClient(): DataForSEOClient | null {
   const login = process.env.DATAFORSEO_LOGIN;
   const password = process.env.DATAFORSEO_PASSWORD;
@@ -42,18 +61,22 @@ export async function POST(request: NextRequest) {
     const { googleApiKey } = await getUserApiKeys(user.id);
 
     console.log("[parse-link] Parsed URL:", JSON.stringify(parsed));
-    console.log("[parse-link] Google API key available:", !!googleApiKey);
 
-    // ─── FAST PATH: Google Places API (if user has API key) ───
+    // ─── FAST PATH: Google Places API (same logic as main branch) ───
     if (googleApiKey) {
       let placeData = null;
 
-      // Google only works with place_id (direct lookup) and search (text query).
-      // CID and coordinates have no text query — skip Google, let DataForSEO handle them.
       switch (parsed.type) {
         case "place_id":
           if (parsed.placeId) {
             placeData = await getPlaceDetails(parsed.placeId, googleApiKey, user.id);
+          }
+          break;
+        case "cid":
+          if (parsed.lat && parsed.lng) {
+            placeData = await searchPlace(
+              `${parsed.lat},${parsed.lng}`, googleApiKey, user.id, parsed.lat, parsed.lng
+            );
           }
           break;
         case "search":
@@ -63,15 +86,19 @@ export async function POST(request: NextRequest) {
             );
           }
           break;
-        // cid and coordinates: no text query available, fall through to DataForSEO
+        case "coordinates":
+          if (parsed.lat && parsed.lng) {
+            placeData = await searchPlace(
+              `${parsed.lat},${parsed.lng}`, googleApiKey, user.id, parsed.lat, parsed.lng
+            );
+          }
+          break;
       }
 
       if (placeData) {
         const fetchTimeMs = Date.now() - startTime;
         console.log(`[parse-link] Success: "${placeData.name}" in ${fetchTimeMs}ms via Google`);
 
-        // photoRef from Google is NOT used (we don't download from Google Photos API)
-        // DataForSEO will provide the photo via main_image in background enrichment
         return NextResponse.json({
           ...placeData,
           photoRef: null, // Don't use Google photo ref — DataForSEO handles photos
@@ -79,11 +106,10 @@ export async function POST(request: NextRequest) {
           _fetchTimeMs: fetchTimeMs,
         });
       }
-      // Google failed — fall through to DataForSEO
       console.log("[parse-link] Google returned no results, trying DataForSEO...");
     }
 
-    // ─── SLOW PATH: DataForSEO (no Google key, or Google failed) ───
+    // ─── SLOW PATH: DataForSEO ───
     const dfClient = getDataForSEOClient();
     if (!dfClient) {
       return NextResponse.json(
@@ -92,25 +118,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // For DataForSEO, try CID first (most reliable), then other parsed data
+    const cidFromUrl = extractCidFromUrl(url);
     const locationCoord = parsed.lat && parsed.lng
       ? `${parsed.lat},${parsed.lng},1000`
       : undefined;
 
     let req: BusinessInfoRequest | null = null;
 
-    switch (parsed.type) {
-      case "place_id":
-        if (parsed.placeId) req = { keyword: `place_id:${parsed.placeId}`, location_coordinate: locationCoord };
-        break;
-      case "cid":
-        if (parsed.cid) req = { keyword: `cid:${parsed.cid}`, location_coordinate: locationCoord };
-        break;
-      case "search":
-        if (parsed.query) req = { keyword: parsed.query, location_coordinate: locationCoord };
-        break;
-      case "coordinates":
-        if (parsed.lat && parsed.lng) req = { keyword: `${parsed.lat},${parsed.lng}`, location_coordinate: `${parsed.lat},${parsed.lng},200` };
-        break;
+    if (cidFromUrl) {
+      req = { keyword: `cid:${cidFromUrl}`, location_coordinate: locationCoord };
+    } else if (parsed.type === "place_id" && parsed.placeId) {
+      req = { keyword: `place_id:${parsed.placeId}`, location_coordinate: locationCoord };
+    } else if (parsed.type === "search" && parsed.query) {
+      req = { keyword: parsed.query, location_coordinate: locationCoord };
+    } else if (parsed.lat && parsed.lng) {
+      req = { keyword: `${parsed.lat},${parsed.lng}`, location_coordinate: `${parsed.lat},${parsed.lng},200` };
     }
 
     if (!req) {
@@ -119,6 +142,8 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    console.log("[parse-link] DataForSEO request:", JSON.stringify(req));
 
     const raw = await fetchBusinessInfoLive(dfClient, req);
     if (!raw) {
