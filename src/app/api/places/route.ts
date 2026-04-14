@@ -216,10 +216,66 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Fire-and-forget: fetch reviews in background after save
+  const cid = google_data?.cid as string | undefined;
+  if (cid) {
+    enrichPlaceWithReviews(place.id, cid, country || "United States", savedGoogleData).catch(
+      (err) => console.error("[auto-enrich] Reviews failed:", err)
+    );
+  }
+
   return NextResponse.json({
     ...place,
     location: { lat, lng },
   });
+}
+
+/**
+ * Background: fetch reviews via DataForSEO and update google_data.
+ * All imports are dynamic so this doesn't break the GET handler.
+ */
+async function enrichPlaceWithReviews(
+  placeId: string,
+  cid: string,
+  country: string,
+  existingGoogleData: Record<string, unknown>
+) {
+  const login = process.env.DATAFORSEO_LOGIN;
+  const password = process.env.DATAFORSEO_PASSWORD;
+  if (!login || !password) return;
+
+  const { DataForSEOClient } = await import("@/lib/dataforseo/client");
+  const { fetchReviews } = await import("@/lib/dataforseo/reviews");
+  const { transformReviews } = await import("@/lib/dataforseo/transform");
+  const { trackUsage } = await import("@/lib/google/track-usage");
+  const { createClient } = await import("@/lib/supabase/server");
+
+  const client = new DataForSEOClient({ login, password });
+  console.log(`[auto-enrich] Fetching reviews for place ${placeId}, cid: ${cid}`);
+
+  const rawReviews = await fetchReviews(client, {
+    cid,
+    depth: 50,
+    location_name: country,
+  });
+
+  if (rawReviews.length === 0) {
+    console.log("[auto-enrich] No reviews returned");
+    return;
+  }
+
+  const reviews = transformReviews(rawReviews);
+  trackUsage("system", "dataforseo_reviews").catch(() => {});
+
+  const supabase = await createClient();
+  await supabase
+    .from("places")
+    .update({
+      google_data: { ...existingGoogleData, reviews },
+    })
+    .eq("id", placeId);
+
+  console.log(`[auto-enrich] ${reviews.length} reviews saved for place ${placeId}`);
 }
 
 /**

@@ -146,6 +146,7 @@ export function AddPlaceDialog({ open, onOpenChange, initialUrl }: AddPlaceDialo
           website: placeData.website,
           phone: placeData.phone,
           url: placeData.googleMapsUrl,
+          ...((placeData as any)._extended || {}),
         },
         photoRef: placeData.photoRef,
         source: "link",

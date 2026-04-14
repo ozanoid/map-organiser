@@ -4,7 +4,10 @@ import { parseMapsUrl } from "@/lib/google/parse-maps-url";
 import { DataForSEOClient } from "@/lib/dataforseo/client";
 import { fetchBusinessInfoLive } from "@/lib/dataforseo/business-info";
 import type { BusinessInfoRequest } from "@/lib/dataforseo/business-info";
-import { transformBusinessInfoToPlaceData } from "@/lib/dataforseo/transform";
+import {
+  transformBusinessInfoToPlaceData,
+  extractExtendedData,
+} from "@/lib/dataforseo/transform";
 import { trackUsage } from "@/lib/google/track-usage";
 
 function getDataForSEOClient(): DataForSEOClient {
@@ -103,6 +106,7 @@ export async function POST(request: NextRequest) {
     trackUsage(user.id, "dataforseo_business_info_live").catch(() => {});
 
     const placeData = transformBusinessInfoToPlaceData(raw);
+    const extended = extractExtendedData(raw);
     const fetchTimeMs = Date.now() - startTime;
 
     console.log(`[parse-link] Success: "${placeData.name}" in ${fetchTimeMs}ms via DataForSEO`);
@@ -111,6 +115,7 @@ export async function POST(request: NextRequest) {
       ...placeData,
       _provider: "dataforseo",
       _fetchTimeMs: fetchTimeMs,
+      _extended: extended,
     });
   } catch (error) {
     console.error("Parse link error:", error);
