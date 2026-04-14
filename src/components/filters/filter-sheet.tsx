@@ -22,7 +22,7 @@ export function FilterSheet({ open, onOpenChange }: FilterSheetProps) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="bottom" className="max-h-[65dvh] rounded-t-2xl flex flex-col" showCloseButton={false}>
-        <SheetHeader className="flex flex-row items-center justify-between shrink-0 px-5">
+        <SheetHeader className="flex flex-row items-center justify-between shrink-0 px-5 pb-0">
           <SheetTitle>Filters</SheetTitle>
           <div className="flex items-center gap-2">
             {hasActiveFilters && (
@@ -49,7 +49,7 @@ export function FilterSheet({ open, onOpenChange }: FilterSheetProps) {
 
         <div className="overflow-y-auto flex-1 px-5 pb-safe-area-inset-bottom" style={{ paddingBottom: "env(safe-area-inset-bottom, 16px)" }}>
           {/* Visit Status */}
-          <div className="py-4">
+          <div className="pt-2 pb-4">
             <label className="text-sm font-medium mb-2 block">Status</label>
             <VisitStatusFilter />
           </div>
