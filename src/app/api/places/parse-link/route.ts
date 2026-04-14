@@ -47,6 +47,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    const startTime = Date.now();
     const parsed = await parseMapsUrl(url);
     let result = null;
 
@@ -110,7 +111,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    return NextResponse.json(result.data);
+    const fetchTimeMs = Date.now() - startTime;
+    return NextResponse.json({
+      ...result.data,
+      _provider: provider.name,
+      _fetchTimeMs: fetchTimeMs,
+    });
   } catch (error) {
     console.error("Parse link error:", error);
     return NextResponse.json(

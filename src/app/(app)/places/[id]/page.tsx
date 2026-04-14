@@ -620,7 +620,14 @@ export default function PlaceDetailPage() {
       {(reviews.length > 0 || place.google_place_id) && (
         <section className="space-y-3">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold">Google Reviews</h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-sm font-semibold">Reviews</h2>
+              {googleData.provider && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-muted-foreground">
+                  via {googleData.provider === "dataforseo" ? "DataForSEO" : "Google"}
+                </span>
+              )}
+            </div>
             {place.google_place_id && (
               <Button
                 variant="ghost"

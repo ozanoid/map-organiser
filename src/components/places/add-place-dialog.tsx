@@ -33,6 +33,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import type { ParsedPlaceData, VisitStatus } from "@/lib/types";
+import { Database, Zap } from "lucide-react";
 
 interface AddPlaceDialogProps {
   open: boolean;
@@ -43,6 +44,7 @@ interface AddPlaceDialogProps {
 export function AddPlaceDialog({ open, onOpenChange, initialUrl }: AddPlaceDialogProps) {
   const [url, setUrl] = useState("");
   const [placeData, setPlaceData] = useState<ParsedPlaceData | null>(null);
+  const [providerInfo, setProviderInfo] = useState<{ name: string; timeMs: number } | null>(null);
   const [categoryId, setCategoryId] = useState<string>("");
   const [notes, setNotes] = useState("");
   const [rating, setRating] = useState<number>(0);
@@ -62,7 +64,12 @@ export function AddPlaceDialog({ open, onOpenChange, initialUrl }: AddPlaceDialo
     if (open && initialUrl && !placeData && !parseLink.isPending) {
       setUrl(initialUrl);
       parseLink.mutate(initialUrl, {
-        onSuccess: (data) => setPlaceData(data),
+        onSuccess: (data: any) => {
+          setPlaceData(data);
+          if (data._provider) {
+            setProviderInfo({ name: data._provider, timeMs: data._fetchTimeMs || 0 });
+          }
+        },
         onError: (err) => toast.error(err.message),
       });
     }
@@ -92,6 +99,7 @@ export function AddPlaceDialog({ open, onOpenChange, initialUrl }: AddPlaceDialo
   function reset() {
     setUrl("");
     setPlaceData(null);
+    setProviderInfo(null);
     setCategoryId("");
     setNotes("");
     setRating(0);
@@ -106,7 +114,12 @@ export function AddPlaceDialog({ open, onOpenChange, initialUrl }: AddPlaceDialo
     if (!url.trim()) return;
 
     parseLink.mutate(url, {
-      onSuccess: (data) => setPlaceData(data),
+      onSuccess: (data: any) => {
+        setPlaceData(data);
+        if (data._provider) {
+          setProviderInfo({ name: data._provider, timeMs: data._fetchTimeMs || 0 });
+        }
+      },
       onError: (err) => toast.error(err.message),
     });
   }
@@ -270,6 +283,23 @@ export function AddPlaceDialog({ open, onOpenChange, initialUrl }: AddPlaceDialo
                   </Badge>
                 )}
               </div>
+
+              {/* Provider indicator */}
+              {providerInfo && (
+                <div className="flex items-center gap-1.5 mt-2 text-[10px] text-muted-foreground">
+                  {providerInfo.name === "dataforseo" ? (
+                    <Database className="h-3 w-3" />
+                  ) : (
+                    <Zap className="h-3 w-3" />
+                  )}
+                  <span>
+                    via {providerInfo.name === "dataforseo" ? "DataForSEO" : "Google Places API"}
+                    {providerInfo.timeMs > 0 && (
+                      <> &middot; {(providerInfo.timeMs / 1000).toFixed(1)}s</>
+                    )}
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* Visit Status */}
