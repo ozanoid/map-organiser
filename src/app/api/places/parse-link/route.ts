@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { parseMapsUrl } from "@/lib/google/parse-maps-url";
+import { getUserApiKeys } from "@/lib/google/get-user-api-keys";
+import { getPlaceDetails, searchPlace } from "@/lib/google/places-api";
 import { DataForSEOClient } from "@/lib/dataforseo/client";
 import { fetchBusinessInfoLive } from "@/lib/dataforseo/business-info";
 import type { BusinessInfoRequest } from "@/lib/dataforseo/business-info";
@@ -10,12 +12,10 @@ import {
 } from "@/lib/dataforseo/transform";
 import { trackUsage } from "@/lib/google/track-usage";
 
-function getDataForSEOClient(): DataForSEOClient {
+function getDataForSEOClient(): DataForSEOClient | null {
   const login = process.env.DATAFORSEO_LOGIN;
   const password = process.env.DATAFORSEO_PASSWORD;
-  if (!login || !password) {
-    throw new Error("DATAFORSEO_LOGIN and DATAFORSEO_PASSWORD env vars required");
-  }
+  if (!login || !password) return null;
   return new DataForSEOClient({ login, password });
 }
 
@@ -38,64 +38,100 @@ export async function POST(request: NextRequest) {
 
   try {
     const startTime = Date.now();
-    const client = getDataForSEOClient();
     const parsed = await parseMapsUrl(url);
+    const { googleApiKey } = await getUserApiKeys(user.id);
 
     console.log("[parse-link] Parsed URL:", JSON.stringify(parsed));
+    console.log("[parse-link] Google API key available:", !!googleApiKey);
 
-    // Build DataForSEO request from parsed URL data
-    let req: BusinessInfoRequest | null = null;
+    // ─── FAST PATH: Google Places API (if user has API key) ───
+    if (googleApiKey) {
+      let placeData = null;
 
-    // Build location_coordinate from parsed coords (DataForSEO requires location for ALL queries)
-    const locationCoord = parsed.lat && parsed.lng
-      ? `${parsed.lat},${parsed.lng},1000`
-      : undefined;
+      switch (parsed.type) {
+        case "place_id":
+          if (parsed.placeId) {
+            placeData = await getPlaceDetails(parsed.placeId, googleApiKey, user.id);
+          }
+          break;
+        case "cid":
+          if (parsed.lat && parsed.lng) {
+            placeData = await searchPlace(
+              `${parsed.lat},${parsed.lng}`, googleApiKey, user.id, parsed.lat, parsed.lng
+            );
+          }
+          break;
+        case "search":
+          if (parsed.query) {
+            placeData = await searchPlace(
+              parsed.query, googleApiKey, user.id, parsed.lat, parsed.lng
+            );
+          }
+          break;
+        case "coordinates":
+          if (parsed.lat && parsed.lng) {
+            placeData = await searchPlace(
+              `${parsed.lat},${parsed.lng}`, googleApiKey, user.id, parsed.lat, parsed.lng
+            );
+          }
+          break;
+      }
 
-    switch (parsed.type) {
-      case "place_id":
-        if (parsed.placeId) {
-          req = { keyword: `place_id:${parsed.placeId}`, location_coordinate: locationCoord };
-        }
-        break;
+      if (placeData) {
+        const fetchTimeMs = Date.now() - startTime;
+        console.log(`[parse-link] Success: "${placeData.name}" in ${fetchTimeMs}ms via Google`);
 
-      case "cid":
-        if (parsed.cid) {
-          req = { keyword: `cid:${parsed.cid}`, location_coordinate: locationCoord };
-        }
-        break;
-
-      case "search":
-        if (parsed.query) {
-          req = { keyword: parsed.query, location_coordinate: locationCoord };
-        }
-        break;
-
-      case "coordinates":
-        if (parsed.lat && parsed.lng) {
-          req = {
-            keyword: `${parsed.lat},${parsed.lng}`,
-            location_coordinate: `${parsed.lat},${parsed.lng},200`,
-          };
-        }
-        break;
-
-      default:
-        return NextResponse.json(
-          { error: "Could not parse this URL. Please try a different Google Maps link." },
-          { status: 400 }
-        );
+        // photoRef from Google is NOT used (we don't download from Google Photos API)
+        // DataForSEO will provide the photo via main_image in background enrichment
+        return NextResponse.json({
+          ...placeData,
+          photoRef: null, // Don't use Google photo ref — DataForSEO handles photos
+          _provider: "google",
+          _fetchTimeMs: fetchTimeMs,
+        });
+      }
+      // Google failed — fall through to DataForSEO
+      console.log("[parse-link] Google returned no results, trying DataForSEO...");
     }
 
-    if (!req) {
+    // ─── SLOW PATH: DataForSEO (no Google key, or Google failed) ───
+    const dfClient = getDataForSEOClient();
+    if (!dfClient) {
       return NextResponse.json(
-        { error: "Could not extract search parameters from this URL." },
+        { error: "No API credentials configured. Add a Google Places API key in Settings." },
         { status: 400 }
       );
     }
 
-    console.log("[parse-link] DataForSEO request:", JSON.stringify(req));
+    const locationCoord = parsed.lat && parsed.lng
+      ? `${parsed.lat},${parsed.lng},1000`
+      : undefined;
 
-    const raw = await fetchBusinessInfoLive(client, req);
+    let req: BusinessInfoRequest | null = null;
+
+    switch (parsed.type) {
+      case "place_id":
+        if (parsed.placeId) req = { keyword: `place_id:${parsed.placeId}`, location_coordinate: locationCoord };
+        break;
+      case "cid":
+        if (parsed.cid) req = { keyword: `cid:${parsed.cid}`, location_coordinate: locationCoord };
+        break;
+      case "search":
+        if (parsed.query) req = { keyword: parsed.query, location_coordinate: locationCoord };
+        break;
+      case "coordinates":
+        if (parsed.lat && parsed.lng) req = { keyword: `${parsed.lat},${parsed.lng}`, location_coordinate: `${parsed.lat},${parsed.lng},200` };
+        break;
+    }
+
+    if (!req) {
+      return NextResponse.json(
+        { error: "Could not parse this URL. Please try a different Google Maps link." },
+        { status: 400 }
+      );
+    }
+
+    const raw = await fetchBusinessInfoLive(dfClient, req);
     if (!raw) {
       return NextResponse.json(
         { error: "Could not find place details for this link." },

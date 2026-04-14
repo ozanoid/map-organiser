@@ -182,9 +182,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  // Download photo to Supabase Storage
-  // photoRef from DataForSEO is a direct URL (main_image)
+  // If photoRef exists (DataForSEO path), download photo immediately
   if (photoRef) {
+    const { downloadAndStorePhotoFromUrl } = await import("@/lib/dataforseo/photo");
     const storageUrl = await downloadAndStorePhotoFromUrl(photoRef, place.id, user.id);
     if (storageUrl) {
       await supabase
@@ -216,12 +216,20 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Fire-and-forget: fetch reviews in background after save
+  // Fire-and-forget: DataForSEO background enrichment
+  // Google path: needs photo + extended data + reviews (everything)
+  // DataForSEO path: only needs reviews (photo + extended already saved)
   const cid = google_data?.cid as string | undefined;
-  if (cid) {
-    enrichPlaceWithReviews(place.id, cid, country || "United States").catch(
-      (err) => console.error("[auto-enrich] Reviews failed:", err)
-    );
+  const needsFullEnrichment = !google_data?.provider || google_data?.provider !== "dataforseo";
+
+  if (cid || (google_place_id && needsFullEnrichment)) {
+    enrichPlaceInBackground(
+      place.id,
+      google_place_id || "",
+      cid || null,
+      country || "United States",
+      needsFullEnrichment
+    ).catch((err) => console.error("[auto-enrich] Failed:", err));
   }
 
   return NextResponse.json({
@@ -231,59 +239,107 @@ export async function POST(request: NextRequest) {
 }
 
 /**
- * Background: fetch reviews via DataForSEO and update google_data.
- * All imports are dynamic so this doesn't break the GET handler.
+ * Background DataForSEO enrichment. All imports dynamic (GET handler safe).
+ *
+ * fullEnrichment=true (Google path): fetch business info (photo + extended) + reviews
+ * fullEnrichment=false (DataForSEO path): fetch reviews only (rest already saved)
  */
-async function enrichPlaceWithReviews(
+async function enrichPlaceInBackground(
   placeId: string,
-  cid: string,
-  country: string
+  googlePlaceId: string,
+  cid: string | null,
+  country: string,
+  fullEnrichment: boolean
 ) {
   const login = process.env.DATAFORSEO_LOGIN;
   const password = process.env.DATAFORSEO_PASSWORD;
   if (!login || !password) return;
 
   const { DataForSEOClient } = await import("@/lib/dataforseo/client");
+  const { fetchBusinessInfoLive } = await import("@/lib/dataforseo/business-info");
   const { fetchReviews } = await import("@/lib/dataforseo/reviews");
-  const { transformReviews } = await import("@/lib/dataforseo/transform");
+  const { transformReviews, extractExtendedData } = await import("@/lib/dataforseo/transform");
+  const { downloadAndStorePhotoFromUrl } = await import("@/lib/dataforseo/photo");
   const { trackUsage } = await import("@/lib/google/track-usage");
   const { createClient } = await import("@/lib/supabase/server");
 
   const client = new DataForSEOClient({ login, password });
-  console.log(`[auto-enrich] Fetching reviews for place ${placeId}, cid: ${cid}`);
+  let resolvedCid = cid;
 
-  const rawReviews = await fetchReviews(client, {
-    cid,
-    depth: 50,
-    location_name: country,
-  });
+  console.log(`[auto-enrich] Starting for place ${placeId}, full=${fullEnrichment}`);
 
-  if (rawReviews.length === 0) {
-    console.log("[auto-enrich] No reviews returned");
-    return;
+  // Step 1: If full enrichment, fetch business info for photo + extended data + CID
+  if (fullEnrichment && googlePlaceId) {
+    const keyword = googlePlaceId.startsWith("ChIJ")
+      ? `place_id:${googlePlaceId}`
+      : `cid:${googlePlaceId}`;
+
+    const raw = await fetchBusinessInfoLive(client, { keyword, location_name: country });
+    trackUsage("system", "dataforseo_business_info_live").catch(() => {});
+
+    if (raw) {
+      resolvedCid = raw.cid || resolvedCid;
+      const extended = extractExtendedData(raw);
+
+      // Read current google_data, merge extended + photo
+      const supabase = await createClient();
+      const { data: current } = await supabase
+        .from("places")
+        .select("google_data")
+        .eq("id", placeId)
+        .single();
+
+      const currentData = (current?.google_data as Record<string, unknown>) || {};
+      const merged: Record<string, unknown> = { ...currentData, ...extended };
+
+      // Download photo if not already present
+      if (!currentData.photo_storage_url && raw.main_image) {
+        const photoUrl = await downloadAndStorePhotoFromUrl(raw.main_image, placeId, "system");
+        if (photoUrl) merged.photo_storage_url = photoUrl;
+      }
+
+      await supabase
+        .from("places")
+        .update({ google_data: merged })
+        .eq("id", placeId);
+
+      console.log(`[auto-enrich] Extended data + photo saved for ${placeId}`);
+    }
   }
 
-  const reviews = transformReviews(rawReviews);
-  trackUsage("system", "dataforseo_reviews").catch(() => {});
+  // Step 2: Fetch reviews
+  if (resolvedCid) {
+    const rawReviews = await fetchReviews(client, {
+      cid: resolvedCid,
+      depth: 50,
+      location_name: country,
+    });
 
-  // Read CURRENT google_data from DB (photo may have been added after save)
-  const supabase = await createClient();
-  const { data: current } = await supabase
-    .from("places")
-    .select("google_data")
-    .eq("id", placeId)
-    .single();
+    if (rawReviews.length > 0) {
+      const reviews = transformReviews(rawReviews);
+      trackUsage("system", "dataforseo_reviews").catch(() => {});
 
-  const currentData = (current?.google_data as Record<string, unknown>) || {};
+      const supabase = await createClient();
+      const { data: current } = await supabase
+        .from("places")
+        .select("google_data")
+        .eq("id", placeId)
+        .single();
 
-  await supabase
-    .from("places")
-    .update({
-      google_data: { ...currentData, reviews },
-    })
-    .eq("id", placeId);
+      const currentData = (current?.google_data as Record<string, unknown>) || {};
 
-  console.log(`[auto-enrich] ${reviews.length} reviews saved for place ${placeId}`);
+      await supabase
+        .from("places")
+        .update({ google_data: { ...currentData, reviews } })
+        .eq("id", placeId);
+
+      console.log(`[auto-enrich] ${reviews.length} reviews saved for ${placeId}`);
+    } else {
+      console.log("[auto-enrich] No reviews returned");
+    }
+  } else {
+    console.log("[auto-enrich] No CID available, skipping reviews");
+  }
 }
 
 /**
