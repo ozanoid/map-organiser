@@ -1,15 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { getProvider } from "@/lib/data-provider";
-import type { ProviderCredentials } from "@/lib/data-provider/types";
-import { getUserApiKeys } from "@/lib/google/get-user-api-keys";
+import { DataForSEOClient } from "@/lib/dataforseo/client";
+import { fetchBusinessInfoLive } from "@/lib/dataforseo/business-info";
+import { fetchReviews } from "@/lib/dataforseo/reviews";
+import { downloadAndStorePhotoFromUrl } from "@/lib/dataforseo/photo";
+import {
+  transformBusinessInfoToPlaceData,
+  transformReviews,
+  extractExtendedData,
+} from "@/lib/dataforseo/transform";
+import { trackUsage } from "@/lib/google/track-usage";
 
-/**
- * POST /api/places/[id]/refresh-google-data
- *
- * Refreshes place data via the active provider (Google or DataForSEO).
- * Fetches details, reviews, and re-downloads photo.
- */
+function getDataForSEOClient(): DataForSEOClient {
+  const login = process.env.DATAFORSEO_LOGIN;
+  const password = process.env.DATAFORSEO_PASSWORD;
+  if (!login || !password) {
+    throw new Error("DATAFORSEO_LOGIN and DATAFORSEO_PASSWORD env vars required");
+  }
+  return new DataForSEOClient({ login, password });
+}
+
 export async function POST(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -42,66 +52,48 @@ export async function POST(
     );
   }
 
-  const keys = await getUserApiKeys(user.id);
-  const provider = await getProvider();
-  const credentials: ProviderCredentials = {
-    googleApiKey: keys.googleApiKey,
-    dataforseoLogin: keys.dataforseoLogin,
-    dataforseoPassword: keys.dataforseoPassword,
-  };
-
-  // Validate credentials for the active provider
-  if (provider.name === "google" && !keys.googleApiKey) {
-    return NextResponse.json(
-      { error: "Please add your Google Places API key in Settings" },
-      { status: 400 }
-    );
-  }
-  if (provider.name === "dataforseo" && (!keys.dataforseoLogin || !keys.dataforseoPassword)) {
-    return NextResponse.json(
-      { error: "Please configure DataForSEO credentials" },
-      { status: 400 }
-    );
-  }
-
+  const client = getDataForSEOClient();
   const existingData = (place.google_data as Record<string, unknown>) || {};
 
-  // 1. Fetch fresh details via provider
-  const detailsResult = await provider.getPlaceDetails(
-    place.google_place_id,
-    credentials,
-    user.id
-  );
-  const details = detailsResult?.data ?? null;
-  const extended = detailsResult?.extended ?? {};
+  // 1. Fetch fresh business info via DataForSEO Live
+  const placeId = place.google_place_id;
+  const keyword = placeId.startsWith("ChIJ")
+    ? `place_id:${placeId}`
+    : `cid:${placeId}`;
 
-  // 2. Fetch reviews via provider
-  const reviews = await provider.getPlaceReviews(
-    place.google_place_id,
-    credentials,
-    user.id,
-    provider.name === "dataforseo" ? 50 : undefined // DataForSEO: fetch more reviews
-  );
+  const raw = await fetchBusinessInfoLive(client, { keyword });
+  trackUsage(user.id, "dataforseo_business_info_live").catch(() => {});
+
+  const details = raw ? transformBusinessInfoToPlaceData(raw) : null;
+  const extended = raw ? extractExtendedData(raw) : {};
+
+  // 2. Fetch reviews — need CID for the reviews endpoint
+  const cid = raw?.cid || (existingData.cid as string) || null;
+  let reviews: ReturnType<typeof transformReviews> = [];
+  if (cid) {
+    const rawReviews = await fetchReviews(client, { cid, depth: 50 });
+    reviews = transformReviews(rawReviews);
+    trackUsage(user.id, "dataforseo_reviews").catch(() => {});
+  }
 
   // 3. Re-download photo if available
   let photoStorageUrl = existingData.photo_storage_url as string | undefined;
   if (details?.photoRef) {
-    const newUrl = await provider.downloadAndStorePhoto(
-      details.photoRef,
-      id,
-      user.id,
-      credentials
-    );
+    const newUrl = await downloadAndStorePhotoFromUrl(details.photoRef, id, user.id);
     if (newUrl) photoStorageUrl = newUrl;
   }
+
+  // Calculate total ratings from distribution
+  const dist = extended.rating_distribution as Record<string, number> | undefined;
+  const userRatingsTotal = dist
+    ? Object.values(dist).reduce((a: number, b: number) => a + b, 0)
+    : existingData.user_ratings_total;
 
   const updatedGoogleData: Record<string, unknown> = {
     ...existingData,
     types: details?.types || existingData.types,
     rating: details?.rating ?? existingData.rating,
-    user_ratings_total: extended.rating_distribution
-      ? Object.values(extended.rating_distribution).reduce((a, b) => a + b, 0)
-      : existingData.user_ratings_total,
+    user_ratings_total: userRatingsTotal,
     opening_hours: details?.openingHours || existingData.opening_hours,
     website: details?.website || existingData.website,
     phone: details?.phone || existingData.phone,
@@ -109,11 +101,11 @@ export async function POST(
     url: details?.googleMapsUrl || existingData.url,
     photo_storage_url: photoStorageUrl,
     reviews: reviews.length > 0 ? reviews : existingData.reviews,
-    // DataForSEO extended fields (only populated when provider is dataforseo)
+    // DataForSEO extended fields
     ...extended,
   };
 
-  // Remove legacy fields
+  // Clean legacy fields
   delete updatedGoogleData.photos;
   delete updatedGoogleData.editorial_summary;
   delete updatedGoogleData.editorialSummary;

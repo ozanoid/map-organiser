@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { resolveCategoryId } from "@/lib/google/category-mapping";
-import { getProvider } from "@/lib/data-provider";
-import type { ProviderCredentials } from "@/lib/data-provider/types";
-import { getUserApiKeys } from "@/lib/google/get-user-api-keys";
+import { downloadAndStorePhotoFromUrl } from "@/lib/dataforseo/photo";
 
 // GET /api/places - List all places for current user with filters
 export async function GET(request: NextRequest) {
@@ -59,7 +57,6 @@ export async function GET(request: NextRequest) {
   }
 
   // If filtering by tags, do a secondary filter
-
   if (tagIds && tagIds.length > 0) {
     const { data: taggedPlaceIds } = await supabase
       .from("place_tags")
@@ -85,19 +82,6 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // Post-filter: also match search in google_data reviews text
-  if (search && filteredPlaces.length > 0) {
-    const searchLower = search.toLowerCase();
-    // Get IDs already matched by DB query
-    const dbMatchIds = new Set(filteredPlaces.map((p) => p.id));
-    // If we have places NOT matched by name/address/notes but matching review text,
-    // we'd need a second query. For now, just filter existing results to include review matches.
-    // The DB or() already filtered, so all results match. No extra filtering needed here.
-    // But if we want to ALSO find places whose reviews match but name/address don't,
-    // we need to fetch ALL places first. For performance, we skip that for now.
-    // Instead, just keep existing behavior - DB handles name/address/notes search.
-  }
-
   // Transform PostGIS geography to {lat, lng}
   const transformed = filteredPlaces.map((place) => ({
     ...place,
@@ -119,14 +103,6 @@ export async function POST(request: NextRequest) {
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-
-  const keys = await getUserApiKeys(user.id);
-  const provider = await getProvider();
-  const credentials: ProviderCredentials = {
-    googleApiKey: keys.googleApiKey,
-    dataforseoLogin: keys.dataforseoLogin,
-    dataforseoPassword: keys.dataforseoPassword,
-  };
 
   const body = await request.json();
   const { name, address, country, city, lat, lng, category_id, rating, notes, google_place_id, google_data, source, tag_ids, list_ids, visit_status, photoRef } = body;
@@ -178,7 +154,6 @@ export async function POST(request: NextRequest) {
   delete savedGoogleData.reviews;
   delete savedGoogleData.editorialSummary;
   delete savedGoogleData.editorial_summary;
-  // Keep only essential photo data - actual image stored in Supabase Storage
   delete savedGoogleData.photos;
 
   const { data: place, error } = await supabase
@@ -207,22 +182,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  // Download photo to Supabase Storage via active provider
+  // Download photo to Supabase Storage
+  // photoRef from DataForSEO is a direct URL (main_image)
   if (photoRef) {
-    const hasCredentials = provider.name === "google"
-      ? !!credentials.googleApiKey
-      : !!(credentials.dataforseoLogin && credentials.dataforseoPassword);
-
-    if (hasCredentials) {
-      const storageUrl = await provider.downloadAndStorePhoto(photoRef, place.id, user.id, credentials);
-      if (storageUrl) {
-        await supabase
-          .from("places")
-          .update({
-            google_data: { ...savedGoogleData, photo_storage_url: storageUrl },
-          })
-          .eq("id", place.id);
-      }
+    const storageUrl = await downloadAndStorePhotoFromUrl(photoRef, place.id, user.id);
+    if (storageUrl) {
+      await supabase
+        .from("places")
+        .update({
+          google_data: { ...savedGoogleData, photo_storage_url: storageUrl },
+        })
+        .eq("id", place.id);
     }
   }
 
@@ -259,8 +229,6 @@ export async function POST(request: NextRequest) {
 function parseEWKB(hex: string): { lat: number; lng: number } | null {
   try {
     const buf = Buffer.from(hex, "hex");
-    // EWKB: byte_order(1) + type(4) + srid(4) + x(8) + y(8)
-    // Little-endian (01) or big-endian (00)
     const le = buf[0] === 1;
     const lng = le ? buf.readDoubleLE(9) : buf.readDoubleBE(9);
     const lat = le ? buf.readDoubleLE(17) : buf.readDoubleBE(17);
@@ -271,17 +239,14 @@ function parseEWKB(hex: string): { lat: number; lng: number } | null {
 
 function parsePostgisPoint(location: unknown): { lat: number; lng: number } {
   if (typeof location === "string") {
-    // Hex EWKB format (from Supabase REST API)
     if (/^[0-9a-fA-F]+$/.test(location) && location.length > 20) {
       const parsed = parseEWKB(location);
       if (parsed) return parsed;
     }
-    // WKT format: POINT(lng lat)
     const match = location.match(/POINT\((-?\d+\.?\d*)\s+(-?\d+\.?\d*)\)/);
     if (match) {
       return { lng: parseFloat(match[1]), lat: parseFloat(match[2]) };
     }
-    // GeoJSON string
     try {
       const geo = JSON.parse(location);
       if (geo.coordinates) return { lng: geo.coordinates[0], lat: geo.coordinates[1] };

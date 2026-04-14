@@ -41,8 +41,6 @@ export function decryptApiKey(encryptedStr: string): string {
 export interface UserApiKeys {
   googleApiKey: string;
   mapboxToken: string;
-  dataforseoLogin: string;
-  dataforseoPassword: string;
   isAdmin: boolean;
 }
 
@@ -51,7 +49,7 @@ export async function getUserApiKeys(userId: string): Promise<UserApiKeys> {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("is_admin, google_api_key_enc, mapbox_token_enc, dataforseo_login_enc, dataforseo_password_enc")
+    .select("is_admin, google_api_key_enc, mapbox_token_enc")
     .eq("id", userId)
     .single();
 
@@ -62,8 +60,6 @@ export async function getUserApiKeys(userId: string): Promise<UserApiKeys> {
     return {
       googleApiKey: process.env.GOOGLE_PLACES_API_KEY || "",
       mapboxToken: process.env.NEXT_PUBLIC_MAPBOX_TOKEN || "",
-      dataforseoLogin: process.env.DATAFORSEO_LOGIN || "",
-      dataforseoPassword: process.env.DATAFORSEO_PASSWORD || "",
       isAdmin,
     };
   }
@@ -75,14 +71,8 @@ export async function getUserApiKeys(userId: string): Promise<UserApiKeys> {
   const mapboxToken = profile.mapbox_token_enc
     ? decryptApiKey(profile.mapbox_token_enc)
     : "";
-  const dataforseoLogin = profile.dataforseo_login_enc
-    ? decryptApiKey(profile.dataforseo_login_enc)
-    : "";
-  const dataforseoPassword = profile.dataforseo_password_enc
-    ? decryptApiKey(profile.dataforseo_password_enc)
-    : "";
 
-  return { googleApiKey, mapboxToken, dataforseoLogin, dataforseoPassword, isAdmin };
+  return { googleApiKey, mapboxToken, isAdmin };
 }
 
 // Mask a key for display: "AIzaSyBk...MEuI"

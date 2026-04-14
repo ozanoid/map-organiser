@@ -6,8 +6,7 @@
  * and GoogleReview[] shapes regardless of which provider is active.
  */
 
-import type { ParsedPlaceData, GoogleReview } from "@/lib/types";
-import type { ExtendedPlaceData } from "@/lib/data-provider/types";
+import type { ParsedPlaceData, GoogleReview, GooglePlaceData } from "@/lib/types";
 import type { RawBusinessInfo, RawReview } from "./api-types";
 import { dataforseoCategoriesToGoogleTypes } from "./category-adapter";
 import { convertWorkTimeToOpeningHours } from "./opening-hours-adapter";
@@ -123,7 +122,7 @@ export function transformBusinessInfoToPlaceData(
  */
 export function extractExtendedData(
   raw: RawBusinessInfo
-): ExtendedPlaceData {
+): Partial<GooglePlaceData> {
   // Flatten attributes into a boolean map
   const attributes: Record<string, boolean> = {};
   if (raw.attributes?.available_attributes) {
@@ -156,9 +155,8 @@ export function extractExtendedData(
   return {
     provider: "dataforseo",
     cid: raw.cid || undefined,
-    feature_id: raw.feature_id || undefined,
     rating_distribution: raw.rating_distribution || undefined,
-    popular_times: (raw.popular_times as ExtendedPlaceData["popular_times"]) || undefined,
+    popular_times: (raw.popular_times as GooglePlaceData["popular_times"]) || undefined,
     place_topics: raw.place_topics || undefined,
     attributes: Object.keys(attributes).length > 0 ? attributes : undefined,
     is_claimed: raw.is_claimed ?? undefined,
