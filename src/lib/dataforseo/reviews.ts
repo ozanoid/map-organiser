@@ -1,7 +1,9 @@
 /**
  * DataForSEO Reviews wrapper.
- * Uses async Task POST/GET with polling since there is no Live endpoint for reviews.
+ * Uses async Task POST/GET with polling.
  * Cost: $0.00075/10 reviews (standard), $0.0015/10 reviews (priority)
+ *
+ * IMPORTANT: location_name or location_code is REQUIRED, even for CID-based queries.
  */
 
 import type { DataForSEOClient } from "./client";
@@ -15,20 +17,19 @@ export interface ReviewsRequest {
   cid: string;
   depth?: number;
   sort_by?: "newest" | "highest_rating" | "lowest_rating" | "relevant";
+  location_name?: string;
   location_code?: number;
   language_code?: string;
 }
 
-/**
- * Fetch reviews using async task workflow.
- * Posts a task, then polls for results with exponential backoff.
- * Timeout: 90 seconds total.
- */
 export async function fetchReviews(
   client: DataForSEOClient,
   request: ReviewsRequest
 ): Promise<RawReview[]> {
   const depth = request.depth ?? 10;
+
+  // Location is required — default to UK (2826) if not provided
+  const hasLocation = request.location_code || request.location_name;
 
   try {
     // Step 1: POST task
@@ -38,27 +39,32 @@ export async function fetchReviews(
         {
           cid: request.cid,
           language_code: request.language_code || "en",
-          ...(request.location_code && {
-            location_code: request.location_code,
-          }),
+          ...(request.location_name && { location_name: request.location_name }),
+          ...(request.location_code && { location_code: request.location_code }),
+          ...(!hasLocation && { location_name: "United Kingdom" }),
           depth,
           sort_by: request.sort_by || "newest",
-          priority: 2, // Use priority queue for faster results (<1min)
+          priority: 2,
         },
       ]
     );
 
-    const taskId = postResponse.tasks?.[0]?.id;
-    if (!taskId) {
-      console.warn("[DataForSEO] Reviews: no task ID returned");
+    const task = postResponse.tasks?.[0];
+
+    // Check if task creation itself failed
+    if (!task?.id || (task.status_code && task.status_code >= 40000)) {
+      console.warn(
+        `[DataForSEO] Reviews task creation failed: ${task?.status_code} - ${task?.status_message}`
+      );
       return [];
     }
 
+    const taskId = task.id;
     console.log(`[DataForSEO] Reviews task posted: ${taskId}, polling...`);
 
     // Step 2: Poll for results
-    const maxAttempts = 15;
-    let delay = 3000; // Start at 3s (priority queue is fast)
+    const maxAttempts = 12;
+    let delay = 5000;
 
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       await new Promise((r) => setTimeout(r, delay));
@@ -68,30 +74,26 @@ export async function fetchReviews(
           `/business_data/google/reviews/task_get/${taskId}`
         );
 
-        const task = getResponse.tasks?.[0];
+        const getTask = getResponse.tasks?.[0];
 
-        if (task?.status_code === 20000 && task.result?.[0]?.items) {
+        if (getTask?.status_code === 20000 && getTask.result?.[0]?.items) {
           console.log(
-            `[DataForSEO] Reviews ready after ${attempt + 1} attempts, got ${task.result[0].items.length} reviews`
+            `[DataForSEO] Reviews ready after ${attempt + 1} attempts, got ${getTask.result[0].items.length} reviews`
           );
-          return task.result[0].items;
+          return getTask.result[0].items;
         }
 
-        // Task not ready yet — known status codes for "still processing"
-        if (task?.status_code === 40601 || task?.status_code === 40602) {
-          console.log(
-            `[DataForSEO] Reviews still processing (attempt ${attempt + 1}/${maxAttempts})`
-          );
-        }
-      } catch {
-        // GET might fail if task not ready — continue polling
+        // Log progress
         console.log(
-          `[DataForSEO] Reviews poll attempt ${attempt + 1} failed, retrying...`
+          `[DataForSEO] Reviews poll ${attempt + 1}/${maxAttempts}: status=${getTask?.status_code}`
+        );
+      } catch {
+        console.log(
+          `[DataForSEO] Reviews poll ${attempt + 1} error, retrying...`
         );
       }
 
-      // Exponential backoff: 3s → 4.5s → 6.75s → ... max 15s
-      delay = Math.min(delay * 1.5, 15000);
+      delay = Math.min(delay * 1.3, 10000);
     }
 
     console.warn("[DataForSEO] Reviews polling timed out");

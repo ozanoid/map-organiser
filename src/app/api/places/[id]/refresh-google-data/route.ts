@@ -36,7 +36,7 @@ export async function POST(
 
   const { data: place, error: fetchError } = await supabase
     .from("places")
-    .select("google_place_id, google_data")
+    .select("google_place_id, google_data, country")
     .eq("id", id)
     .eq("user_id", user.id)
     .single();
@@ -67,11 +67,15 @@ export async function POST(
   const details = raw ? transformBusinessInfoToPlaceData(raw) : null;
   const extended = raw ? extractExtendedData(raw) : {};
 
-  // 2. Fetch reviews — need CID for the reviews endpoint
+  // 2. Fetch reviews — need CID + location for the reviews endpoint
   const cid = raw?.cid || (existingData.cid as string) || null;
   let reviews: ReturnType<typeof transformReviews> = [];
   if (cid) {
-    const rawReviews = await fetchReviews(client, { cid, depth: 50 });
+    const rawReviews = await fetchReviews(client, {
+      cid,
+      depth: 50,
+      location_name: place.country || "United States",
+    });
     reviews = transformReviews(rawReviews);
     trackUsage(user.id, "dataforseo_reviews").catch(() => {});
   }
