@@ -225,6 +225,7 @@ export async function POST(request: NextRequest) {
   if (cid || (google_place_id && needsFullEnrichment)) {
     enrichPlaceInBackground(
       place.id,
+      user.id,
       google_place_id || "",
       cid || null,
       country || "United States",
@@ -246,6 +247,7 @@ export async function POST(request: NextRequest) {
  */
 async function enrichPlaceInBackground(
   placeId: string,
+  userId: string,
   googlePlaceId: string,
   cid: string | null,
   country: string,
@@ -274,12 +276,14 @@ async function enrichPlaceInBackground(
       ? `place_id:${googlePlaceId}`
       : `cid:${googlePlaceId}`;
 
+    console.log(`[auto-enrich] Fetching business info: ${keyword}`);
     const raw = await fetchBusinessInfoLive(client, { keyword, location_name: country });
-    trackUsage("system", "dataforseo_business_info_live").catch(() => {});
+    trackUsage(userId, "dataforseo_business_info_live").catch(() => {});
 
     if (raw) {
       resolvedCid = raw.cid || resolvedCid;
       const extended = extractExtendedData(raw);
+      console.log(`[auto-enrich] Business info received, cid: ${resolvedCid}, main_image: ${!!raw.main_image}`);
 
       // Read current google_data, merge extended + photo
       const supabase = await createClient();
@@ -294,8 +298,14 @@ async function enrichPlaceInBackground(
 
       // Download photo if not already present
       if (!currentData.photo_storage_url && raw.main_image) {
-        const photoUrl = await downloadAndStorePhotoFromUrl(raw.main_image, placeId, "system");
-        if (photoUrl) merged.photo_storage_url = photoUrl;
+        console.log(`[auto-enrich] Downloading photo for ${placeId}`);
+        const photoUrl = await downloadAndStorePhotoFromUrl(raw.main_image, placeId, userId);
+        if (photoUrl) {
+          merged.photo_storage_url = photoUrl;
+          console.log(`[auto-enrich] Photo saved: ${photoUrl}`);
+        } else {
+          console.log(`[auto-enrich] Photo download failed`);
+        }
       }
 
       await supabase
@@ -303,7 +313,9 @@ async function enrichPlaceInBackground(
         .update({ google_data: merged })
         .eq("id", placeId);
 
-      console.log(`[auto-enrich] Extended data + photo saved for ${placeId}`);
+      console.log(`[auto-enrich] Extended data saved for ${placeId}`);
+    } else {
+      console.log(`[auto-enrich] Business info returned null for ${keyword}`);
     }
   }
 
@@ -317,7 +329,7 @@ async function enrichPlaceInBackground(
 
     if (rawReviews.length > 0) {
       const reviews = transformReviews(rawReviews);
-      trackUsage("system", "dataforseo_reviews").catch(() => {});
+      trackUsage(userId, "dataforseo_reviews").catch(() => {});
 
       const supabase = await createClient();
       const { data: current } = await supabase
