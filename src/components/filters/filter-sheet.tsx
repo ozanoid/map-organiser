@@ -21,8 +21,8 @@ export function FilterSheet({ open, onOpenChange }: FilterSheetProps) {
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className="max-h-[65dvh] rounded-t-2xl flex flex-col">
-        <SheetHeader className="flex flex-row items-center justify-between shrink-0">
+      <SheetContent side="bottom" className="max-h-[65dvh] rounded-t-2xl flex flex-col" showCloseButton={false}>
+        <SheetHeader className="flex flex-row items-center justify-between shrink-0 px-5 pb-0">
           <SheetTitle>Filters</SheetTitle>
           <div className="flex items-center gap-2">
             {hasActiveFilters && (
@@ -47,15 +47,17 @@ export function FilterSheet({ open, onOpenChange }: FilterSheetProps) {
           </div>
         </SheetHeader>
 
-        <div className="space-y-6 mt-4 overflow-y-auto flex-1 pb-safe-area-inset-bottom" style={{ paddingBottom: "env(safe-area-inset-bottom, 16px)" }}>
+        <div className="overflow-y-auto flex-1 px-5 pb-safe-area-inset-bottom" style={{ paddingBottom: "env(safe-area-inset-bottom, 16px)" }}>
           {/* Visit Status */}
-          <div>
+          <div className="pt-2 pb-4">
             <label className="text-sm font-medium mb-2 block">Status</label>
             <VisitStatusFilter />
           </div>
 
+          <div className="border-t" />
+
           {/* Search */}
-          <div>
+          <div className="py-4">
             <label className="text-sm font-medium mb-2 block">Search</label>
             <DebouncedSearchInput
               value={filters.search}
@@ -63,8 +65,10 @@ export function FilterSheet({ open, onOpenChange }: FilterSheetProps) {
             />
           </div>
 
+          <div className="border-t" />
+
           {/* Country / City */}
-          <div>
+          <div className="py-4">
             <label className="text-sm font-medium mb-2 block">Location</label>
             <CountryCityFilter
               country={filters.country}
@@ -74,8 +78,10 @@ export function FilterSheet({ open, onOpenChange }: FilterSheetProps) {
             />
           </div>
 
+          <div className="border-t" />
+
           {/* Category */}
-          <div>
+          <div className="py-4">
             <label className="text-sm font-medium mb-2 block">Category</label>
             <CategoryFilter
               selected={filters.category_ids}
@@ -83,20 +89,26 @@ export function FilterSheet({ open, onOpenChange }: FilterSheetProps) {
             />
           </div>
 
+          <div className="border-t" />
+
           {/* Tags */}
-          <div>
+          <div className="py-4">
             <label className="text-sm font-medium mb-2 block">Tags</label>
             <TagFilter />
           </div>
 
+          <div className="border-t" />
+
           {/* List */}
-          <div>
+          <div className="py-4">
             <label className="text-sm font-medium mb-2 block">List</label>
             <ListFilter />
           </div>
 
+          <div className="border-t" />
+
           {/* My Rating */}
-          <div>
+          <div className="py-4">
             <label className="text-sm font-medium mb-2 block">My rating (min)</label>
             <SheetRatingStars
               value={filters.rating_min || 0}
@@ -104,8 +116,10 @@ export function FilterSheet({ open, onOpenChange }: FilterSheetProps) {
             />
           </div>
 
+          <div className="border-t" />
+
           {/* Google Rating */}
-          <div>
+          <div className="py-4">
             <label className="text-sm font-medium mb-2 block">Google rating (min)</label>
             <SheetRatingStars
               value={filters.google_rating_min || 0}

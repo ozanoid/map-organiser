@@ -27,7 +27,7 @@ Map Organiser, kullanicilarin Google Maps'te kaydettikleri mekanlari organize et
 | Maps | Mapbox GL JS | 3.21 |
 | S2 Decode | s2-geometry | 1.2.10 |
 | Deploy | Vercel | - |
-| PWA | Native manifest.ts | - |
+| PWA | manifest.ts + Service Worker | - |
 
 ---
 
@@ -68,7 +68,7 @@ Map Organiser, kullanicilarin Google Maps'te kaydettikleri mekanlari organize et
 ```
 src/
 ├── app/
-│   ├── layout.tsx              # Root: Inter font, QueryProvider, Toaster
+│   ├── layout.tsx              # Root: Inter font, QueryProvider, Toaster, SW register, Apple PWA meta
 │   ├── page.tsx                # / → redirect to /map or /login
 │   ├── manifest.ts             # PWA manifest + Share Target
 │   ├── middleware.ts           # Auth guard (all routes)
@@ -78,14 +78,15 @@ src/
 │   │   ├── login/page.tsx      # Email + Google login
 │   │   └── signup/page.tsx     # Registration
 │   ├── (app)/                  # Protected app pages
-│   │   ├── layout.tsx          # Sidebar + Header + MobileNav
+│   │   ├── layout.tsx          # Sidebar + Header + MobileNav + OfflineBanner
 │   │   ├── map/page.tsx        # Server component: mapbox token fetch
 │   │   ├── places/page.tsx     # Card grid + filters + bulk actions
 │   │   ├── places/[id]/page.tsx# Place detail
 │   │   ├── lists/page.tsx      # List management
 │   │   ├── lists/[id]/page.tsx # List detail + map
 │   │   ├── import/page.tsx     # CSV/GeoJSON import
-│   │   └── settings/page.tsx   # Category + tag CRUD + API & Usage tab
+│   │   ├── settings/page.tsx   # Category + tag CRUD + API & Usage tab
+│   │   └── offline/page.tsx   # PWA offline fallback page
 │   └── api/
 │       ├── places/route.ts          # GET (list) + POST (create)
 │       ├── places/[id]/route.ts     # GET + PATCH + DELETE
@@ -98,7 +99,7 @@ src/
 │       └── share-target/route.ts    # PWA share receiver
 ├── components/
 │   ├── ui/                     # shadcn/ui primitives (~20 files)
-│   ├── layout/                 # App shell (sidebar, header, mobile nav)
+│   ├── layout/                 # App shell (sidebar, header, mobile nav, offline banner)
 │   ├── map/                    # MapView + MapContent (Mapbox GL JS)
 │   ├── filters/                # Filter components (9 files)
 │   └── places/                 # Place components (7 files)
@@ -109,7 +110,13 @@ src/
 │   ├── supabase/               # Supabase clients (browser, server, middleware)
 │   ├── hooks/                  # React Query hooks + utilities (6 files)
 │   └── google/                 # Google API integration (6 files)
+├── sw-register.tsx             # Service worker registration (client component)
 └── middleware.ts               # Next.js middleware entry
+
+public/
+├── sw.js                       # Service worker (offline cache, stale-while-revalidate)
+├── icon-192.png                # PWA icon 192x192
+└── icon-512.png                # PWA icon 512x512
 ```
 
 ---

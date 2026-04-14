@@ -17,7 +17,7 @@ export function VisitStatusFilter() {
   const { filters, setFilters } = useFilters();
 
   return (
-    <div className="flex flex-wrap gap-1.5">
+    <div className="flex flex-wrap gap-2">
       {statuses.map((status) => {
         const isActive = filters.visit_status === status.value;
         const Icon = status.icon;
