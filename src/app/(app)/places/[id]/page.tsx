@@ -59,12 +59,13 @@ export default function PlaceDetailPage() {
   const { data: allLists = [] } = useLists();
 
   const fetchPlace = useCallback(() => {
-    fetch(`/api/places/${params.id}`)
+    return fetch(`/api/places/${params.id}`)
       .then((res) => res.json())
       .then((data) => {
         setPlace(data);
         setNotesValue(data.notes || "");
         setLoading(false);
+        return data;
       })
       .catch(() => setLoading(false));
   }, [params.id]);
@@ -72,6 +73,31 @@ export default function PlaceDetailPage() {
   useEffect(() => {
     fetchPlace();
   }, [fetchPlace]);
+
+  // Poll for reviews if enrichment is likely in progress
+  // (has CID but no reviews yet → background enrichment running)
+  useEffect(() => {
+    if (!place) return;
+    const gd = place.google_data || {};
+    const hasReviews = gd.reviews && gd.reviews.length > 0;
+    const hasCid = !!gd.cid;
+
+    if (hasCid && !hasReviews) {
+      const interval = setInterval(() => {
+        fetch(`/api/places/${params.id}`)
+          .then((res) => res.json())
+          .then((data) => {
+            if (data.google_data?.reviews?.length > 0) {
+              setPlace(data);
+              clearInterval(interval);
+            }
+          })
+          .catch(() => {});
+      }, 8000); // check every 8 seconds
+
+      return () => clearInterval(interval);
+    }
+  }, [place?.google_data?.reviews, place?.google_data?.cid, params.id]);
 
   async function handleDelete() {
     if (!confirm("Are you sure you want to delete this place?")) return;
@@ -626,6 +652,7 @@ export default function PlaceDetailPage() {
           hasPlaceId={!!place.google_place_id}
           provider={googleData.provider}
           refreshing={refreshing}
+          enriching={!!googleData.cid && reviews.length === 0}
           onRefresh={handleRefreshGoogle}
         />
       )}
@@ -812,12 +839,14 @@ function ReviewsSection({
   hasPlaceId,
   provider,
   refreshing,
+  enriching,
   onRefresh,
 }: {
   reviews: GoogleReview[];
   hasPlaceId: boolean;
   provider?: string;
   refreshing: boolean;
+  enriching: boolean;
   onRefresh: () => void;
 }) {
   const [page, setPage] = useState(0);
@@ -880,13 +909,13 @@ function ReviewsSection({
               variant="ghost"
               size="sm"
               onClick={onRefresh}
-              disabled={refreshing}
+              disabled={refreshing || enriching}
               className="cursor-pointer gap-1 text-xs text-muted-foreground"
             >
               <RefreshCw
-                className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`}
+                className={`h-3.5 w-3.5 ${refreshing || enriching ? "animate-spin" : ""}`}
               />
-              Refresh
+              {enriching ? "Loading..." : "Refresh"}
             </Button>
           )}
         </div>
@@ -927,6 +956,11 @@ function ReviewsSection({
               )}
             </div>
           ))}
+        </div>
+      ) : enriching ? (
+        <div className="flex items-center gap-2 py-4 justify-center text-xs text-muted-foreground">
+          <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+          Loading reviews...
         </div>
       ) : (
         <p className="text-xs text-muted-foreground">

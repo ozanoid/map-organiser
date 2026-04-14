@@ -219,7 +219,7 @@ export async function POST(request: NextRequest) {
   // Fire-and-forget: fetch reviews in background after save
   const cid = google_data?.cid as string | undefined;
   if (cid) {
-    enrichPlaceWithReviews(place.id, cid, country || "United States", savedGoogleData).catch(
+    enrichPlaceWithReviews(place.id, cid, country || "United States").catch(
       (err) => console.error("[auto-enrich] Reviews failed:", err)
     );
   }
@@ -237,8 +237,7 @@ export async function POST(request: NextRequest) {
 async function enrichPlaceWithReviews(
   placeId: string,
   cid: string,
-  country: string,
-  existingGoogleData: Record<string, unknown>
+  country: string
 ) {
   const login = process.env.DATAFORSEO_LOGIN;
   const password = process.env.DATAFORSEO_PASSWORD;
@@ -267,11 +266,20 @@ async function enrichPlaceWithReviews(
   const reviews = transformReviews(rawReviews);
   trackUsage("system", "dataforseo_reviews").catch(() => {});
 
+  // Read CURRENT google_data from DB (photo may have been added after save)
   const supabase = await createClient();
+  const { data: current } = await supabase
+    .from("places")
+    .select("google_data")
+    .eq("id", placeId)
+    .single();
+
+  const currentData = (current?.google_data as Record<string, unknown>) || {};
+
   await supabase
     .from("places")
     .update({
-      google_data: { ...existingGoogleData, reviews },
+      google_data: { ...currentData, reviews },
     })
     .eq("id", placeId);
 
