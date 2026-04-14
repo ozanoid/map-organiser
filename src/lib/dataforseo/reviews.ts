@@ -43,7 +43,7 @@ export async function fetchReviews(
           ...(request.location_code && { location_code: request.location_code }),
           ...(!hasLocation && { location_name: "United Kingdom" }),
           depth,
-          sort_by: request.sort_by || "newest",
+          sort_by: request.sort_by || "relevant",
           priority: 2,
         },
       ]

@@ -80,9 +80,9 @@ export async function POST(
     trackUsage(user.id, "dataforseo_reviews").catch(() => {});
   }
 
-  // 3. Re-download photo if available
+  // 3. Only download photo if we don't already have one stored
   let photoStorageUrl = existingData.photo_storage_url as string | undefined;
-  if (details?.photoRef) {
+  if (!photoStorageUrl && details?.photoRef) {
     const newUrl = await downloadAndStorePhotoFromUrl(details.photoRef, id, user.id);
     if (newUrl) photoStorageUrl = newUrl;
   }

@@ -37,9 +37,12 @@ import {
   UtensilsCrossed,
   MessageSquare,
   ThumbsUp,
+  ArrowUpDown,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { toast } from "sonner";
-import type { Place, VisitStatus } from "@/lib/types";
+import type { Place, VisitStatus, GoogleReview } from "@/lib/types";
 
 export default function PlaceDetailPage() {
   const params = useParams();
@@ -618,70 +621,13 @@ export default function PlaceDetailPage() {
 
       {/* Reviews Section */}
       {(reviews.length > 0 || place.google_place_id) && (
-        <section className="space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <h2 className="text-sm font-semibold">Reviews</h2>
-              {googleData.provider && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-muted-foreground">
-                  via {googleData.provider === "dataforseo" ? "DataForSEO" : "Google"}
-                </span>
-              )}
-            </div>
-            {place.google_place_id && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleRefreshGoogle}
-                disabled={refreshing}
-                className="cursor-pointer gap-1 text-xs text-muted-foreground"
-              >
-                <RefreshCw
-                  className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`}
-                />
-                Refresh
-              </Button>
-            )}
-          </div>
-          {reviews.length > 0 ? (
-            <div className="space-y-3">
-              {reviews.map((review, i) => (
-                <div
-                  key={i}
-                  className="border rounded-lg p-3 space-y-1.5 text-sm"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-medium text-sm">
-                      {review.author_name}
-                    </span>
-                    <span className="text-xs text-muted-foreground shrink-0">
-                      {review.relative_time}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-0.5">
-                    {Array.from({ length: 5 }).map((_, j) => (
-                      <Star
-                        key={j}
-                        className={`h-3 w-3 ${
-                          j < review.rating
-                            ? "fill-orange-400 text-orange-400"
-                            : "text-gray-300"
-                        }`}
-                      />
-                    ))}
-                  </div>
-                  {review.text && (
-                    <p className="text-xs text-muted-foreground leading-relaxed">
-                      {review.text}
-                    </p>
-                  )}
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-xs text-muted-foreground">No reviews yet.</p>
-          )}
-        </section>
+        <ReviewsSection
+          reviews={reviews}
+          hasPlaceId={!!place.google_place_id}
+          provider={googleData.provider}
+          refreshing={refreshing}
+          onRefresh={handleRefreshGoogle}
+        />
       )}
 
       {/* Lists Section */}
@@ -852,6 +798,169 @@ export default function PlaceDetailPage() {
         )}
       </section>
     </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────
+// Reviews with pagination + date sorting
+// ──────────────────────────────────────────────────────────
+
+const REVIEWS_PER_PAGE = 5;
+
+function ReviewsSection({
+  reviews,
+  hasPlaceId,
+  provider,
+  refreshing,
+  onRefresh,
+}: {
+  reviews: GoogleReview[];
+  hasPlaceId: boolean;
+  provider?: string;
+  refreshing: boolean;
+  onRefresh: () => void;
+}) {
+  const [page, setPage] = useState(0);
+  const [sortByDate, setSortByDate] = useState(false);
+
+  const sorted = sortByDate
+    ? [...reviews].sort((a, b) => {
+        // publish_time is ISO string or undefined
+        const ta = a.publish_time ? new Date(a.publish_time).getTime() : 0;
+        const tb = b.publish_time ? new Date(b.publish_time).getTime() : 0;
+        return tb - ta; // newest first
+      })
+    : reviews;
+
+  const totalPages = Math.ceil(sorted.length / REVIEWS_PER_PAGE);
+  const pageReviews = sorted.slice(
+    page * REVIEWS_PER_PAGE,
+    (page + 1) * REVIEWS_PER_PAGE
+  );
+
+  // Reset page when sort changes
+  useEffect(() => {
+    setPage(0);
+  }, [sortByDate]);
+
+  return (
+    <section className="space-y-3">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <h2 className="text-sm font-semibold">Reviews</h2>
+          {reviews.length > 0 && (
+            <span className="text-[10px] text-muted-foreground">
+              ({reviews.length})
+            </span>
+          )}
+          {provider && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-muted-foreground">
+              via {provider === "dataforseo" ? "DataForSEO" : "Google"}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-1">
+          {reviews.length > 1 && (
+            <button
+              type="button"
+              onClick={() => setSortByDate(!sortByDate)}
+              className={`inline-flex items-center gap-1 px-2 py-1 text-[10px] rounded-full cursor-pointer transition-colors ${
+                sortByDate
+                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                  : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+              }`}
+            >
+              <ArrowUpDown className="h-2.5 w-2.5" />
+              {sortByDate ? "Newest first" : "Sort by date"}
+            </button>
+          )}
+          {hasPlaceId && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onRefresh}
+              disabled={refreshing}
+              className="cursor-pointer gap-1 text-xs text-muted-foreground"
+            >
+              <RefreshCw
+                className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`}
+              />
+              Refresh
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* Review cards */}
+      {pageReviews.length > 0 ? (
+        <div className="space-y-3">
+          {pageReviews.map((review, i) => (
+            <div
+              key={`${page}-${i}`}
+              className="border rounded-lg p-3 space-y-1.5 text-sm"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-medium text-sm">
+                  {review.author_name}
+                </span>
+                <span className="text-xs text-muted-foreground shrink-0">
+                  {review.relative_time}
+                </span>
+              </div>
+              <div className="flex items-center gap-0.5">
+                {Array.from({ length: 5 }).map((_, j) => (
+                  <Star
+                    key={j}
+                    className={`h-3 w-3 ${
+                      j < review.rating
+                        ? "fill-orange-400 text-orange-400"
+                        : "text-gray-300"
+                    }`}
+                  />
+                ))}
+              </div>
+              {review.text && (
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  {review.text}
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-xs text-muted-foreground">
+          No reviews yet. Tap Refresh to fetch reviews.
+        </p>
+      )}
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between pt-1">
+          <button
+            type="button"
+            onClick={() => setPage((p) => Math.max(0, p - 1))}
+            disabled={page === 0}
+            className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs rounded-md cursor-pointer transition-colors disabled:opacity-30 disabled:cursor-not-allowed hover:bg-gray-100"
+          >
+            <ChevronLeft className="h-3.5 w-3.5" />
+            Prev
+          </button>
+          <span className="text-xs text-muted-foreground">
+            {page + 1} / {totalPages}
+          </span>
+          <button
+            type="button"
+            onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+            disabled={page >= totalPages - 1}
+            className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs rounded-md cursor-pointer transition-colors disabled:opacity-30 disabled:cursor-not-allowed hover:bg-gray-100"
+          >
+            Next
+            <ChevronRight className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
+    </section>
   );
 }
 
