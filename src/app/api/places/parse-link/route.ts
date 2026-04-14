@@ -43,33 +43,31 @@ export async function POST(request: NextRequest) {
     // Build DataForSEO request from parsed URL data
     let req: BusinessInfoRequest | null = null;
 
+    // Build location_coordinate from parsed coords (DataForSEO requires location for ALL queries)
+    const locationCoord = parsed.lat && parsed.lng
+      ? `${parsed.lat},${parsed.lng},1000`
+      : undefined;
+
     switch (parsed.type) {
       case "place_id":
-        // ChIJ format PlaceID — DataForSEO accepts this directly
         if (parsed.placeId) {
-          req = { keyword: `place_id:${parsed.placeId}` };
+          req = { keyword: `place_id:${parsed.placeId}`, location_coordinate: locationCoord };
         }
         break;
 
       case "cid":
-        // Google CID — DataForSEO accepts this natively
         if (parsed.cid) {
-          req = { keyword: `cid:${parsed.cid}` };
+          req = { keyword: `cid:${parsed.cid}`, location_coordinate: locationCoord };
         }
         break;
 
       case "search":
-        // Text search — use query + coordinate for geo-biasing
         if (parsed.query) {
-          req = { keyword: parsed.query };
-          if (parsed.lat && parsed.lng) {
-            req.location_coordinate = `${parsed.lat},${parsed.lng},1000`;
-          }
+          req = { keyword: parsed.query, location_coordinate: locationCoord };
         }
         break;
 
       case "coordinates":
-        // Only coordinates — reverse search at that location
         if (parsed.lat && parsed.lng) {
           req = {
             keyword: `${parsed.lat},${parsed.lng}`,
