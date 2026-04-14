@@ -88,11 +88,26 @@ function ftidToCoordinates(ftid: string): { lat: number; lng: number } | null {
 }
 
 /**
- * Extract CID from URL.
+ * Extract CID from URL — either from ?cid= param or from FTid's second hex part.
+ * FTid format: 0x{s2_cell}:0x{cid_hex} — the second part IS the CID in hex.
  */
 function extractCid(url: string): string | null {
+  // Format: ?cid=12345 (decimal)
   const cidMatch = url.match(/[?&]cid=(\d+)/);
-  return cidMatch ? cidMatch[1] : null;
+  if (cidMatch) return cidMatch[1];
+
+  // Format: !1s0x...:0x{cid_hex} — convert hex to decimal
+  const ftidMatch = url.match(/!1s0x[a-f0-9]+:(0x[a-f0-9]+)/) ||
+    url.match(/ftid=0x[a-f0-9]+:(0x[a-f0-9]+)/);
+  if (ftidMatch) {
+    try {
+      return BigInt(ftidMatch[1]).toString();
+    } catch {
+      // BigInt parse failed
+    }
+  }
+
+  return null;
 }
 
 /**
@@ -167,32 +182,8 @@ export async function parseMapsUrl(rawUrl: string): Promise<ParsedUrl> {
     };
   }
 
-  // Step 3: If URL has FTid (0x...), use S2 decode or URL coords for search
-  const ftid = extractFtid(url);
-  if (ftid) {
-    const s2Coords = ftidToCoordinates(ftid);
-    const urlCoords = extractCoordinates(url);
-    const bestCoords = urlCoords || s2Coords; // URL coords are more precise
-    const query = extractSearchQuery(url);
-
-    if (query && bestCoords) {
-      return {
-        type: "search",
-        query,
-        lat: bestCoords.lat,
-        lng: bestCoords.lng,
-      };
-    }
-    if (bestCoords) {
-      return {
-        type: "coordinates",
-        lat: bestCoords.lat,
-        lng: bestCoords.lng,
-      };
-    }
-  }
-
-  // Step 4: Try CID
+  // Step 3: Try CID — from ?cid= param OR from FTid's second hex part
+  // This must come before the FTid fallback-to-search logic
   const cid = extractCid(url);
   if (cid) {
     const coords = extractCoordinates(url);
