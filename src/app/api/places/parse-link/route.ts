@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { parseMapsUrl } from "@/lib/google/parse-maps-url";
-import { getPlaceDetails, searchPlace } from "@/lib/google/places-api";
+import { getProvider } from "@/lib/data-provider";
 import { getUserApiKeys } from "@/lib/google/get-user-api-keys";
+import type { ProviderCredentials } from "@/lib/data-provider/types";
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
@@ -14,10 +15,26 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { googleApiKey } = await getUserApiKeys(user.id);
-  if (!googleApiKey) {
+  const keys = await getUserApiKeys(user.id);
+  const provider = await getProvider();
+
+  // Build provider-agnostic credentials
+  const credentials: ProviderCredentials = {
+    googleApiKey: keys.googleApiKey,
+    dataforseoLogin: keys.dataforseoLogin,
+    dataforseoPassword: keys.dataforseoPassword,
+  };
+
+  // Validate credentials for the active provider
+  if (provider.name === "google" && !keys.googleApiKey) {
     return NextResponse.json(
       { error: "Please add your Google Places API key in Settings" },
+      { status: 400 }
+    );
+  }
+  if (provider.name === "dataforseo" && (!keys.dataforseoLogin || !keys.dataforseoPassword)) {
+    return NextResponse.json(
+      { error: "Please configure DataForSEO credentials in Settings or .env" },
       { status: 400 }
     );
   }
@@ -31,20 +48,23 @@ export async function POST(request: NextRequest) {
 
   try {
     const parsed = await parseMapsUrl(url);
-    let placeData = null;
+    let result = null;
 
     switch (parsed.type) {
       case "place_id":
         if (parsed.placeId) {
-          placeData = await getPlaceDetails(parsed.placeId, googleApiKey, user.id);
+          result = await provider.getPlaceDetails(parsed.placeId, credentials, user.id);
         }
         break;
 
       case "cid":
-        if (parsed.lat && parsed.lng) {
-          placeData = await searchPlace(
+        // DataForSEO handles CID natively (much better than Google's coord-based workaround)
+        if (provider.name === "dataforseo" && parsed.cid) {
+          result = await provider.getPlaceDetails(parsed.cid, credentials, user.id);
+        } else if (parsed.lat && parsed.lng) {
+          result = await provider.searchPlace(
             `${parsed.lat},${parsed.lng}`,
-            googleApiKey,
+            credentials,
             user.id,
             parsed.lat,
             parsed.lng
@@ -54,9 +74,9 @@ export async function POST(request: NextRequest) {
 
       case "search":
         if (parsed.query) {
-          placeData = await searchPlace(
+          result = await provider.searchPlace(
             parsed.query,
-            googleApiKey,
+            credentials,
             user.id,
             parsed.lat,
             parsed.lng
@@ -66,9 +86,9 @@ export async function POST(request: NextRequest) {
 
       case "coordinates":
         if (parsed.lat && parsed.lng) {
-          placeData = await searchPlace(
+          result = await provider.searchPlace(
             `${parsed.lat},${parsed.lng}`,
-            googleApiKey,
+            credentials,
             user.id,
             parsed.lat,
             parsed.lng
@@ -83,14 +103,14 @@ export async function POST(request: NextRequest) {
         );
     }
 
-    if (!placeData) {
+    if (!result?.data) {
       return NextResponse.json(
         { error: "Could not find place details for this link." },
         { status: 404 }
       );
     }
 
-    return NextResponse.json(placeData);
+    return NextResponse.json(result.data);
   } catch (error) {
     console.error("Parse link error:", error);
     return NextResponse.json(

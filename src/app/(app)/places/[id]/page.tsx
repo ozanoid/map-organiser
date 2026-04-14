@@ -29,6 +29,14 @@ import {
   RefreshCw,
   Plus,
   Check,
+  Wifi,
+  Accessibility,
+  Sun,
+  ShieldCheck,
+  CalendarCheck,
+  UtensilsCrossed,
+  MessageSquare,
+  ThumbsUp,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { Place, VisitStatus } from "@/lib/types";
@@ -231,6 +239,7 @@ export default function PlaceDetailPage() {
   const googleData = place.google_data || {};
   const photoUrl = googleData.photo_storage_url || googleData.photos?.[0] || null;
   const reviews = googleData.reviews || [];
+  const hasExtendedData = googleData.provider === "dataforseo";
 
   return (
     <div className="p-4 lg:p-6 max-w-2xl mx-auto space-y-6 pb-12">
@@ -423,6 +432,189 @@ export default function PlaceDetailPage() {
           </a>
         )}
       </section>
+
+      {/* DataForSEO Extended Data */}
+      {hasExtendedData && (
+        <>
+          {/* Business Description */}
+          {googleData.business_description && (
+            <section className="space-y-2">
+              <h2 className="text-sm font-semibold">About</h2>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                {googleData.business_description}
+              </p>
+            </section>
+          )}
+
+          {/* Current Status */}
+          {googleData.current_status && (
+            <div className="flex items-center gap-2">
+              <div
+                className={`h-2 w-2 rounded-full ${
+                  googleData.current_status === "opened"
+                    ? "bg-green-500"
+                    : googleData.current_status === "temporarily_closed"
+                      ? "bg-amber-500"
+                      : "bg-red-500"
+                }`}
+              />
+              <span className="text-xs font-medium">
+                {googleData.current_status === "opened"
+                  ? "Open now"
+                  : googleData.current_status === "temporarily_closed"
+                    ? "Temporarily closed"
+                    : googleData.current_status === "closed_forever"
+                      ? "Permanently closed"
+                      : "Closed"}
+              </span>
+              {googleData.is_claimed && (
+                <Badge variant="outline" className="gap-1 text-[10px] py-0">
+                  <ShieldCheck className="h-3 w-3 text-blue-500" />
+                  Verified
+                </Badge>
+              )}
+            </div>
+          )}
+
+          {/* Rating Distribution */}
+          {googleData.rating_distribution && (
+            <section className="space-y-2">
+              <h2 className="text-sm font-semibold">Rating Breakdown</h2>
+              <div className="space-y-1">
+                {[5, 4, 3, 2, 1].map((star) => {
+                  const count =
+                    googleData.rating_distribution?.[String(star)] ?? 0;
+                  const total = Object.values(
+                    googleData.rating_distribution!
+                  ).reduce((a, b) => a + b, 0);
+                  const pct = total > 0 ? (count / total) * 100 : 0;
+                  return (
+                    <div
+                      key={star}
+                      className="flex items-center gap-2 text-xs"
+                    >
+                      <span className="w-3 text-right text-muted-foreground">
+                        {star}
+                      </span>
+                      <Star className="h-3 w-3 text-orange-400 fill-orange-400" />
+                      <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-orange-400 rounded-full transition-all"
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                      <span className="w-8 text-right text-muted-foreground tabular-nums">
+                        {count}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          )}
+
+          {/* Popular Times */}
+          {googleData.popular_times && (
+            <PopularTimesWidget popularTimes={googleData.popular_times} />
+          )}
+
+          {/* Action Buttons */}
+          {(googleData.book_online_url || googleData.local_business_links?.length) && (
+            <section className="flex flex-wrap gap-2">
+              {googleData.book_online_url && (
+                <a
+                  href={googleData.book_online_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="cursor-pointer gap-1.5 text-xs"
+                  >
+                    <CalendarCheck className="h-3.5 w-3.5" />
+                    Book Online
+                  </Button>
+                </a>
+              )}
+              {googleData.local_business_links?.map((link, i) => (
+                <a
+                  key={i}
+                  href={link.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="cursor-pointer gap-1.5 text-xs"
+                  >
+                    {link.type === "menu" ? (
+                      <UtensilsCrossed className="h-3.5 w-3.5" />
+                    ) : (
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    )}
+                    {link.title || link.type || "Link"}
+                  </Button>
+                </a>
+              ))}
+            </section>
+          )}
+
+          {/* Business Attributes */}
+          {googleData.attributes &&
+            Object.keys(googleData.attributes).length > 0 && (
+              <section className="space-y-2">
+                <h2 className="text-sm font-semibold">Amenities</h2>
+                <div className="flex flex-wrap gap-1.5">
+                  {Object.entries(googleData.attributes).map(
+                    ([attr, available]) => (
+                      <Badge
+                        key={attr}
+                        variant="outline"
+                        className={`text-[10px] gap-1 ${
+                          available
+                            ? "text-green-700 border-green-200 bg-green-50"
+                            : "text-gray-400 border-gray-200 bg-gray-50 line-through"
+                        }`}
+                      >
+                        {available ? (
+                          <Check className="h-2.5 w-2.5" />
+                        ) : (
+                          <span className="h-2.5 w-2.5 text-center">-</span>
+                        )}
+                        {formatAttributeName(attr)}
+                      </Badge>
+                    )
+                  )}
+                </div>
+              </section>
+            )}
+
+          {/* Place Topics */}
+          {googleData.place_topics &&
+            Object.keys(googleData.place_topics).length > 0 && (
+              <section className="space-y-2">
+                <h2 className="text-sm font-semibold">People mention</h2>
+                <div className="flex flex-wrap gap-1.5">
+                  {Object.entries(googleData.place_topics)
+                    .sort(([, a], [, b]) => b - a)
+                    .slice(0, 15)
+                    .map(([topic, count]) => (
+                      <Badge
+                        key={topic}
+                        variant="secondary"
+                        className="text-[10px] gap-1"
+                      >
+                        {topic}
+                        <span className="text-muted-foreground">({count})</span>
+                      </Badge>
+                    ))}
+                </div>
+              </section>
+            )}
+        </>
+      )}
 
       {/* Reviews Section */}
       {(reviews.length > 0 || place.google_place_id) && (
@@ -654,4 +846,99 @@ export default function PlaceDetailPage() {
       </section>
     </div>
   );
+}
+
+// ──────────────────────────────────────────────────────────
+// Helper components & utilities for DataForSEO extended data
+// ──────────────────────────────────────────────────────────
+
+const DAYS_OF_WEEK = [
+  { key: "monday", label: "Mon" },
+  { key: "tuesday", label: "Tue" },
+  { key: "wednesday", label: "Wed" },
+  { key: "thursday", label: "Thu" },
+  { key: "friday", label: "Fri" },
+  { key: "saturday", label: "Sat" },
+  { key: "sunday", label: "Sun" },
+] as const;
+
+function PopularTimesWidget({
+  popularTimes,
+}: {
+  popularTimes: Record<string, Array<{ hour: number; popular_index: number }>>;
+}) {
+  const [selectedDay, setSelectedDay] = useState(
+    DAYS_OF_WEEK[new Date().getDay() === 0 ? 6 : new Date().getDay() - 1].key
+  );
+
+  const dayData = popularTimes[selectedDay] || [];
+  // Filter to reasonable hours (6am - midnight)
+  const hours = dayData.filter((h) => h.hour >= 6 && h.hour <= 23);
+  const maxIndex = Math.max(...hours.map((h) => h.popular_index), 1);
+
+  if (hours.length === 0) return null;
+
+  return (
+    <section className="space-y-2">
+      <h2 className="text-sm font-semibold">Popular Times</h2>
+      {/* Day selector */}
+      <div className="flex gap-1">
+        {DAYS_OF_WEEK.map((d) => (
+          <button
+            key={d.key}
+            type="button"
+            onClick={() => setSelectedDay(d.key)}
+            className={`px-2 py-1 text-[10px] font-medium rounded-full cursor-pointer transition-colors ${
+              selectedDay === d.key
+                ? "bg-emerald-600 text-white"
+                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+            }`}
+          >
+            {d.label}
+          </button>
+        ))}
+      </div>
+      {/* Bar chart */}
+      <div className="flex items-end gap-[3px] h-20">
+        {hours.map((h) => {
+          const heightPct = (h.popular_index / maxIndex) * 100;
+          const isNow =
+            selectedDay ===
+              DAYS_OF_WEEK[
+                new Date().getDay() === 0 ? 6 : new Date().getDay() - 1
+              ].key && h.hour === new Date().getHours();
+          return (
+            <div
+              key={h.hour}
+              className="flex-1 flex flex-col items-center gap-0.5"
+              title={`${h.hour}:00 — ${h.popular_index}% busy`}
+            >
+              <div
+                className={`w-full rounded-sm transition-all ${
+                  isNow ? "bg-emerald-500" : "bg-emerald-200"
+                }`}
+                style={{
+                  height: `${Math.max(heightPct, 4)}%`,
+                  minHeight: "2px",
+                }}
+              />
+              {h.hour % 3 === 0 && (
+                <span className="text-[8px] text-muted-foreground">
+                  {h.hour}
+                </span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function formatAttributeName(attr: string): string {
+  return attr
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase())
+    .replace(/^Has /, "")
+    .replace(/^Serves /, "");
 }

@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { resolveCategoryId } from "@/lib/google/category-mapping";
-import { downloadAndStorePhoto } from "@/lib/google/places-api";
+import { getProvider } from "@/lib/data-provider";
+import type { ProviderCredentials } from "@/lib/data-provider/types";
 import { getUserApiKeys } from "@/lib/google/get-user-api-keys";
 
 // GET /api/places - List all places for current user with filters
@@ -119,7 +120,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { googleApiKey } = await getUserApiKeys(user.id);
+  const keys = await getUserApiKeys(user.id);
+  const provider = await getProvider();
+  const credentials: ProviderCredentials = {
+    googleApiKey: keys.googleApiKey,
+    dataforseoLogin: keys.dataforseoLogin,
+    dataforseoPassword: keys.dataforseoPassword,
+  };
 
   const body = await request.json();
   const { name, address, country, city, lat, lng, category_id, rating, notes, google_place_id, google_data, source, tag_ids, list_ids, visit_status, photoRef } = body;
@@ -200,16 +207,22 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  // Download photo to Supabase Storage (1 photo only, $7/1K requests)
-  if (photoRef && googleApiKey) {
-    const storageUrl = await downloadAndStorePhoto(photoRef, place.id, user.id, googleApiKey);
-    if (storageUrl) {
-      await supabase
-        .from("places")
-        .update({
-          google_data: { ...savedGoogleData, photo_storage_url: storageUrl },
-        })
-        .eq("id", place.id);
+  // Download photo to Supabase Storage via active provider
+  if (photoRef) {
+    const hasCredentials = provider.name === "google"
+      ? !!credentials.googleApiKey
+      : !!(credentials.dataforseoLogin && credentials.dataforseoPassword);
+
+    if (hasCredentials) {
+      const storageUrl = await provider.downloadAndStorePhoto(photoRef, place.id, user.id, credentials);
+      if (storageUrl) {
+        await supabase
+          .from("places")
+          .update({
+            google_data: { ...savedGoogleData, photo_storage_url: storageUrl },
+          })
+          .eq("id", place.id);
+      }
     }
   }
 
