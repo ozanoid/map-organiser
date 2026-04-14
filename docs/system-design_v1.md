@@ -392,9 +392,28 @@ Controls: NavigationControl (no compass), GeolocateControl
 1. Marker click → Mapbox popup (name, address, rating, Maps link, "View details →")
 2. "View details →" click → `onPlaceClick(place)` callback (uses refs for stability)
 3. Map page: `setSelectedPlace(place)` → fetch full details
-4. Right-side panel slides in (w-96 on desktop, full-width on mobile)
+4. Right-side panel slides in (w-96 on desktop, full-width on mobile, pb-14 for MobileNav clearance)
 5. Panel shows: photo, address, badges, visit status, rating, hours, reviews, notes, actions
 6. "Full details" button → navigates to /places/{id}
+
+### Detail Panel — Browser History Entegrasyonu
+- Panel acildiginda `history.pushState({ panel: placeId })` ile state eklenir
+- Mobilde back tusu panel'i kapatir (sayfa degismez)
+- Close butonu `history.back()` cagirir → popstate event → panel kapanir
+
+### FAB Gizleme
+- Detail panel acikken FAB (`+` butonu) gizlenir (`{!selectedPlace && <FAB />}`)
+- z-index catismasini onler (panel z-20, FAB z-10)
+
+### Bos Durum (Empty State)
+- Place yokken haritada merkeze overlay: MapPin icon + "No places yet" + "Add Place" CTA butonu
+- Filtre aktifse: "No places match your filters." (CTA butonu yok)
+
+### Map Popup Erisilebilirlik
+- Popup: `<article role="dialog" aria-label="Place: {name}">` semantic HTML
+- "View details" linki: proper `<button>` elementi (span degil)
+- Touch target: `min-height: 44px` tum tiklanabilir elemanlarda
+- Google Maps linki: `aria-label="Open {name} in Google Maps"`
 
 ### Stable Event Handler Pattern
 ```typescript
@@ -630,3 +649,41 @@ Base UI Select componentleri projede guvenilir calismadigindan (selection bozukl
 - Supabase anon key RLS ile sinirli (kullanici sadece kendi verisini gorur)
 - All API routes validate auth before any operation
 - Bulk operations verify ownership of all place_ids
+
+---
+
+## PWA & Share Target
+
+### PWA Konfigurasyonu
+- **manifest.ts:** `display: standalone`, `theme_color: #059669`, `start_url: /map`
+- **Icons:** `icon-192.png`, `icon-512.png` (emerald arka plan, beyaz map pin)
+- **Apple meta tags:** `apple-web-app-capable`, `apple-touch-icon`, `statusBarStyle: default`
+- **Service Worker:** `public/sw.js` — root layout'ta `ServiceWorkerRegister` client component ile kayit
+
+### Service Worker Stratejisi
+| Istek Tipi | Strateji | Aciklama |
+|-----------|----------|----------|
+| Navigation (sayfa) | Network-first + offline fallback | Offline'da `/offline` sayfasi gosterilir |
+| Static assets (`/_next/static/`, resimler, fontlar) | Stale-while-revalidate | Cache'ten servis, arka planda guncelle |
+| API routes (`/api/`) | Network-only (skip) | Her zaman taze veri |
+| External (Mapbox vb.) | Skip | SW mudahale etmez |
+
+### Share Target Akisi
+```
+Android: Google Maps → Share → "Map Organiser" secimi
+  → POST /api/share-target (FormData: url, text, title)
+  → Google Maps URL regex ile extract
+  → Redirect: /map?add=encodedUrl
+  → MapContent: useSearchParams → "add" param oku
+  → sharedUrl state'e set + AddPlaceDialog ac
+  → AddPlaceDialog(initialUrl) → auto parseLink.mutate()
+  → Parse sonucu: mekan preview gosterilir
+  → Kullanici Save → mekan kaydedilir
+```
+
+**iOS Kisitlamasi:** iOS Safari Web Share Target API desteklemiyor. Workaround: iOS Shortcuts app ile `/map?add=URL` acilabilir.
+
+### Offline Deneyim
+- `OfflineBanner` component: `navigator.onLine` listener ile amber uyari banner'i (header altinda)
+- `/offline` sayfasi: WifiOff ikonu + "You're offline" mesaji
+- Service worker: navigation istekleri basarisiz olursa `/offline` cache'ten servis edilir

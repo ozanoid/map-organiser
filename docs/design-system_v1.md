@@ -288,8 +288,8 @@ Pasif: bg-gray-100 text-gray-600 hover:bg-gray-200
 ```
 Aktif: [status].activeBg + [status].activeColor border rounded-full
 Pasif: border-gray-200 text-gray-500 hover:border-gray-300
-Size sm: px-2 py-0.5 text-xs
-Size md: px-3 py-1 text-sm
+Size sm: px-2.5 py-1.5 text-xs (44px touch target)
+Size md: px-3 py-1.5 text-sm
 ```
 
 ---
@@ -325,19 +325,23 @@ Size md: px-3 py-1 text-sm
 ├──────────────────────────┤
 │                          │
 │     Main Content         │
-│     (full-width)         │
+│     (full-width, h-dvh)  │
 │                          │
 │                          │
 ├──────────────────────────┤
 │ Bottom Nav (h-14)        │
-│ [Map] [Places] [Lists]  │
+│ [Map][Places][Lists][More│
 └──────────────────────────┘
 ```
 
-- Bottom tab bar: `fixed bottom-0`, `h-14`, `z-50`
+- Bottom tab bar: `fixed bottom-0`, `h-14`, `z-50`, 4 tab (Map/Places/Lists/More)
+- "More" menusu: Import + Settings erisimi (popover, `z-40`)
 - Main padding bottom: `pb-14` (tab bar yuksekligi)
+- Viewport yukseklik: `h-dvh` (iOS Safari address bar uyumu, `h-screen` degil)
 - Filter: Bottom sheet (`max-h-[65dvh]`)
-- FAB: `bottom-20 right-4` (tab bar uzerinde)
+- FAB: `bottom-20 right-4` (tab bar uzerinde, detail panel acikken gizlenir)
+- Global: `touch-action: manipulation` (300ms tap delay onlenir)
+- Safe area: `.safe-area-pb` class (`env(safe-area-inset-bottom)`)
 
 ### Tablet (768-1023px)
 
@@ -523,7 +527,10 @@ Herhangi bir UI kodu teslim etmeden once kontrol et:
 - [ ] Kontrast orani >= 4.5:1
 - [ ] Focus ring gorunur
 - [ ] Input'lar label ile iliskili
-- [ ] Touch target >= 44x44px (mobil)
+- [ ] Touch target >= 44x44px (mobil) — padding ile genislet, ikon boyutu degil
+- [ ] Icon-only butonlarda `aria-label` var
+- [ ] Toggle butonlarda `aria-pressed` var
+- [ ] Search input'larda `inputMode="search"` + `enterKeyHint="search"` var
 
 ### Responsive
 - [ ] 375px (iPhone SE) test edildi
@@ -532,6 +539,9 @@ Herhangi bir UI kodu teslim etmeden once kontrol et:
 - [ ] 1440px (desktop) test edildi
 - [ ] Yatay scroll yok (mobil)
 - [ ] Fixed navbar arkasinda icerik gizlenmiyor
+- [ ] `h-dvh` kullanildi (`h-screen` degil — iOS Safari)
+- [ ] Detail panel'de `pb-14` var (MobileNav clearance)
+- [ ] FAB detail panel acikken gizleniyor
 
 ### Tutarlilik
 - [ ] Native `<select>` kullanildi (Base UI Select degil)
