@@ -29,7 +29,7 @@ export function MobileNav() {
       {/* More menu overlay */}
       {moreOpen && (
         <div className="lg:hidden fixed inset-0 z-40" onClick={() => setMoreOpen(false)}>
-          <div className="absolute bottom-14 right-4 bg-white rounded-xl shadow-xl border p-1.5 min-w-[160px]" onClick={(e) => e.stopPropagation()}>
+          <div className="absolute bottom-14 right-4 bg-white dark:bg-gray-900 rounded-xl shadow-xl border p-1.5 min-w-[160px]" onClick={(e) => e.stopPropagation()}>
             {moreItems.map((item) => {
               const isActive = pathname.startsWith(item.href);
               return (
@@ -41,8 +41,8 @@ export function MobileNav() {
                   className={cn(
                     "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium cursor-pointer transition-colors",
                     isActive
-                      ? "bg-emerald-50 text-emerald-700"
-                      : "text-gray-600 hover:bg-gray-50"
+                      ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
+                      : "text-gray-600 hover:bg-gray-50 dark:text-gray-400 dark:hover:bg-gray-800"
                   )}
                 >
                   <item.icon className="h-4 w-4" />
@@ -55,7 +55,7 @@ export function MobileNav() {
       )}
 
       {/* Bottom tab bar */}
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-50 border-t bg-white/95 backdrop-blur-sm safe-area-pb">
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-50 border-t bg-white/95 dark:bg-gray-950/95 backdrop-blur-sm safe-area-pb">
         <div className="flex items-center justify-around h-14">
           {tabs.map((tab) => {
             const isActive =
@@ -67,7 +67,7 @@ export function MobileNav() {
                 prefetch={false}
                 className={cn(
                   "flex flex-col items-center gap-0.5 px-4 py-1.5 cursor-pointer transition-colors",
-                  isActive ? "text-emerald-600" : "text-gray-400"
+                  isActive ? "text-emerald-600" : "text-gray-400 dark:text-gray-500"
                 )}
               >
                 <tab.icon className="h-5 w-5" />
@@ -82,7 +82,7 @@ export function MobileNav() {
             onClick={() => setMoreOpen((prev) => !prev)}
             className={cn(
               "flex flex-col items-center gap-0.5 px-4 py-1.5 cursor-pointer transition-colors",
-              moreOpen || isMoreActive ? "text-emerald-600" : "text-gray-400"
+              moreOpen || isMoreActive ? "text-emerald-600" : "text-gray-400 dark:text-gray-500"
             )}
           >
             {moreOpen ? (

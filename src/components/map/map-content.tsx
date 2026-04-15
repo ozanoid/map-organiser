@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { usePlaces } from "@/lib/hooks/use-places";
 import { useFilters } from "@/lib/hooks/use-filters";
+import { useMapStyle } from "@/lib/hooks/use-map-style";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   SlidersHorizontal,
@@ -30,6 +31,7 @@ import type { Place, VisitStatus } from "@/lib/types";
 export function MapContent({ mapboxToken }: { mapboxToken: string }) {
   const { filters, hasActiveFilters } = useFilters();
   const { data: places = [], isLoading } = usePlaces(filters);
+  const { mapStyleUrl } = useMapStyle();
   const [addOpen, setAddOpen] = useState(false);
   const [sharedUrl, setSharedUrl] = useState<string | undefined>();
   const [filterOpen, setFilterOpen] = useState(false);
@@ -140,6 +142,7 @@ export function MapContent({ mapboxToken }: { mapboxToken: string }) {
           places={places}
           onPlaceClick={handlePlaceClick}
           mapboxToken={mapboxToken}
+          mapStyle={mapStyleUrl}
           className="w-full h-full"
         />
 
@@ -175,7 +178,7 @@ export function MapContent({ mapboxToken }: { mapboxToken: string }) {
         {/* Place count */}
         {!isLoading && places.length > 0 && !selectedPlace && (
           <div className="absolute top-4 right-16 z-10 lg:right-4">
-            <div className="bg-white/90 backdrop-blur-sm rounded-full px-3 py-1.5 shadow-md text-sm font-medium text-gray-700">
+            <div className="bg-white/90 dark:bg-gray-900/90 backdrop-blur-sm rounded-full px-3 py-1.5 shadow-md text-sm font-medium text-gray-700 dark:text-gray-300">
               {places.length} place{places.length !== 1 ? "s" : ""}
             </div>
           </div>
@@ -184,9 +187,9 @@ export function MapContent({ mapboxToken }: { mapboxToken: string }) {
         {/* Empty state CTA */}
         {!isLoading && places.length === 0 && !selectedPlace && (
           <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
-            <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-lg p-6 text-center max-w-[260px] pointer-events-auto">
-              <MapPin className="h-10 w-10 text-gray-300 mx-auto mb-3" />
-              <p className="text-sm font-medium text-gray-700 mb-1">No places yet</p>
+            <div className="bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm rounded-2xl shadow-lg p-6 text-center max-w-[260px] pointer-events-auto">
+              <MapPin className="h-10 w-10 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
+              <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">No places yet</p>
               <p className="text-xs text-muted-foreground mb-4">
                 {hasActiveFilters
                   ? "No places match your filters."
@@ -208,9 +211,9 @@ export function MapContent({ mapboxToken }: { mapboxToken: string }) {
 
         {/* Slide-in detail panel */}
         {selectedPlace && (
-          <div className="absolute top-0 right-0 bottom-0 w-full sm:w-96 z-20 bg-white border-l shadow-xl overflow-y-auto pb-14 lg:pb-0">
+          <div className="absolute top-0 right-0 bottom-0 w-full sm:w-96 z-20 bg-white dark:bg-gray-950 border-l shadow-xl overflow-y-auto pb-14 lg:pb-0">
             {/* Close button */}
-            <div className="sticky top-0 bg-white/95 backdrop-blur-sm z-10 flex items-center justify-between p-3 border-b">
+            <div className="sticky top-0 bg-white/95 dark:bg-gray-950/95 backdrop-blur-sm z-10 flex items-center justify-between p-3 border-b">
               <h2 className="font-semibold text-sm truncate flex-1">
                 {selectedPlace.name}
               </h2>
@@ -234,7 +237,7 @@ export function MapContent({ mapboxToken }: { mapboxToken: string }) {
               <div className="p-4 space-y-4">
                 {/* Photo */}
                 {photoUrl && (
-                  <div className="h-40 rounded-lg overflow-hidden bg-gray-100">
+                  <div className="h-40 rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800">
                     <img
                       src={photoUrl}
                       alt={detailData.name}
@@ -355,7 +358,7 @@ export function MapContent({ mapboxToken }: { mapboxToken: string }) {
                   <div className="space-y-2">
                     <h3 className="text-xs font-semibold text-muted-foreground uppercase">Reviews</h3>
                     {reviews.slice(0, 3).map((review: any, i: number) => (
-                      <div key={i} className="text-xs space-y-0.5 border-l-2 border-gray-100 pl-2">
+                      <div key={i} className="text-xs space-y-0.5 border-l-2 border-gray-100 dark:border-gray-800 pl-2">
                         <div className="flex items-center gap-1">
                           <span className="font-medium">{review.author_name}</span>
                           <span className="text-orange-400">
@@ -371,7 +374,7 @@ export function MapContent({ mapboxToken }: { mapboxToken: string }) {
 
                 {/* Notes */}
                 {detailData.notes && (
-                  <div className="bg-gray-50 rounded-lg p-3 text-sm text-muted-foreground">
+                  <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-3 text-sm text-muted-foreground">
                     {detailData.notes}
                   </div>
                 )}

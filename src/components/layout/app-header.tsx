@@ -12,15 +12,20 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { AddPlaceDialog } from "@/components/places/add-place-dialog";
-import { Plus, Search, LogOut, Settings, MapPin } from "lucide-react";
+import { Plus, Search, LogOut, Settings, MapPin, Sun, Moon, Monitor } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useTheme } from "next-themes";
 import type { User } from "@supabase/supabase-js";
 
 export function AppHeader() {
   const [addOpen, setAddOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const router = useRouter();
   const supabase = createClient();
   const [user, setUser] = useState<User | null>(null);
+  const { theme, setTheme } = useTheme();
+
+  useEffect(() => { setMounted(true); }, []);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => setUser(user));
@@ -41,7 +46,7 @@ export function AppHeader() {
       .slice(0, 2) || "U";
 
   return (
-    <header className="flex items-center justify-between h-14 px-4 border-b bg-white shrink-0">
+    <header className="flex items-center justify-between h-14 px-4 border-b bg-white dark:bg-gray-950 shrink-0">
       <div className="flex items-center gap-2 lg:hidden">
         <MapPin className="h-6 w-6 text-emerald-600" />
         <span className="font-semibold text-sm">Map Organiser</span>
@@ -50,6 +55,24 @@ export function AppHeader() {
       <div className="hidden lg:block" />
 
       <div className="flex items-center gap-2">
+        {mounted && (
+          <button
+            type="button"
+            onClick={() => setTheme(theme === "light" ? "dark" : theme === "dark" ? "system" : "light")}
+            className="h-9 w-9 flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-accent cursor-pointer transition-colors duration-200"
+            aria-label={`Theme: ${theme}. Click to switch.`}
+            title={`Theme: ${theme}`}
+          >
+            {theme === "dark" ? (
+              <Moon className="h-4 w-4" />
+            ) : theme === "system" ? (
+              <Monitor className="h-4 w-4" />
+            ) : (
+              <Sun className="h-4 w-4" />
+            )}
+          </button>
+        )}
+
         <Button
           variant="outline"
           size="sm"
@@ -64,7 +87,7 @@ export function AppHeader() {
           <DropdownMenuTrigger className="h-8 w-8 rounded-full cursor-pointer focus:outline-none">
             <Avatar className="h-8 w-8">
               <AvatarImage src={user?.user_metadata?.avatar_url} />
-              <AvatarFallback className="bg-emerald-100 text-emerald-700 text-xs">
+              <AvatarFallback className="bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 text-xs">
                 {initials}
               </AvatarFallback>
             </Avatar>

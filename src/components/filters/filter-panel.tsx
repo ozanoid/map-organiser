@@ -167,7 +167,7 @@ function RatingStars({ value, onChange }: { value: number; onChange: (v: number)
             className={`h-6 w-6 ${
               star <= value
                 ? "fill-orange-400 text-orange-400"
-                : "fill-none text-gray-300"
+                : "fill-none text-gray-300 dark:text-gray-600"
             }`}
             viewBox="0 0 24 24"
             stroke="currentColor"

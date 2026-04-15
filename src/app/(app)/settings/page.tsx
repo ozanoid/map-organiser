@@ -8,10 +8,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { Plus, Trash2, Loader2, Tag, FolderOpen, Shield } from "lucide-react";
+import { Plus, Trash2, Loader2, Tag, FolderOpen, Shield, Paintbrush, Sun, Moon, Monitor, Map } from "lucide-react";
 import { toast } from "sonner";
+import { useTheme } from "next-themes";
 import { ApiKeysManager } from "@/components/settings/api-keys-manager";
 import { CostTracker } from "@/components/settings/cost-tracker";
+import { useMapStyle, MAP_STYLE_OPTIONS } from "@/lib/hooks/use-map-style";
+import type { MapStyleKey } from "@/lib/hooks/use-map-style";
 
 const PRESET_COLORS = [
   "#EF4444", "#F97316", "#F59E0B", "#22C55E", "#06B6D4",
@@ -43,6 +46,10 @@ export default function SettingsPage() {
             <Shield className="h-4 w-4 mr-1.5" />
             API & Usage
           </TabsTrigger>
+          <TabsTrigger value="appearance" className="cursor-pointer">
+            <Paintbrush className="h-4 w-4 mr-1.5" />
+            Appearance
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="categories" className="mt-4">
@@ -55,6 +62,9 @@ export default function SettingsPage() {
           <ApiKeysManager />
           <Separator />
           <CostTracker />
+        </TabsContent>
+        <TabsContent value="appearance" className="mt-4">
+          <AppearanceSettings />
         </TabsContent>
       </Tabs>
     </div>
@@ -136,7 +146,7 @@ function CategoryManager() {
         {categories.map((cat) => (
           <div
             key={cat.id}
-            className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-gray-50 group"
+            className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 group"
           >
             <div className="flex items-center gap-3">
               <span
@@ -145,7 +155,7 @@ function CategoryManager() {
               />
               <span className="text-sm">{cat.name}</span>
               {cat.is_default && (
-                <span className="text-[10px] text-muted-foreground bg-gray-100 px-1.5 py-0.5 rounded">
+                <span className="text-[10px] text-muted-foreground bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded">
                   default
                 </span>
               )}
@@ -222,7 +232,7 @@ function TagManager() {
           {tags.map((tag) => (
             <div
               key={tag.id}
-              className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-gray-50 group"
+              className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 group"
             >
               <span className="text-sm">{tag.name}</span>
               <Button
@@ -237,6 +247,82 @@ function TagManager() {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+const THEME_OPTIONS = [
+  { value: "light", label: "Light", icon: Sun },
+  { value: "dark", label: "Dark", icon: Moon },
+  { value: "system", label: "System", icon: Monitor },
+] as const;
+
+function AppearanceSettings() {
+  const { theme, setTheme } = useTheme();
+  const { mapStyle, setMapStyle } = useMapStyle();
+  const [mounted, setMounted] = useState(false);
+
+  useState(() => { setMounted(true); });
+
+  if (!mounted) return null;
+
+  return (
+    <div className="space-y-6">
+      {/* Theme */}
+      <div>
+        <label className="text-sm font-medium mb-3 block">Theme</label>
+        <div className="grid grid-cols-3 gap-2">
+          {THEME_OPTIONS.map((opt) => {
+            const Icon = opt.icon;
+            const active = theme === opt.value;
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setTheme(opt.value)}
+                className={`flex flex-col items-center gap-1.5 p-3 rounded-lg border cursor-pointer transition-colors duration-200 ${
+                  active
+                    ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300"
+                    : "border-input hover:border-gray-300 dark:hover:border-gray-600 text-muted-foreground"
+                }`}
+              >
+                <Icon className="h-5 w-5" />
+                <span className="text-xs font-medium">{opt.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <Separator />
+
+      {/* Map Style */}
+      <div>
+        <label className="text-sm font-medium mb-3 block">
+          <Map className="h-4 w-4 inline mr-1.5 -mt-0.5" />
+          Map Style
+        </label>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          {MAP_STYLE_OPTIONS.map((opt) => {
+            const active = mapStyle === opt.value;
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setMapStyle(opt.value as MapStyleKey)}
+                className={`flex flex-col items-start p-3 rounded-lg border cursor-pointer transition-colors duration-200 ${
+                  active
+                    ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300"
+                    : "border-input hover:border-gray-300 dark:hover:border-gray-600"
+                }`}
+              >
+                <span className="text-sm font-medium">{opt.label}</span>
+                <span className="text-[10px] text-muted-foreground mt-0.5">{opt.description}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }

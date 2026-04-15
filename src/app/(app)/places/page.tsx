@@ -51,7 +51,7 @@ function SelectablePlaceCard({
           className={`h-5 w-5 rounded border-2 flex items-center justify-center transition-colors ${
             isSelected
               ? "bg-emerald-500 border-emerald-500 text-white"
-              : "bg-white/80 border-gray-300 hover:border-gray-400"
+              : "bg-white/80 dark:bg-gray-800/80 border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500"
           }`}
         >
           {isSelected && (
@@ -75,7 +75,7 @@ function SelectablePlaceCard({
           }`}
         >
           {googlePhoto && (
-            <div className="relative h-32 bg-gray-100">
+            <div className="relative h-32 bg-gray-100 dark:bg-gray-800">
               <img
                 src={googlePhoto}
                 alt={place.name}
@@ -146,7 +146,7 @@ function SelectablePlaceCard({
 
               {googleRating && !place.rating && (
                 <span className="flex items-center gap-0.5 text-xs text-muted-foreground">
-                  <Star className="h-3 w-3 fill-gray-300 text-gray-300" />
+                  <Star className="h-3 w-3 fill-gray-300 text-gray-300 dark:fill-gray-600 dark:text-gray-600" />
                   {googleRating}
                 </span>
               )}
