@@ -155,8 +155,12 @@ export function AddPlaceDialog({ open, onOpenChange, initialUrl }: AddPlaceDialo
         list_ids: selectedListIds.length > 0 ? selectedListIds : undefined,
       },
       {
-        onSuccess: () => {
+        onSuccess: (savedPlace: any) => {
           toast.success(`${placeData.name} saved!`);
+          // Trigger DataForSEO enrichment in its own function instance
+          if (savedPlace?.id) {
+            fetch(`/api/places/${savedPlace.id}/enrich`, { method: "POST" }).catch(() => {});
+          }
           reset();
           onOpenChange(false);
         },
