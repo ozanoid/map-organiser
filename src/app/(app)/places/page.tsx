@@ -11,7 +11,7 @@ import { FilterPanel } from "@/components/filters/filter-panel";
 import { Button } from "@/components/ui/button";
 import { DebouncedSearchInput } from "@/components/filters/debounced-search-input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { MapPin, Plus, SlidersHorizontal, CheckSquare, Square, RefreshCw } from "lucide-react";
+import { MapPin, Plus, SlidersHorizontal, CheckSquare, Square, RefreshCw, ArrowUpDown } from "lucide-react";
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -185,6 +185,15 @@ function SelectablePlaceCard({
   );
 }
 
+const SORT_OPTIONS = [
+  { value: "newest", label: "Newest first" },
+  { value: "oldest", label: "Oldest first" },
+  { value: "name_asc", label: "Name A → Z" },
+  { value: "name_desc", label: "Name Z → A" },
+  { value: "rating_desc", label: "Highest rated" },
+  { value: "google_rating_desc", label: "Google rating" },
+] as const;
+
 function PlacesContent() {
   const { filters, setFilters, hasActiveFilters } = useFilters();
   const { data: places = [], isLoading, isFetching } = usePlaces(filters);
@@ -257,6 +266,34 @@ function PlacesContent() {
           )}
         </div>
         <div className="flex items-center gap-2">
+          {/* Sort */}
+          <div className="relative">
+            <ArrowUpDown className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+            <select
+              value={filters.sort || "newest"}
+              onChange={(e) =>
+                setFilters({ sort: e.target.value === "newest" ? undefined : e.target.value })
+              }
+              className="h-9 pl-8 pr-7 text-sm border border-input rounded-md bg-background cursor-pointer appearance-none focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1 transition-colors duration-200"
+              aria-label="Sort places"
+            >
+              {SORT_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+            <svg
+              className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path d="m6 9 6 6 6-6" />
+            </svg>
+          </div>
+
           <Button
             variant="outline"
             size="sm"

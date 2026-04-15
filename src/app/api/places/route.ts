@@ -25,12 +25,24 @@ export async function GET(request: NextRequest) {
   const ratingMin = searchParams.get("rating");
   const googleRatingMin = searchParams.get("google_rating");
   const search = searchParams.get("q");
+  const sort = searchParams.get("sort");
+
+  // Determine sort field and direction
+  const sortConfig: Record<string, { column: string; ascending: boolean }> = {
+    newest: { column: "created_at", ascending: false },
+    oldest: { column: "created_at", ascending: true },
+    name_asc: { column: "name", ascending: true },
+    name_desc: { column: "name", ascending: false },
+    rating_desc: { column: "rating", ascending: false },
+  };
+  const { column: sortColumn, ascending: sortAscending } =
+    sortConfig[sort || ""] ?? sortConfig.newest;
 
   let query = supabase
     .from("places")
     .select("*, category:categories(*)")
     .eq("user_id", user.id)
-    .order("created_at", { ascending: false });
+    .order(sortColumn, { ascending: sortAscending });
 
   if (country) query = query.eq("country", country);
   if (city) query = query.eq("city", city);
@@ -80,6 +92,15 @@ export async function GET(request: NextRequest) {
       const ids = new Set(listPlaceIds.map((lp) => lp.place_id));
       filteredPlaces = filteredPlaces.filter((p) => ids.has(p.id));
     }
+  }
+
+  // Post-query sort for google_rating (stored in JSONB, can't sort at query level)
+  if (sort === "google_rating_desc") {
+    filteredPlaces.sort((a: any, b: any) => {
+      const ra = a.google_data?.rating ?? 0;
+      const rb = b.google_data?.rating ?? 0;
+      return rb - ra;
+    });
   }
 
   // Transform PostGIS geography to {lat, lng}

@@ -114,6 +114,7 @@ export interface PlaceFilters {
   google_rating_min?: number;
   visit_status?: VisitStatus;
   search?: string;
+  sort?: string;
 }
 
 export interface ParsedPlaceData {

@@ -16,6 +16,15 @@ interface FilterSheetProps {
   onOpenChange: (open: boolean) => void;
 }
 
+const SORT_OPTIONS = [
+  { value: "newest", label: "Newest first" },
+  { value: "oldest", label: "Oldest first" },
+  { value: "name_asc", label: "Name A → Z" },
+  { value: "name_desc", label: "Name Z → A" },
+  { value: "rating_desc", label: "Highest rated" },
+  { value: "google_rating_desc", label: "Google rating" },
+] as const;
+
 export function FilterSheet({ open, onOpenChange }: FilterSheetProps) {
   const { filters, setFilters, clearFilters, hasActiveFilters } = useFilters();
 
@@ -48,6 +57,37 @@ export function FilterSheet({ open, onOpenChange }: FilterSheetProps) {
         </SheetHeader>
 
         <div className="overflow-y-auto flex-1 px-5 pb-safe-area-inset-bottom" style={{ paddingBottom: "env(safe-area-inset-bottom, 16px)" }}>
+          {/* Sort */}
+          <div className="pt-2 pb-4">
+            <label className="text-sm font-medium mb-2 block">Sort by</label>
+            <div className="relative">
+              <select
+                value={filters.sort || "newest"}
+                onChange={(e) =>
+                  setFilters({ sort: e.target.value === "newest" ? undefined : e.target.value })
+                }
+                className="w-full h-10 px-3 pr-8 text-sm border border-input rounded-md bg-background cursor-pointer appearance-none focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1 transition-colors duration-200"
+              >
+                {SORT_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+              <svg
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path d="m6 9 6 6 6-6" />
+              </svg>
+            </div>
+          </div>
+
+          <div className="border-t" />
+
           {/* Visit Status */}
           <div className="pt-2 pb-4">
             <label className="text-sm font-medium mb-2 block">Status</label>
