@@ -81,16 +81,19 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // If filtering by list, do a secondary filter
+  // If filtering by list, do a secondary filter + sort by sort_order
   if (listId) {
     const { data: listPlaceIds } = await supabase
       .from("list_places")
-      .select("place_id")
-      .eq("list_id", listId);
+      .select("place_id, sort_order")
+      .eq("list_id", listId)
+      .order("sort_order", { ascending: true });
 
     if (listPlaceIds) {
-      const ids = new Set(listPlaceIds.map((lp) => lp.place_id));
-      filteredPlaces = filteredPlaces.filter((p) => ids.has(p.id));
+      const orderMap = new Map(listPlaceIds.map((lp) => [lp.place_id, lp.sort_order ?? 0]));
+      filteredPlaces = filteredPlaces
+        .filter((p) => orderMap.has(p.id))
+        .sort((a, b) => (orderMap.get(a.id) ?? 0) - (orderMap.get(b.id) ?? 0));
     }
   }
 

@@ -101,6 +101,24 @@ export function useRemoveFromList() {
   });
 }
 
+export function useReorderListPlaces() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ listId, placeIds }: { listId: string; placeIds: string[] }) => {
+      const res = await fetch(`/api/lists/${listId}/reorder`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ placeIds }),
+      });
+      if (!res.ok) throw new Error("Failed to reorder");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["places"] });
+    },
+  });
+}
+
 export function usePlaceLists(placeId: string | undefined) {
   return useQuery({
     queryKey: ["place-lists", placeId],
