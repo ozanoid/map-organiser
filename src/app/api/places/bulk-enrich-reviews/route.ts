@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
 
       const reviews = await fetchReviews(client, {
         cid,
-        depth: 10,
+        depth: 50,
         location_name: place.country || "United Kingdom",
       });
 
