@@ -215,6 +215,7 @@ export function MapView({ places, categories = [], onPlaceClick, mapboxToken, ma
       center: [29.0, 41.0],
       zoom: 5,
       attributionControl: false,
+      fadeDuration: 0,
     });
 
     map.current.addControl(
