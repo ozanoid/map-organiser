@@ -46,11 +46,22 @@ export async function GET(
     .eq("place_id", id)
     .order("created_at", { ascending: false });
 
+  // Get trip references
+  const { data: tripRefs } = await supabase
+    .from("trip_day_places")
+    .select("trip_day_id, trip_days!inner(trip_id, trips!inner(name))")
+    .eq("place_id", id);
+
+  const trips = (tripRefs || []).map((ref: any) => ({
+    name: ref.trip_days?.trips?.name || "Unknown trip",
+  }));
+
   return NextResponse.json({
     ...place,
     location: parseLocation(place.location),
     tags: placeTags?.map((pt) => pt.tags) || [],
     lists: placeLists?.map((pl) => pl.lists) || [],
+    trips,
     photos: photos || [],
   });
 }

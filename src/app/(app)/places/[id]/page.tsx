@@ -100,11 +100,17 @@ export default function PlaceDetailPage() {
   }, [place?.google_data?.reviews, place?.google_data?.cid, params.id]);
 
   async function handleDelete() {
-    if (!confirm("Are you sure you want to delete this place?")) return;
+    const tripNames = ((place as any)?.trips || []).map((t: any) => t.name);
+    let msg = "Are you sure you want to delete this place?";
+    if (tripNames.length > 0) {
+      msg += `\n\nThis place is part of ${tripNames.length} trip${tripNames.length > 1 ? "s" : ""}: ${tripNames.join(", ")}. It will be removed from those trips too.`;
+    }
+    if (!confirm(msg)) return;
 
     const res = await fetch(`/api/places/${params.id}`, { method: "DELETE" });
     if (res.ok) {
       queryClient.invalidateQueries({ queryKey: ["places"] });
+      queryClient.invalidateQueries({ queryKey: ["trips"] });
       toast.success("Place deleted");
       router.push("/places");
     } else {

@@ -111,3 +111,73 @@ export function useReorderTripDayPlaces() {
     },
   });
 }
+
+export function useRemoveTripPlace() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ tripId, dayId, placeId }: { tripId: string; dayId: string; placeId: string }) => {
+      const res = await fetch(`/api/trips/${tripId}/days/${dayId}/places`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ place_id: placeId }),
+      });
+      if (!res.ok) throw new Error("Failed to remove place");
+    },
+    onSuccess: (_data, { tripId }) => {
+      queryClient.invalidateQueries({ queryKey: ["trip", tripId] });
+    },
+  });
+}
+
+export function useAddTripPlace() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ tripId, dayId, placeId }: { tripId: string; dayId: string; placeId: string }) => {
+      const res = await fetch(`/api/trips/${tripId}/days/${dayId}/places`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ place_id: placeId }),
+      });
+      if (!res.ok) throw new Error("Failed to add place");
+    },
+    onSuccess: (_data, { tripId }) => {
+      queryClient.invalidateQueries({ queryKey: ["trip", tripId] });
+    },
+  });
+}
+
+export function useMoveTripPlace() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ tripId, dayId, placeId, targetDayId }: {
+      tripId: string; dayId: string; placeId: string; targetDayId: string;
+    }) => {
+      const res = await fetch(`/api/trips/${tripId}/days/${dayId}/places`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ place_id: placeId, target_day_id: targetDayId }),
+      });
+      if (!res.ok) throw new Error("Failed to move place");
+    },
+    onSuccess: (_data, { tripId }) => {
+      queryClient.invalidateQueries({ queryKey: ["trip", tripId] });
+    },
+  });
+}
+
+export function useSwapTripDays() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ tripId, dayId, direction }: { tripId: string; dayId: string; direction: "up" | "down" }) => {
+      const res = await fetch(`/api/trips/${tripId}/swap-days`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dayId, direction }),
+      });
+      if (!res.ok) throw new Error("Failed to swap days");
+    },
+    onSuccess: (_data, { tripId }) => {
+      queryClient.invalidateQueries({ queryKey: ["trip", tripId] });
+    },
+  });
+}
