@@ -46,8 +46,8 @@ export default function SharedPage() {
   // Check if user is logged in (for save button)
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   useEffect(() => {
-    fetch("/api/user/usage")
-      .then((r) => setIsLoggedIn(r.ok))
+    fetch("/api/user/usage", { redirect: "manual" })
+      .then((r) => setIsLoggedIn(r.status === 200))
       .catch(() => setIsLoggedIn(false));
   }, []);
 
