@@ -24,7 +24,7 @@ const PRESET_COLORS = [
 
 export default function SettingsPage() {
   return (
-    <div className="p-4 lg:p-6 max-w-2xl mx-auto space-y-6">
+    <div className="p-4 lg:p-6 max-w-2xl mx-auto space-y-6 overflow-x-hidden">
       <div>
         <h1 className="text-xl font-semibold">Settings</h1>
         <p className="text-sm text-muted-foreground mt-1">
@@ -33,7 +33,7 @@ export default function SettingsPage() {
       </div>
 
       <Tabs defaultValue="categories">
-        <TabsList>
+        <TabsList className="w-full overflow-x-auto">
           <TabsTrigger value="categories" className="cursor-pointer">
             <FolderOpen className="h-4 w-4 mr-1.5" />
             Categories
