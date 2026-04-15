@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useParseLink, useCreatePlace } from "@/lib/hooks/use-places";
 import { useCategories } from "@/lib/hooks/use-categories";
 import { useLists } from "@/lib/hooks/use-lists";
@@ -54,6 +55,7 @@ export function AddPlaceDialog({ open, onOpenChange, initialUrl }: AddPlaceDialo
     "want_to_go"
   );
 
+  const queryClient = useQueryClient();
   const parseLink = useParseLink();
   const createPlace = useCreatePlace();
   const { data: categories = [] } = useCategories();
@@ -157,12 +159,27 @@ export function AddPlaceDialog({ open, onOpenChange, initialUrl }: AddPlaceDialo
       {
         onSuccess: (savedPlace: any) => {
           toast.success(`${placeData.name} saved!`);
-          // Trigger DataForSEO enrichment in its own function instance
-          if (savedPlace?.id) {
-            fetch(`/api/places/${savedPlace.id}/enrich`, { method: "POST" }).catch(() => {});
-          }
           reset();
           onOpenChange(false);
+
+          if (savedPlace?.id) {
+            // Step 1: info (photo + extended) — await, then invalidate cache
+            fetch(`/api/places/${savedPlace.id}/enrich?step=info`, { method: "POST" })
+              .then((res) => res.json())
+              .then((data) => {
+                queryClient.invalidateQueries({ queryKey: ["places"] });
+                // Step 2: reviews — fire-and-forget, detail page polling picks it up
+                const cid = data?.cid;
+                if (cid) {
+                  fetch(`/api/places/${savedPlace.id}/enrich?step=reviews`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ cid }),
+                  }).catch(() => {});
+                }
+              })
+              .catch(() => {});
+          }
         },
         onError: (err) => toast.error(err.message),
       }
