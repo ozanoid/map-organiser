@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useEffect, useState, useCallback } from "react";
+import { useRef, useEffect, useState, useCallback, useImperativeHandle, forwardRef } from "react";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import type { Place, Category } from "@/lib/types";
@@ -10,16 +10,24 @@ interface MapViewProps {
   places: Place[];
   categories?: Category[];
   onPlaceClick?: (place: Place) => void;
+  onVisiblePlacesChange?: (visibleIds: string[]) => void;
   mapboxToken?: string;
   mapStyle?: string;
   className?: string;
+}
+
+export interface MapViewHandle {
+  flyToPlace: (placeId: string) => void;
 }
 
 const CATEGORY_COLORS: Record<string, string> = {
   default: "#059669",
 };
 
-export function MapView({ places, categories = [], onPlaceClick, mapboxToken, mapStyle, className }: MapViewProps) {
+export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
+  { places, categories = [], onPlaceClick, onVisiblePlacesChange, mapboxToken, mapStyle, className },
+  ref
+) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
@@ -28,10 +36,40 @@ export function MapView({ places, categories = [], onPlaceClick, mapboxToken, ma
   // Keep refs stable for Mapbox event handlers
   const placesRef = useRef(places);
   const onPlaceClickRef = useRef(onPlaceClick);
+  const onVisiblePlacesChangeRef = useRef(onVisiblePlacesChange);
   placesRef.current = places;
   onPlaceClickRef.current = onPlaceClick;
+  onVisiblePlacesChangeRef.current = onVisiblePlacesChange;
 
   const defaultStyle = mapStyle || "mapbox://styles/mapbox/light-v11";
+
+  // Expose flyToPlace to parent via ref
+  useImperativeHandle(ref, () => ({
+    flyToPlace: (placeId: string) => {
+      if (!map.current) return;
+      const place = placesRef.current.find((p) => p.id === placeId);
+      if (!place) return;
+      map.current.flyTo({ center: [place.location.lng, place.location.lat], zoom: 16 });
+      // Trigger place click to open popup/detail
+      if (onPlaceClickRef.current) onPlaceClickRef.current(place);
+    },
+  }), []);
+
+  // Query visible (unclustered) places in the current viewport
+  const emitVisiblePlaces = useCallback(() => {
+    if (!map.current || !layersAdded.current) return;
+    try {
+      const canvas = map.current.getCanvas();
+      const features = map.current.queryRenderedFeatures(
+        [[0, 0], [canvas.width, canvas.height]],
+        { layers: ["unclustered-point"] }
+      );
+      const ids = [...new Set(features.map((f) => f.properties?.id as string).filter(Boolean))];
+      onVisiblePlacesChangeRef.current?.(ids);
+    } catch {
+      // Layer may not exist yet
+    }
+  }, []);
 
   // Build GeoJSON from places
   const buildGeoJSON = useCallback((data: Place[]): GeoJSON.FeatureCollection => ({
@@ -202,7 +240,12 @@ export function MapView({ places, categories = [], onPlaceClick, mapboxToken, ma
     m.on("mouseleave", "unclustered-point", () => { m.getCanvas().style.cursor = ""; });
 
     layersAdded.current = true;
-  }, []);
+
+    // Emit visible places on viewport change
+    m.on("moveend", () => emitVisiblePlaces());
+    // Initial emit after layers are ready
+    emitVisiblePlaces();
+  }, [emitVisiblePlaces]);
 
   // Initialize map
   useEffect(() => {
@@ -267,7 +310,9 @@ export function MapView({ places, categories = [], onPlaceClick, mapboxToken, ma
     } else {
       setupLayers(map.current, geojson);
     }
-  }, [places, mapLoaded, buildGeoJSON, setupLayers]);
+    // Re-emit visible places after data update (slight delay for render)
+    setTimeout(emitVisiblePlaces, 100);
+  }, [places, mapLoaded, buildGeoJSON, setupLayers, emitVisiblePlaces]);
 
   // Fit bounds when places change
   useEffect(() => {
@@ -289,4 +334,4 @@ export function MapView({ places, categories = [], onPlaceClick, mapboxToken, ma
       className={className || "w-full h-full"}
     />
   );
-}
+});

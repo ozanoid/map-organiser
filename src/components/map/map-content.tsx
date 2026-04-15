@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { MapView } from "@/components/map/map-view";
+import type { MapViewHandle } from "@/components/map/map-view";
 import { AddPlaceDialog } from "@/components/places/add-place-dialog";
 import { FilterSheet } from "@/components/filters/filter-sheet";
 import { FilterPanel } from "@/components/filters/filter-panel";
@@ -25,6 +26,8 @@ import {
   Globe,
   Phone,
   ExternalLink,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { Place, VisitStatus } from "@/lib/types";
@@ -37,6 +40,9 @@ export function MapContent({ mapboxToken }: { mapboxToken: string }) {
   const [addOpen, setAddOpen] = useState(false);
   const [sharedUrl, setSharedUrl] = useState<string | undefined>();
   const [filterOpen, setFilterOpen] = useState(false);
+  const [visiblePlaceIds, setVisiblePlaceIds] = useState<string[]>([]);
+  const [placeListOpen, setPlaceListOpen] = useState(false);
+  const mapRef = useRef<MapViewHandle>(null);
   const searchParams = useSearchParams();
   const router = useRouter();
   const sharedHandled = useRef(false);
@@ -141,9 +147,11 @@ export function MapContent({ mapboxToken }: { mapboxToken: string }) {
 
       <div className="relative flex-1">
         <MapView
+          ref={mapRef}
           places={places}
           categories={categories}
           onPlaceClick={handlePlaceClick}
+          onVisiblePlacesChange={setVisiblePlaceIds}
           mapboxToken={mapboxToken}
           mapStyle={mapStyleUrl}
           className="w-full h-full"
@@ -178,12 +186,48 @@ export function MapContent({ mapboxToken }: { mapboxToken: string }) {
           </div>
         )}
 
-        {/* Place count */}
+        {/* Visible place count + list */}
         {!isLoading && places.length > 0 && !selectedPlace && (
           <div className="absolute top-4 right-16 z-10 lg:right-4">
-            <div className="bg-white/90 dark:bg-gray-900/90 backdrop-blur-sm rounded-full px-3 py-1.5 shadow-md text-sm font-medium text-gray-700 dark:text-gray-300">
-              {places.length} place{places.length !== 1 ? "s" : ""}
-            </div>
+            <button
+              type="button"
+              onClick={() => setPlaceListOpen((prev) => !prev)}
+              className="bg-white/90 dark:bg-gray-900/90 backdrop-blur-sm rounded-full px-3 py-1.5 shadow-md text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer flex items-center gap-1.5 transition-colors duration-200 hover:bg-white dark:hover:bg-gray-900"
+            >
+              {visiblePlaceIds.length} place{visiblePlaceIds.length !== 1 ? "s" : ""}
+              {placeListOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+            </button>
+
+            {placeListOpen && visiblePlaceIds.length > 0 && (
+              <div className="mt-2 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm rounded-xl shadow-xl border max-h-[50dvh] overflow-y-auto w-64">
+                {visiblePlaceIds.map((id) => {
+                  const place = places.find((p) => p.id === id);
+                  if (!place) return null;
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => {
+                        setPlaceListOpen(false);
+                        mapRef.current?.flyToPlace(id);
+                      }}
+                      className="w-full text-left px-3 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition-colors flex items-center gap-2.5 border-b last:border-b-0 border-gray-100 dark:border-gray-800"
+                    >
+                      <span
+                        className="h-5 w-5 rounded-full shrink-0"
+                        style={{ backgroundColor: place.category?.color || "#6B7280" }}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium truncate">{place.name}</p>
+                        {place.address && (
+                          <p className="text-[10px] text-muted-foreground truncate">{place.address}</p>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
 
