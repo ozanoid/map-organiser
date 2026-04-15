@@ -4,7 +4,9 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { usePlaces } from "@/lib/hooks/use-places";
+import { useCategories } from "@/lib/hooks/use-categories";
 import { useDeleteList, useReorderListPlaces } from "@/lib/hooks/use-lists";
+import { useMapStyle } from "@/lib/hooks/use-map-style";
 import { MapView } from "@/components/map/map-view";
 import { PlaceCard } from "@/components/places/place-card";
 import { Button } from "@/components/ui/button";
@@ -76,6 +78,8 @@ export default function ListDetailPage() {
   const [view, setView] = useState<"grid" | "map">("grid");
   const deleteList = useDeleteList();
   const reorder = useReorderListPlaces();
+  const { data: categories = [] } = useCategories();
+  const { mapStyleUrl, markerStyle } = useMapStyle();
 
   const { data: places = [] } = usePlaces({ list_id: params.id as string });
 
@@ -196,7 +200,13 @@ export default function ListDetailPage() {
       {/* Content */}
       {view === "map" ? (
         <div className="flex-1">
-          <MapView places={orderedPlaces} className="w-full h-full" />
+          <MapView
+            places={orderedPlaces}
+            categories={categories}
+            mapStyle={mapStyleUrl}
+            markerStyle={markerStyle}
+            className="w-full h-full"
+          />
         </div>
       ) : (
         <div className="p-4 overflow-y-auto flex-1">
