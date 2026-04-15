@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/server";
 import { parsePostgisPoint } from "@/lib/geo";
 import { getRoute } from "@/lib/trip/directions";
 
@@ -8,7 +8,7 @@ export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ slug: string }> }
 ) {
-  const supabase = await createClient();
+  const supabase = createServiceClient();
   const { slug } = await params;
 
   // Lookup active shared link
