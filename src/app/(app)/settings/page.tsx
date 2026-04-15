@@ -8,13 +8,36 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { Plus, Trash2, Loader2, Tag, FolderOpen, Shield, Paintbrush, Sun, Moon, Monitor, Map } from "lucide-react";
+import {
+  Plus, Trash2, Loader2, Tag, FolderOpen, Shield, Paintbrush, Sun, Moon, Monitor, Map,
+  Utensils, Coffee, Wine, Bed, ShoppingBag, Landmark, Trees, Waves, Dumbbell, HeartPulse, Ticket, MapPin,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import { CATEGORY_DEFAULT_ICONS } from "@/lib/map/category-icons";
 import { toast } from "sonner";
 import { useTheme } from "next-themes";
 import { ApiKeysManager } from "@/components/settings/api-keys-manager";
 import { CostTracker } from "@/components/settings/cost-tracker";
 import { useMapStyle, MAP_STYLE_OPTIONS } from "@/lib/hooks/use-map-style";
 import type { MapStyleKey } from "@/lib/hooks/use-map-style";
+
+/** Map Lucide icon name → React component for display in UI */
+const ICON_COMPONENTS: Record<string, LucideIcon> = {
+  utensils: Utensils,
+  coffee: Coffee,
+  wine: Wine,
+  bed: Bed,
+  "shopping-bag": ShoppingBag,
+  landmark: Landmark,
+  trees: Trees,
+  waves: Waves,
+  dumbbell: Dumbbell,
+  "heart-pulse": HeartPulse,
+  ticket: Ticket,
+  "map-pin": MapPin,
+};
+
+const PRESET_ICONS = Object.keys(ICON_COMPONENTS);
 
 const PRESET_COLORS = [
   "#EF4444", "#F97316", "#F59E0B", "#22C55E", "#06B6D4",
@@ -80,12 +103,13 @@ function CategoryManager() {
   const deleteCategory = useDeleteCategory();
   const [newName, setNewName] = useState("");
   const [newColor, setNewColor] = useState("#059669");
+  const [newIcon, setNewIcon] = useState("map-pin");
 
   function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     if (!newName.trim()) return;
     createCategory.mutate(
-      { name: newName.trim(), color: newColor },
+      { name: newName.trim(), color: newColor, icon: newIcon },
       {
         onSuccess: () => {
           toast.success("Category created");
@@ -113,16 +137,21 @@ function CategoryManager() {
   return (
     <div className="space-y-4">
       {/* Create form */}
-      <form onSubmit={handleCreate} className="flex gap-2 items-end">
-        <div className="flex-1">
-          <Input
-            placeholder="New category name"
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            className="h-9 text-sm"
-          />
+      <form onSubmit={handleCreate} className="space-y-2">
+        <div className="flex gap-2 items-end">
+          <div className="flex-1">
+            <Input
+              placeholder="New category name"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              className="h-9 text-sm"
+            />
+          </div>
+          <Button type="submit" size="sm" className="h-9 cursor-pointer" disabled={!newName.trim() || createCategory.isPending}>
+            {createCategory.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+          </Button>
         </div>
-        <div className="flex gap-1">
+        <div className="flex gap-1 flex-wrap">
           {PRESET_COLORS.slice(0, 6).map((c) => (
             <button
               key={c}
@@ -137,9 +166,27 @@ function CategoryManager() {
             />
           ))}
         </div>
-        <Button type="submit" size="sm" className="h-9 cursor-pointer" disabled={!newName.trim() || createCategory.isPending}>
-          {createCategory.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-        </Button>
+        <div className="flex gap-1 flex-wrap">
+          {PRESET_ICONS.map((iconName) => {
+            const Icon = ICON_COMPONENTS[iconName];
+            if (!Icon) return null;
+            return (
+              <button
+                key={iconName}
+                type="button"
+                onClick={() => setNewIcon(iconName)}
+                className={`h-7 w-7 rounded-md flex items-center justify-center cursor-pointer transition-colors duration-200 ${
+                  newIcon === iconName
+                    ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300"
+                    : "text-muted-foreground hover:bg-gray-100 dark:hover:bg-gray-800"
+                }`}
+                title={iconName}
+              >
+                <Icon className="h-3.5 w-3.5" />
+              </button>
+            );
+          })}
+        </div>
       </form>
 
       <Separator />
@@ -153,9 +200,14 @@ function CategoryManager() {
           >
             <div className="flex items-center gap-3">
               <span
-                className="h-4 w-4 rounded-full shrink-0"
+                className="h-6 w-6 rounded-full shrink-0 flex items-center justify-center"
                 style={{ backgroundColor: cat.color }}
-              />
+              >
+                {(() => {
+                  const Icon = ICON_COMPONENTS[cat.icon] || MapPin;
+                  return <Icon className="h-3 w-3 text-white" />;
+                })()}
+              </span>
               <span className="text-sm">{cat.name}</span>
               {cat.is_default && (
                 <span className="text-[10px] text-muted-foreground bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded">

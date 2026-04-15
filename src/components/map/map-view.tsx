@@ -3,10 +3,12 @@
 import { useRef, useEffect, useState, useCallback } from "react";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
-import type { Place } from "@/lib/types";
+import type { Place, Category } from "@/lib/types";
+import { registerCategoryIcons } from "@/lib/map/category-icons";
 
 interface MapViewProps {
   places: Place[];
+  categories?: Category[];
   onPlaceClick?: (place: Place) => void;
   mapboxToken?: string;
   mapStyle?: string;
@@ -17,7 +19,7 @@ const CATEGORY_COLORS: Record<string, string> = {
   default: "#059669",
 };
 
-export function MapView({ places, onPlaceClick, mapboxToken, mapStyle, className }: MapViewProps) {
+export function MapView({ places, categories = [], onPlaceClick, mapboxToken, mapStyle, className }: MapViewProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
@@ -53,9 +55,19 @@ export function MapView({ places, onPlaceClick, mapboxToken, mapStyle, className
     })),
   }), []);
 
+  // Keep categories ref for icon registration
+  const categoriesRef = useRef(categories);
+  categoriesRef.current = categories;
+
   // Add source + layers to the map
   const setupLayers = useCallback((m: mapboxgl.Map, geojson: GeoJSON.FeatureCollection) => {
     const sourceId = "places";
+
+    // Register category icons before adding layers
+    registerCategoryIcons(
+      m,
+      categoriesRef.current.map((c) => ({ icon: c.icon, color: c.color }))
+    );
 
     if (m.getSource(sourceId)) {
       (m.getSource(sourceId) as mapboxgl.GeoJSONSource).setData(geojson);
@@ -103,33 +115,17 @@ export function MapView({ places, onPlaceClick, mapboxToken, mapStyle, className
       },
     });
 
-    // Individual markers
+    // Individual markers — symbol layer with category icons
     m.addLayer({
       id: "unclustered-point",
-      type: "circle",
+      type: "symbol",
       source: sourceId,
       filter: ["!", ["has", "point_count"]],
-      paint: {
-        "circle-color": ["get", "categoryColor"],
-        "circle-radius": 8,
-        "circle-stroke-width": [
-          "match",
-          ["get", "visitStatus"],
-          "visited", 3,
-          "favorite", 3,
-          "booked", 3,
-          "want_to_go", 2.5,
-          2,
-        ],
-        "circle-stroke-color": [
-          "match",
-          ["get", "visitStatus"],
-          "visited", "#22C55E",
-          "favorite", "#EF4444",
-          "booked", "#3B82F6",
-          "want_to_go", "#F59E0B",
-          "#ffffff",
-        ],
+      layout: {
+        "icon-image": ["concat", "cat-", ["get", "categoryIcon"]],
+        "icon-size": 1,
+        "icon-allow-overlap": true,
+        "icon-anchor": "center",
       },
     });
 

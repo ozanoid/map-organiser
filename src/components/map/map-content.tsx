@@ -11,6 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { usePlaces } from "@/lib/hooks/use-places";
+import { useCategories } from "@/lib/hooks/use-categories";
 import { useFilters } from "@/lib/hooks/use-filters";
 import { useMapStyle } from "@/lib/hooks/use-map-style";
 import { useQueryClient } from "@tanstack/react-query";
@@ -31,6 +32,7 @@ import type { Place, VisitStatus } from "@/lib/types";
 export function MapContent({ mapboxToken }: { mapboxToken: string }) {
   const { filters, hasActiveFilters } = useFilters();
   const { data: places = [], isLoading } = usePlaces(filters);
+  const { data: categories = [] } = useCategories();
   const { mapStyleUrl } = useMapStyle();
   const [addOpen, setAddOpen] = useState(false);
   const [sharedUrl, setSharedUrl] = useState<string | undefined>();
@@ -140,6 +142,7 @@ export function MapContent({ mapboxToken }: { mapboxToken: string }) {
       <div className="relative flex-1">
         <MapView
           places={places}
+          categories={categories}
           onPlaceClick={handlePlaceClick}
           mapboxToken={mapboxToken}
           mapStyle={mapStyleUrl}
