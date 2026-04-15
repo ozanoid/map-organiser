@@ -13,6 +13,7 @@ interface MapViewProps {
   onVisiblePlacesChange?: (visibleIds: string[]) => void;
   mapboxToken?: string;
   mapStyle?: string;
+  markerStyle?: "icons" | "dots";
   className?: string;
 }
 
@@ -25,7 +26,7 @@ const CATEGORY_COLORS: Record<string, string> = {
 };
 
 export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
-  { places, categories = [], onPlaceClick, onVisiblePlacesChange, mapboxToken, mapStyle, className },
+  { places, categories = [], onPlaceClick, onVisiblePlacesChange, mapboxToken, mapStyle, markerStyle = "icons", className },
   ref
 ) {
   const mapContainer = useRef<HTMLDivElement>(null);
@@ -91,6 +92,8 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
   // Keep categories ref for icon registration
   const categoriesRef = useRef(categories);
   categoriesRef.current = categories;
+  const markerStyleRef = useRef(markerStyle);
+  markerStyleRef.current = markerStyle;
 
   // Add source + layers to the map
   const setupLayers = useCallback((m: mapboxgl.Map, geojson: GeoJSON.FeatureCollection) => {
@@ -148,19 +151,50 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
       },
     });
 
-    // Individual markers — symbol layer with category icons
-    m.addLayer({
-      id: "unclustered-point",
-      type: "symbol",
-      source: sourceId,
-      filter: ["!", ["has", "point_count"]],
-      layout: {
-        "icon-image": ["concat", "cat-", ["get", "categoryIcon"]],
-        "icon-size": 1,
-        "icon-allow-overlap": true,
-        "icon-anchor": "center",
-      },
-    });
+    // Individual markers — icon or dot style
+    if (markerStyleRef.current === "icons") {
+      m.addLayer({
+        id: "unclustered-point",
+        type: "symbol",
+        source: sourceId,
+        filter: ["!", ["has", "point_count"]],
+        layout: {
+          "icon-image": ["concat", "cat-", ["get", "categoryIcon"]],
+          "icon-size": 1,
+          "icon-allow-overlap": true,
+          "icon-anchor": "center",
+        },
+      });
+    } else {
+      m.addLayer({
+        id: "unclustered-point",
+        type: "circle",
+        source: sourceId,
+        filter: ["!", ["has", "point_count"]],
+        paint: {
+          "circle-color": ["get", "categoryColor"],
+          "circle-radius": 8,
+          "circle-stroke-width": [
+            "match",
+            ["get", "visitStatus"],
+            "visited", 3,
+            "favorite", 3,
+            "booked", 3,
+            "want_to_go", 2.5,
+            2,
+          ],
+          "circle-stroke-color": [
+            "match",
+            ["get", "visitStatus"],
+            "visited", "#22C55E",
+            "favorite", "#EF4444",
+            "booked", "#3B82F6",
+            "want_to_go", "#F59E0B",
+            "#ffffff",
+          ],
+        },
+      });
+    }
 
     // Click on cluster → zoom in
     m.on("click", "clusters", (e) => {
@@ -293,6 +327,56 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
       });
     }
   }, [defaultStyle, mapLoaded, buildGeoJSON, setupLayers]);
+
+  // Handle marker style change (dots ↔ icons)
+  useEffect(() => {
+    if (!map.current || !mapLoaded || !layersAdded.current) return;
+    const m = map.current;
+    // Remove and re-add the unclustered-point layer with new style
+    if (m.getLayer("unclustered-point")) {
+      m.removeLayer("unclustered-point");
+    }
+    // Register icons if switching to icon mode
+    if (markerStyle === "icons") {
+      registerCategoryIcons(
+        m,
+        categoriesRef.current.map((c) => ({ icon: c.icon, color: c.color }))
+      );
+      m.addLayer({
+        id: "unclustered-point",
+        type: "symbol",
+        source: "places",
+        filter: ["!", ["has", "point_count"]],
+        layout: {
+          "icon-image": ["concat", "cat-", ["get", "categoryIcon"]],
+          "icon-size": 1,
+          "icon-allow-overlap": true,
+          "icon-anchor": "center",
+        },
+      });
+    } else {
+      m.addLayer({
+        id: "unclustered-point",
+        type: "circle",
+        source: "places",
+        filter: ["!", ["has", "point_count"]],
+        paint: {
+          "circle-color": ["get", "categoryColor"],
+          "circle-radius": 8,
+          "circle-stroke-width": [
+            "match",
+            ["get", "visitStatus"],
+            "visited", 3, "favorite", 3, "booked", 3, "want_to_go", 2.5, 2,
+          ],
+          "circle-stroke-color": [
+            "match",
+            ["get", "visitStatus"],
+            "visited", "#22C55E", "favorite", "#EF4444", "booked", "#3B82F6", "want_to_go", "#F59E0B", "#ffffff",
+          ],
+        },
+      });
+    }
+  }, [markerStyle, mapLoaded]);
 
   // Update markers when places change
   useEffect(() => {

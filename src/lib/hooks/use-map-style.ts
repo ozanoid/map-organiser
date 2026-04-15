@@ -12,6 +12,9 @@ const MAP_STYLES: Record<string, string> = {
 };
 
 const STORAGE_KEY = "map-style";
+const MARKER_STYLE_KEY = "marker-style";
+
+export type MarkerStyle = "icons" | "dots";
 
 export type MapStyleKey = "auto" | keyof typeof MAP_STYLES;
 
@@ -27,12 +30,17 @@ export const MAP_STYLE_OPTIONS = [
 export function useMapStyle() {
   const { resolvedTheme } = useTheme();
   const [mapStyle, setMapStyleState] = useState<MapStyleKey>("auto");
+  const [markerStyle, setMarkerStyleState] = useState<MarkerStyle>("icons");
 
   // Read from localStorage on mount
   useEffect(() => {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored && (stored === "auto" || stored in MAP_STYLES)) {
       setMapStyleState(stored as MapStyleKey);
+    }
+    const storedMarker = localStorage.getItem(MARKER_STYLE_KEY);
+    if (storedMarker === "icons" || storedMarker === "dots") {
+      setMarkerStyleState(storedMarker);
     }
   }, []);
 
@@ -41,11 +49,16 @@ export function useMapStyle() {
     localStorage.setItem(STORAGE_KEY, style);
   }, []);
 
+  const setMarkerStyle = useCallback((style: MarkerStyle) => {
+    setMarkerStyleState(style);
+    localStorage.setItem(MARKER_STYLE_KEY, style);
+  }, []);
+
   // Resolve the actual Mapbox style URL
   const mapStyleUrl =
     mapStyle === "auto"
       ? MAP_STYLES[resolvedTheme === "dark" ? "dark-v11" : "light-v11"]
       : MAP_STYLES[mapStyle] || MAP_STYLES["light-v11"];
 
-  return { mapStyle, setMapStyle, mapStyleUrl };
+  return { mapStyle, setMapStyle, mapStyleUrl, markerStyle, setMarkerStyle };
 }

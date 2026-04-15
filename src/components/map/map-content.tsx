@@ -36,7 +36,7 @@ export function MapContent({ mapboxToken }: { mapboxToken: string }) {
   const { filters, hasActiveFilters } = useFilters();
   const { data: places = [], isLoading } = usePlaces(filters);
   const { data: categories = [] } = useCategories();
-  const { mapStyleUrl } = useMapStyle();
+  const { mapStyleUrl, markerStyle } = useMapStyle();
   const [addOpen, setAddOpen] = useState(false);
   const [sharedUrl, setSharedUrl] = useState<string | undefined>();
   const [filterOpen, setFilterOpen] = useState(false);
@@ -154,6 +154,7 @@ export function MapContent({ mapboxToken }: { mapboxToken: string }) {
           onVisiblePlacesChange={setVisiblePlaceIds}
           mapboxToken={mapboxToken}
           mapStyle={mapStyleUrl}
+          markerStyle={markerStyle}
           className="w-full h-full"
         />
 

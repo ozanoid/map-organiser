@@ -19,7 +19,7 @@ import { useTheme } from "next-themes";
 import { ApiKeysManager } from "@/components/settings/api-keys-manager";
 import { CostTracker } from "@/components/settings/cost-tracker";
 import { useMapStyle, MAP_STYLE_OPTIONS } from "@/lib/hooks/use-map-style";
-import type { MapStyleKey } from "@/lib/hooks/use-map-style";
+import type { MapStyleKey, MarkerStyle } from "@/lib/hooks/use-map-style";
 
 /** Map Lucide icon name → React component for display in UI */
 const ICON_COMPONENTS: Record<string, LucideIcon> = {
@@ -314,7 +314,7 @@ const THEME_OPTIONS = [
 
 function AppearanceSettings() {
   const { theme, setTheme } = useTheme();
-  const { mapStyle, setMapStyle } = useMapStyle();
+  const { mapStyle, setMapStyle, markerStyle, setMarkerStyle } = useMapStyle();
   const [mounted, setMounted] = useState(false);
 
   useState(() => { setMounted(true); });
@@ -365,6 +365,39 @@ function AppearanceSettings() {
                 key={opt.value}
                 type="button"
                 onClick={() => setMapStyle(opt.value as MapStyleKey)}
+                className={`flex flex-col items-start p-3 rounded-lg border cursor-pointer transition-colors duration-200 ${
+                  active
+                    ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300"
+                    : "border-input hover:border-gray-300 dark:hover:border-gray-600"
+                }`}
+              >
+                <span className="text-sm font-medium">{opt.label}</span>
+                <span className="text-[10px] text-muted-foreground mt-0.5">{opt.description}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <Separator />
+
+      {/* Marker Style */}
+      <div>
+        <label className="text-sm font-medium mb-3 block">
+          <MapPin className="h-4 w-4 inline mr-1.5 -mt-0.5" />
+          Marker Style
+        </label>
+        <div className="grid grid-cols-2 gap-2">
+          {([
+            { value: "dots" as const, label: "Simple dots", description: "Clean colored circles" },
+            { value: "icons" as const, label: "Category icons", description: "Icons inside markers" },
+          ]).map((opt) => {
+            const active = markerStyle === opt.value;
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setMarkerStyle(opt.value)}
                 className={`flex flex-col items-start p-3 rounded-lg border cursor-pointer transition-colors duration-200 ${
                   active
                     ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300"
