@@ -59,6 +59,8 @@ export function BulkActionBar({
       toast.success(`${label} - ${result.affected} place${result.affected === 1 ? "" : "s"} updated`);
       queryClient.invalidateQueries({ queryKey: ["places"] });
       queryClient.invalidateQueries({ queryKey: ["lists"] });
+      queryClient.invalidateQueries({ queryKey: ["trips"] });
+      queryClient.invalidateQueries({ queryKey: ["trip"] });
       onComplete();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Action failed");
@@ -69,8 +71,17 @@ export function BulkActionBar({
   }
 
   async function handleDelete() {
+    // Check trip references first
+    let tripWarning = "";
+    try {
+      const checkRes = await bulkAction({ action: "check_trips", place_ids: ids });
+      if (checkRes.tripNames?.length > 0) {
+        tripWarning = `\n\n${checkRes.placesInTrips} of these place${checkRes.placesInTrips === 1 ? " is" : "s are"} in trip${checkRes.tripNames.length === 1 ? "" : "s"}: ${checkRes.tripNames.join(", ")}. They will be removed from those trips too.`;
+      }
+    } catch {}
+
     const confirmed = confirm(
-      `Delete ${count} place${count === 1 ? "" : "s"}? This cannot be undone.`
+      `Delete ${count} place${count === 1 ? "" : "s"}? This cannot be undone.${tripWarning}`
     );
     if (!confirmed) return;
     await runAction("Deleted", { action: "delete" });
