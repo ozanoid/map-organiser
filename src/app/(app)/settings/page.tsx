@@ -33,7 +33,7 @@ export default function SettingsPage() {
       </div>
 
       <Tabs defaultValue="categories">
-        <TabsList className="w-auto max-w-full overflow-x-auto">
+        <TabsList>
           <TabsTrigger value="categories" className="cursor-pointer shrink-0">
             <FolderOpen className="h-4 w-4 mr-1.5" />
             <span className="hidden sm:inline">Categories</span>
