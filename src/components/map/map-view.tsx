@@ -55,20 +55,15 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
     },
   }), []);
 
-  // Query visible (unclustered) places in the current viewport
+  // Emit all places within the current map viewport bounds
   const emitVisiblePlaces = useCallback(() => {
-    if (!map.current || !layersAdded.current) return;
-    try {
-      const canvas = map.current.getCanvas();
-      const features = map.current.queryRenderedFeatures(
-        [[0, 0], [canvas.width, canvas.height]],
-        { layers: ["unclustered-point"] }
-      );
-      const ids = [...new Set(features.map((f) => f.properties?.id as string).filter(Boolean))];
-      onVisiblePlacesChangeRef.current?.(ids);
-    } catch {
-      // Layer may not exist yet
-    }
+    if (!map.current) return;
+    const bounds = map.current.getBounds();
+    if (!bounds) return;
+    const ids = placesRef.current
+      .filter((p) => bounds.contains([p.location.lng, p.location.lat]))
+      .map((p) => p.id);
+    onVisiblePlacesChangeRef.current?.(ids);
   }, []);
 
   // Build GeoJSON from places
