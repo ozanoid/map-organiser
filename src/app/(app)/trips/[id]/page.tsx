@@ -5,13 +5,14 @@ import { useParams, useRouter } from "next/navigation";
 import { useTrip, useAutoPlan, useReorderTripDayPlaces } from "@/lib/hooks/use-trips";
 import { useCategories } from "@/lib/hooks/use-categories";
 import { useMapStyle } from "@/lib/hooks/use-map-style";
+import { useCreateSharedLink } from "@/lib/hooks/use-shared-links";
 import { MapView } from "@/components/map/map-view";
 import type { MapViewHandle } from "@/components/map/map-view";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import {
-  ArrowLeft, Wand2, Map, LayoutList, Calendar, MapPin, GripVertical, Loader2,
+  ArrowLeft, Wand2, Map, LayoutList, Calendar, MapPin, GripVertical, Loader2, Share2,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { Place, TripDay, TripDayPlace } from "@/lib/types";
@@ -173,6 +174,7 @@ export default function TripDetailPage() {
   const { data: categories = [] } = useCategories();
   const { mapStyleUrl, markerStyle } = useMapStyle();
   const autoPlan = useAutoPlan();
+  const createSharedLink = useCreateSharedLink();
   const mapRef = useRef<MapViewHandle>(null);
   const [view, setView] = useState<"timeline" | "map">("timeline");
   const [selectedDayIndex, setSelectedDayIndex] = useState<number | null>(null);
@@ -204,6 +206,20 @@ export default function TripDetailPage() {
         coordinates: day.route!.geometry.coordinates,
       }));
   }, [trip?.days, selectedDayIndex]);
+
+  function handleShare() {
+    createSharedLink.mutate(
+      { resource_type: "trip", resource_id: tripId },
+      {
+        onSuccess: (link) => {
+          const url = `${window.location.origin}/shared/${link.slug}`;
+          navigator.clipboard.writeText(url);
+          toast.success("Link copied to clipboard!");
+        },
+        onError: (err) => toast.error(err.message),
+      }
+    );
+  }
 
   function handleAutoPlan() {
     autoPlan.mutate(tripId, {
@@ -248,6 +264,20 @@ export default function TripDetailPage() {
           </div>
         </div>
         <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 cursor-pointer"
+            onClick={handleShare}
+            disabled={createSharedLink.isPending}
+            title="Share trip"
+          >
+            {createSharedLink.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Share2 className="h-4 w-4" />
+            )}
+          </Button>
           {totalPlaces > 0 && (
             <Button
               variant="outline"

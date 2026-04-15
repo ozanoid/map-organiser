@@ -7,11 +7,12 @@ import { usePlaces } from "@/lib/hooks/use-places";
 import { useCategories } from "@/lib/hooks/use-categories";
 import { useDeleteList, useReorderListPlaces } from "@/lib/hooks/use-lists";
 import { useMapStyle } from "@/lib/hooks/use-map-style";
+import { useCreateSharedLink, useToggleSharedLink } from "@/lib/hooks/use-shared-links";
 import { MapView } from "@/components/map/map-view";
 import { PlaceCard } from "@/components/places/place-card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, Trash2, Map, LayoutGrid, GripVertical } from "lucide-react";
+import { ArrowLeft, Trash2, Map, LayoutGrid, GripVertical, Share2, Link2, Loader2 as ShareLoader } from "lucide-react";
 import { toast } from "sonner";
 import type { PlaceList, Place } from "@/lib/types";
 import {
@@ -80,6 +81,9 @@ export default function ListDetailPage() {
   const reorder = useReorderListPlaces();
   const { data: categories = [] } = useCategories();
   const { mapStyleUrl, markerStyle } = useMapStyle();
+  const createSharedLink = useCreateSharedLink();
+  const toggleSharedLink = useToggleSharedLink();
+  const [sharedLink, setSharedLink] = useState<{ id: string; slug: string; is_active: boolean } | null>(null);
 
   const { data: places = [] } = usePlaces({ list_id: params.id as string });
 
@@ -128,6 +132,21 @@ export default function ListDetailPage() {
       });
   }, [params.id, supabase]);
 
+  async function handleShare() {
+    createSharedLink.mutate(
+      { resource_type: "list", resource_id: params.id as string },
+      {
+        onSuccess: (link) => {
+          setSharedLink(link);
+          const url = `${window.location.origin}/shared/${link.slug}`;
+          navigator.clipboard.writeText(url);
+          toast.success("Link copied to clipboard!");
+        },
+        onError: (err) => toast.error(err.message),
+      }
+    );
+  }
+
   function handleDelete() {
     if (!confirm("Delete this list? Places won't be deleted.")) return;
     deleteList.mutate(params.id as string, {
@@ -170,6 +189,20 @@ export default function ListDetailPage() {
           </span>
         </div>
         <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 cursor-pointer"
+            onClick={handleShare}
+            disabled={createSharedLink.isPending}
+            title="Share list"
+          >
+            {createSharedLink.isPending ? (
+              <ShareLoader className="h-4 w-4 animate-spin" />
+            ) : (
+              <Share2 className="h-4 w-4" />
+            )}
+          </Button>
           <Button
             variant={view === "grid" ? "secondary" : "ghost"}
             size="icon"
