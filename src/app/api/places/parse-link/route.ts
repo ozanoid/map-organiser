@@ -55,13 +55,13 @@ export async function POST(request: NextRequest) {
   try {
     const startTime = Date.now();
     const parsed = await parseMapsUrl(url);
-    const { googleApiKey } = await getUserApiKeys(user.id);
+    const { googleApiKey, googlePlacesEnabled } = await getUserApiKeys(user.id);
 
     console.log("[parse-link] Parsed URL:", JSON.stringify(parsed));
+    console.log("[parse-link] Google key:", !!googleApiKey, "| enabled:", googlePlacesEnabled);
 
-    // ─── Google key exists: use Google only (fast preview) ───
-    // DataForSEO enrichment will run after save via enrichPlaceInBackground
-    if (googleApiKey) {
+    // ─── Google key exists AND enabled: use Google for fast preview ───
+    if (googleApiKey && googlePlacesEnabled) {
       let placeData = null;
 
       switch (parsed.type) {

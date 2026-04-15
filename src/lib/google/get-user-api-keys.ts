@@ -42,6 +42,7 @@ export interface UserApiKeys {
   googleApiKey: string;
   mapboxToken: string;
   isAdmin: boolean;
+  googlePlacesEnabled: boolean;
 }
 
 export async function getUserApiKeys(userId: string): Promise<UserApiKeys> {
@@ -49,11 +50,13 @@ export async function getUserApiKeys(userId: string): Promise<UserApiKeys> {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("is_admin, google_api_key_enc, mapbox_token_enc")
+    .select("is_admin, google_api_key_enc, mapbox_token_enc, google_places_enabled")
     .eq("id", userId)
     .single();
 
   const isAdmin = profile?.is_admin || false;
+
+  const googlePlacesEnabled = profile?.google_places_enabled ?? true;
 
   // Admin or no profile -> env vars
   if (isAdmin || !profile) {
@@ -61,6 +64,7 @@ export async function getUserApiKeys(userId: string): Promise<UserApiKeys> {
       googleApiKey: process.env.GOOGLE_PLACES_API_KEY || "",
       mapboxToken: process.env.NEXT_PUBLIC_MAPBOX_TOKEN || "",
       isAdmin,
+      googlePlacesEnabled,
     };
   }
 
@@ -72,7 +76,7 @@ export async function getUserApiKeys(userId: string): Promise<UserApiKeys> {
     ? decryptApiKey(profile.mapbox_token_enc)
     : "";
 
-  return { googleApiKey, mapboxToken, isAdmin };
+  return { googleApiKey, mapboxToken, isAdmin, googlePlacesEnabled };
 }
 
 // Mask a key for display: "AIzaSyBk...MEuI"
