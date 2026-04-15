@@ -55,6 +55,52 @@ export interface PlaceList {
   place_count?: number;
 }
 
+export interface Trip {
+  id: string;
+  user_id: string;
+  list_id: string | null;
+  name: string;
+  start_date: string;
+  end_date: string;
+  color: string;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  // Joined
+  days?: TripDay[];
+  day_count?: number;
+  place_count?: number;
+}
+
+export interface TripDay {
+  id: string;
+  trip_id: string;
+  day_number: number;
+  date: string;
+  notes: string | null;
+  created_at: string;
+  // Joined
+  places?: TripDayPlace[];
+  route?: {
+    distance_km: number;
+    duration_min: number;
+    geometry: { type: "LineString"; coordinates: [number, number][] };
+    legs?: Array<{ distance_km: number; duration_min: number }>;
+  };
+}
+
+export interface TripDayPlace {
+  id: string;
+  trip_day_id: string;
+  place_id: string;
+  sort_order: number;
+  time_slot: string | null;
+  notes: string | null;
+  created_at: string;
+  // Joined
+  place?: Place;
+}
+
 export interface PlacePhoto {
   id: string;
   place_id: string;

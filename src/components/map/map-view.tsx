@@ -6,6 +6,12 @@ import "mapbox-gl/dist/mapbox-gl.css";
 import type { Place, Category } from "@/lib/types";
 import { registerCategoryIcons } from "@/lib/map/category-icons";
 
+export interface RouteLine {
+  id: string;
+  color: string;
+  coordinates: [number, number][];
+}
+
 interface MapViewProps {
   places: Place[];
   categories?: Category[];
@@ -14,6 +20,7 @@ interface MapViewProps {
   mapboxToken?: string;
   mapStyle?: string;
   markerStyle?: "icons" | "dots";
+  routeLines?: RouteLine[];
   className?: string;
 }
 
@@ -26,7 +33,7 @@ const CATEGORY_COLORS: Record<string, string> = {
 };
 
 export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
-  { places, categories = [], onPlaceClick, onVisiblePlacesChange, mapboxToken, mapStyle, markerStyle = "icons", className },
+  { places, categories = [], onPlaceClick, onVisiblePlacesChange, mapboxToken, mapStyle, markerStyle = "icons", routeLines, className },
   ref
 ) {
   const mapContainer = useRef<HTMLDivElement>(null);
@@ -408,6 +415,52 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
       map.current.fitBounds(bounds, { padding: 60, maxZoom: 15 });
     }
   }, [places, mapLoaded]);
+
+  // Draw route lines (trip polylines)
+  useEffect(() => {
+    if (!map.current || !mapLoaded) return;
+    const m = map.current;
+
+    // Remove old route layers/sources
+    m.getStyle()?.layers?.forEach((layer) => {
+      if (layer.id.startsWith("route-")) {
+        m.removeLayer(layer.id);
+      }
+    });
+    Object.keys(m.getStyle()?.sources || {}).forEach((srcId) => {
+      if (srcId.startsWith("route-")) {
+        m.removeSource(srcId);
+      }
+    });
+
+    // Add new route lines (before marker layers so lines are behind markers)
+    if (routeLines && routeLines.length > 0) {
+      for (const line of routeLines) {
+        m.addSource(line.id, {
+          type: "geojson",
+          data: {
+            type: "Feature",
+            geometry: { type: "LineString", coordinates: line.coordinates },
+            properties: {},
+          },
+        });
+        m.addLayer(
+          {
+            id: line.id,
+            type: "line",
+            source: line.id,
+            layout: { "line-join": "round", "line-cap": "round" },
+            paint: {
+              "line-color": line.color,
+              "line-width": 4,
+              "line-opacity": 0.8,
+            },
+          },
+          "clusters" // insert before clusters layer so lines are behind markers
+        );
+      }
+    }
+  }, [routeLines, mapLoaded]);
 
   return (
     <div
