@@ -233,7 +233,7 @@ function PlacesContent() {
         <FilterPanel />
       </aside>
 
-      <div className="flex-1 p-4 lg:p-6 space-y-4">
+      <div className="flex-1 min-w-0 p-4 lg:p-6 space-y-4 overflow-x-hidden">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -266,34 +266,6 @@ function PlacesContent() {
           )}
         </div>
         <div className="flex items-center gap-2">
-          {/* Sort */}
-          <div className="relative">
-            <ArrowUpDown className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-            <select
-              value={filters.sort || "newest"}
-              onChange={(e) =>
-                setFilters({ sort: e.target.value === "newest" ? undefined : e.target.value })
-              }
-              className="h-9 pl-8 pr-7 text-sm border border-input rounded-md bg-background cursor-pointer appearance-none focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1 transition-colors duration-200"
-              aria-label="Sort places"
-            >
-              {SORT_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-            <svg
-              className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={2}
-            >
-              <path d="m6 9 6 6 6-6" />
-            </svg>
-          </div>
-
           <Button
             variant="outline"
             size="sm"
@@ -317,12 +289,40 @@ function PlacesContent() {
         </div>
       </div>
 
-      {/* Search */}
-      <div className="max-w-sm">
-        <DebouncedSearchInput
-          value={filters.search}
-          onSearch={(search) => setFilters({ search })}
-        />
+      {/* Search + Sort */}
+      <div className="flex items-center gap-2">
+        <div className="flex-1 max-w-sm">
+          <DebouncedSearchInput
+            value={filters.search}
+            onSearch={(search) => setFilters({ search })}
+          />
+        </div>
+        <div className="relative shrink-0">
+          <ArrowUpDown className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+          <select
+            value={filters.sort || "newest"}
+            onChange={(e) =>
+              setFilters({ sort: e.target.value === "newest" ? undefined : e.target.value })
+            }
+            className="h-9 pl-8 pr-7 text-sm border border-input rounded-md bg-background cursor-pointer appearance-none focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1 transition-colors duration-200"
+            aria-label="Sort places"
+          >
+            {SORT_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+          <svg
+            className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
+            <path d="m6 9 6 6 6-6" />
+          </svg>
+        </div>
       </div>
 
       {/* Place grid */}
