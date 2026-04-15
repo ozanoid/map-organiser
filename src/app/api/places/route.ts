@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { resolveCategoryId } from "@/lib/google/category-mapping";
 import { downloadAndStorePhotoFromUrl } from "@/lib/dataforseo/photo";
+import { parsePostgisPoint } from "@/lib/geo";
 
 // GET /api/places - List all places for current user with filters
 export async function GET(request: NextRequest) {
@@ -244,48 +245,4 @@ export async function POST(request: NextRequest) {
     ...place,
     location: { lat, lng },
   });
-}
-
-/**
- * Parse PostGIS geography point to {lat, lng}.
- * Supabase REST API returns geography as hex EWKB string.
- */
-function parseEWKB(hex: string): { lat: number; lng: number } | null {
-  try {
-    const buf = Buffer.from(hex, "hex");
-    const le = buf[0] === 1;
-    const lng = le ? buf.readDoubleLE(9) : buf.readDoubleBE(9);
-    const lat = le ? buf.readDoubleLE(17) : buf.readDoubleBE(17);
-    if (isFinite(lat) && isFinite(lng)) return { lat, lng };
-  } catch {}
-  return null;
-}
-
-function parsePostgisPoint(location: unknown): { lat: number; lng: number } {
-  if (typeof location === "string") {
-    if (/^[0-9a-fA-F]+$/.test(location) && location.length > 20) {
-      const parsed = parseEWKB(location);
-      if (parsed) return parsed;
-    }
-    const match = location.match(/POINT\((-?\d+\.?\d*)\s+(-?\d+\.?\d*)\)/);
-    if (match) {
-      return { lng: parseFloat(match[1]), lat: parseFloat(match[2]) };
-    }
-    try {
-      const geo = JSON.parse(location);
-      if (geo.coordinates) return { lng: geo.coordinates[0], lat: geo.coordinates[1] };
-    } catch {}
-  }
-
-  if (typeof location === "object" && location !== null) {
-    const loc = location as Record<string, unknown>;
-    if ("lat" in loc && "lng" in loc) {
-      return { lat: Number(loc.lat), lng: Number(loc.lng) };
-    }
-    if ("coordinates" in loc && Array.isArray(loc.coordinates)) {
-      return { lng: loc.coordinates[0], lat: loc.coordinates[1] };
-    }
-  }
-
-  return { lat: 0, lng: 0 };
 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { autoPlanTrip } from "@/lib/trip/auto-plan";
+import { parsePostgisPoint } from "@/lib/geo";
 
 // POST /api/trips/[id]/auto-plan — auto-distribute places across days
 export async function POST(
@@ -78,15 +79,4 @@ export async function POST(
   }
 
   return NextResponse.json({ success: true, planned: planned.map((p) => ({ dayNumber: p.dayNumber, placeCount: p.places.length })) });
-}
-
-function parsePostgisPoint(point: any): { lat: number; lng: number } {
-  if (typeof point === "object" && point.coordinates) {
-    return { lng: point.coordinates[0], lat: point.coordinates[1] };
-  }
-  if (typeof point === "string") {
-    const match = point.match(/POINT\(([^ ]+) ([^)]+)\)/);
-    if (match) return { lng: parseFloat(match[1]), lat: parseFloat(match[2]) };
-  }
-  return { lat: 0, lng: 0 };
 }

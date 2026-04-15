@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getRoute } from "@/lib/trip/directions";
+import { parsePostgisPoint } from "@/lib/geo";
 
 // GET /api/trips/[id] — trip detail with days, places, and route data
 export async function GET(
@@ -113,16 +114,4 @@ export async function DELETE(
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ success: true });
-}
-
-// Helper: parse PostGIS geography point
-function parsePostgisPoint(point: any): { lat: number; lng: number } {
-  if (typeof point === "object" && point.coordinates) {
-    return { lng: point.coordinates[0], lat: point.coordinates[1] };
-  }
-  if (typeof point === "string") {
-    const match = point.match(/POINT\(([^ ]+) ([^)]+)\)/);
-    if (match) return { lng: parseFloat(match[1]), lat: parseFloat(match[2]) };
-  }
-  return { lat: 0, lng: 0 };
 }
