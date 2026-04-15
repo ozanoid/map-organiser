@@ -1487,9 +1487,141 @@ AI-10 (Vision) ← bağımsız
 
 > **Sonuç:** Bu doküman 28 benzersiz feature önerisini (18 non-AI + 10 AI) kapsamaktadır.
 > Her feature bağımsız implement edilebilir, ancak bağımlılık grafiği optimal sıralamayı gösterir.
-> Sprint 1'deki 4 feature (Sıralama + Export + NL Filtre + Review Özeti) toplam ~10 günde
-> tamamlanabilir ve uygulamanın algılanan değerini dramatik artırır.
->
-> Uzun vadeli vizyon: **Organize → Discover → Plan → Share** döngüsünü tamamlayarak
-> Map Organiser'ı "Google Maps saved places replacement"tan "kişisel mekan deneyimi platformu"na
-> dönüştürmek.
+
+---
+
+# PART 5 — IMPLEMENTED FEATURES LOG
+
+> **Son güncelleme:** 2026-04-16
+> **Branch:** feat/dataforseo-provider
+
+## Tamamlanan Feature'lar
+
+### DataForSEO Entegrasyonu (Pre-F serisi)
+| Commit | Açıklama |
+|--------|----------|
+| `5db6f1c` | DataForSEO Business Data API eklendi |
+| `8f7db35` | Pure DataForSEO'ya geçiş (provider abstraction kaldırıldı) |
+| `b84f84b` | Auto-enrich reviews on save + extended data |
+| `da1f432` | Enrichment ayrı /enrich endpoint'e taşındı |
+| `f3c22ce` | Google Places API toggle in settings |
+
+**Mimari:** Dual-path (Google fallback + DataForSEO primary). 9 modül: client, api-types, business-info, reviews, transform, category-adapter, opening-hours-adapter, price-level-adapter, photo.
+
+---
+
+### F-02: Mekan Sıralama ✅
+| Commit | Açıklama |
+|--------|----------|
+| `a2f9a2d` | 6 sort seçeneği, URL persistence |
+| `40f82f9` | Sort select mobil horizontal scroll fix |
+
+**Kapsam:** PlaceFilters.sort, API dinamik order(), FilterPanel/FilterSheet/header'da sort dropdown. Default: newest.
+
+---
+
+### F-06: Dark Mode & Tema Sistemi ✅
+| Commit | Açıklama |
+|--------|----------|
+| `d8b9385` | ThemeProvider, toggle, map style selector, 14 component dark audit |
+| `f1b97b3` | Filter pills dark variants |
+
+**Kapsam:** next-themes (system/light/dark), 6 harita stili (auto + 5 manual), Settings > Appearance tab, Mapbox popup dark CSS, globals.css oklch variables.
+
+---
+
+### F-07: Custom Map Markers ✅
+| Commit | Açıklama |
+|--------|----------|
+| `df0b442` | Canvas hybrid markers (12 Lucide ikon) |
+| `2ebf161` | Marker style preference (dots vs icons) |
+| `eb6fde3` | Cluster text fade fix (fadeDuration: 0) |
+
+**Kapsam:** category-icons.ts (SVG paths + canvas render), circle→symbol layer migration, Settings'te ikon seçici, marker style toggle.
+
+---
+
+### F-09: Drag & Drop Liste Sıralama ✅
+| Commit | Açıklama |
+|--------|----------|
+| `28e5cf3` | @dnd-kit sortable, sort_order kolonu, reorder API |
+
+**Kapsam:** list_places.sort_order, PATCH /api/lists/[id]/reorder, GripVertical handle, numaralı liste, touch sensor (200ms delay).
+
+---
+
+### F-10: Trip Planner ✅
+| Commit | Açıklama |
+|--------|----------|
+| `8248510` | Trip entity, auto-plan, timeline UI, route visualization |
+| `82b9e14` | Shared PostGIS parser (lib/geo.ts) — koordinat fix |
+| `126dca6` | Complete trip management (remove/add/move places, swap days) |
+
+**Kapsam:** 3 DB tablosu (trips, trip_days, trip_day_places), k-means clustering + nearest-neighbor, Mapbox Directions API (walking routes), day-colored polylines, DnD reorder, "Move to Day X", gün sırası ↑↓ okları, "+ Add place" dialog, Lists > My Trips tab.
+
+---
+
+### F-11a: Public Sharing Links ✅
+| Commit | Açıklama |
+|--------|----------|
+| `34db641` | Sharing system (create, get, save-to-account) |
+| `b5774ad` | /api/shared/ public route fix |
+| `9dcf75e` | Service role client for RLS bypass |
+| `4ccfb89` | Logout'ta Save butonu gizleme |
+
+**Kapsam:** shared_links tablosu (slug, is_active, view_count), nanoid slug, /shared/[slug] public sayfa, service role client, liste + trip paylaşımı, "Save to my lists/trips" (login'li), "Create your free account" CTA (logout).
+
+---
+
+### F-14: İstatistik Dashboard ✅
+| Commit | Açıklama |
+|--------|----------|
+| `d9f2550` | Recharts dashboard (6 widget, parallel queries) |
+
+**Kapsam:** /stats sayfası, Hero stats (4), visit progress bar, category donut, top cities bar, monthly trend area, rating distribution bar. Sidebar + mobile nav'da "Stats" linki. 5dk stale time.
+
+---
+
+### Batch Import Rewrite ✅
+| Commit | Açıklama |
+|--------|----------|
+| `6d68139` | Client-driven batch import (Zustand + parse/batch endpoints) |
+
+**Kapsam:** /import-parse (file→list), /import-batch (3 mekan enrich+insert), Zustand import store (phase machine, cancel, state persist), import options (visit status + list + tag), background review enrichment (batch=5, depth=50).
+
+---
+
+### Viewport Place Count + List ✅
+| Commit | Açıklama |
+|--------|----------|
+| `0f5c7fe` | Clickable place count badge + dropdown list |
+| `086efdf` | Bounds-based counting (cluster dahil) |
+
+---
+
+### Diğer İyileştirmeler
+| Commit | Açıklama |
+|--------|----------|
+| `55a4e1e` | fitBounds sadece ilk yüklemede (filtre değişiminde kamera sabit) |
+| `d7134da` | Bulk delete trip warning + cache invalidation |
+| `194f638` | Place delete trip cache invalidation |
+
+---
+
+## Henüz Tamamlanmamış Feature'lar
+
+| ID | Feature | Durum | Not |
+|----|---------|-------|-----|
+| F-01 | Manuel Mekan Ekleme | Backlog | Drop pin / address search |
+| F-03 | Kayıtlı Filtreler | Backlog | Power user feature |
+| F-04 | Mekan Karşılaştırma | Backlog | Side-by-side |
+| F-05 | Quick Add (Voice) | Backlog | Native app ile daha güçlü |
+| F-08 | Nearby + Proximity | Backlog | PostGIS ST_DWithin |
+| F-11b | Collaborative Lists | **Rafa kaldırıldı** | RLS karmaşıklığı çok yüksek |
+| F-12 | Export | Backlog | CSV/JSON/GeoJSON/KML |
+| F-13 | Duplikat Tespiti | Backlog | pg_trgm |
+| F-15 | Zengin Notlar | Backlog | Tiptap + kullanıcı fotoğraf |
+| F-16 | Aktivite Logu | Backlog | |
+| F-17 | Bildirimler | Backlog | Push + in-app |
+| F-18 | i18n | Backlog | TR + EN |
+| AI-01 → AI-10 | Tüm AI feature'lar | Backlog | Claude API entegrasyonu gerekli |
