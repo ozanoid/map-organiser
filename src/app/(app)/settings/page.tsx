@@ -33,22 +33,25 @@ export default function SettingsPage() {
       </div>
 
       <Tabs defaultValue="categories">
-        <TabsList className="w-full overflow-x-auto">
-          <TabsTrigger value="categories" className="cursor-pointer">
+        <TabsList className="w-auto max-w-full overflow-x-auto">
+          <TabsTrigger value="categories" className="cursor-pointer shrink-0">
             <FolderOpen className="h-4 w-4 mr-1.5" />
-            Categories
+            <span className="hidden sm:inline">Categories</span>
+            <span className="sm:hidden">Cats</span>
           </TabsTrigger>
-          <TabsTrigger value="tags" className="cursor-pointer">
+          <TabsTrigger value="tags" className="cursor-pointer shrink-0">
             <Tag className="h-4 w-4 mr-1.5" />
             Tags
           </TabsTrigger>
-          <TabsTrigger value="api" className="cursor-pointer">
+          <TabsTrigger value="api" className="cursor-pointer shrink-0">
             <Shield className="h-4 w-4 mr-1.5" />
-            API & Usage
+            <span className="hidden sm:inline">API & Usage</span>
+            <span className="sm:hidden">API</span>
           </TabsTrigger>
-          <TabsTrigger value="appearance" className="cursor-pointer">
+          <TabsTrigger value="appearance" className="cursor-pointer shrink-0">
             <Paintbrush className="h-4 w-4 mr-1.5" />
-            Appearance
+            <span className="hidden sm:inline">Appearance</span>
+            <span className="sm:hidden">Theme</span>
           </TabsTrigger>
         </TabsList>
 
