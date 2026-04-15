@@ -309,10 +309,12 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
     setTimeout(emitVisiblePlaces, 100);
   }, [places, mapLoaded, buildGeoJSON, setupLayers, emitVisiblePlaces]);
 
-  // Fit bounds when places change
+  // Fit bounds only on initial load (not on filter/sort changes)
+  const initialFitDone = useRef(false);
   useEffect(() => {
-    if (!map.current || !mapLoaded || places.length === 0) return;
+    if (!map.current || !mapLoaded || places.length === 0 || initialFitDone.current) return;
 
+    initialFitDone.current = true;
     const bounds = new mapboxgl.LngLatBounds();
     places.forEach((p) => bounds.extend([p.location.lng, p.location.lat]));
 
