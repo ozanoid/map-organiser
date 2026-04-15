@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Map, MapPin, List, MoreHorizontal, Upload, Settings, X } from "lucide-react";
+import { Map, MapPin, List, MoreHorizontal, Upload, Settings, X, BarChart3 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const tabs = [
@@ -13,6 +13,7 @@ const tabs = [
 ];
 
 const moreItems = [
+  { href: "/stats", label: "Stats", icon: BarChart3 },
   { href: "/import", label: "Import", icon: Upload },
   { href: "/settings", label: "Settings", icon: Settings },
 ];

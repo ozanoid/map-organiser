@@ -6,6 +6,7 @@ import {
   Map,
   MapPin,
   List,
+  BarChart3,
   Upload,
   Settings,
   ChevronLeft,
@@ -19,6 +20,7 @@ const navItems = [
   { href: "/map", label: "Map", icon: Map },
   { href: "/places", label: "Places", icon: MapPin },
   { href: "/lists", label: "Lists", icon: List },
+  { href: "/stats", label: "Stats", icon: BarChart3 },
   { href: "/import", label: "Import", icon: Upload },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
