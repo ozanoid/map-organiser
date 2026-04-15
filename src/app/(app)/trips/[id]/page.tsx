@@ -240,10 +240,10 @@ export default function TripDetailPage() {
             <h1 className="font-semibold text-sm truncate">{trip.name}</h1>
             <p className="text-[10px] text-muted-foreground flex items-center gap-1">
               <Calendar className="h-3 w-3" />
-              {days.length} day{days.length !== 1 ? "s" : ""}
+              {days.length}
               <span className="mx-0.5">·</span>
               <MapPin className="h-3 w-3" />
-              {totalPlaces} place{totalPlaces !== 1 ? "s" : ""}
+              {totalPlaces}
             </p>
           </div>
         </div>
