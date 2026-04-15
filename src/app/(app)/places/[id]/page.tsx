@@ -111,6 +111,7 @@ export default function PlaceDetailPage() {
     if (res.ok) {
       queryClient.invalidateQueries({ queryKey: ["places"] });
       queryClient.invalidateQueries({ queryKey: ["trips"] });
+      queryClient.invalidateQueries({ queryKey: ["trip"] });
       toast.success("Place deleted");
       router.push("/places");
     } else {
