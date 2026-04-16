@@ -29,9 +29,20 @@ import {
   RefreshCw,
   Plus,
   Check,
+  Wifi,
+  Accessibility,
+  Sun,
+  ShieldCheck,
+  CalendarCheck,
+  UtensilsCrossed,
+  MessageSquare,
+  ThumbsUp,
+  ArrowUpDown,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { toast } from "sonner";
-import type { Place, VisitStatus } from "@/lib/types";
+import type { Place, VisitStatus, GoogleReview } from "@/lib/types";
 
 export default function PlaceDetailPage() {
   const params = useParams();
@@ -48,12 +59,13 @@ export default function PlaceDetailPage() {
   const { data: allLists = [] } = useLists();
 
   const fetchPlace = useCallback(() => {
-    fetch(`/api/places/${params.id}`)
+    return fetch(`/api/places/${params.id}`)
       .then((res) => res.json())
       .then((data) => {
         setPlace(data);
         setNotesValue(data.notes || "");
         setLoading(false);
+        return data;
       })
       .catch(() => setLoading(false));
   }, [params.id]);
@@ -62,12 +74,44 @@ export default function PlaceDetailPage() {
     fetchPlace();
   }, [fetchPlace]);
 
+  // Poll for reviews if enrichment is likely in progress
+  // (has CID but no reviews yet → background enrichment running)
+  useEffect(() => {
+    if (!place) return;
+    const gd = place.google_data || {};
+    const hasReviews = gd.reviews && gd.reviews.length > 0;
+    const hasCid = !!gd.cid;
+
+    if (hasCid && !hasReviews) {
+      const interval = setInterval(() => {
+        fetch(`/api/places/${params.id}`)
+          .then((res) => res.json())
+          .then((data) => {
+            if (data.google_data?.reviews?.length > 0) {
+              setPlace(data);
+              clearInterval(interval);
+            }
+          })
+          .catch(() => {});
+      }, 8000); // check every 8 seconds
+
+      return () => clearInterval(interval);
+    }
+  }, [place?.google_data?.reviews, place?.google_data?.cid, params.id]);
+
   async function handleDelete() {
-    if (!confirm("Are you sure you want to delete this place?")) return;
+    const tripNames = ((place as any)?.trips || []).map((t: any) => t.name);
+    let msg = "Are you sure you want to delete this place?";
+    if (tripNames.length > 0) {
+      msg += `\n\nThis place is part of ${tripNames.length} trip${tripNames.length > 1 ? "s" : ""}: ${tripNames.join(", ")}. It will be removed from those trips too.`;
+    }
+    if (!confirm(msg)) return;
 
     const res = await fetch(`/api/places/${params.id}`, { method: "DELETE" });
     if (res.ok) {
       queryClient.invalidateQueries({ queryKey: ["places"] });
+      queryClient.invalidateQueries({ queryKey: ["trips"] });
+      queryClient.invalidateQueries({ queryKey: ["trip"] });
       toast.success("Place deleted");
       router.push("/places");
     } else {
@@ -231,6 +275,7 @@ export default function PlaceDetailPage() {
   const googleData = place.google_data || {};
   const photoUrl = googleData.photo_storage_url || googleData.photos?.[0] || null;
   const reviews = googleData.reviews || [];
+  const hasExtendedData = googleData.provider === "dataforseo";
 
   return (
     <div className="p-4 lg:p-6 max-w-2xl mx-auto space-y-6 pb-12">
@@ -424,65 +469,199 @@ export default function PlaceDetailPage() {
         )}
       </section>
 
-      {/* Reviews Section */}
-      {(reviews.length > 0 || place.google_place_id) && (
-        <section className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold">Google Reviews</h2>
-            {place.google_place_id && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleRefreshGoogle}
-                disabled={refreshing}
-                className="cursor-pointer gap-1 text-xs text-muted-foreground"
-              >
-                <RefreshCw
-                  className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`}
-                />
-                Refresh
-              </Button>
-            )}
-          </div>
-          {reviews.length > 0 ? (
-            <div className="space-y-3">
-              {reviews.map((review, i) => (
-                <div
-                  key={i}
-                  className="border rounded-lg p-3 space-y-1.5 text-sm"
+      {/* DataForSEO Extended Data */}
+      {hasExtendedData && (
+        <>
+          {/* Business Description */}
+          {googleData.business_description && (
+            <section className="space-y-2">
+              <h2 className="text-sm font-semibold">About</h2>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                {googleData.business_description}
+              </p>
+            </section>
+          )}
+
+          {/* Current Status */}
+          {googleData.current_status && (
+            <div className="flex items-center gap-2">
+              <div
+                className={`h-2 w-2 rounded-full ${
+                  googleData.current_status === "opened"
+                    ? "bg-green-500"
+                    : googleData.current_status === "temporarily_closed"
+                      ? "bg-amber-500"
+                      : "bg-red-500"
+                }`}
+              />
+              <span className="text-xs font-medium">
+                {googleData.current_status === "opened"
+                  ? "Open now"
+                  : googleData.current_status === "temporarily_closed"
+                    ? "Temporarily closed"
+                    : googleData.current_status === "closed_forever"
+                      ? "Permanently closed"
+                      : "Closed"}
+              </span>
+              {googleData.is_claimed && (
+                <Badge variant="outline" className="gap-1 text-[10px] py-0">
+                  <ShieldCheck className="h-3 w-3 text-blue-500" />
+                  Verified
+                </Badge>
+              )}
+            </div>
+          )}
+
+          {/* Rating Distribution */}
+          {googleData.rating_distribution && (
+            <section className="space-y-2">
+              <h2 className="text-sm font-semibold">Rating Breakdown</h2>
+              <div className="space-y-1">
+                {[5, 4, 3, 2, 1].map((star) => {
+                  const count =
+                    googleData.rating_distribution?.[String(star)] ?? 0;
+                  const total = Object.values(
+                    googleData.rating_distribution!
+                  ).reduce((a, b) => a + b, 0);
+                  const pct = total > 0 ? (count / total) * 100 : 0;
+                  return (
+                    <div
+                      key={star}
+                      className="flex items-center gap-2 text-xs"
+                    >
+                      <span className="w-3 text-right text-muted-foreground">
+                        {star}
+                      </span>
+                      <Star className="h-3 w-3 text-orange-400 fill-orange-400" />
+                      <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-orange-400 rounded-full transition-all"
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                      <span className="w-8 text-right text-muted-foreground tabular-nums">
+                        {count}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          )}
+
+          {/* Popular Times */}
+          {googleData.popular_times && (
+            <PopularTimesWidget popularTimes={googleData.popular_times} />
+          )}
+
+          {/* Action Buttons */}
+          {(googleData.book_online_url || googleData.local_business_links?.length) && (
+            <section className="flex flex-wrap gap-2">
+              {googleData.book_online_url && (
+                <a
+                  href={googleData.book_online_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
                 >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-medium text-sm">
-                      {review.author_name}
-                    </span>
-                    <span className="text-xs text-muted-foreground shrink-0">
-                      {review.relative_time}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-0.5">
-                    {Array.from({ length: 5 }).map((_, j) => (
-                      <Star
-                        key={j}
-                        className={`h-3 w-3 ${
-                          j < review.rating
-                            ? "fill-orange-400 text-orange-400"
-                            : "text-gray-300"
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="cursor-pointer gap-1.5 text-xs"
+                  >
+                    <CalendarCheck className="h-3.5 w-3.5" />
+                    Book Online
+                  </Button>
+                </a>
+              )}
+              {googleData.local_business_links?.map((link, i) => (
+                <a
+                  key={i}
+                  href={link.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="cursor-pointer gap-1.5 text-xs"
+                  >
+                    {link.type === "menu" ? (
+                      <UtensilsCrossed className="h-3.5 w-3.5" />
+                    ) : (
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    )}
+                    {link.title || link.type || "Link"}
+                  </Button>
+                </a>
+              ))}
+            </section>
+          )}
+
+          {/* Business Attributes */}
+          {googleData.attributes &&
+            Object.keys(googleData.attributes).length > 0 && (
+              <section className="space-y-2">
+                <h2 className="text-sm font-semibold">Amenities</h2>
+                <div className="flex flex-wrap gap-1.5">
+                  {Object.entries(googleData.attributes).map(
+                    ([attr, available]) => (
+                      <Badge
+                        key={attr}
+                        variant="outline"
+                        className={`text-[10px] gap-1 ${
+                          available
+                            ? "text-green-700 border-green-200 bg-green-50"
+                            : "text-gray-400 border-gray-200 bg-gray-50 line-through"
                         }`}
-                      />
-                    ))}
-                  </div>
-                  {review.text && (
-                    <p className="text-xs text-muted-foreground leading-relaxed">
-                      {review.text}
-                    </p>
+                      >
+                        {available ? (
+                          <Check className="h-2.5 w-2.5" />
+                        ) : (
+                          <span className="h-2.5 w-2.5 text-center">-</span>
+                        )}
+                        {formatAttributeName(attr)}
+                      </Badge>
+                    )
                   )}
                 </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-xs text-muted-foreground">No reviews yet.</p>
-          )}
-        </section>
+              </section>
+            )}
+
+          {/* Place Topics */}
+          {googleData.place_topics &&
+            Object.keys(googleData.place_topics).length > 0 && (
+              <section className="space-y-2">
+                <h2 className="text-sm font-semibold">People mention</h2>
+                <div className="flex flex-wrap gap-1.5">
+                  {Object.entries(googleData.place_topics)
+                    .sort(([, a], [, b]) => b - a)
+                    .slice(0, 15)
+                    .map(([topic, count]) => (
+                      <Badge
+                        key={topic}
+                        variant="secondary"
+                        className="text-[10px] gap-1"
+                      >
+                        {topic}
+                        <span className="text-muted-foreground">({count})</span>
+                      </Badge>
+                    ))}
+                </div>
+              </section>
+            )}
+        </>
+      )}
+
+      {/* Reviews Section */}
+      {(reviews.length > 0 || place.google_place_id) && (
+        <ReviewsSection
+          reviews={reviews}
+          hasPlaceId={!!place.google_place_id}
+          provider={googleData.provider}
+          refreshing={refreshing}
+          enriching={!!googleData.cid && reviews.length === 0}
+          onRefresh={handleRefreshGoogle}
+        />
       )}
 
       {/* Lists Section */}
@@ -654,4 +833,269 @@ export default function PlaceDetailPage() {
       </section>
     </div>
   );
+}
+
+// ──────────────────────────────────────────────────────────
+// Reviews with pagination + date sorting
+// ──────────────────────────────────────────────────────────
+
+const REVIEWS_PER_PAGE = 5;
+
+function ReviewsSection({
+  reviews,
+  hasPlaceId,
+  provider,
+  refreshing,
+  enriching,
+  onRefresh,
+}: {
+  reviews: GoogleReview[];
+  hasPlaceId: boolean;
+  provider?: string;
+  refreshing: boolean;
+  enriching: boolean;
+  onRefresh: () => void;
+}) {
+  const [page, setPage] = useState(0);
+  const [sortByDate, setSortByDate] = useState(false);
+
+  const sorted = sortByDate
+    ? [...reviews].sort((a, b) => {
+        // publish_time is ISO string or undefined
+        const ta = a.publish_time ? new Date(a.publish_time).getTime() : 0;
+        const tb = b.publish_time ? new Date(b.publish_time).getTime() : 0;
+        return tb - ta; // newest first
+      })
+    : reviews;
+
+  const totalPages = Math.ceil(sorted.length / REVIEWS_PER_PAGE);
+  const pageReviews = sorted.slice(
+    page * REVIEWS_PER_PAGE,
+    (page + 1) * REVIEWS_PER_PAGE
+  );
+
+  // Reset page when sort changes
+  useEffect(() => {
+    setPage(0);
+  }, [sortByDate]);
+
+  return (
+    <section className="space-y-3">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <h2 className="text-sm font-semibold">Reviews</h2>
+          {reviews.length > 0 && (
+            <span className="text-[10px] text-muted-foreground">
+              ({reviews.length})
+            </span>
+          )}
+          {provider && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-muted-foreground">
+              via {provider === "dataforseo" ? "DataForSEO" : "Google"}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-1">
+          {reviews.length > 1 && (
+            <button
+              type="button"
+              onClick={() => setSortByDate(!sortByDate)}
+              className={`inline-flex items-center gap-1 px-2 py-1 text-[10px] rounded-full cursor-pointer transition-colors ${
+                sortByDate
+                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                  : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+              }`}
+            >
+              <ArrowUpDown className="h-2.5 w-2.5" />
+              {sortByDate ? "Newest first" : "Sort by date"}
+            </button>
+          )}
+          {hasPlaceId && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onRefresh}
+              disabled={refreshing || enriching}
+              className="cursor-pointer gap-1 text-xs text-muted-foreground"
+            >
+              <RefreshCw
+                className={`h-3.5 w-3.5 ${refreshing || enriching ? "animate-spin" : ""}`}
+              />
+              {enriching ? "Loading..." : "Refresh"}
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* Review cards */}
+      {pageReviews.length > 0 ? (
+        <div className="space-y-3">
+          {pageReviews.map((review, i) => (
+            <div
+              key={`${page}-${i}`}
+              className="border rounded-lg p-3 space-y-1.5 text-sm"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-medium text-sm">
+                  {review.author_name}
+                </span>
+                <span className="text-xs text-muted-foreground shrink-0">
+                  {review.relative_time}
+                </span>
+              </div>
+              <div className="flex items-center gap-0.5">
+                {Array.from({ length: 5 }).map((_, j) => (
+                  <Star
+                    key={j}
+                    className={`h-3 w-3 ${
+                      j < review.rating
+                        ? "fill-orange-400 text-orange-400"
+                        : "text-gray-300"
+                    }`}
+                  />
+                ))}
+              </div>
+              {review.text && (
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  {review.text}
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
+      ) : enriching ? (
+        <div className="flex items-center gap-2 py-4 justify-center text-xs text-muted-foreground">
+          <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+          Loading reviews...
+        </div>
+      ) : (
+        <p className="text-xs text-muted-foreground">
+          No reviews yet. Tap Refresh to fetch reviews.
+        </p>
+      )}
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between pt-1">
+          <button
+            type="button"
+            onClick={() => setPage((p) => Math.max(0, p - 1))}
+            disabled={page === 0}
+            className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs rounded-md cursor-pointer transition-colors disabled:opacity-30 disabled:cursor-not-allowed hover:bg-gray-100"
+          >
+            <ChevronLeft className="h-3.5 w-3.5" />
+            Prev
+          </button>
+          <span className="text-xs text-muted-foreground">
+            {page + 1} / {totalPages}
+          </span>
+          <button
+            type="button"
+            onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+            disabled={page >= totalPages - 1}
+            className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs rounded-md cursor-pointer transition-colors disabled:opacity-30 disabled:cursor-not-allowed hover:bg-gray-100"
+          >
+            Next
+            <ChevronRight className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
+    </section>
+  );
+}
+
+// ──────────────────────────────────────────────────────────
+// Helper components & utilities for DataForSEO extended data
+// ──────────────────────────────────────────────────────────
+
+const DAYS_OF_WEEK = [
+  { key: "monday", label: "Mon" },
+  { key: "tuesday", label: "Tue" },
+  { key: "wednesday", label: "Wed" },
+  { key: "thursday", label: "Thu" },
+  { key: "friday", label: "Fri" },
+  { key: "saturday", label: "Sat" },
+  { key: "sunday", label: "Sun" },
+] as const;
+
+function PopularTimesWidget({
+  popularTimes,
+}: {
+  popularTimes: Record<string, Array<{ hour: number; popular_index: number }>>;
+}) {
+  const [selectedDay, setSelectedDay] = useState(
+    DAYS_OF_WEEK[new Date().getDay() === 0 ? 6 : new Date().getDay() - 1].key
+  );
+
+  const dayData = popularTimes[selectedDay] || [];
+  // Filter to reasonable hours (6am - midnight)
+  const hours = dayData.filter((h) => h.hour >= 6 && h.hour <= 23);
+  const maxIndex = Math.max(...hours.map((h) => h.popular_index), 1);
+
+  if (hours.length === 0) return null;
+
+  return (
+    <section className="space-y-2">
+      <h2 className="text-sm font-semibold">Popular Times</h2>
+      {/* Day selector */}
+      <div className="flex gap-1">
+        {DAYS_OF_WEEK.map((d) => (
+          <button
+            key={d.key}
+            type="button"
+            onClick={() => setSelectedDay(d.key)}
+            className={`px-2 py-1 text-[10px] font-medium rounded-full cursor-pointer transition-colors ${
+              selectedDay === d.key
+                ? "bg-emerald-600 text-white"
+                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+            }`}
+          >
+            {d.label}
+          </button>
+        ))}
+      </div>
+      {/* Bar chart */}
+      <div className="flex items-end gap-[3px] h-20">
+        {hours.map((h) => {
+          const heightPct = (h.popular_index / maxIndex) * 100;
+          const isNow =
+            selectedDay ===
+              DAYS_OF_WEEK[
+                new Date().getDay() === 0 ? 6 : new Date().getDay() - 1
+              ].key && h.hour === new Date().getHours();
+          return (
+            <div
+              key={h.hour}
+              className="flex-1 flex flex-col items-center gap-0.5"
+              title={`${h.hour}:00 — ${h.popular_index}% busy`}
+            >
+              <div
+                className={`w-full rounded-sm transition-all ${
+                  isNow ? "bg-emerald-500" : "bg-emerald-200"
+                }`}
+                style={{
+                  height: `${Math.max(heightPct, 4)}%`,
+                  minHeight: "2px",
+                }}
+              />
+              {h.hour % 3 === 0 && (
+                <span className="text-[8px] text-muted-foreground">
+                  {h.hour}
+                </span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function formatAttributeName(attr: string): string {
+  return attr
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase())
+    .replace(/^Has /, "")
+    .replace(/^Serves /, "");
 }

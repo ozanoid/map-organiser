@@ -12,6 +12,7 @@ interface ApiKeyData {
   mapboxToken: string;
   hasGoogleKey: boolean;
   hasMapboxToken: boolean;
+  googlePlacesEnabled: boolean;
 }
 
 export function ApiKeysManager() {
@@ -95,13 +96,47 @@ export function ApiKeysManager() {
       </div>
 
       {data?.isAdmin && (
-        <div className="flex items-center gap-2 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg">
-          <Shield className="h-4 w-4 text-emerald-600" />
-          <span className="text-xs text-emerald-700 font-medium">
+        <div className="flex items-center gap-2 px-3 py-2 bg-emerald-50 dark:bg-emerald-950 border border-emerald-200 dark:border-emerald-800 rounded-lg">
+          <Shield className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+          <span className="text-xs text-emerald-700 dark:text-emerald-300 font-medium">
             Admin account — using system API keys
           </span>
         </div>
       )}
+
+      {/* Google Places API Toggle */}
+      <div className="flex items-center justify-between py-2 px-3 border rounded-lg">
+        <div>
+          <p className="text-sm font-medium">Google Places API</p>
+          <p className="text-[10px] text-muted-foreground">
+            Use Google for fast place lookup when adding links
+          </p>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={data?.googlePlacesEnabled ?? true}
+          onClick={async () => {
+            const newVal = !(data?.googlePlacesEnabled ?? true);
+            setData((prev) => prev ? { ...prev, googlePlacesEnabled: newVal } : prev);
+            await fetch("/api/user/api-keys", {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ googlePlacesEnabled: newVal }),
+            });
+            toast.success(newVal ? "Google Places API enabled" : "Google Places API disabled");
+          }}
+          className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
+            data?.googlePlacesEnabled ? "bg-emerald-600" : "bg-gray-200 dark:bg-gray-700"
+          }`}
+        >
+          <span
+            className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow transform transition-transform ${
+              data?.googlePlacesEnabled ? "translate-x-4" : "translate-x-0"
+            }`}
+          />
+        </button>
+      </div>
 
       {/* Google Places API Key */}
       <div className="space-y-2">

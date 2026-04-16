@@ -14,6 +14,7 @@ const PARAM_MAP: Record<string, string> = {
   google_rating_min: "google_rating",
   visit_status: "status",
   search: "q",
+  sort: "sort",
 };
 
 function paramKeyFor(key: string): string {
@@ -38,6 +39,7 @@ function parseUrlToFilters(searchParams: URLSearchParams): PlaceFilters {
       : undefined,
     visit_status: (status as PlaceFilters["visit_status"]) || undefined,
     search: searchParams.get("q") || undefined,
+    sort: searchParams.get("sort") || undefined,
   };
 }
 

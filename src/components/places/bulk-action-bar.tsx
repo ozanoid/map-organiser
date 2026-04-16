@@ -59,6 +59,8 @@ export function BulkActionBar({
       toast.success(`${label} - ${result.affected} place${result.affected === 1 ? "" : "s"} updated`);
       queryClient.invalidateQueries({ queryKey: ["places"] });
       queryClient.invalidateQueries({ queryKey: ["lists"] });
+      queryClient.invalidateQueries({ queryKey: ["trips"] });
+      queryClient.invalidateQueries({ queryKey: ["trip"] });
       onComplete();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Action failed");
@@ -69,8 +71,17 @@ export function BulkActionBar({
   }
 
   async function handleDelete() {
+    // Check trip references first
+    let tripWarning = "";
+    try {
+      const checkRes = await bulkAction({ action: "check_trips", place_ids: ids });
+      if (checkRes.tripNames?.length > 0) {
+        tripWarning = `\n\n${checkRes.placesInTrips} of these place${checkRes.placesInTrips === 1 ? " is" : "s are"} in trip${checkRes.tripNames.length === 1 ? "" : "s"}: ${checkRes.tripNames.join(", ")}. They will be removed from those trips too.`;
+      }
+    } catch {}
+
     const confirmed = confirm(
-      `Delete ${count} place${count === 1 ? "" : "s"}? This cannot be undone.`
+      `Delete ${count} place${count === 1 ? "" : "s"}? This cannot be undone.${tripWarning}`
     );
     if (!confirmed) return;
     await runAction("Deleted", { action: "delete" });
@@ -78,7 +89,7 @@ export function BulkActionBar({
   }
 
   return (
-    <div className="fixed bottom-14 lg:bottom-0 left-0 right-0 z-30 bg-white border-t shadow-lg">
+    <div className="fixed bottom-14 lg:bottom-0 left-0 right-0 z-30 bg-white dark:bg-gray-950 border-t shadow-lg">
       <div className="max-w-screen-2xl mx-auto px-3 py-2 lg:py-0 lg:h-12 lg:flex lg:items-center lg:gap-2">
         {/* Row 1: count + clear + delete */}
         <div className="flex items-center gap-2 mb-2 lg:mb-0">
@@ -101,7 +112,7 @@ export function BulkActionBar({
             type="button"
             disabled={loading}
             onClick={handleDelete}
-            className="h-9 px-3 text-xs border border-red-200 text-red-600 rounded-md hover:bg-red-50 flex items-center gap-1.5 cursor-pointer disabled:opacity-50 ml-auto lg:ml-0 lg:order-last"
+            className="h-9 px-3 text-xs border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 rounded-md hover:bg-red-50 dark:hover:bg-red-950 flex items-center gap-1.5 cursor-pointer disabled:opacity-50 ml-auto lg:ml-0 lg:order-last"
           >
             <Trash2 className="h-3.5 w-3.5" />
             Delete
@@ -113,7 +124,7 @@ export function BulkActionBar({
           <div className="relative shrink-0">
             <select
               disabled={loading}
-              className="h-9 text-sm border rounded-md px-3 pr-7 bg-white cursor-pointer disabled:opacity-50 appearance-none"
+              className="h-9 text-sm border rounded-md px-3 pr-7 bg-white dark:bg-gray-900 cursor-pointer disabled:opacity-50 appearance-none"
               defaultValue=""
               onChange={(e) => {
                 const val = e.target.value;
@@ -139,7 +150,7 @@ export function BulkActionBar({
           <div className="relative shrink-0">
             <select
               disabled={loading}
-              className="h-9 text-sm border rounded-md px-3 pr-7 bg-white cursor-pointer disabled:opacity-50 appearance-none"
+              className="h-9 text-sm border rounded-md px-3 pr-7 bg-white dark:bg-gray-900 cursor-pointer disabled:opacity-50 appearance-none"
               defaultValue=""
               onChange={(e) => {
                 const val = e.target.value;
@@ -165,7 +176,7 @@ export function BulkActionBar({
           <div className="relative shrink-0">
             <select
               disabled={loading}
-              className="h-9 text-sm border rounded-md px-3 pr-7 bg-white cursor-pointer disabled:opacity-50 appearance-none"
+              className="h-9 text-sm border rounded-md px-3 pr-7 bg-white dark:bg-gray-900 cursor-pointer disabled:opacity-50 appearance-none"
               defaultValue=""
               onChange={(e) => {
                 const val = e.target.value;
@@ -191,7 +202,7 @@ export function BulkActionBar({
           <div className="relative shrink-0">
             <select
               disabled={loading}
-              className="h-9 text-sm border rounded-md px-3 pr-7 bg-white cursor-pointer disabled:opacity-50 appearance-none"
+              className="h-9 text-sm border rounded-md px-3 pr-7 bg-white dark:bg-gray-900 cursor-pointer disabled:opacity-50 appearance-none"
               defaultValue=""
               onChange={(e) => {
                 const val = e.target.value;

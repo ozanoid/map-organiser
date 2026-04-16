@@ -29,8 +29,8 @@ export function VisitStatusFilter() {
             className={cn(
               "px-2.5 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer flex items-center gap-1",
               isActive
-                ? "bg-emerald-100 text-emerald-700"
-                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300"
+                : "bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700"
             )}
           >
             {Icon && <Icon className="h-3 w-3" />}

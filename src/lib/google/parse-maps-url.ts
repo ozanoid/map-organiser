@@ -88,7 +88,7 @@ function ftidToCoordinates(ftid: string): { lat: number; lng: number } | null {
 }
 
 /**
- * Extract CID from URL.
+ * Extract CID from URL query parameter only.
  */
 function extractCid(url: string): string | null {
   const cidMatch = url.match(/[?&]cid=(\d+)/);
@@ -172,7 +172,7 @@ export async function parseMapsUrl(rawUrl: string): Promise<ParsedUrl> {
   if (ftid) {
     const s2Coords = ftidToCoordinates(ftid);
     const urlCoords = extractCoordinates(url);
-    const bestCoords = urlCoords || s2Coords; // URL coords are more precise
+    const bestCoords = urlCoords || s2Coords;
     const query = extractSearchQuery(url);
 
     if (query && bestCoords) {
@@ -204,7 +204,7 @@ export async function parseMapsUrl(rawUrl: string): Promise<ParsedUrl> {
     };
   }
 
-  // Step 5: Search URL with coordinates from FTid resolution or URL
+  // Step 5: Search URL with coordinates
   const query = extractSearchQuery(url);
   const coords = extractCoordinates(url);
 

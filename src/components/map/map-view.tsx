@@ -1,145 +1,179 @@
 "use client";
 
-import { useRef, useEffect, useState } from "react";
+import { useRef, useEffect, useState, useCallback, useImperativeHandle, forwardRef } from "react";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
-import type { Place } from "@/lib/types";
+import type { Place, Category } from "@/lib/types";
+import { registerCategoryIcons } from "@/lib/map/category-icons";
+
+export interface RouteLine {
+  id: string;
+  color: string;
+  coordinates: [number, number][];
+}
 
 interface MapViewProps {
   places: Place[];
+  categories?: Category[];
   onPlaceClick?: (place: Place) => void;
+  onVisiblePlacesChange?: (visibleIds: string[]) => void;
   mapboxToken?: string;
+  mapStyle?: string;
+  markerStyle?: "icons" | "dots";
+  routeLines?: RouteLine[];
   className?: string;
+}
+
+export interface MapViewHandle {
+  flyToPlace: (placeId: string) => void;
 }
 
 const CATEGORY_COLORS: Record<string, string> = {
   default: "#059669",
 };
 
-export function MapView({ places, onPlaceClick, mapboxToken, className }: MapViewProps) {
+export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
+  { places, categories = [], onPlaceClick, onVisiblePlacesChange, mapboxToken, mapStyle, markerStyle = "icons", routeLines, className },
+  ref
+) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
+  const layersAdded = useRef(false);
 
   // Keep refs stable for Mapbox event handlers
   const placesRef = useRef(places);
   const onPlaceClickRef = useRef(onPlaceClick);
+  const onVisiblePlacesChangeRef = useRef(onVisiblePlacesChange);
   placesRef.current = places;
   onPlaceClickRef.current = onPlaceClick;
+  onVisiblePlacesChangeRef.current = onVisiblePlacesChange;
 
-  // Initialize map
-  useEffect(() => {
-    if (!mapContainer.current || map.current) return;
+  const defaultStyle = mapStyle || "mapbox://styles/mapbox/light-v11";
 
-    mapboxgl.accessToken = mapboxToken || process.env.NEXT_PUBLIC_MAPBOX_TOKEN || "";
-    map.current = new mapboxgl.Map({
-      container: mapContainer.current,
-      style: "mapbox://styles/mapbox/light-v11",
-      center: [29.0, 41.0], // Istanbul default
-      zoom: 5,
-      attributionControl: false,
-    });
+  // Expose flyToPlace to parent via ref
+  useImperativeHandle(ref, () => ({
+    flyToPlace: (placeId: string) => {
+      if (!map.current) return;
+      const place = placesRef.current.find((p) => p.id === placeId);
+      if (!place) return;
+      map.current.flyTo({ center: [place.location.lng, place.location.lat], zoom: 16 });
+      // Trigger place click to open popup/detail
+      if (onPlaceClickRef.current) onPlaceClickRef.current(place);
+    },
+  }), []);
 
-    map.current.addControl(
-      new mapboxgl.NavigationControl({ showCompass: false }),
-      "top-right"
-    );
-
-    map.current.addControl(
-      new mapboxgl.GeolocateControl({
-        positionOptions: { enableHighAccuracy: true },
-        trackUserLocation: false,
-      }),
-      "top-right"
-    );
-
-    map.current.on("load", () => setMapLoaded(true));
-
-    return () => {
-      map.current?.remove();
-      map.current = null;
-    };
+  // Emit all places within the current map viewport bounds
+  const emitVisiblePlaces = useCallback(() => {
+    if (!map.current) return;
+    const bounds = map.current.getBounds();
+    if (!bounds) return;
+    const ids = placesRef.current
+      .filter((p) => bounds.contains([p.location.lng, p.location.lat]))
+      .map((p) => p.id);
+    onVisiblePlacesChangeRef.current?.(ids);
   }, []);
 
-  // Update markers when places change
-  useEffect(() => {
-    if (!map.current || !mapLoaded) return;
+  // Build GeoJSON from places
+  const buildGeoJSON = useCallback((data: Place[]): GeoJSON.FeatureCollection => ({
+    type: "FeatureCollection",
+    features: data.map((place) => ({
+      type: "Feature",
+      geometry: {
+        type: "Point",
+        coordinates: [place.location.lng, place.location.lat],
+      },
+      properties: {
+        id: place.id,
+        name: place.name,
+        address: place.address || "",
+        rating: place.rating,
+        categoryColor: place.category?.color || CATEGORY_COLORS.default,
+        categoryIcon: place.category?.icon || "map-pin",
+        visitStatus: place.visit_status || "",
+        googleUrl: place.google_data?.url || "",
+      },
+    })),
+  }), []);
 
-    const geojson: GeoJSON.FeatureCollection = {
-      type: "FeatureCollection",
-      features: places.map((place) => ({
-        type: "Feature",
-        geometry: {
-          type: "Point",
-          coordinates: [place.location.lng, place.location.lat],
-        },
-        properties: {
-          id: place.id,
-          name: place.name,
-          address: place.address || "",
-          rating: place.rating,
-          categoryColor: place.category?.color || CATEGORY_COLORS.default,
-          categoryIcon: place.category?.icon || "map-pin",
-          visitStatus: place.visit_status || "",
-          googleUrl: place.google_data?.url || "",
-        },
-      })),
-    };
+  // Keep categories ref for icon registration
+  const categoriesRef = useRef(categories);
+  categoriesRef.current = categories;
+  const markerStyleRef = useRef(markerStyle);
+  markerStyleRef.current = markerStyle;
 
+  // Add source + layers to the map
+  const setupLayers = useCallback((m: mapboxgl.Map, geojson: GeoJSON.FeatureCollection) => {
     const sourceId = "places";
 
-    if (map.current.getSource(sourceId)) {
-      (map.current.getSource(sourceId) as mapboxgl.GeoJSONSource).setData(
-        geojson
-      );
-    } else {
-      map.current.addSource(sourceId, {
-        type: "geojson",
-        data: geojson,
-        cluster: true,
-        clusterMaxZoom: 14,
-        clusterRadius: 50,
-      });
+    // Register category icons before adding layers
+    registerCategoryIcons(
+      m,
+      categoriesRef.current.map((c) => ({ icon: c.icon, color: c.color }))
+    );
 
-      // Cluster circles
-      map.current.addLayer({
-        id: "clusters",
-        type: "circle",
-        source: sourceId,
-        filter: ["has", "point_count"],
-        paint: {
-          "circle-color": "#059669",
-          "circle-radius": [
-            "step",
-            ["get", "point_count"],
-            18,
-            10,
-            24,
-            50,
-            30,
-          ],
-          "circle-opacity": 0.85,
-        },
-      });
+    if (m.getSource(sourceId)) {
+      (m.getSource(sourceId) as mapboxgl.GeoJSONSource).setData(geojson);
+      return;
+    }
 
-      // Cluster count text
-      map.current.addLayer({
-        id: "cluster-count",
+    m.addSource(sourceId, {
+      type: "geojson",
+      data: geojson,
+      cluster: true,
+      clusterMaxZoom: 14,
+      clusterRadius: 50,
+    });
+
+    // Cluster circles
+    m.addLayer({
+      id: "clusters",
+      type: "circle",
+      source: sourceId,
+      filter: ["has", "point_count"],
+      paint: {
+        "circle-color": "#059669",
+        "circle-radius": [
+          "step",
+          ["get", "point_count"],
+          18, 10, 24, 50, 30,
+        ],
+        "circle-opacity": 0.85,
+      },
+    });
+
+    // Cluster count text
+    m.addLayer({
+      id: "cluster-count",
+      type: "symbol",
+      source: sourceId,
+      filter: ["has", "point_count"],
+      layout: {
+        "text-field": "{point_count_abbreviated}",
+        "text-font": ["DIN Pro Medium", "Arial Unicode MS Bold"],
+        "text-size": 13,
+      },
+      paint: {
+        "text-color": "#ffffff",
+      },
+    });
+
+    // Individual markers — icon or dot style
+    if (markerStyleRef.current === "icons") {
+      m.addLayer({
+        id: "unclustered-point",
         type: "symbol",
         source: sourceId,
-        filter: ["has", "point_count"],
+        filter: ["!", ["has", "point_count"]],
         layout: {
-          "text-field": "{point_count_abbreviated}",
-          "text-font": ["DIN Pro Medium", "Arial Unicode MS Bold"],
-          "text-size": 13,
-        },
-        paint: {
-          "text-color": "#ffffff",
+          "icon-image": ["concat", "cat-", ["get", "categoryIcon"]],
+          "icon-size": 1,
+          "icon-allow-overlap": true,
+          "icon-anchor": "center",
         },
       });
-
-      // Individual markers with visit status differentiation
-      map.current.addLayer({
+    } else {
+      m.addLayer({
         id: "unclustered-point",
         type: "circle",
         source: sourceId,
@@ -167,98 +201,211 @@ export function MapView({ places, onPlaceClick, mapboxToken, className }: MapVie
           ],
         },
       });
+    }
 
-      // Click on cluster → zoom in
-      map.current.on("click", "clusters", (e) => {
-        const features = map.current!.queryRenderedFeatures(e.point, {
-          layers: ["clusters"],
-        });
-        const clusterId = features[0].properties?.cluster_id;
-        (
-          map.current!.getSource(sourceId) as mapboxgl.GeoJSONSource
-        ).getClusterExpansionZoom(clusterId, (err, zoom) => {
-          if (err || !zoom) return;
-          const geometry = features[0].geometry;
-          if (geometry.type === "Point") {
-            map.current!.easeTo({
-              center: geometry.coordinates as [number, number],
-              zoom,
-            });
-          }
-        });
-      });
-
-      // Click on marker → show popup
-      map.current.on("click", "unclustered-point", (e) => {
-        if (!e.features?.[0]) return;
-        const props = e.features[0].properties!;
-        const geometry = e.features[0].geometry;
-        if (geometry.type !== "Point") return;
-
-        const coordinates = geometry.coordinates.slice() as [number, number];
-
-        const ratingStars = props.rating
-          ? "★".repeat(props.rating) + "☆".repeat(5 - props.rating)
-          : "";
-
-        const visitStatusLabels: Record<string, { label: string; color: string }> = {
-          want_to_go: { label: "Want to Go", color: "#F59E0B" },
-          booked: { label: "Booked", color: "#3B82F6" },
-          visited: { label: "Visited", color: "#22C55E" },
-          favorite: { label: "Favorite", color: "#EF4444" },
-        };
-        const statusInfo = props.visitStatus ? visitStatusLabels[props.visitStatus] : null;
-
-        const popupEl = document.createElement("article");
-        popupEl.setAttribute("role", "dialog");
-        popupEl.setAttribute("aria-label", `Place: ${props.name}`);
-        popupEl.style.fontFamily = "Inter, sans-serif";
-        popupEl.innerHTML = `
-          <p style="font-weight:600;font-size:14px;margin:0 0 4px">${props.name}</p>
-          ${props.address ? `<p style="font-size:12px;color:#666;margin:0 0 4px">${props.address}</p>` : ""}
-          ${ratingStars ? `<p style="font-size:12px;color:#F97316;margin:0 0 4px" aria-label="Rating: ${props.rating} out of 5">${ratingStars}</p>` : ""}
-          ${statusInfo ? `<p style="font-size:11px;color:${statusInfo.color};font-weight:500;margin:0 0 4px">${statusInfo.label}</p>` : ""}
-          <div style="display:flex;gap:12px;margin-top:6px;align-items:center">
-            <button type="button" class="popup-details" style="font-size:12px;color:#059669;font-weight:500;cursor:pointer;background:none;border:none;padding:6px 2px;margin:-6px -2px;min-height:44px;display:flex;align-items:center" aria-label="View details for ${props.name}">View details →</button>
-            ${props.googleUrl ? `<a href="${props.googleUrl}" target="_blank" rel="noopener noreferrer" style="font-size:12px;color:#3B82F6;text-decoration:none;font-weight:500;padding:6px 2px;min-height:44px;display:flex;align-items:center" onclick="event.stopPropagation()" aria-label="Open ${props.name} in Google Maps">Maps ↗</a>` : ""}
-          </div>
-        `;
-
-        // "View details" click → trigger onPlaceClick (no navigation)
-        const detailsBtn = popupEl.querySelector(".popup-details");
-        if (detailsBtn) {
-          detailsBtn.addEventListener("click", () => {
-            const place = placesRef.current.find((p) => p.id === props.id);
-            if (place && onPlaceClickRef.current) onPlaceClickRef.current(place);
-          });
+    // Click on cluster → zoom in
+    m.on("click", "clusters", (e) => {
+      const features = m.queryRenderedFeatures(e.point, { layers: ["clusters"] });
+      const clusterId = features[0].properties?.cluster_id;
+      (m.getSource(sourceId) as mapboxgl.GeoJSONSource).getClusterExpansionZoom(clusterId, (err, zoom) => {
+        if (err || !zoom) return;
+        const geometry = features[0].geometry;
+        if (geometry.type === "Point") {
+          m.easeTo({ center: geometry.coordinates as [number, number], zoom });
         }
+      });
+    });
 
-        new mapboxgl.Popup({ offset: 12, closeButton: false, maxWidth: "260px" })
-          .setLngLat(coordinates)
-          .setDOMContent(popupEl)
-          .addTo(map.current!);
-      });
+    // Click on marker → show popup
+    m.on("click", "unclustered-point", (e) => {
+      if (!e.features?.[0]) return;
+      const props = e.features[0].properties!;
+      const geometry = e.features[0].geometry;
+      if (geometry.type !== "Point") return;
 
-      // Cursor pointer on hover
-      map.current.on("mouseenter", "clusters", () => {
-        if (map.current) map.current.getCanvas().style.cursor = "pointer";
-      });
-      map.current.on("mouseleave", "clusters", () => {
-        if (map.current) map.current.getCanvas().style.cursor = "";
-      });
-      map.current.on("mouseenter", "unclustered-point", () => {
-        if (map.current) map.current.getCanvas().style.cursor = "pointer";
-      });
-      map.current.on("mouseleave", "unclustered-point", () => {
-        if (map.current) map.current.getCanvas().style.cursor = "";
+      const coordinates = geometry.coordinates.slice() as [number, number];
+      const ratingStars = props.rating
+        ? "\u2605".repeat(props.rating) + "\u2606".repeat(5 - props.rating)
+        : "";
+
+      const visitStatusLabels: Record<string, { label: string; color: string }> = {
+        want_to_go: { label: "Want to Go", color: "#F59E0B" },
+        booked: { label: "Booked", color: "#3B82F6" },
+        visited: { label: "Visited", color: "#22C55E" },
+        favorite: { label: "Favorite", color: "#EF4444" },
+      };
+      const statusInfo = props.visitStatus ? visitStatusLabels[props.visitStatus] : null;
+
+      const isDark = document.documentElement.classList.contains("dark");
+      const textColor = isDark ? "#e2e8f0" : "#0f172a";
+      const mutedColor = isDark ? "#94a3b8" : "#666666";
+
+      const popupEl = document.createElement("article");
+      popupEl.setAttribute("role", "dialog");
+      popupEl.setAttribute("aria-label", `Place: ${props.name}`);
+      popupEl.style.fontFamily = "Inter, sans-serif";
+      popupEl.innerHTML = `
+        <p style="font-weight:600;font-size:14px;margin:0 0 4px;color:${textColor}">${props.name}</p>
+        ${props.address ? `<p style="font-size:12px;color:${mutedColor};margin:0 0 4px">${props.address}</p>` : ""}
+        ${ratingStars ? `<p style="font-size:12px;color:#F97316;margin:0 0 4px" aria-label="Rating: ${props.rating} out of 5">${ratingStars}</p>` : ""}
+        ${statusInfo ? `<p style="font-size:11px;color:${statusInfo.color};font-weight:500;margin:0 0 4px">${statusInfo.label}</p>` : ""}
+        <div style="display:flex;gap:12px;margin-top:6px;align-items:center">
+          <button type="button" class="popup-details" style="font-size:12px;color:#059669;font-weight:500;cursor:pointer;background:none;border:none;padding:6px 2px;margin:-6px -2px;min-height:44px;display:flex;align-items:center" aria-label="View details for ${props.name}">View details \u2192</button>
+          ${props.googleUrl ? `<a href="${props.googleUrl}" target="_blank" rel="noopener noreferrer" style="font-size:12px;color:#3B82F6;text-decoration:none;font-weight:500;padding:6px 2px;min-height:44px;display:flex;align-items:center" onclick="event.stopPropagation()" aria-label="Open ${props.name} in Google Maps">Maps \u2197</a>` : ""}
+        </div>
+      `;
+
+      const detailsBtn = popupEl.querySelector(".popup-details");
+      if (detailsBtn) {
+        detailsBtn.addEventListener("click", () => {
+          const place = placesRef.current.find((p) => p.id === props.id);
+          if (place && onPlaceClickRef.current) onPlaceClickRef.current(place);
+        });
+      }
+
+      new mapboxgl.Popup({ offset: 12, closeButton: false, maxWidth: "260px" })
+        .setLngLat(coordinates)
+        .setDOMContent(popupEl)
+        .addTo(m);
+    });
+
+    // Cursor pointer on hover
+    m.on("mouseenter", "clusters", () => { m.getCanvas().style.cursor = "pointer"; });
+    m.on("mouseleave", "clusters", () => { m.getCanvas().style.cursor = ""; });
+    m.on("mouseenter", "unclustered-point", () => { m.getCanvas().style.cursor = "pointer"; });
+    m.on("mouseleave", "unclustered-point", () => { m.getCanvas().style.cursor = ""; });
+
+    layersAdded.current = true;
+
+    // Emit visible places on viewport change
+    m.on("moveend", () => emitVisiblePlaces());
+    // Initial emit after layers are ready
+    emitVisiblePlaces();
+  }, [emitVisiblePlaces]);
+
+  // Initialize map
+  useEffect(() => {
+    if (!mapContainer.current || map.current) return;
+
+    mapboxgl.accessToken = mapboxToken || process.env.NEXT_PUBLIC_MAPBOX_TOKEN || "";
+    map.current = new mapboxgl.Map({
+      container: mapContainer.current,
+      style: defaultStyle,
+      center: [29.0, 41.0],
+      zoom: 5,
+      attributionControl: false,
+      fadeDuration: 0,
+    });
+
+    map.current.addControl(
+      new mapboxgl.NavigationControl({ showCompass: false }),
+      "top-right"
+    );
+
+    map.current.addControl(
+      new mapboxgl.GeolocateControl({
+        positionOptions: { enableHighAccuracy: true },
+        trackUserLocation: false,
+      }),
+      "top-right"
+    );
+
+    map.current.on("load", () => setMapLoaded(true));
+
+    return () => {
+      map.current?.remove();
+      map.current = null;
+    };
+  }, []);
+
+  // Handle style changes (dark/light/manual switch)
+  useEffect(() => {
+    if (!map.current || !mapLoaded) return;
+
+    const currentStyle = map.current.getStyle()?.sprite;
+    // Only switch if the style actually changed
+    if (defaultStyle && currentStyle && !currentStyle.toString().includes(defaultStyle.replace("mapbox://styles/mapbox/", ""))) {
+      layersAdded.current = false;
+      map.current.setStyle(defaultStyle);
+
+      map.current.once("style.load", () => {
+        const geojson = buildGeoJSON(placesRef.current);
+        setupLayers(map.current!, geojson);
       });
     }
-  }, [places, mapLoaded, onPlaceClick]);
+  }, [defaultStyle, mapLoaded, buildGeoJSON, setupLayers]);
 
-  // Fit bounds when places change
+  // Handle marker style change (dots ↔ icons)
   useEffect(() => {
-    if (!map.current || !mapLoaded || places.length === 0) return;
+    if (!map.current || !mapLoaded || !layersAdded.current) return;
+    const m = map.current;
+    // Remove and re-add the unclustered-point layer with new style
+    if (m.getLayer("unclustered-point")) {
+      m.removeLayer("unclustered-point");
+    }
+    // Register icons if switching to icon mode
+    if (markerStyle === "icons") {
+      registerCategoryIcons(
+        m,
+        categoriesRef.current.map((c) => ({ icon: c.icon, color: c.color }))
+      );
+      m.addLayer({
+        id: "unclustered-point",
+        type: "symbol",
+        source: "places",
+        filter: ["!", ["has", "point_count"]],
+        layout: {
+          "icon-image": ["concat", "cat-", ["get", "categoryIcon"]],
+          "icon-size": 1,
+          "icon-allow-overlap": true,
+          "icon-anchor": "center",
+        },
+      });
+    } else {
+      m.addLayer({
+        id: "unclustered-point",
+        type: "circle",
+        source: "places",
+        filter: ["!", ["has", "point_count"]],
+        paint: {
+          "circle-color": ["get", "categoryColor"],
+          "circle-radius": 8,
+          "circle-stroke-width": [
+            "match",
+            ["get", "visitStatus"],
+            "visited", 3, "favorite", 3, "booked", 3, "want_to_go", 2.5, 2,
+          ],
+          "circle-stroke-color": [
+            "match",
+            ["get", "visitStatus"],
+            "visited", "#22C55E", "favorite", "#EF4444", "booked", "#3B82F6", "want_to_go", "#F59E0B", "#ffffff",
+          ],
+        },
+      });
+    }
+  }, [markerStyle, mapLoaded]);
 
+  // Update markers when places change
+  useEffect(() => {
+    if (!map.current || !mapLoaded) return;
+
+    const geojson = buildGeoJSON(places);
+
+    if (layersAdded.current && map.current.getSource("places")) {
+      (map.current.getSource("places") as mapboxgl.GeoJSONSource).setData(geojson);
+    } else {
+      setupLayers(map.current, geojson);
+    }
+    // Re-emit visible places after data update (slight delay for render)
+    setTimeout(emitVisiblePlaces, 100);
+  }, [places, mapLoaded, buildGeoJSON, setupLayers, emitVisiblePlaces]);
+
+  // Fit bounds only on initial load (not on filter/sort changes)
+  const initialFitDone = useRef(false);
+  useEffect(() => {
+    if (!map.current || !mapLoaded || places.length === 0 || initialFitDone.current) return;
+
+    initialFitDone.current = true;
     const bounds = new mapboxgl.LngLatBounds();
     places.forEach((p) => bounds.extend([p.location.lng, p.location.lat]));
 
@@ -269,10 +416,56 @@ export function MapView({ places, onPlaceClick, mapboxToken, className }: MapVie
     }
   }, [places, mapLoaded]);
 
+  // Draw route lines (trip polylines)
+  useEffect(() => {
+    if (!map.current || !mapLoaded) return;
+    const m = map.current;
+
+    // Remove old route layers/sources
+    m.getStyle()?.layers?.forEach((layer) => {
+      if (layer.id.startsWith("route-")) {
+        m.removeLayer(layer.id);
+      }
+    });
+    Object.keys(m.getStyle()?.sources || {}).forEach((srcId) => {
+      if (srcId.startsWith("route-")) {
+        m.removeSource(srcId);
+      }
+    });
+
+    // Add new route lines (before marker layers so lines are behind markers)
+    if (routeLines && routeLines.length > 0) {
+      for (const line of routeLines) {
+        m.addSource(line.id, {
+          type: "geojson",
+          data: {
+            type: "Feature",
+            geometry: { type: "LineString", coordinates: line.coordinates },
+            properties: {},
+          },
+        });
+        m.addLayer(
+          {
+            id: line.id,
+            type: "line",
+            source: line.id,
+            layout: { "line-join": "round", "line-cap": "round" },
+            paint: {
+              "line-color": line.color,
+              "line-width": 4,
+              "line-opacity": 0.8,
+            },
+          },
+          "clusters" // insert before clusters layer so lines are behind markers
+        );
+      }
+    }
+  }, [routeLines, mapLoaded]);
+
   return (
     <div
       ref={mapContainer}
       className={className || "w-full h-full"}
     />
   );
-}
+});

@@ -55,6 +55,52 @@ export interface PlaceList {
   place_count?: number;
 }
 
+export interface Trip {
+  id: string;
+  user_id: string;
+  list_id: string | null;
+  name: string;
+  start_date: string;
+  end_date: string;
+  color: string;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  // Joined
+  days?: TripDay[];
+  day_count?: number;
+  place_count?: number;
+}
+
+export interface TripDay {
+  id: string;
+  trip_id: string;
+  day_number: number;
+  date: string;
+  notes: string | null;
+  created_at: string;
+  // Joined
+  places?: TripDayPlace[];
+  route?: {
+    distance_km: number;
+    duration_min: number;
+    geometry: { type: "LineString"; coordinates: [number, number][] };
+    legs?: Array<{ distance_km: number; duration_min: number }>;
+  };
+}
+
+export interface TripDayPlace {
+  id: string;
+  trip_day_id: string;
+  place_id: string;
+  sort_order: number;
+  time_slot: string | null;
+  notes: string | null;
+  created_at: string;
+  // Joined
+  place?: Place;
+}
+
 export interface PlacePhoto {
   id: string;
   place_id: string;
@@ -87,6 +133,21 @@ export interface GooglePlaceData {
   price_level?: number;
   url?: string;
   reviews?: GoogleReview[];
+  // DataForSEO extended fields (optional — only present when provider is dataforseo)
+  provider?: "google" | "dataforseo";
+  cid?: string;
+  rating_distribution?: Record<string, number>;
+  popular_times?: Record<string, Array<{ hour: number; popular_index: number }>>;
+  place_topics?: Record<string, number>;
+  attributes?: Record<string, boolean>;
+  is_claimed?: boolean;
+  current_status?: string;
+  total_photos?: number;
+  business_description?: string;
+  book_online_url?: string;
+  local_business_links?: Array<{ type: string; url: string; title?: string }>;
+  people_also_search?: Array<{ title: string; cid?: string; rating?: number }>;
+  enriched_at?: string;
 }
 
 export interface PlaceFilters {
@@ -99,6 +160,7 @@ export interface PlaceFilters {
   google_rating_min?: number;
   visit_status?: VisitStatus;
   search?: string;
+  sort?: string;
 }
 
 export interface ParsedPlaceData {

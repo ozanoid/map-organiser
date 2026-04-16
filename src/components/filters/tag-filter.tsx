@@ -35,7 +35,7 @@ export function TagFilter() {
               "px-2.5 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer flex items-center gap-1",
               isActive
                 ? "text-white bg-emerald-600"
-                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                : "bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700"
             )}
             style={
               isActive && tag.color

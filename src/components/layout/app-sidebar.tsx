@@ -6,6 +6,7 @@ import {
   Map,
   MapPin,
   List,
+  BarChart3,
   Upload,
   Settings,
   ChevronLeft,
@@ -19,6 +20,7 @@ const navItems = [
   { href: "/map", label: "Map", icon: Map },
   { href: "/places", label: "Places", icon: MapPin },
   { href: "/lists", label: "Lists", icon: List },
+  { href: "/stats", label: "Stats", icon: BarChart3 },
   { href: "/import", label: "Import", icon: Upload },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
@@ -30,7 +32,7 @@ export function AppSidebar() {
   return (
     <aside
       className={cn(
-        "hidden lg:flex flex-col border-r bg-white transition-all duration-200",
+        "hidden lg:flex flex-col border-r bg-white dark:bg-gray-950 transition-all duration-200",
         collapsed ? "w-16" : "w-56"
       )}
     >
@@ -67,8 +69,8 @@ export function AppSidebar() {
               className={cn(
                 "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer",
                 isActive
-                  ? "bg-emerald-50 text-emerald-700"
-                  : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                  ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
+                  : "text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-100"
               )}
             >
               <item.icon className="h-5 w-5 shrink-0" />

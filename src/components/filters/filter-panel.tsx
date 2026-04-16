@@ -10,6 +10,15 @@ import { DebouncedSearchInput } from "./debounced-search-input";
 import { useFilters } from "@/lib/hooks/use-filters";
 import { X } from "lucide-react";
 
+const SORT_OPTIONS = [
+  { value: "newest", label: "Newest first" },
+  { value: "oldest", label: "Oldest first" },
+  { value: "name_asc", label: "Name A → Z" },
+  { value: "name_desc", label: "Name Z → A" },
+  { value: "rating_desc", label: "Highest rated" },
+  { value: "google_rating_desc", label: "Google rating" },
+] as const;
+
 export function FilterPanel() {
   const { filters, setFilters, clearFilters, hasActiveFilters } = useFilters();
 
@@ -28,6 +37,37 @@ export function FilterPanel() {
             Clear
           </Button>
         )}
+      </div>
+
+      {/* Sort */}
+      <div>
+        <label className="text-xs font-medium mb-1.5 block text-muted-foreground">
+          Sort by
+        </label>
+        <div className="relative">
+          <select
+            value={filters.sort || "newest"}
+            onChange={(e) =>
+              setFilters({ sort: e.target.value === "newest" ? undefined : e.target.value })
+            }
+            className="w-full h-9 px-3 pr-8 text-sm border border-input rounded-md bg-background cursor-pointer appearance-none focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1 transition-colors duration-200"
+          >
+            {SORT_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+          <svg
+            className="absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
+            <path d="m6 9 6 6 6-6" />
+          </svg>
+        </div>
       </div>
 
       {/* Visit Status */}
@@ -127,7 +167,7 @@ function RatingStars({ value, onChange }: { value: number; onChange: (v: number)
             className={`h-6 w-6 ${
               star <= value
                 ? "fill-orange-400 text-orange-400"
-                : "fill-none text-gray-300"
+                : "fill-none text-gray-300 dark:text-gray-600"
             }`}
             viewBox="0 0 24 24"
             stroke="currentColor"

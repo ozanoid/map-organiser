@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useParseLink, useCreatePlace } from "@/lib/hooks/use-places";
 import { useCategories } from "@/lib/hooks/use-categories";
 import { useLists } from "@/lib/hooks/use-lists";
@@ -33,6 +34,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import type { ParsedPlaceData, VisitStatus } from "@/lib/types";
+import { Database, Zap } from "lucide-react";
 
 interface AddPlaceDialogProps {
   open: boolean;
@@ -43,6 +45,7 @@ interface AddPlaceDialogProps {
 export function AddPlaceDialog({ open, onOpenChange, initialUrl }: AddPlaceDialogProps) {
   const [url, setUrl] = useState("");
   const [placeData, setPlaceData] = useState<ParsedPlaceData | null>(null);
+  const [providerInfo, setProviderInfo] = useState<{ name: string; timeMs: number } | null>(null);
   const [categoryId, setCategoryId] = useState<string>("");
   const [notes, setNotes] = useState("");
   const [rating, setRating] = useState<number>(0);
@@ -52,6 +55,7 @@ export function AddPlaceDialog({ open, onOpenChange, initialUrl }: AddPlaceDialo
     "want_to_go"
   );
 
+  const queryClient = useQueryClient();
   const parseLink = useParseLink();
   const createPlace = useCreatePlace();
   const { data: categories = [] } = useCategories();
@@ -62,7 +66,12 @@ export function AddPlaceDialog({ open, onOpenChange, initialUrl }: AddPlaceDialo
     if (open && initialUrl && !placeData && !parseLink.isPending) {
       setUrl(initialUrl);
       parseLink.mutate(initialUrl, {
-        onSuccess: (data) => setPlaceData(data),
+        onSuccess: (data: any) => {
+          setPlaceData(data);
+          if (data._provider) {
+            setProviderInfo({ name: data._provider, timeMs: data._fetchTimeMs || 0 });
+          }
+        },
         onError: (err) => toast.error(err.message),
       });
     }
@@ -92,6 +101,7 @@ export function AddPlaceDialog({ open, onOpenChange, initialUrl }: AddPlaceDialo
   function reset() {
     setUrl("");
     setPlaceData(null);
+    setProviderInfo(null);
     setCategoryId("");
     setNotes("");
     setRating(0);
@@ -106,7 +116,12 @@ export function AddPlaceDialog({ open, onOpenChange, initialUrl }: AddPlaceDialo
     if (!url.trim()) return;
 
     parseLink.mutate(url, {
-      onSuccess: (data) => setPlaceData(data),
+      onSuccess: (data: any) => {
+        setPlaceData(data);
+        if (data._provider) {
+          setProviderInfo({ name: data._provider, timeMs: data._fetchTimeMs || 0 });
+        }
+      },
       onError: (err) => toast.error(err.message),
     });
   }
@@ -133,6 +148,7 @@ export function AddPlaceDialog({ open, onOpenChange, initialUrl }: AddPlaceDialo
           website: placeData.website,
           phone: placeData.phone,
           url: placeData.googleMapsUrl,
+          ...((placeData as any)._extended || {}),
         },
         photoRef: placeData.photoRef,
         source: "link",
@@ -141,10 +157,29 @@ export function AddPlaceDialog({ open, onOpenChange, initialUrl }: AddPlaceDialo
         list_ids: selectedListIds.length > 0 ? selectedListIds : undefined,
       },
       {
-        onSuccess: () => {
+        onSuccess: (savedPlace: any) => {
           toast.success(`${placeData.name} saved!`);
           reset();
           onOpenChange(false);
+
+          if (savedPlace?.id) {
+            // Step 1: info (photo + extended) — await, then invalidate cache
+            fetch(`/api/places/${savedPlace.id}/enrich?step=info`, { method: "POST" })
+              .then((res) => res.json())
+              .then((data) => {
+                queryClient.invalidateQueries({ queryKey: ["places"] });
+                // Step 2: reviews — fire-and-forget, detail page polling picks it up
+                const cid = data?.cid;
+                if (cid) {
+                  fetch(`/api/places/${savedPlace.id}/enrich?step=reviews`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ cid }),
+                  }).catch(() => {});
+                }
+              })
+              .catch(() => {});
+          }
         },
         onError: (err) => toast.error(err.message),
       }
@@ -270,6 +305,23 @@ export function AddPlaceDialog({ open, onOpenChange, initialUrl }: AddPlaceDialo
                   </Badge>
                 )}
               </div>
+
+              {/* Provider indicator */}
+              {providerInfo && (
+                <div className="flex items-center gap-1.5 mt-2 text-[10px] text-muted-foreground">
+                  {providerInfo.name === "dataforseo" ? (
+                    <Database className="h-3 w-3" />
+                  ) : (
+                    <Zap className="h-3 w-3" />
+                  )}
+                  <span>
+                    via {providerInfo.name === "dataforseo" ? "DataForSEO" : "Google Places API"}
+                    {providerInfo.timeMs > 0 && (
+                      <> &middot; {(providerInfo.timeMs / 1000).toFixed(1)}s</>
+                    )}
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* Visit Status */}

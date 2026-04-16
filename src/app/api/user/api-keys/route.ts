@@ -17,7 +17,7 @@ export async function GET() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("is_admin, google_api_key_enc, mapbox_token_enc")
+    .select("is_admin, google_api_key_enc, mapbox_token_enc, google_places_enabled")
     .eq("id", user.id)
     .single();
 
@@ -34,6 +34,7 @@ export async function GET() {
     mapboxToken: maskApiKey(mapboxToken),
     hasGoogleKey: !!googleKey,
     hasMapboxToken: !!mapboxToken,
+    googlePlacesEnabled: profile?.google_places_enabled ?? true,
   });
 }
 
@@ -58,6 +59,9 @@ export async function PUT(request: NextRequest) {
     updates.mapbox_token_enc = body.mapboxToken
       ? encryptApiKey(body.mapboxToken)
       : null;
+  }
+  if (body.googlePlacesEnabled !== undefined) {
+    updates.google_places_enabled = body.googlePlacesEnabled;
   }
 
   if (Object.keys(updates).length === 0) {

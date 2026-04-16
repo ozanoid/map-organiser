@@ -8,10 +8,36 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { Plus, Trash2, Loader2, Tag, FolderOpen, Shield } from "lucide-react";
+import {
+  Plus, Trash2, Loader2, Tag, FolderOpen, Shield, Paintbrush, Sun, Moon, Monitor, Map,
+  Utensils, Coffee, Wine, Bed, ShoppingBag, Landmark, Trees, Waves, Dumbbell, HeartPulse, Ticket, MapPin,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import { CATEGORY_DEFAULT_ICONS } from "@/lib/map/category-icons";
 import { toast } from "sonner";
+import { useTheme } from "next-themes";
 import { ApiKeysManager } from "@/components/settings/api-keys-manager";
 import { CostTracker } from "@/components/settings/cost-tracker";
+import { useMapStyle, MAP_STYLE_OPTIONS } from "@/lib/hooks/use-map-style";
+import type { MapStyleKey, MarkerStyle } from "@/lib/hooks/use-map-style";
+
+/** Map Lucide icon name → React component for display in UI */
+const ICON_COMPONENTS: Record<string, LucideIcon> = {
+  utensils: Utensils,
+  coffee: Coffee,
+  wine: Wine,
+  bed: Bed,
+  "shopping-bag": ShoppingBag,
+  landmark: Landmark,
+  trees: Trees,
+  waves: Waves,
+  dumbbell: Dumbbell,
+  "heart-pulse": HeartPulse,
+  ticket: Ticket,
+  "map-pin": MapPin,
+};
+
+const PRESET_ICONS = Object.keys(ICON_COMPONENTS);
 
 const PRESET_COLORS = [
   "#EF4444", "#F97316", "#F59E0B", "#22C55E", "#06B6D4",
@@ -21,7 +47,7 @@ const PRESET_COLORS = [
 
 export default function SettingsPage() {
   return (
-    <div className="p-4 lg:p-6 max-w-2xl mx-auto space-y-6">
+    <div className="p-4 lg:p-6 max-w-2xl mx-auto space-y-6 overflow-x-hidden">
       <div>
         <h1 className="text-xl font-semibold">Settings</h1>
         <p className="text-sm text-muted-foreground mt-1">
@@ -31,17 +57,24 @@ export default function SettingsPage() {
 
       <Tabs defaultValue="categories">
         <TabsList>
-          <TabsTrigger value="categories" className="cursor-pointer">
+          <TabsTrigger value="categories" className="cursor-pointer shrink-0">
             <FolderOpen className="h-4 w-4 mr-1.5" />
-            Categories
+            <span className="hidden sm:inline">Categories</span>
+            <span className="sm:hidden">Cats</span>
           </TabsTrigger>
-          <TabsTrigger value="tags" className="cursor-pointer">
+          <TabsTrigger value="tags" className="cursor-pointer shrink-0">
             <Tag className="h-4 w-4 mr-1.5" />
             Tags
           </TabsTrigger>
-          <TabsTrigger value="api" className="cursor-pointer">
+          <TabsTrigger value="api" className="cursor-pointer shrink-0">
             <Shield className="h-4 w-4 mr-1.5" />
-            API & Usage
+            <span className="hidden sm:inline">API & Usage</span>
+            <span className="sm:hidden">API</span>
+          </TabsTrigger>
+          <TabsTrigger value="appearance" className="cursor-pointer shrink-0">
+            <Paintbrush className="h-4 w-4 mr-1.5" />
+            <span className="hidden sm:inline">Appearance</span>
+            <span className="sm:hidden">Theme</span>
           </TabsTrigger>
         </TabsList>
 
@@ -56,6 +89,9 @@ export default function SettingsPage() {
           <Separator />
           <CostTracker />
         </TabsContent>
+        <TabsContent value="appearance" className="mt-4">
+          <AppearanceSettings />
+        </TabsContent>
       </Tabs>
     </div>
   );
@@ -67,12 +103,13 @@ function CategoryManager() {
   const deleteCategory = useDeleteCategory();
   const [newName, setNewName] = useState("");
   const [newColor, setNewColor] = useState("#059669");
+  const [newIcon, setNewIcon] = useState("map-pin");
 
   function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     if (!newName.trim()) return;
     createCategory.mutate(
-      { name: newName.trim(), color: newColor },
+      { name: newName.trim(), color: newColor, icon: newIcon },
       {
         onSuccess: () => {
           toast.success("Category created");
@@ -100,16 +137,21 @@ function CategoryManager() {
   return (
     <div className="space-y-4">
       {/* Create form */}
-      <form onSubmit={handleCreate} className="flex gap-2 items-end">
-        <div className="flex-1">
-          <Input
-            placeholder="New category name"
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            className="h-9 text-sm"
-          />
+      <form onSubmit={handleCreate} className="space-y-2">
+        <div className="flex gap-2 items-end">
+          <div className="flex-1">
+            <Input
+              placeholder="New category name"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              className="h-9 text-sm"
+            />
+          </div>
+          <Button type="submit" size="sm" className="h-9 cursor-pointer" disabled={!newName.trim() || createCategory.isPending}>
+            {createCategory.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+          </Button>
         </div>
-        <div className="flex gap-1">
+        <div className="flex gap-1 flex-wrap">
           {PRESET_COLORS.slice(0, 6).map((c) => (
             <button
               key={c}
@@ -124,9 +166,27 @@ function CategoryManager() {
             />
           ))}
         </div>
-        <Button type="submit" size="sm" className="h-9 cursor-pointer" disabled={!newName.trim() || createCategory.isPending}>
-          {createCategory.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-        </Button>
+        <div className="flex gap-1 flex-wrap">
+          {PRESET_ICONS.map((iconName) => {
+            const Icon = ICON_COMPONENTS[iconName];
+            if (!Icon) return null;
+            return (
+              <button
+                key={iconName}
+                type="button"
+                onClick={() => setNewIcon(iconName)}
+                className={`h-7 w-7 rounded-md flex items-center justify-center cursor-pointer transition-colors duration-200 ${
+                  newIcon === iconName
+                    ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300"
+                    : "text-muted-foreground hover:bg-gray-100 dark:hover:bg-gray-800"
+                }`}
+                title={iconName}
+              >
+                <Icon className="h-3.5 w-3.5" />
+              </button>
+            );
+          })}
+        </div>
       </form>
 
       <Separator />
@@ -136,16 +196,21 @@ function CategoryManager() {
         {categories.map((cat) => (
           <div
             key={cat.id}
-            className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-gray-50 group"
+            className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 group"
           >
             <div className="flex items-center gap-3">
               <span
-                className="h-4 w-4 rounded-full shrink-0"
+                className="h-6 w-6 rounded-full shrink-0 flex items-center justify-center"
                 style={{ backgroundColor: cat.color }}
-              />
+              >
+                {(() => {
+                  const Icon = ICON_COMPONENTS[cat.icon] || MapPin;
+                  return <Icon className="h-3 w-3 text-white" />;
+                })()}
+              </span>
               <span className="text-sm">{cat.name}</span>
               {cat.is_default && (
-                <span className="text-[10px] text-muted-foreground bg-gray-100 px-1.5 py-0.5 rounded">
+                <span className="text-[10px] text-muted-foreground bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded">
                   default
                 </span>
               )}
@@ -222,7 +287,7 @@ function TagManager() {
           {tags.map((tag) => (
             <div
               key={tag.id}
-              className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-gray-50 group"
+              className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 group"
             >
               <span className="text-sm">{tag.name}</span>
               <Button
@@ -237,6 +302,115 @@ function TagManager() {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+const THEME_OPTIONS = [
+  { value: "light", label: "Light", icon: Sun },
+  { value: "dark", label: "Dark", icon: Moon },
+  { value: "system", label: "System", icon: Monitor },
+] as const;
+
+function AppearanceSettings() {
+  const { theme, setTheme } = useTheme();
+  const { mapStyle, setMapStyle, markerStyle, setMarkerStyle } = useMapStyle();
+  const [mounted, setMounted] = useState(false);
+
+  useState(() => { setMounted(true); });
+
+  if (!mounted) return null;
+
+  return (
+    <div className="space-y-6">
+      {/* Theme */}
+      <div>
+        <label className="text-sm font-medium mb-3 block">Theme</label>
+        <div className="grid grid-cols-3 gap-2">
+          {THEME_OPTIONS.map((opt) => {
+            const Icon = opt.icon;
+            const active = theme === opt.value;
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setTheme(opt.value)}
+                className={`flex flex-col items-center gap-1.5 p-3 rounded-lg border cursor-pointer transition-colors duration-200 ${
+                  active
+                    ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300"
+                    : "border-input hover:border-gray-300 dark:hover:border-gray-600 text-muted-foreground"
+                }`}
+              >
+                <Icon className="h-5 w-5" />
+                <span className="text-xs font-medium">{opt.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <Separator />
+
+      {/* Map Style */}
+      <div>
+        <label className="text-sm font-medium mb-3 block">
+          <Map className="h-4 w-4 inline mr-1.5 -mt-0.5" />
+          Map Style
+        </label>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          {MAP_STYLE_OPTIONS.map((opt) => {
+            const active = mapStyle === opt.value;
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setMapStyle(opt.value as MapStyleKey)}
+                className={`flex flex-col items-start p-3 rounded-lg border cursor-pointer transition-colors duration-200 ${
+                  active
+                    ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300"
+                    : "border-input hover:border-gray-300 dark:hover:border-gray-600"
+                }`}
+              >
+                <span className="text-sm font-medium">{opt.label}</span>
+                <span className="text-[10px] text-muted-foreground mt-0.5">{opt.description}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <Separator />
+
+      {/* Marker Style */}
+      <div>
+        <label className="text-sm font-medium mb-3 block">
+          <MapPin className="h-4 w-4 inline mr-1.5 -mt-0.5" />
+          Marker Style
+        </label>
+        <div className="grid grid-cols-2 gap-2">
+          {([
+            { value: "dots" as const, label: "Simple dots", description: "Clean colored circles" },
+            { value: "icons" as const, label: "Category icons", description: "Icons inside markers" },
+          ]).map((opt) => {
+            const active = markerStyle === opt.value;
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setMarkerStyle(opt.value)}
+                className={`flex flex-col items-start p-3 rounded-lg border cursor-pointer transition-colors duration-200 ${
+                  active
+                    ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300"
+                    : "border-input hover:border-gray-300 dark:hover:border-gray-600"
+                }`}
+              >
+                <span className="text-sm font-medium">{opt.label}</span>
+                <span className="text-[10px] text-muted-foreground mt-0.5">{opt.description}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }

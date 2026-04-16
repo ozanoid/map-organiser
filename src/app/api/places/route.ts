@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { resolveCategoryId } from "@/lib/google/category-mapping";
-import { downloadAndStorePhoto } from "@/lib/google/places-api";
-import { getUserApiKeys } from "@/lib/google/get-user-api-keys";
+import { downloadAndStorePhotoFromUrl } from "@/lib/dataforseo/photo";
+import { parsePostgisPoint } from "@/lib/geo";
 
 // GET /api/places - List all places for current user with filters
 export async function GET(request: NextRequest) {
@@ -26,12 +26,24 @@ export async function GET(request: NextRequest) {
   const ratingMin = searchParams.get("rating");
   const googleRatingMin = searchParams.get("google_rating");
   const search = searchParams.get("q");
+  const sort = searchParams.get("sort");
+
+  // Determine sort field and direction
+  const sortConfig: Record<string, { column: string; ascending: boolean }> = {
+    newest: { column: "created_at", ascending: false },
+    oldest: { column: "created_at", ascending: true },
+    name_asc: { column: "name", ascending: true },
+    name_desc: { column: "name", ascending: false },
+    rating_desc: { column: "rating", ascending: false },
+  };
+  const { column: sortColumn, ascending: sortAscending } =
+    sortConfig[sort || ""] ?? sortConfig.newest;
 
   let query = supabase
     .from("places")
     .select("*, category:categories(*)")
     .eq("user_id", user.id)
-    .order("created_at", { ascending: false });
+    .order(sortColumn, { ascending: sortAscending });
 
   if (country) query = query.eq("country", country);
   if (city) query = query.eq("city", city);
@@ -58,7 +70,6 @@ export async function GET(request: NextRequest) {
   }
 
   // If filtering by tags, do a secondary filter
-
   if (tagIds && tagIds.length > 0) {
     const { data: taggedPlaceIds } = await supabase
       .from("place_tags")
@@ -71,30 +82,29 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // If filtering by list, do a secondary filter
+  // If filtering by list, do a secondary filter + sort by sort_order
   if (listId) {
     const { data: listPlaceIds } = await supabase
       .from("list_places")
-      .select("place_id")
-      .eq("list_id", listId);
+      .select("place_id, sort_order")
+      .eq("list_id", listId)
+      .order("sort_order", { ascending: true });
 
     if (listPlaceIds) {
-      const ids = new Set(listPlaceIds.map((lp) => lp.place_id));
-      filteredPlaces = filteredPlaces.filter((p) => ids.has(p.id));
+      const orderMap = new Map(listPlaceIds.map((lp) => [lp.place_id, lp.sort_order ?? 0]));
+      filteredPlaces = filteredPlaces
+        .filter((p) => orderMap.has(p.id))
+        .sort((a, b) => (orderMap.get(a.id) ?? 0) - (orderMap.get(b.id) ?? 0));
     }
   }
 
-  // Post-filter: also match search in google_data reviews text
-  if (search && filteredPlaces.length > 0) {
-    const searchLower = search.toLowerCase();
-    // Get IDs already matched by DB query
-    const dbMatchIds = new Set(filteredPlaces.map((p) => p.id));
-    // If we have places NOT matched by name/address/notes but matching review text,
-    // we'd need a second query. For now, just filter existing results to include review matches.
-    // The DB or() already filtered, so all results match. No extra filtering needed here.
-    // But if we want to ALSO find places whose reviews match but name/address don't,
-    // we need to fetch ALL places first. For performance, we skip that for now.
-    // Instead, just keep existing behavior - DB handles name/address/notes search.
+  // Post-query sort for google_rating (stored in JSONB, can't sort at query level)
+  if (sort === "google_rating_desc") {
+    filteredPlaces.sort((a: any, b: any) => {
+      const ra = a.google_data?.rating ?? 0;
+      const rb = b.google_data?.rating ?? 0;
+      return rb - ra;
+    });
   }
 
   // Transform PostGIS geography to {lat, lng}
@@ -118,8 +128,6 @@ export async function POST(request: NextRequest) {
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-
-  const { googleApiKey } = await getUserApiKeys(user.id);
 
   const body = await request.json();
   const { name, address, country, city, lat, lng, category_id, rating, notes, google_place_id, google_data, source, tag_ids, list_ids, visit_status, photoRef } = body;
@@ -171,7 +179,6 @@ export async function POST(request: NextRequest) {
   delete savedGoogleData.reviews;
   delete savedGoogleData.editorialSummary;
   delete savedGoogleData.editorial_summary;
-  // Keep only essential photo data - actual image stored in Supabase Storage
   delete savedGoogleData.photos;
 
   const { data: place, error } = await supabase
@@ -200,9 +207,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  // Download photo to Supabase Storage (1 photo only, $7/1K requests)
-  if (photoRef && googleApiKey) {
-    const storageUrl = await downloadAndStorePhoto(photoRef, place.id, user.id, googleApiKey);
+  // If photoRef exists (DataForSEO path), download photo immediately
+  if (photoRef) {
+    const { downloadAndStorePhotoFromUrl } = await import("@/lib/dataforseo/photo");
+    const storageUrl = await downloadAndStorePhotoFromUrl(photoRef, place.id, user.id);
     if (storageUrl) {
       await supabase
         .from("places")
@@ -237,53 +245,4 @@ export async function POST(request: NextRequest) {
     ...place,
     location: { lat, lng },
   });
-}
-
-/**
- * Parse PostGIS geography point to {lat, lng}.
- * Supabase REST API returns geography as hex EWKB string.
- */
-function parseEWKB(hex: string): { lat: number; lng: number } | null {
-  try {
-    const buf = Buffer.from(hex, "hex");
-    // EWKB: byte_order(1) + type(4) + srid(4) + x(8) + y(8)
-    // Little-endian (01) or big-endian (00)
-    const le = buf[0] === 1;
-    const lng = le ? buf.readDoubleLE(9) : buf.readDoubleBE(9);
-    const lat = le ? buf.readDoubleLE(17) : buf.readDoubleBE(17);
-    if (isFinite(lat) && isFinite(lng)) return { lat, lng };
-  } catch {}
-  return null;
-}
-
-function parsePostgisPoint(location: unknown): { lat: number; lng: number } {
-  if (typeof location === "string") {
-    // Hex EWKB format (from Supabase REST API)
-    if (/^[0-9a-fA-F]+$/.test(location) && location.length > 20) {
-      const parsed = parseEWKB(location);
-      if (parsed) return parsed;
-    }
-    // WKT format: POINT(lng lat)
-    const match = location.match(/POINT\((-?\d+\.?\d*)\s+(-?\d+\.?\d*)\)/);
-    if (match) {
-      return { lng: parseFloat(match[1]), lat: parseFloat(match[2]) };
-    }
-    // GeoJSON string
-    try {
-      const geo = JSON.parse(location);
-      if (geo.coordinates) return { lng: geo.coordinates[0], lat: geo.coordinates[1] };
-    } catch {}
-  }
-
-  if (typeof location === "object" && location !== null) {
-    const loc = location as Record<string, unknown>;
-    if ("lat" in loc && "lng" in loc) {
-      return { lat: Number(loc.lat), lng: Number(loc.lng) };
-    }
-    if ("coordinates" in loc && Array.isArray(loc.coordinates)) {
-      return { lng: loc.coordinates[0], lat: loc.coordinates[1] };
-    }
-  }
-
-  return { lat: 0, lng: 0 };
 }

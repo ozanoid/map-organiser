@@ -1,16 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { getPlaceReviews, getPlaceDetails, downloadAndStorePhoto } from "@/lib/google/places-api";
-import { getUserApiKeys } from "@/lib/google/get-user-api-keys";
+import { DataForSEOClient } from "@/lib/dataforseo/client";
+import { fetchBusinessInfoLive } from "@/lib/dataforseo/business-info";
+import { fetchReviews } from "@/lib/dataforseo/reviews";
+import { downloadAndStorePhotoFromUrl } from "@/lib/dataforseo/photo";
+import {
+  transformBusinessInfoToPlaceData,
+  transformReviews,
+  extractExtendedData,
+} from "@/lib/dataforseo/transform";
+import { trackUsage } from "@/lib/google/track-usage";
 
-/**
- * POST /api/places/[id]/refresh-google-data
- *
- * Refreshes Google data for a place:
- * - PRO tier ($17/1K): basic info, hours, website, phone, price
- * - ENTERPRISE tier ($20/1K): reviews (separate call)
- * - PHOTOS ($7/1K): re-downloads 1 photo to Supabase Storage
- */
+function getDataForSEOClient(): DataForSEOClient {
+  const login = process.env.DATAFORSEO_LOGIN;
+  const password = process.env.DATAFORSEO_PASSWORD;
+  if (!login || !password) {
+    throw new Error("DATAFORSEO_LOGIN and DATAFORSEO_PASSWORD env vars required");
+  }
+  return new DataForSEOClient({ login, password });
+}
+
 export async function POST(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -27,7 +36,7 @@ export async function POST(
 
   const { data: place, error: fetchError } = await supabase
     .from("places")
-    .select("google_place_id, google_data")
+    .select("google_place_id, google_data, country")
     .eq("id", id)
     .eq("user_id", user.id)
     .single();
@@ -43,33 +52,52 @@ export async function POST(
     );
   }
 
-  const { googleApiKey } = await getUserApiKeys(user.id);
-  if (!googleApiKey) {
-    return NextResponse.json(
-      { error: "Please add your Google Places API key in Settings" },
-      { status: 400 }
-    );
-  }
-
+  const client = getDataForSEOClient();
   const existingData = (place.google_data as Record<string, unknown>) || {};
 
-  // 1. Fetch fresh basic data (PRO tier - $17/1K)
-  const details = await getPlaceDetails(place.google_place_id, googleApiKey, user.id);
+  // 1. Fetch fresh business info via DataForSEO Live
+  const placeId = place.google_place_id;
+  const keyword = placeId.startsWith("ChIJ")
+    ? `place_id:${placeId}`
+    : `cid:${placeId}`;
 
-  // 2. Fetch reviews separately (ENTERPRISE tier - $20/1K)
-  const reviews = await getPlaceReviews(place.google_place_id, googleApiKey, user.id);
+  const raw = await fetchBusinessInfoLive(client, { keyword });
+  trackUsage(user.id, "dataforseo_business_info_live").catch(() => {});
 
-  // 3. Re-download photo if available (PHOTOS - $7/1K)
+  const details = raw ? transformBusinessInfoToPlaceData(raw) : null;
+  const extended = raw ? extractExtendedData(raw) : {};
+
+  // 2. Fetch reviews — need CID + location for the reviews endpoint
+  const cid = raw?.cid || (existingData.cid as string) || null;
+  let reviews: ReturnType<typeof transformReviews> = [];
+  if (cid) {
+    const rawReviews = await fetchReviews(client, {
+      cid,
+      depth: 50,
+      location_name: place.country || "United States",
+    });
+    reviews = transformReviews(rawReviews);
+    trackUsage(user.id, "dataforseo_reviews").catch(() => {});
+  }
+
+  // 3. Only download photo if we don't already have one stored
   let photoStorageUrl = existingData.photo_storage_url as string | undefined;
-  if (details?.photoRef) {
-    const newUrl = await downloadAndStorePhoto(details.photoRef, id, user.id, googleApiKey);
+  if (!photoStorageUrl && details?.photoRef) {
+    const newUrl = await downloadAndStorePhotoFromUrl(details.photoRef, id, user.id);
     if (newUrl) photoStorageUrl = newUrl;
   }
 
-  const updatedGoogleData = {
+  // Calculate total ratings from distribution
+  const dist = extended.rating_distribution as Record<string, number> | undefined;
+  const userRatingsTotal = dist
+    ? Object.values(dist).reduce((a: number, b: number) => a + b, 0)
+    : existingData.user_ratings_total;
+
+  const updatedGoogleData: Record<string, unknown> = {
     ...existingData,
     types: details?.types || existingData.types,
-    rating: details?.rating || existingData.rating,
+    rating: details?.rating ?? existingData.rating,
+    user_ratings_total: userRatingsTotal,
     opening_hours: details?.openingHours || existingData.opening_hours,
     website: details?.website || existingData.website,
     phone: details?.phone || existingData.phone,
@@ -77,13 +105,14 @@ export async function POST(
     url: details?.googleMapsUrl || existingData.url,
     photo_storage_url: photoStorageUrl,
     reviews: reviews.length > 0 ? reviews : existingData.reviews,
+    // DataForSEO extended fields
+    ...extended,
   };
 
-  // Remove legacy fields
-  const cleanData = updatedGoogleData as Record<string, unknown>;
-  delete cleanData.photos;
-  delete cleanData.editorial_summary;
-  delete cleanData.editorialSummary;
+  // Clean legacy fields
+  delete updatedGoogleData.photos;
+  delete updatedGoogleData.editorial_summary;
+  delete updatedGoogleData.editorialSummary;
 
   const { data: updated, error: updateError } = await supabase
     .from("places")

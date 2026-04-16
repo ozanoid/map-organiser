@@ -14,6 +14,7 @@ async function fetchPlaces(filters: PlaceFilters): Promise<Place[]> {
   if (filters.google_rating_min) params.set("google_rating", String(filters.google_rating_min));
   if (filters.visit_status) params.set("status", filters.visit_status);
   if (filters.search) params.set("q", filters.search);
+  if (filters.sort) params.set("sort", filters.sort);
 
   const res = await fetch(`/api/places?${params}`);
   if (!res.ok) throw new Error("Failed to fetch places");

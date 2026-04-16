@@ -14,6 +14,17 @@ export const SKU_CONFIG = {
   },
   photos: { name: "Photos", costPer1k: 7.0, freeMonthly: 1000 },
   mapbox_load: { name: "Mapbox Loads", costPer1k: 5.0, freeMonthly: 50000 },
+  // DataForSEO SKUs
+  dataforseo_business_info_live: {
+    name: "DataForSEO Business Info",
+    costPer1k: 5.4,
+    freeMonthly: 0,
+  },
+  dataforseo_reviews: {
+    name: "DataForSEO Reviews",
+    costPer1k: 0.75,
+    freeMonthly: 0,
+  },
 } as const;
 
 export type SkuType = keyof typeof SKU_CONFIG;
