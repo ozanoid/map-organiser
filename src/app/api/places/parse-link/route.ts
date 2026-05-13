@@ -115,6 +115,10 @@ export async function POST(request: NextRequest) {
     let req: BusinessInfoRequest | null = null;
     if (cidFromUrl) {
       req = { keyword: `cid:${cidFromUrl}`, location_coordinate: locationCoord };
+    } else if (parsed.type === "cid" && parsed.cid) {
+      // Parser extracted CID from FTid (short links resolved server-side).
+      // Exact-match Business Info lookup — preferred over text search.
+      req = { keyword: `cid:${parsed.cid}`, location_coordinate: locationCoord };
     } else if (parsed.type === "place_id" && parsed.placeId) {
       req = { keyword: `place_id:${parsed.placeId}`, location_coordinate: locationCoord };
     } else if (parsed.type === "search" && parsed.query) {

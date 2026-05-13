@@ -6,6 +6,20 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 13.05.2026 — v1.1.2 — patch: extract CID from FTid + prefer POI coords
+
+Short-link shares (`maps.app.goo.gl/...`) resolve to URLs whose `data=` blob carries an FTid (`!1s0xCELL:0xCID`) and the POI's actual coordinates (`!3d!4d`), but the parser was throwing both away and falling back to text search with the viewport center.
+
+- `src/lib/google/parse-maps-url.ts`:
+  - When an FTid is present, the second hex is converted to a Google CID — parser now returns `type: "cid"` with the decimal CID. DataForSEO accepts this as an exact-match key, bypassing the lossy text-search path entirely.
+  - `extractCoordinates` now prefers `!3d!4d` (POI actual location) over `@lat,lng` (viewport center). The two can differ by 1+ km in real-world shares.
+  - `ParsedUrl` now exposes the resolved URL via `resolvedUrl?: string` for any future re-inspection.
+- `/api/places/parse-link`: handles the new `type: "cid"` branch — issues `keyword: "cid:<decimal>"` straight to DataForSEO.
+
+Real-world impact: e.g. `https://maps.app.goo.gl/m6rXiaYaKLqEdqhh6` (Top Cuvée Highbury) used to 404 with "Could not find place details" because viewport center sat 1.3 km from the actual POI and "Top Cuvée Highbury" + 2 km bias still missed Google's text-search match. Now it resolves via CID on the first call.
+
+---
+
 ## 13.05.2026 — v1.1.1 — patch: short-query parse-link match
 
 Fixes "Could not find place details" for `/maps/place/Name/@lat,lng/` URLs where the parser only extracts a bare short name (e.g. `Beam`). Short generic keywords lose Google's text-search against same-named businesses worldwide even with a coordinate bias.

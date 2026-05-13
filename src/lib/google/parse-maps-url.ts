@@ -17,6 +17,8 @@ export interface ParsedUrl {
   lat?: number;
   lng?: number;
   query?: string;
+  /** When the input was a short link, the URL it resolved to (for downstream re-inspection). */
+  resolvedUrl?: string;
 }
 
 /**
@@ -88,6 +90,21 @@ function ftidToCoordinates(ftid: string): { lat: number; lng: number } | null {
 }
 
 /**
+ * The second hex of an FTid (`0xCELL:0xCID`) is the Google CID — a stable
+ * 64-bit handle that DataForSEO accepts as `cid:<decimal>` for exact-match
+ * Business Info lookups. This converts that hex to decimal.
+ */
+function cidFromFtid(ftid: string): string | null {
+  const parts = ftid.split(":");
+  if (parts.length !== 2) return null;
+  try {
+    return BigInt(parts[1]).toString();
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Extract CID from URL query parameter only.
  */
 function extractCid(url: string): string | null {
@@ -97,9 +114,20 @@ function extractCid(url: string): string | null {
 
 /**
  * Extract coordinates from URL.
+ *
+ * Precedence matters: !3d!4d (POI's actual location inside Google's `data=`
+ * payload) is correct; @lat,lng is the *viewport center* the user happened
+ * to be looking at when they shared, and can sit a kilometer away from the
+ * actual POI. Check !3d!4d first.
  */
 function extractCoordinates(url: string): { lat: number; lng: number } | null {
-  // Format: @lat,lng,zoom
+  // Format: /data=!3d(lat)!4d(lng) — POI's actual coordinates (most accurate)
+  const dataMatch = url.match(/!3d(-?\d+\.?\d*)!4d(-?\d+\.?\d*)/);
+  if (dataMatch) {
+    return { lat: parseFloat(dataMatch[1]), lng: parseFloat(dataMatch[2]) };
+  }
+
+  // Format: @lat,lng,zoom — viewport center, fallback
   const atMatch = url.match(/@(-?\d+\.?\d*),(-?\d+\.?\d*)/);
   if (atMatch) {
     return { lat: parseFloat(atMatch[1]), lng: parseFloat(atMatch[2]) };
@@ -109,12 +137,6 @@ function extractCoordinates(url: string): { lat: number; lng: number } | null {
   const llMatch = url.match(/(?:ll|center)=(-?\d+\.?\d*),(-?\d+\.?\d*)/);
   if (llMatch) {
     return { lat: parseFloat(llMatch[1]), lng: parseFloat(llMatch[2]) };
-  }
-
-  // Format: /data=!3d(lat)!4d(lng)
-  const dataMatch = url.match(/!3d(-?\d+\.?\d*)!4d(-?\d+\.?\d*)/);
-  if (dataMatch) {
-    return { lat: parseFloat(dataMatch[1]), lng: parseFloat(dataMatch[2]) };
   }
 
   return null;
@@ -144,16 +166,18 @@ function extractSearchQuery(url: string): string | null {
  * Main parser: takes any Google Maps URL and extracts structured data.
  */
 export async function parseMapsUrl(rawUrl: string): Promise<ParsedUrl> {
-  let url = rawUrl.trim();
+  const original = rawUrl.trim();
+  let url = original;
 
   // Step 1: Resolve short links
-  if (
+  const isShort =
     url.includes("goo.gl/maps/") ||
     url.includes("maps.app.goo.gl/") ||
-    url.includes("maps.google.com/goo.gl")
-  ) {
+    url.includes("maps.google.com/goo.gl");
+  if (isShort) {
     url = await resolveUrl(url);
   }
+  const resolvedUrl = url !== original ? url : undefined;
 
   // Step 2: Try to extract ChIJ Place ID (works with New API)
   const placeId = extractChIJPlaceId(url);
@@ -164,23 +188,38 @@ export async function parseMapsUrl(rawUrl: string): Promise<ParsedUrl> {
       placeId,
       lat: coords?.lat,
       lng: coords?.lng,
+      resolvedUrl,
     };
   }
 
-  // Step 3: If URL has FTid (0x...), use S2 decode or URL coords for search
+  // Step 3: If URL has FTid (0x...:0x...), the second hex is the Google CID —
+  // an exact-match key DataForSEO accepts directly. Prefer this over text search.
   const ftid = extractFtid(url);
   if (ftid) {
+    const cid = cidFromFtid(ftid);
     const s2Coords = ftidToCoordinates(ftid);
     const urlCoords = extractCoordinates(url);
     const bestCoords = urlCoords || s2Coords;
-    const query = extractSearchQuery(url);
 
+    if (cid) {
+      return {
+        type: "cid",
+        cid,
+        lat: bestCoords?.lat,
+        lng: bestCoords?.lng,
+        resolvedUrl,
+      };
+    }
+
+    // No CID extractable — fall back to query + coords search.
+    const query = extractSearchQuery(url);
     if (query && bestCoords) {
       return {
         type: "search",
         query,
         lat: bestCoords.lat,
         lng: bestCoords.lng,
+        resolvedUrl,
       };
     }
     if (bestCoords) {
@@ -188,6 +227,7 @@ export async function parseMapsUrl(rawUrl: string): Promise<ParsedUrl> {
         type: "coordinates",
         lat: bestCoords.lat,
         lng: bestCoords.lng,
+        resolvedUrl,
       };
     }
   }
@@ -201,6 +241,7 @@ export async function parseMapsUrl(rawUrl: string): Promise<ParsedUrl> {
       cid,
       lat: coords?.lat,
       lng: coords?.lng,
+      resolvedUrl,
     };
   }
 
@@ -214,6 +255,7 @@ export async function parseMapsUrl(rawUrl: string): Promise<ParsedUrl> {
       query,
       lat: coords?.lat,
       lng: coords?.lng,
+      resolvedUrl,
     };
   }
 
@@ -223,8 +265,9 @@ export async function parseMapsUrl(rawUrl: string): Promise<ParsedUrl> {
       type: "coordinates",
       lat: coords.lat,
       lng: coords.lng,
+      resolvedUrl,
     };
   }
 
-  return { type: "unknown" };
+  return { type: "unknown", resolvedUrl };
 }
