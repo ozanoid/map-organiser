@@ -107,16 +107,30 @@ export function SearchResultPanel({ place, onClose }: SearchResultPanelProps) {
           toast.success(`${place.name} saved!`);
           onClose();
 
-          // Fire-and-forget reviews enrichment if DataForSEO match returned a cid.
-          const cid = place._extended?.cid;
-          if (savedPlace?.id && cid) {
-            fetch(`/api/places/${savedPlace.id}/enrich?step=reviews`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ cid }),
-            }).catch(() => {});
+          // Same two-step enrichment as the URL-paste flow:
+          //  1. step=info — DB roundtrip that re-asserts google_data + cid and
+          //     hands us a fresh cid for reviews. Resolves any race against the
+          //     async photo-download UPDATE that POST /api/places does.
+          //  2. step=reviews — fire-and-forget; /places/[id] polling picks it up.
+          if (savedPlace?.id) {
+            fetch(`/api/places/${savedPlace.id}/enrich?step=info`, { method: "POST" })
+              .then((res) => res.json())
+              .then((data) => {
+                queryClient.invalidateQueries({ queryKey: ["places"] });
+                const cid = data?.cid ?? place._extended?.cid;
+                if (cid) {
+                  fetch(`/api/places/${savedPlace.id}/enrich?step=reviews`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ cid }),
+                  }).catch(() => {});
+                }
+              })
+              .catch(() => {
+                // Fallback: at least invalidate if info failed (e.g. mapbox-only path with no google_place_id)
+                queryClient.invalidateQueries({ queryKey: ["places"] });
+              });
           }
-          queryClient.invalidateQueries({ queryKey: ["places"] });
         },
         onError: (err) => toast.error(err.message),
       }
