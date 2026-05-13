@@ -6,6 +6,45 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 13.05.2026 — v1.1.0 — F-01 place search (Mapbox Search Box)
+
+Shipped F-01 from `_archive/feature-suggestions_v3` (Manuel Mekan Ekleme, drop-pin scope dropped). Users can now search a place on `/map`, preview enriched details, and save to their places without leaving the page.
+
+### Code
+
+- **DB** — migration `add_source_check_with_mapbox_search` applied: `places.source` now has `CHECK (source IN ('manual','import','link','mapbox_search'))`.
+- **Backend** — new `GET /api/search/suggest` and `GET /api/search/retrieve/[id]` (`src/app/api/search/...`) wrapping Mapbox Search Box. Retrieve auto-enriches via DataForSEO when env credentials present, mirroring the parse-link response shape.
+- **Library** — `src/lib/mapbox/search-box.ts` (server-only): `suggest` + `retrieve` fetch wrappers.
+- **Cost tracking** — new SKU `mapbox_search_session` ($11.50/1k, 500 free/month). Tracked on `retrieve` call.
+- **Env** — new server-only `MAPBOX_SERVER_TOKEN` (URL-restriction off). Falls back to public token. Added to `.env.local.example`.
+- **Types** — `Place.source` extended with `"mapbox_search"`.
+- **Frontend hook** — `src/lib/hooks/use-place-search.ts` (`usePlaceSearch`): 300ms debounced suggest, UUIDv4 session token rotation (on retrieve / 180s idle / 50 suggests), retrieve mutation.
+- **MapView extension** — new ref methods `flyToCoords({lng,lat,zoom})` and `getCenter()`; new prop `searchMarker?: {lng,lat,color?}` renders a transient `mapboxgl.Marker`.
+- **New components** — `src/components/map/search-box.tsx` (overlay autocomplete pill) and `src/components/map/search-result-panel.tsx` (slide-in detail + Save form). Form reuses existing inline-category/list/tag creators and VisitStatusToggle.
+- **MapContent integration** — search box sits beside the mobile filter button (top-left); search panel hides FAB / visible-place badge / empty-state CTA. Selecting a place closes any active search panel and vice versa.
+
+### Docs
+
+- New [[02-backend/api-routes/search]] — full per-route detail.
+- New [[03-frontend/hooks/use-place-search]] — hook spec + session lifecycle.
+- New [[05-flows/place-search-flow]] — end-to-end flow doc.
+- Updated [[02-backend/api-routes/_README]] — added Search group.
+- Updated [[02-backend/schema/places]] — `source` CHECK constraint documented; `source` enum drift moved out of Open questions.
+- Updated [[02-backend/schema/api_usage]] — `mapbox_search_session` SKU registered.
+- Updated [[03-frontend/hooks/_README]] — added `usePlaceSearch`.
+- Updated [[03-frontend/components/map]] — MapView extended API; new SearchBox / SearchResultPanel sections.
+- Updated [[04-integrations/mapbox]] — Search Box API section + standard pricing.
+- Updated [[06-ops/env-vars]] — `MAPBOX_SERVER_TOKEN` added.
+
+### Out of scope (deferred)
+
+- Drop-pin / map-click to add place.
+- Clickable POI labels (Mapbox Standard `addInteraction` or `queryRenderedFeatures` overlay).
+- Proximity bias (`usePlaceSearch` accepts the opt; not wired through `SearchBox` yet).
+- Per-user DataForSEO billing (server env still single-tenant).
+
+---
+
 ## 12.05.2026 — v1.0.0 — Vault complete
 
 The vault is now fully populated end-to-end. Foundation, anchor, backend, frontend, integrations, flows, and ops layers all written. Automation wired.

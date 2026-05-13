@@ -5,6 +5,9 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { MapView } from "@/components/map/map-view";
 import type { MapViewHandle } from "@/components/map/map-view";
 import { AddPlaceDialog } from "@/components/places/add-place-dialog";
+import { SearchBox } from "@/components/map/search-box";
+import { SearchResultPanel } from "@/components/map/search-result-panel";
+import type { RetrievedPlaceData } from "@/lib/hooks/use-place-search";
 import { FilterSheet } from "@/components/filters/filter-sheet";
 import { FilterPanel } from "@/components/filters/filter-panel";
 import { VisitStatusToggle, VisitStatusBadge } from "@/components/places/visit-status-toggle";
@@ -62,7 +65,15 @@ export function MapContent({ mapboxToken }: { mapboxToken: string }) {
   const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
   const [detailData, setDetailData] = useState<Place | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [searchResult, setSearchResult] = useState<RetrievedPlaceData | null>(null);
   const queryClient = useQueryClient();
+
+  // Pick a search result: close any detail panel, focus the new marker, open save panel.
+  const handleSearchSelect = useCallback((data: RetrievedPlaceData) => {
+    setSelectedPlace(null);
+    setSearchResult(data);
+    mapRef.current?.flyToCoords({ lng: data.lng, lat: data.lat, zoom: 16 });
+  }, []);
 
   // Close panel helper — shared by X button and popstate
   const closePanel = useCallback(() => {
@@ -100,6 +111,7 @@ export function MapContent({ mapboxToken }: { mapboxToken: string }) {
   }, [selectedPlace]);
 
   function handlePlaceClick(place: Place) {
+    setSearchResult(null);
     setSelectedPlace(place);
   }
 
@@ -155,15 +167,24 @@ export function MapContent({ mapboxToken }: { mapboxToken: string }) {
           mapboxToken={mapboxToken}
           mapStyle={mapStyleUrl}
           markerStyle={markerStyle}
+          searchMarker={
+            searchResult
+              ? { lng: searchResult.lng, lat: searchResult.lat }
+              : null
+          }
           className="w-full h-full"
         />
 
-        {/* Floating filter button (mobile) */}
-        <div className="absolute top-4 left-4 z-10 flex gap-2">
+        {/* Search + filter row */}
+        <div className="absolute top-4 left-4 right-4 sm:right-auto z-10 flex gap-2 items-center">
+          <SearchBox
+            onSelect={handleSearchSelect}
+            className="flex-1 max-w-sm"
+          />
           <Button
             size="sm"
             variant="secondary"
-            className="shadow-md cursor-pointer lg:hidden"
+            className="shadow-md cursor-pointer lg:hidden shrink-0"
             onClick={() => setFilterOpen(true)}
           >
             <SlidersHorizontal className="h-4 w-4 mr-1.5" />
@@ -174,8 +195,8 @@ export function MapContent({ mapboxToken }: { mapboxToken: string }) {
           </Button>
         </div>
 
-        {/* FAB — hidden when detail panel is open */}
-        {!selectedPlace && (
+        {/* FAB — hidden when detail or search panel is open */}
+        {!selectedPlace && !searchResult && (
           <div className="absolute bottom-20 right-4 z-10 lg:bottom-6">
             <Button
               size="lg"
@@ -188,7 +209,7 @@ export function MapContent({ mapboxToken }: { mapboxToken: string }) {
         )}
 
         {/* Visible place count + list */}
-        {!isLoading && places.length > 0 && !selectedPlace && (
+        {!isLoading && places.length > 0 && !selectedPlace && !searchResult && (
           <div className="absolute top-4 right-16 z-10 lg:right-4">
             <button
               type="button"
@@ -233,7 +254,7 @@ export function MapContent({ mapboxToken }: { mapboxToken: string }) {
         )}
 
         {/* Empty state CTA */}
-        {!isLoading && places.length === 0 && !selectedPlace && (
+        {!isLoading && places.length === 0 && !selectedPlace && !searchResult && (
           <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
             <div className="bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm rounded-2xl shadow-lg p-6 text-center max-w-[260px] pointer-events-auto">
               <MapPin className="h-10 w-10 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
@@ -455,6 +476,14 @@ export function MapContent({ mapboxToken }: { mapboxToken: string }) {
               </div>
             ) : null}
           </div>
+        )}
+
+        {/* Search-result panel (Mapbox Search Box → save) */}
+        {searchResult && (
+          <SearchResultPanel
+            place={searchResult}
+            onClose={() => setSearchResult(null)}
+          />
         )}
 
         <AddPlaceDialog

@@ -2,8 +2,8 @@
 title: Hooks
 type: overview
 domain: frontend
-version: 1.0.0
-last_updated: 12.05.2026
+version: 1.1.0
+last_updated: 13.05.2026
 status: stable
 sources:
   - src/lib/hooks/
@@ -21,6 +21,7 @@ Every custom hook lives in `src/lib/hooks/`. Convention: file `use-x.ts` exports
 | Hook | Flavor | Query key | Doc |
 |---|---|---|---|
 | `useCategories` | react-query | `["categories"]` | [[use-categories]] |
+| `usePlaceSearch` | react-query + mutation | `["place-search", "suggest", q, proximity]` | [[use-place-search]] |
 | `useCreateCategory` / `useDeleteCategory` | mutation | invalidates `["categories"]`, `["places"]` | [[use-categories]] |
 | `useDebouncedCallback` | utility | — | [[use-debounce]] |
 | `useFilters` | local-state + URL sync | — | [[use-filters]] |

@@ -2,8 +2,8 @@
 title: api_usage
 type: table
 domain: backend
-version: 1.0.0
-last_updated: 12.05.2026
+version: 1.1.0
+last_updated: 13.05.2026
 status: stable
 sources:
   - Supabase project hukppmaevcapvbrvxtph (live)
@@ -72,9 +72,10 @@ The composite UNIQUE constraint makes the UPSERT atomic. App code calls this via
 
 - **Migration.** `create_api_usage_table` (2026-04-13).
 - **Day granularity is deliberate.** Reporting is monthly; row-per-day keeps query plans simple and storage small.
-- **SKU naming convention.** Observed SKUs in code:
-  - `google.text_search`, `google.place_details`, `google.place_photo` (Google Places)
-  - `dataforseo.business_info`, `dataforseo.reviews` (DataForSEO)
+- **SKU naming convention.** SKUs registered in `src/lib/google/track-usage.ts#SKU_CONFIG`:
+  - `text_search_pro`, `place_details_pro`, `reviews_enterprise`, `photos` (Google Places)
+  - `mapbox_load`, `mapbox_search_session` (Mapbox)
+  - `dataforseo_business_info_live`, `dataforseo_reviews` (DataForSEO)
   - (Verify by grepping `trackUsage` callers; expand here when new SKUs appear.)
 - **Cost computed in UI, not stored.** The `cost_per_1k` column lets the UI multiply by `count / 1000` for monthly spend; no aggregate is precomputed.
 - Consumed by: `GET /api/user/usage` (monthly aggregate), `CostTracker` UI component, every external API helper in `src/lib/google/` and `src/lib/dataforseo/`.

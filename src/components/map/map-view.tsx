@@ -21,11 +21,17 @@ interface MapViewProps {
   mapStyle?: string;
   markerStyle?: "icons" | "dots";
   routeLines?: RouteLine[];
+  /** Optional transient marker (e.g. result selected from /map search box). */
+  searchMarker?: { lng: number; lat: number; color?: string } | null;
   className?: string;
 }
 
 export interface MapViewHandle {
   flyToPlace: (placeId: string) => void;
+  /** Pan + zoom to arbitrary coordinates (not tied to a saved place). */
+  flyToCoords: (coords: { lng: number; lat: number; zoom?: number }) => void;
+  /** Read viewport center — used for Search Box proximity bias. */
+  getCenter: () => { lng: number; lat: number } | null;
 }
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -33,7 +39,7 @@ const CATEGORY_COLORS: Record<string, string> = {
 };
 
 export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
-  { places, categories = [], onPlaceClick, onVisiblePlacesChange, mapboxToken, mapStyle, markerStyle = "icons", routeLines, className },
+  { places, categories = [], onPlaceClick, onVisiblePlacesChange, mapboxToken, mapStyle, markerStyle = "icons", routeLines, searchMarker, className },
   ref
 ) {
   const mapContainer = useRef<HTMLDivElement>(null);
@@ -51,7 +57,7 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
 
   const defaultStyle = mapStyle || "mapbox://styles/mapbox/light-v11";
 
-  // Expose flyToPlace to parent via ref
+  // Expose imperative methods to parent via ref
   useImperativeHandle(ref, () => ({
     flyToPlace: (placeId: string) => {
       if (!map.current) return;
@@ -60,6 +66,14 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
       map.current.flyTo({ center: [place.location.lng, place.location.lat], zoom: 16 });
       // Trigger place click to open popup/detail
       if (onPlaceClickRef.current) onPlaceClickRef.current(place);
+    },
+    flyToCoords: ({ lng, lat, zoom }) => {
+      if (!map.current) return;
+      map.current.flyTo({ center: [lng, lat], zoom: zoom ?? 16 });
+    },
+    getCenter: () => {
+      const c = map.current?.getCenter();
+      return c ? { lng: c.lng, lat: c.lat } : null;
     },
   }), []);
 
@@ -461,6 +475,27 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
       }
     }
   }, [routeLines, mapLoaded]);
+
+  // Transient search-result marker (separate from the places source/layer).
+  const searchMarkerRef = useRef<mapboxgl.Marker | null>(null);
+  useEffect(() => {
+    if (!map.current || !mapLoaded) return;
+
+    if (!searchMarker) {
+      searchMarkerRef.current?.remove();
+      searchMarkerRef.current = null;
+      return;
+    }
+
+    const color = searchMarker.color || "#059669";
+    if (searchMarkerRef.current) {
+      searchMarkerRef.current.setLngLat([searchMarker.lng, searchMarker.lat]);
+    } else {
+      searchMarkerRef.current = new mapboxgl.Marker({ color })
+        .setLngLat([searchMarker.lng, searchMarker.lat])
+        .addTo(map.current);
+    }
+  }, [searchMarker, mapLoaded]);
 
   return (
     <div
