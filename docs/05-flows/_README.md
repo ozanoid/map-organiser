@@ -2,14 +2,15 @@
 title: Flows
 type: overview
 domain: overview
-version: 1.0.0
-last_updated: 12.05.2026
+version: 1.1.0
+last_updated: 13.05.2026
 status: stable
 related:
   - "[[auth-flow]]"
   - "[[signup-flow]]"
   - "[[place-import-flow]]"
   - "[[manual-place-create-flow]]"
+  - "[[place-search-flow]]"
   - "[[trip-planning-flow]]"
   - "[[share-flow]]"
   - "[[share-target-flow]]"
@@ -28,6 +29,7 @@ End-to-end user / data flows that span multiple subsystems. Each doc traces the 
 | [[signup-flow]] | New user authenticates for the first time | `auth.users`, `handle_new_user`, `create_default_categories`, 12 categories seeded |
 | [[place-import-flow]] | User uploads a Takeout file | `/api/places/import-parse` → loop of `/api/places/import-batch` |
 | [[manual-place-create-flow]] | User pastes a Google Maps URL or hits the FAB | `/api/places/parse-link` → `/api/places` → enrich |
+| [[place-search-flow]] | User searches on the map overlay | `/api/search/suggest` → `/api/search/retrieve/[id]` → `/api/places` |
 | [[trip-planning-flow]] | User creates a trip from a list | `/api/trips` → optional `/api/trips/[id]/auto-plan` → day-place mutations |
 | [[share-flow]] | User clicks "Share" on a list or trip | `/api/shared` (POST) → public `/shared/<slug>` → optional save |
 | [[share-target-flow]] | User shares a URL into the PWA from mobile share sheet | `/api/share-target` → `/map?add=…` → manual-place-create-flow |

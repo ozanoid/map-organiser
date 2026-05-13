@@ -2,12 +2,14 @@
 title: Map components
 type: component
 domain: frontend
-version: 1.0.0
-last_updated: 12.05.2026
+version: 1.1.0
+last_updated: 13.05.2026
 status: stable
 sources:
   - src/components/map/map-view.tsx
   - src/components/map/map-content.tsx
+  - src/components/map/search-box.tsx
+  - src/components/map/search-result-panel.tsx
   - src/lib/map/category-icons.ts
 related:
   - "[[_README]]"
@@ -37,11 +39,15 @@ Two components. `MapView` is a self-contained Mapbox renderer; `MapContent` is t
     mapStyle?: string;
     markerStyle?: "icons" | "dots";
     routeLines?: RouteLine[];
+    searchMarker?: { lng: number; lat: number; color?: string } | null;
     className?: string;
   }
   ```
 
-- **Ref API:** `flyToPlace(placeId)` — pan + zoom to a specific place.
+- **Ref API:**
+  - `flyToPlace(placeId)` — pan + zoom to a saved place (and trigger `onPlaceClick`).
+  - `flyToCoords({ lng, lat, zoom? })` — pan + zoom to arbitrary coordinates (search results).
+  - `getCenter()` — current viewport center, returns `{ lng, lat } | null`.
 - **Hooks:** `useRef`, `useEffect`, `useState`, `useCallback`, `useImperativeHandle`.
 - **State:** `mapLoaded` (boolean), refs to the map instance and stable callback identities.
 - **Mapbox layers managed:**
@@ -65,7 +71,7 @@ Two components. `MapView` is a self-contained Mapbox renderer; `MapContent` is t
 - **File:** `src/components/map/map-content.tsx`
 - **`"use client"`**.
 - **Props:** `{ mapboxToken: string }`.
-- **Hooks:** `useState`, `useEffect`, `useCallback`, `useRef`, `useSearchParams`, `useRouter`, `useQueryClient`, `useFilters`, `usePlaces`, `useCategories`, `useMapStyle`.
+- **Hooks:** `useState`, `useEffect`, `useCallback`, `useRef`, `useSearchParams`, `useRouter`, `useQueryClient`, `useFilters`, `usePlaces`, `useCategories`, `useMapStyle`. (Search lifecycle owned by `SearchBox`'s internal `usePlaceSearch`.)
 - **State managed:**
   - `addOpen` (Add Place dialog).
   - `filterOpen` (mobile filter sheet).
@@ -91,6 +97,45 @@ Two components. `MapView` is a self-contained Mapbox renderer; `MapContent` is t
   - Renders a visible-place-count badge with an expandable dropdown list of places currently in the viewport (uses `MapView.flyToPlace` ref).
   - Renders a floating action button to open the Add Place dialog.
 - **Used by:** `/map` page.
+
+## `SearchBox`
+
+- **File:** `src/components/map/search-box.tsx`
+- **`"use client"`**.
+- **Props:**
+  ```ts
+  {
+    proximity?: { lng: number; lat: number };
+    onSelect: (place: RetrievedPlaceData) => void;
+    className?: string;
+  }
+  ```
+- **Hooks:** [[../hooks/use-place-search|`usePlaceSearch`]], `useState`, `useEffect`, `useRef`.
+- **UI:** Pill-shaped input with `Search` icon and `Loader2` spinner while suggest/retrieve is in flight. Absolute-positioned dropdown beneath shows up to 8 Mapbox POI suggestions; each row has `MapPin` icon + name + place_formatted address. Click outside or pick a result closes the dropdown.
+- **Behavior:**
+  - Min 2 chars to fire suggest (handled in the hook).
+  - On select → calls `onSelect(retrievedData)` with the enriched `RetrievedPlaceData`; clears the input.
+  - "No places found" message after a non-empty query yields zero suggestions.
+- **Used by:** `MapContent`.
+
+## `SearchResultPanel`
+
+- **File:** `src/components/map/search-result-panel.tsx`
+- **`"use client"`**.
+- **Props:**
+  ```ts
+  {
+    place: RetrievedPlaceData;
+    onClose: () => void;
+  }
+  ```
+- **Hooks:** `useState`, `useEffect`, `useQueryClient`, [[../hooks/use-places|`useCreatePlace`]], [[../hooks/use-categories|`useCategories`]], [[../hooks/use-lists|`useLists`]].
+- **API:** `POST /api/places` (with `source: "mapbox_search"`), optional fire-and-forget `POST /api/places/[id]/enrich?step=reviews` when DataForSEO returned a `cid`.
+- **UI:** Right slide-in panel mirroring the place-detail panel; pre-filled photo / address / quick-facts (rating, opening hours, website, phone, city/country), form for category / lists / tags / visit status / rating / notes. Sticky bottom "Save to my places" action.
+- **Behavior:**
+  - Auto-resolves category from `place.types` via `resolveCategoryId`; falls back to "Other".
+  - On save success: toast, close, invalidate `["places"]`, kick reviews enrichment.
+- **Used by:** `MapContent`.
 
 ## `src/lib/map/category-icons.ts`
 

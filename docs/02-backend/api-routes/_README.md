@@ -2,8 +2,8 @@
 title: API Routes
 type: overview
 domain: backend
-version: 1.0.0
-last_updated: 12.05.2026
+version: 1.1.0
+last_updated: 13.05.2026
 status: stable
 sources:
   - src/app/api/
@@ -29,6 +29,7 @@ All Next.js route handlers grouped by area. Each linked doc is the canonical ref
 | Shared | `/api/shared/*` | **Mixed** — GET `/[slug]` public via service role | [[shared]] |
 | Stats | `/api/stats` | Required | [[stats]] |
 | User | `/api/user/*` | Required | [[user]] |
+| Search | `/api/search/*` | Required | [[search]] |
 | Share target | `/api/share-target` | **None** (PWA inbound) | [[share-target]] |
 | Auth callback | `/auth/callback` | **None** (OAuth handshake) | [[auth-callback]] |
 

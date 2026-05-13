@@ -6,6 +6,69 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 13.05.2026 — v1.1.2 — patch: extract CID from FTid + prefer POI coords
+
+Short-link shares (`maps.app.goo.gl/...`) resolve to URLs whose `data=` blob carries an FTid (`!1s0xCELL:0xCID`) and the POI's actual coordinates (`!3d!4d`), but the parser was throwing both away and falling back to text search with the viewport center.
+
+- `src/lib/google/parse-maps-url.ts`:
+  - When an FTid is present, the second hex is converted to a Google CID — parser now returns `type: "cid"` with the decimal CID. DataForSEO accepts this as an exact-match key, bypassing the lossy text-search path entirely.
+  - `extractCoordinates` now prefers `!3d!4d` (POI actual location) over `@lat,lng` (viewport center). The two can differ by 1+ km in real-world shares.
+  - `ParsedUrl` now exposes the resolved URL via `resolvedUrl?: string` for any future re-inspection.
+- `/api/places/parse-link`: handles the new `type: "cid"` branch — issues `keyword: "cid:<decimal>"` straight to DataForSEO.
+
+Real-world impact: e.g. `https://maps.app.goo.gl/m6rXiaYaKLqEdqhh6` (Top Cuvée Highbury) used to 404 with "Could not find place details" because viewport center sat 1.3 km from the actual POI and "Top Cuvée Highbury" + 2 km bias still missed Google's text-search match. Now it resolves via CID on the first call.
+
+---
+
+## 13.05.2026 — v1.1.1 — patch: short-query parse-link match
+
+Fixes "Could not find place details" for `/maps/place/Name/@lat,lng/` URLs where the parser only extracts a bare short name (e.g. `Beam`). Short generic keywords lose Google's text-search against same-named businesses worldwide even with a coordinate bias.
+
+- `src/lib/mapbox/search-box.ts`: new exported `reverseGeocode({lng, lat})` helper wrapping Mapbox Search Box `/reverse`. Per-request endpoint, $1.70/1k, 50k/month free.
+- `/api/places/parse-link`: when the parser yields `type: "search"` + coordinates, the route now reverse-geocodes once to fetch a `full_address` and appends it to the DataForSEO keyword (`"Beam, Stoke Newington Rd, London, UK"`). Search radius for this branch widened from 1000m → 2000m.
+- Same trick already in `/api/search/retrieve/[id]`'s DataForSEO enrichment (v1.0 of F-01) — applied symmetrically here.
+
+---
+
+## 13.05.2026 — v1.1.0 — F-01 place search (Mapbox Search Box)
+
+Shipped F-01 from `_archive/feature-suggestions_v3` (Manuel Mekan Ekleme, drop-pin scope dropped). Users can now search a place on `/map`, preview enriched details, and save to their places without leaving the page.
+
+### Code
+
+- **DB** — migration `add_source_check_with_mapbox_search` applied: `places.source` now has `CHECK (source IN ('manual','import','link','mapbox_search'))`.
+- **Backend** — new `GET /api/search/suggest` and `GET /api/search/retrieve/[id]` (`src/app/api/search/...`) wrapping Mapbox Search Box. Retrieve auto-enriches via DataForSEO when env credentials present, mirroring the parse-link response shape.
+- **Library** — `src/lib/mapbox/search-box.ts` (server-only): `suggest` + `retrieve` fetch wrappers.
+- **Cost tracking** — new SKU `mapbox_search_session` ($11.50/1k, 500 free/month). Tracked on `retrieve` call.
+- **Env** — new server-only `MAPBOX_SERVER_TOKEN` (URL-restriction off). Falls back to public token. Added to `.env.local.example`.
+- **Types** — `Place.source` extended with `"mapbox_search"`.
+- **Frontend hook** — `src/lib/hooks/use-place-search.ts` (`usePlaceSearch`): 300ms debounced suggest, UUIDv4 session token rotation (on retrieve / 180s idle / 50 suggests), retrieve mutation.
+- **MapView extension** — new ref methods `flyToCoords({lng,lat,zoom})` and `getCenter()`; new prop `searchMarker?: {lng,lat,color?}` renders a transient `mapboxgl.Marker`.
+- **New components** — `src/components/map/search-box.tsx` (overlay autocomplete pill) and `src/components/map/search-result-panel.tsx` (slide-in detail + Save form). Form reuses existing inline-category/list/tag creators and VisitStatusToggle.
+- **MapContent integration** — search box sits beside the mobile filter button (top-left); search panel hides FAB / visible-place badge / empty-state CTA. Selecting a place closes any active search panel and vice versa.
+
+### Docs
+
+- New [[02-backend/api-routes/search]] — full per-route detail.
+- New [[03-frontend/hooks/use-place-search]] — hook spec + session lifecycle.
+- New [[05-flows/place-search-flow]] — end-to-end flow doc.
+- Updated [[02-backend/api-routes/_README]] — added Search group.
+- Updated [[02-backend/schema/places]] — `source` CHECK constraint documented; `source` enum drift moved out of Open questions.
+- Updated [[02-backend/schema/api_usage]] — `mapbox_search_session` SKU registered.
+- Updated [[03-frontend/hooks/_README]] — added `usePlaceSearch`.
+- Updated [[03-frontend/components/map]] — MapView extended API; new SearchBox / SearchResultPanel sections.
+- Updated [[04-integrations/mapbox]] — Search Box API section + standard pricing.
+- Updated [[06-ops/env-vars]] — `MAPBOX_SERVER_TOKEN` added.
+
+### Out of scope (deferred)
+
+- Drop-pin / map-click to add place.
+- Clickable POI labels (Mapbox Standard `addInteraction` or `queryRenderedFeatures` overlay).
+- Proximity bias (`usePlaceSearch` accepts the opt; not wired through `SearchBox` yet).
+- Per-user DataForSEO billing (server env still single-tenant).
+
+---
+
 ## 12.05.2026 — v1.0.0 — Vault complete
 
 The vault is now fully populated end-to-end. Foundation, anchor, backend, frontend, integrations, flows, and ops layers all written. Automation wired.

@@ -2,8 +2,8 @@
 title: Env Vars
 type: overview
 domain: ops
-version: 1.0.0
-last_updated: 12.05.2026
+version: 1.1.0
+last_updated: 13.05.2026
 status: stable
 sources:
   - .env.local.example
@@ -34,6 +34,7 @@ Every environment variable the app reads, where it lives, and who depends on it.
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | ✅ public | yes | Supabase project | Browser + server clients |
 | `SUPABASE_SERVICE_ROLE_KEY` | ❌ server-only | yes (for public sharing) | Supabase project → Settings → API | `createServiceClient()` (sole user: `GET /api/shared/[slug]`) |
 | `NEXT_PUBLIC_MAPBOX_TOKEN` | ✅ public (URL-restricted) | yes | Mapbox account → tokens | MapView + server-side Directions fallback |
+| `MAPBOX_SERVER_TOKEN` | ❌ server-only | optional (recommended) | Mapbox account → secret token (no URL restriction) | `src/lib/mapbox/search-box.ts` proxy for Search Box `/suggest` and `/retrieve`. Falls back to public token if absent. |
 | `GOOGLE_PLACES_API_KEY` | ❌ server-only | optional (admin fallback) | Google Cloud Console | `getUserApiKeys` if no per-user key |
 | `ENCRYPTION_SECRET` | ❌ server-only | yes | Generated; documented in [[encryption]] | `encryptApiKey` / `decryptApiKey` for `profiles.*_enc` |
 | `DATAFORSEO_LOGIN` | ❌ server-only | yes | DataForSEO account | Default enrichment provider basic auth |

@@ -25,6 +25,11 @@ export const SKU_CONFIG = {
     costPer1k: 0.75,
     freeMonthly: 0,
   },
+  mapbox_search_session: {
+    name: "Mapbox Search Sessions",
+    costPer1k: 11.5,
+    freeMonthly: 500,
+  },
 } as const;
 
 export type SkuType = keyof typeof SKU_CONFIG;

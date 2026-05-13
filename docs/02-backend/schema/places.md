@@ -2,8 +2,8 @@
 title: places
 type: table
 domain: backend
-version: 1.0.0
-last_updated: 12.05.2026
+version: 1.1.0
+last_updated: 13.05.2026
 status: stable
 sources:
   - Supabase project hukppmaevcapvbrvxtph (live)
@@ -41,7 +41,7 @@ The core entity — user-saved locations. 458 rows in the current snapshot. Geog
 | `rating` | smallint | yes | — | User's 1–5 rating. Check `rating >= 1 AND rating <= 5`. |
 | `notes` | text | yes | — | Free-form. |
 | `google_data` | jsonb | yes | `'{}'::jsonb` | Provider data (see [[../../01-domain/places#google_data-shape]]). |
-| `source` | text | yes | `'manual'::text` | Values observed in code: `manual` / `import` / `link`. No check constraint. |
+| `source` | text | yes | `'manual'::text` | CHECK enum: `manual` / `import` / `link` / `mapbox_search`. Added 13.05.2026 (migration `add_source_check_with_mapbox_search`). |
 | `visit_status` | text | yes | — | Check enum: `want_to_go` / `booked` / `visited` / `favorite`. |
 | `visited_at` | timestamptz | yes | — | Set when status flips to `visited` (app-side). |
 | `booked_at` | timestamptz | yes | — | Set when status flips to `booked` (app-side). |
@@ -99,5 +99,4 @@ None on this table directly.
 
 ## Open questions
 
-- **`source` enum drift.** No DB check constraint — any text accepted. If the app contracts on the four values (`manual`/`import`/`link`/and what else?), worth adding a CHECK.
 - **`updated_at` is not enforced.** App-managed only; a missed `update` call leaves it stale. A `moddatetime` extension trigger could automate.
