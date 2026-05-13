@@ -6,6 +6,34 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 14.05.2026 — v1.3.0 — AI Phase 2: Subcategory infrastructure
+
+Per-user subcategory table (under each parent category) + default
+dictionary + filter cascade UI + Settings manage UI. **No AI behavior yet**
+— Phase 4 will start populating subcategories via the AI place profile.
+
+- **DB migrations**:
+  - `create_subcategories_table` — per-user table with RLS (`auth.uid() = user_id`).
+  - `add_subcategory_id_to_places` — nullable FK with `ON DELETE SET NULL`.
+  - `create_seed_default_subcategories_function` — idempotent helper.
+  - `create_subcategories_signup_trigger` — `z_on_profile_created_default_subcategories` (AFTER trigger order verified via `information_schema.triggers.action_order`).
+  - `backfill_subcategories_for_existing_users` — 3 existing users seeded (62 sub-cats each).
+- **Default dictionary** (62 entries across 11 of 12 parents) is encoded inside `seed_default_subcategories_for_user()`.
+- **TypeScript**: `Subcategory` interface + `Place.subcategory_id` + `PlaceFilters.subcategory_ids`.
+- **React Query hook** `useSubcategories` (+ `useCreateSubcategory`, `useDeleteSubcategory`).
+- **API routes**:
+  - `GET /api/subcategories` (with `?include_pending=true`).
+  - `POST /api/subcategories` (Zod-validated, 409 on dup).
+  - `PATCH /api/subcategories/[id]` (rename + approve pending).
+  - `DELETE /api/subcategories/[id]` (cascades to places via SET NULL).
+- **`GET /api/places`** — new `?subcategory=<id,id>` query param + joined `subcategory:subcategories(*)` select.
+- **`useFilters`** — `subcategory_ids` URL state (`?subcategory=…`).
+- **`CategoryFilter`** — cascade UI: when a parent is selected, sub-cat pills appear under it with parent-name labels.
+- **Settings → Categories**: each row is now collapsible with `ChevronRight`. Expanded view shows child sub-cats + add/delete form. Default sub-cats can be deleted (places fall back to parent only).
+- **Vault**: [[02-backend/schema/subcategories]], [[02-backend/api-routes/subcategories]], [[03-frontend/hooks/use-subcategories]] new docs.
+
+---
+
 ## 14.05.2026 — v1.2.0 — AI Phase 1: foundation
 
 Foundation layer for AI features (AI-01 NL filter, AI-03 categorization, AI-04 tag/list suggestions, AI-05 place profile pivot). No user-facing AI behavior yet — this PR only lays the rails.
