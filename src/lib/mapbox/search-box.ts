@@ -28,6 +28,12 @@ export interface RetrieveRequest {
   language?: string;
 }
 
+export interface ReverseRequest {
+  lng: number;
+  lat: number;
+  language?: string;
+}
+
 export interface SearchSuggestion {
   mapbox_id: string;
   name: string;
@@ -164,6 +170,67 @@ export async function retrieve(req: RetrieveRequest): Promise<RetrievedPlace | n
     };
   } catch (e) {
     console.error("[mapbox/search-box] retrieve error:", e);
+    return null;
+  }
+}
+
+/**
+ * GET /search/searchbox/v1/reverse
+ *
+ * Coordinate → best matching POI/address. Used to enrich the DataForSEO
+ * search keyword for `/maps/place/Name/@lat,lng/` URLs where the parser
+ * only extracts a bare name. The reverse hit gives us "Stoke Newington Rd,
+ * London, UK" context that disambiguates short names like "Beam" against
+ * Google's text search.
+ *
+ * Per-request endpoint (not session-billed). $1.70 / 1000 with 50k/month free.
+ */
+export async function reverseGeocode(
+  req: ReverseRequest
+): Promise<RetrievedPlace | null> {
+  const token = getToken();
+  if (!token) return null;
+
+  const params = new URLSearchParams({
+    longitude: String(req.lng),
+    latitude: String(req.lat),
+    access_token: token,
+    language: req.language || "en",
+    types: "poi,address",
+    limit: "1",
+  });
+
+  try {
+    const res = await fetch(`${SEARCH_BASE}/reverse?${params.toString()}`);
+    if (!res.ok) {
+      console.warn(`[mapbox/search-box] reverse ${res.status} ${res.statusText}`);
+      return null;
+    }
+    const data = await res.json();
+    const feature = data.features?.[0];
+    if (!feature) return null;
+
+    const props = feature.properties || {};
+    const [lng, lat] = feature.geometry?.coordinates || [req.lng, req.lat];
+
+    return {
+      mapbox_id: props.mapbox_id || "",
+      name: props.name || "",
+      feature_type: props.feature_type || "address",
+      lng,
+      lat,
+      full_address: props.full_address,
+      address: props.address,
+      country: props.context?.country?.name,
+      city: props.context?.place?.name || props.context?.locality?.name,
+      poi_category: props.poi_category,
+      brand: props.brand,
+      external_ids: props.external_ids,
+      metadata: props.metadata,
+      maki: props.maki,
+    };
+  } catch (e) {
+    console.error("[mapbox/search-box] reverse error:", e);
     return null;
   }
 }

@@ -10,6 +10,7 @@ import {
   transformBusinessInfoToPlaceData,
   extractExtendedData,
 } from "@/lib/dataforseo/transform";
+import { reverseGeocode } from "@/lib/mapbox/search-box";
 import { trackUsage } from "@/lib/google/track-usage";
 
 /**
@@ -117,7 +118,23 @@ export async function POST(request: NextRequest) {
     } else if (parsed.type === "place_id" && parsed.placeId) {
       req = { keyword: `place_id:${parsed.placeId}`, location_coordinate: locationCoord };
     } else if (parsed.type === "search" && parsed.query) {
-      req = { keyword: parsed.query, location_coordinate: locationCoord };
+      // Short queries like "Beam" lose against Google's text search even with
+      // a tight coord bias. Reverse-geocode the URL's coords to pad the keyword
+      // with neighborhood + city + country context — same trick used in the
+      // /map search-box flow.
+      let keyword = parsed.query;
+      if (parsed.lat && parsed.lng) {
+        const ctx = await reverseGeocode({ lng: parsed.lng, lat: parsed.lat });
+        const suffix = ctx?.full_address
+          || [ctx?.address, ctx?.city, ctx?.country].filter(Boolean).join(", ");
+        if (suffix) keyword = `${parsed.query}, ${suffix}`;
+      }
+      req = {
+        keyword,
+        location_coordinate: parsed.lat && parsed.lng
+          ? `${parsed.lat},${parsed.lng},2000`
+          : locationCoord,
+      };
     } else if (parsed.lat && parsed.lng) {
       req = { keyword: `${parsed.lat},${parsed.lng}`, location_coordinate: `${parsed.lat},${parsed.lng},200` };
     }

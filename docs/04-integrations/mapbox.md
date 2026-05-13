@@ -12,6 +12,7 @@ sources:
   - src/lib/mapbox/search-box.ts
   - src/app/api/search/suggest/route.ts
   - src/app/api/search/retrieve/[id]/route.ts
+  - src/app/api/places/parse-link/route.ts
 related:
   - "[[../03-frontend/components/map]]"
   - "[[../03-frontend/hooks/use-map-style]]"
@@ -78,15 +79,17 @@ Called from:
 
 ### Search Box API (server)
 
-`src/lib/mapbox/search-box.ts` exports two thin fetch wrappers:
+`src/lib/mapbox/search-box.ts` exports three thin fetch wrappers:
 
 - `suggest({ q, sessionToken, proximity?, limit?, language? })` →  `GET https://api.mapbox.com/search/searchbox/v1/suggest`. Hard-codes `types=poi`. Returns autocomplete `SearchSuggestion[]`.
 - `retrieve({ mapboxId, sessionToken, language? })` → `GET https://api.mapbox.com/search/searchbox/v1/retrieve/{id}`. Returns a single `RetrievedPlace` with coords, address, POI categories, brand, external IDs.
+- `reverseGeocode({ lng, lat, language? })` → `GET https://api.mapbox.com/search/searchbox/v1/reverse`. Per-request endpoint. Used to pad DataForSEO keywords with address context when only `name + coords` are available (parse-link's `/maps/place/Name/@lat,lng/` branch).
 
 Called from:
 
 - `GET /api/search/suggest` — `/map` autocomplete (per keystroke after 300ms debounce).
 - `GET /api/search/retrieve/[id]` — when the user picks a suggestion. Tracks one `mapbox_search_session` SKU per call.
+- `POST /api/places/parse-link` — calls `reverseGeocode` for short-name Google Maps URLs to disambiguate DataForSEO search.
 
 **Session model.** A `session_token` (UUIDv4 minted by the client in `usePlaceSearch`) groups all suggest calls plus one retrieve into a single billable session. The hook rotates the token after every successful retrieve or after 180s inactivity / 50 successive suggests. See [[../03-frontend/hooks/use-place-search]].
 
@@ -97,7 +100,7 @@ Mapbox public-key free tier:
 - **Map loads:** 50,000 / month for GL JS.
 - **Directions API:** 100,000 requests / month.
 - **Search Box API (sessions):** 500 sessions / month free. Standard rate $11.50 / 1000 above the free tier.
-- **Search Box API (per-request `/category` and `/reverse`):** 50,000 / month free. Not used today.
+- **Search Box API (per-request `/reverse`):** 50,000 / month free. `/category` not used today.
 
 Directions calls are **not tracked** in `api_usage` (Mapbox dashboard only). **Search Box `retrieve` IS tracked** as `mapbox_search_session` for per-user cost visibility.
 

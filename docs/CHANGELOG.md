@@ -6,6 +6,16 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 13.05.2026 — v1.1.1 — patch: short-query parse-link match
+
+Fixes "Could not find place details" for `/maps/place/Name/@lat,lng/` URLs where the parser only extracts a bare short name (e.g. `Beam`). Short generic keywords lose Google's text-search against same-named businesses worldwide even with a coordinate bias.
+
+- `src/lib/mapbox/search-box.ts`: new exported `reverseGeocode({lng, lat})` helper wrapping Mapbox Search Box `/reverse`. Per-request endpoint, $1.70/1k, 50k/month free.
+- `/api/places/parse-link`: when the parser yields `type: "search"` + coordinates, the route now reverse-geocodes once to fetch a `full_address` and appends it to the DataForSEO keyword (`"Beam, Stoke Newington Rd, London, UK"`). Search radius for this branch widened from 1000m → 2000m.
+- Same trick already in `/api/search/retrieve/[id]`'s DataForSEO enrichment (v1.0 of F-01) — applied symmetrically here.
+
+---
+
 ## 13.05.2026 — v1.1.0 — F-01 place search (Mapbox Search Box)
 
 Shipped F-01 from `_archive/feature-suggestions_v3` (Manuel Mekan Ekleme, drop-pin scope dropped). Users can now search a place on `/map`, preview enriched details, and save to their places without leaving the page.
