@@ -110,6 +110,10 @@ export function FilterPanel() {
         <CategoryFilter
           selected={filters.category_ids}
           onChange={(category_ids) => setFilters({ category_ids })}
+          selectedSubcategories={filters.subcategory_ids}
+          onSubcategoryChange={(subcategory_ids) =>
+            setFilters({ subcategory_ids })
+          }
         />
       </div>
 

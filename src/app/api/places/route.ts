@@ -20,6 +20,8 @@ export async function GET(request: NextRequest) {
   const city = searchParams.get("city");
   const categoryParam = searchParams.get("category");
   const categoryIds = categoryParam?.split(",").filter(Boolean);
+  const subcategoryParam = searchParams.get("subcategory");
+  const subcategoryIds = subcategoryParam?.split(",").filter(Boolean);
   const tagIds = searchParams.get("tags")?.split(",").filter(Boolean);
   const listId = searchParams.get("list");
   const visitStatus = searchParams.get("status");
@@ -41,13 +43,15 @@ export async function GET(request: NextRequest) {
 
   let query = supabase
     .from("places")
-    .select("*, category:categories(*)")
+    .select("*, category:categories(*), subcategory:subcategories(*)")
     .eq("user_id", user.id)
     .order(sortColumn, { ascending: sortAscending });
 
   if (country) query = query.eq("country", country);
   if (city) query = query.eq("city", city);
   if (categoryIds?.length) query = query.in("category_id", categoryIds);
+  if (subcategoryIds?.length)
+    query = query.in("subcategory_id", subcategoryIds);
   if (visitStatus) query = query.eq("visit_status", visitStatus);
   if (ratingMin) query = query.gte("rating", parseInt(ratingMin));
   if (search) query = query.or(`name.ilike.%${search}%,address.ilike.%${search}%,notes.ilike.%${search}%`);

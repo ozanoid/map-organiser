@@ -2,6 +2,11 @@
 
 import { useState } from "react";
 import { useCategories, useCreateCategory, useDeleteCategory } from "@/lib/hooks/use-categories";
+import {
+  useSubcategories,
+  useCreateSubcategory,
+  useDeleteSubcategory,
+} from "@/lib/hooks/use-subcategories";
 import { useTags, useCreateTag, useDeleteTag } from "@/lib/hooks/use-tags";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -9,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import {
-  Plus, Trash2, Loader2, Tag, FolderOpen, Shield, Paintbrush, Sun, Moon, Monitor, Map, Sparkles,
+  Plus, Trash2, Loader2, Tag, FolderOpen, Shield, Paintbrush, Sun, Moon, Monitor, Map, Sparkles, ChevronDown, ChevronRight,
   Utensils, Coffee, Wine, Bed, ShoppingBag, Landmark, Trees, Waves, Dumbbell, HeartPulse, Ticket, MapPin,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -199,43 +204,155 @@ function CategoryManager() {
 
       <Separator />
 
-      {/* Category list */}
+      {/* Category list with inline subcategory expand */}
       <div className="space-y-1">
         {categories.map((cat) => (
-          <div
+          <CategoryRow
             key={cat.id}
-            className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 group"
-          >
-            <div className="flex items-center gap-3">
-              <span
-                className="h-6 w-6 rounded-full shrink-0 flex items-center justify-center"
-                style={{ backgroundColor: cat.color }}
-              >
-                {(() => {
-                  const Icon = ICON_COMPONENTS[cat.icon] || MapPin;
-                  return <Icon className="h-3 w-3 text-white" />;
-                })()}
-              </span>
-              <span className="text-sm">{cat.name}</span>
-              {cat.is_default && (
-                <span className="text-[10px] text-muted-foreground bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded">
-                  default
-                </span>
-              )}
-            </div>
-            {!cat.is_default && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 cursor-pointer text-red-500 hover:text-red-600"
-                onClick={() => handleDelete(cat.id, cat.name, cat.is_default)}
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </Button>
-            )}
-          </div>
+            cat={cat}
+            onDelete={() => handleDelete(cat.id, cat.name, cat.is_default)}
+          />
         ))}
       </div>
+    </div>
+  );
+}
+
+interface CategoryRowProps {
+  cat: { id: string; name: string; color: string; icon: string; is_default: boolean };
+  onDelete: () => void;
+}
+
+function CategoryRow({ cat, onDelete }: CategoryRowProps) {
+  const [expanded, setExpanded] = useState(false);
+  const { data: subcategories = [] } = useSubcategories();
+  const createSubcategory = useCreateSubcategory();
+  const deleteSubcategory = useDeleteSubcategory();
+  const [newSubName, setNewSubName] = useState("");
+
+  const childSubcategories = subcategories.filter(
+    (s) => s.parent_category_id === cat.id
+  );
+
+  function handleAddSubcategory(e: React.FormEvent) {
+    e.preventDefault();
+    const name = newSubName.trim();
+    if (!name) return;
+    const slug = name.toLowerCase().replace(/[\s_]+/g, "-").replace(/[^a-z0-9-]/g, "");
+    createSubcategory.mutate(
+      { parent_category_id: cat.id, name, slug },
+      {
+        onSuccess: () => {
+          toast.success("Subcategory created");
+          setNewSubName("");
+        },
+        onError: (err) => toast.error(err.message),
+      }
+    );
+  }
+
+  function handleDeleteSubcategory(id: string, name: string, isDefault: boolean) {
+    const label = isDefault ? `${name} (default)` : name;
+    if (!confirm(`Delete subcategory "${label}"? Places assigned to it will fall back to the parent category only.`)) return;
+    deleteSubcategory.mutate(id, {
+      onSuccess: () => toast.success("Subcategory deleted"),
+      onError: (err) => toast.error(err.message),
+    });
+  }
+
+  return (
+    <div className="rounded-lg overflow-hidden">
+      <div className="flex items-center justify-between py-2 px-3 hover:bg-gray-50 dark:hover:bg-gray-800 group">
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="flex items-center gap-3 cursor-pointer flex-1 text-left"
+        >
+          {expanded ? (
+            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+          ) : (
+            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+          )}
+          <span
+            className="h-6 w-6 rounded-full shrink-0 flex items-center justify-center"
+            style={{ backgroundColor: cat.color }}
+          >
+            {(() => {
+              const Icon = ICON_COMPONENTS[cat.icon] || MapPin;
+              return <Icon className="h-3 w-3 text-white" />;
+            })()}
+          </span>
+          <span className="text-sm">{cat.name}</span>
+          {cat.is_default && (
+            <span className="text-[10px] text-muted-foreground bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded">
+              default
+            </span>
+          )}
+          <span className="text-[10px] text-muted-foreground ml-auto mr-1">
+            {childSubcategories.length} sub
+          </span>
+        </button>
+        {!cat.is_default && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 cursor-pointer text-red-500 hover:text-red-600"
+            onClick={onDelete}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
+        )}
+      </div>
+
+      {expanded && (
+        <div className="px-3 pb-3 pl-12 space-y-2">
+          {/* Sub-category list */}
+          {childSubcategories.length === 0 ? (
+            <p className="text-xs text-muted-foreground">No subcategories yet</p>
+          ) : (
+            <div className="flex flex-wrap gap-1">
+              {childSubcategories.map((sub) => (
+                <span
+                  key={sub.id}
+                  className="group/sub inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300"
+                >
+                  {sub.name}
+                  <button
+                    type="button"
+                    aria-label={`Delete ${sub.name}`}
+                    onClick={() => handleDeleteSubcategory(sub.id, sub.name, sub.is_default)}
+                    className="opacity-0 group-hover/sub:opacity-100 cursor-pointer text-red-500 hover:text-red-600 transition-opacity"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+
+          {/* Add form */}
+          <form onSubmit={handleAddSubcategory} className="flex gap-1">
+            <Input
+              placeholder="Add subcategory…"
+              value={newSubName}
+              onChange={(e) => setNewSubName(e.target.value)}
+              className="h-7 text-xs"
+            />
+            <Button
+              type="submit"
+              size="sm"
+              className="h-7 cursor-pointer"
+              disabled={!newSubName.trim() || createSubcategory.isPending}
+            >
+              {createSubcategory.isPending ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <Plus className="h-3 w-3" />
+              )}
+            </Button>
+          </form>
+        </div>
+      )}
     </div>
   );
 }

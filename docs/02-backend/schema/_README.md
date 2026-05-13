@@ -24,6 +24,7 @@ All user-facing tables in the `public` schema of the Supabase project `hukppmaev
 | `profiles` | [[profiles]] | 3 | Per-user profile, encrypted API keys, feature flags |
 | `places` | [[places]] | 458 | The core entity — saved Google Maps locations |
 | `categories` | [[categories]] | 36 | Classification (12 defaults seeded × 3 users) |
+| `subcategories` | [[subcategories]] | 186 | Granular taxonomy under each parent category (~62 defaults × 3 users) |
 | `tags` | [[tags]] | 4 | Free-form labels |
 | `place_tags` | [[place_tags]] | 2 | Junction: places ↔ tags |
 | `lists` | [[lists]] | 6 | Named groupings of places |

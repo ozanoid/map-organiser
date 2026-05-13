@@ -8,6 +8,7 @@ import type { PlaceFilters } from "@/lib/types";
 // URL param name ↔ PlaceFilters property mapping
 const PARAM_MAP: Record<string, string> = {
   category_ids: "category",
+  subcategory_ids: "subcategory",
   tag_ids: "tags",
   list_id: "list",
   rating_min: "rating",
@@ -23,12 +24,14 @@ function paramKeyFor(key: string): string {
 
 function parseUrlToFilters(searchParams: URLSearchParams): PlaceFilters {
   const category = searchParams.get("category");
+  const subcategory = searchParams.get("subcategory");
   const tagIds = searchParams.get("tags");
   const status = searchParams.get("status");
   return {
     country: searchParams.get("country") || undefined,
     city: searchParams.get("city") || undefined,
     category_ids: category ? category.split(",") : undefined,
+    subcategory_ids: subcategory ? subcategory.split(",") : undefined,
     tag_ids: tagIds ? tagIds.split(",") : undefined,
     list_id: searchParams.get("list") || undefined,
     rating_min: searchParams.get("rating")

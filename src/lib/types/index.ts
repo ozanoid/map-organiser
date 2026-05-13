@@ -10,6 +10,7 @@ export interface Place {
   city: string | null;
   location: { lat: number; lng: number };
   category_id: string | null;
+  subcategory_id: string | null;
   rating: number | null;
   notes: string | null;
   visit_status: VisitStatus | null;
@@ -21,6 +22,7 @@ export interface Place {
   updated_at: string;
   // Joined
   category?: Category;
+  subcategory?: Subcategory;
   tags?: Tag[];
   lists?: PlaceList[];
 }
@@ -33,6 +35,19 @@ export interface Category {
   icon: string;
   sort_order: number;
   is_default: boolean;
+  created_at: string;
+}
+
+export interface Subcategory {
+  id: string;
+  user_id: string;
+  parent_category_id: string;
+  name: string;
+  slug: string;
+  is_default: boolean;
+  is_pending: boolean;
+  proposed_at: string | null;
+  approved_at: string | null;
   created_at: string;
 }
 
@@ -154,6 +169,7 @@ export interface PlaceFilters {
   country?: string;
   city?: string;
   category_ids?: string[];
+  subcategory_ids?: string[];
   tag_ids?: string[];
   list_id?: string;
   rating_min?: number;
