@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@ai-sdk/google": "^3.0.73",
     "@base-ui/react": "^1.4.1",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
@@ -16,6 +17,7 @@
     "@supabase/ssr": "^0.10.3",
     "@supabase/supabase-js": "^2.103.0",
     "@tanstack/react-query": "^5.100.9",
+    "ai": "^6.0.182",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",

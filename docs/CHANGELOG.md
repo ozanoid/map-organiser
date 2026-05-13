@@ -6,6 +6,29 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 14.05.2026 — v1.2.0 — AI Phase 1: foundation
+
+Foundation layer for AI features (AI-01 NL filter, AI-03 categorization, AI-04 tag/list suggestions, AI-05 place profile pivot). No user-facing AI behavior yet — this PR only lays the rails.
+
+- **DB migration** `add_ai_features_enabled_to_profiles` — new `profiles.ai_features_enabled boolean NOT NULL DEFAULT true` column. Master toggle for every AI feature.
+- **`src/lib/ai/`** new directory:
+  - `client.ts` — Gemini factory (`getAiClient()`, `FLASH_MODEL`, `MODEL_VERSION`, `isAiAvailable()`). Uses `@ai-sdk/google` v3 (already in `package.json`).
+  - `normalize.ts` — string normalize + Levenshtein + fuzzy-match predicate (`isFuzzyMatch`).
+  - `dedup.ts` — `dedupProposals()`: post-LLM fuzzy dedup against existing user entities. Tag/category/list duplication shield.
+  - `track-usage.ts` — `trackAiUsage()` + AI_SKU_CONFIG (ai_parse_query, ai_rank_results, ai_place_profile, ai_embedding). Reuses existing `increment_api_usage` RPC.
+  - `context-builder.ts` — `buildUserContext()` + `serializeUserContext()`. Built once per AI request; injected into every prompt.
+  - `schemas/place-profile.ts` — `PlaceProfileSchema` (lite + full completeness, category_signals, features, theme_insights, searchable_summary).
+  - `schemas/parse-query.ts` — `ParseQuerySchema` (hard filters + soft features + semantic_intent + needs_clarification).
+  - `schemas/suggestions.ts` — `SuggestionsSchema` (chip UI slice).
+- **`/api/user/ai-settings` route** — GET returns `{ enabled, available }`. PUT accepts `{ enabled }`. Zod-validated.
+- **Settings → AI tab** — new tab with master toggle. Optimistic update, rollback on error. Surfaces `available: false` state when `GOOGLE_GENERATIVE_AI_API_KEY` env is missing.
+- **`.env.local.example`** — `GOOGLE_GENERATIVE_AI_API_KEY=` added.
+- **Vault**: [[06-ops/env-vars]] bumped to v1.2.0 with the new variable + canonical-list entry.
+
+Phases 2-7 (subcategory infra, lite profile in parse-link, full profile pipeline, suggestions queue, AI-01 NL filtering, backfill) will land as separate PRs.
+
+---
+
 ## 13.05.2026 — v1.1.3 — patch: search-save reviews loading loop
 
 Places saved via the `/map` search box stayed in "Loading reviews..." forever on `/places/[id]` — polling was triggered (`google_data.cid` was set) but reviews never landed.
