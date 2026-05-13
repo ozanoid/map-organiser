@@ -41,10 +41,21 @@ User opens the Add Place dialog from:
        │
        ▼
 3. useParseLink → POST /api/places/parse-link  { url }
-       │  • src/lib/google/parse-maps-url.ts extracts the place ID or coords
+       │  • src/lib/google/parse-maps-url.ts extracts identifiers:
+       │      - ChIJ place_id (most preferred — exact match)
+       │      - FTid → second hex decoded to Google CID (returns type="cid")
+       │      - !3d!4d (POI actual coords) preferred over @lat,lng (viewport)
+       │      - Falls back to {query, lat, lng} for /maps/place/Name/@…/ URLs
+       │      - Short links resolved server-side; resolvedUrl exposed downstream
        │  • If profiles.google_places_enabled AND google_api_key exists:
        │      Google path: getPlaceDetails / searchPlace → ParsedPlaceData
-       │  • Else: DataForSEO path: fetchBusinessInfoLive → transformBusinessInfoToPlaceData
+       │  • Else: DataForSEO path:
+       │      - place_id → keyword: place_id:ChIJ…
+       │      - cid (from FTid or ?cid=) → keyword: cid:<decimal>  (exact match)
+       │      - search → reverseGeocode(coords) to pad keyword with full_address,
+       │        location_coordinate widened to 2km
+       │      - lat/lng fallback → keyword: "lat,lng" + 200m
+       │      - fetchBusinessInfoLive → transformBusinessInfoToPlaceData
        │  • trackUsage tracks the API call
        │  • Returns { ...ParsedPlaceData, _provider, _fetchTimeMs, _extended? }
        │
