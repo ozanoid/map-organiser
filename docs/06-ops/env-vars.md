@@ -2,14 +2,15 @@
 title: Env Vars
 type: overview
 domain: ops
-version: 1.1.0
-last_updated: 13.05.2026
+version: 1.2.0
+last_updated: 14.05.2026
 status: stable
 sources:
   - .env.local.example
   - src/lib/supabase/client.ts
   - src/lib/supabase/server.ts
   - src/lib/supabase/middleware.ts
+  - src/lib/ai/client.ts
   - src/lib/google/get-user-api-keys.ts
   - src/lib/dataforseo/client.ts
 related:
@@ -39,6 +40,7 @@ Every environment variable the app reads, where it lives, and who depends on it.
 | `ENCRYPTION_SECRET` | ❌ server-only | yes | Generated; documented in [[encryption]] | `encryptApiKey` / `decryptApiKey` for `profiles.*_enc` |
 | `DATAFORSEO_LOGIN` | ❌ server-only | yes | DataForSEO account | Default enrichment provider basic auth |
 | `DATAFORSEO_PASSWORD` | ❌ server-only | yes | DataForSEO account | Same |
+| `GOOGLE_GENERATIVE_AI_API_KEY` | ❌ server-only | optional (required for AI features) | https://aistudio.google.com/apikey | `src/lib/ai/client.ts#getAiClient` — Gemini Flash for AI-01/AI-03/AI-04/AI-05. When absent, `/api/user/ai-settings` reports `available: false` and the Settings AI toggle is disabled. |
 
 ## Where they're set
 
@@ -94,6 +96,7 @@ Practical rules:
 | `GOOGLE_PLACES_API_KEY` | `process.env.GOOGLE_PLACES_API_KEY` in `getUserApiKeys` (admin fallback) |
 | `ENCRYPTION_SECRET` | `process.env.ENCRYPTION_SECRET` in the AES-256-GCM helpers |
 | `DATAFORSEO_LOGIN` / `DATAFORSEO_PASSWORD` | `process.env.DATAFORSEO_*` in `src/lib/dataforseo/client.ts` |
+| `GOOGLE_GENERATIVE_AI_API_KEY` | `process.env.GOOGLE_GENERATIVE_AI_API_KEY` in `src/lib/ai/client.ts#getAiClient` |
 
 ## When to add a new env var
 

@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import {
-  Plus, Trash2, Loader2, Tag, FolderOpen, Shield, Paintbrush, Sun, Moon, Monitor, Map,
+  Plus, Trash2, Loader2, Tag, FolderOpen, Shield, Paintbrush, Sun, Moon, Monitor, Map, Sparkles,
   Utensils, Coffee, Wine, Bed, ShoppingBag, Landmark, Trees, Waves, Dumbbell, HeartPulse, Ticket, MapPin,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -18,6 +18,7 @@ import { toast } from "sonner";
 import { useTheme } from "next-themes";
 import { ApiKeysManager } from "@/components/settings/api-keys-manager";
 import { CostTracker } from "@/components/settings/cost-tracker";
+import { AiSettings } from "@/components/settings/ai-settings";
 import { useMapStyle, MAP_STYLE_OPTIONS } from "@/lib/hooks/use-map-style";
 import type { MapStyleKey, MarkerStyle } from "@/lib/hooks/use-map-style";
 
@@ -71,6 +72,10 @@ export default function SettingsPage() {
             <span className="hidden sm:inline">API & Usage</span>
             <span className="sm:hidden">API</span>
           </TabsTrigger>
+          <TabsTrigger value="ai" className="cursor-pointer shrink-0">
+            <Sparkles className="h-4 w-4 mr-1.5" />
+            AI
+          </TabsTrigger>
           <TabsTrigger value="appearance" className="cursor-pointer shrink-0">
             <Paintbrush className="h-4 w-4 mr-1.5" />
             <span className="hidden sm:inline">Appearance</span>
@@ -88,6 +93,9 @@ export default function SettingsPage() {
           <ApiKeysManager />
           <Separator />
           <CostTracker />
+        </TabsContent>
+        <TabsContent value="ai" className="mt-4">
+          <AiSettings />
         </TabsContent>
         <TabsContent value="appearance" className="mt-4">
           <AppearanceSettings />
