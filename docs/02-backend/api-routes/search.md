@@ -59,7 +59,7 @@ Both routes require an authenticated user. The Mapbox session is owned by the **
 - **External pipeline:**
   1. `src/lib/mapbox/search-box.ts#retrieve` → name + coords + address + POI categories.
   2. **`trackUsage(user.id, "mapbox_search_session")`** — one billable session per suggest→retrieve pair.
-  3. If DataForSEO env credentials are configured: `fetchBusinessInfoLive({ keyword: name, location_coordinate: "lat,lng,200" })` for enrichment. On match: `trackUsage(user.id, "dataforseo_business_info_live")`.
+  3. If DataForSEO env credentials are configured: `fetchBusinessInfoLive({ keyword: "<name>, <full_address>", location_coordinate: "lat,lng,1000" })` for enrichment. The address suffix disambiguates name collisions; the 1000m radius absorbs the typical Mapbox↔Google coordinate drift. On match: `trackUsage(user.id, "dataforseo_business_info_live")`.
 - **Response shape (DataForSEO match):**
 
   ```ts

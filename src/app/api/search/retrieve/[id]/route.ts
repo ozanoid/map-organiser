@@ -107,10 +107,16 @@ async function enrichWithDataForSEO(
   userId: string,
   retrieved: RetrievedPlace
 ) {
-  // Bias DataForSEO to the Mapbox feature's coords with a 200m radius.
-  const locationCoord = `${retrieved.lat},${retrieved.lng},200`;
+  // Pad the Google text search with the Mapbox address so name-only collisions
+  // are disambiguated; widen the coord bias because Mapbox/Google point geometry
+  // often disagrees by a few hundred meters for the same business.
+  const keyword = retrieved.full_address
+    ? `${retrieved.name}, ${retrieved.full_address}`
+    : retrieved.name;
+  const locationCoord = `${retrieved.lat},${retrieved.lng},1000`;
+
   const raw = await fetchBusinessInfoLive(client, {
-    keyword: retrieved.name,
+    keyword,
     location_coordinate: locationCoord,
   });
 

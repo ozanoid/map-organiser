@@ -48,7 +48,10 @@ User focuses the search input that sits on top of the map view (top-left, beside
        │  • Mapbox /retrieve → name, lat, lng, address, country, city, …
        │  • trackUsage("mapbox_search_session")  ← 1 billable Mapbox session
        │  • If DataForSEO configured:
-       │      fetchBusinessInfoLive({ keyword: name, location_coordinate: "lat,lng,200" })
+       │      fetchBusinessInfoLive({
+       │        keyword: "<name>, <full_address>",          ← address pad disambiguates
+       │        location_coordinate: "lat,lng,1000",        ← 1km radius absorbs drift
+       │      })
        │      → enriches with rating, opening_hours, photoRef, cid/place_id, extended fields
        │      → trackUsage("dataforseo_business_info_live")
        │  • Returns RetrievedPlaceData (parse-link-compatible shape)
