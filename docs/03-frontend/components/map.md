@@ -130,11 +130,15 @@ Two components. `MapView` is a self-contained Mapbox renderer; `MapContent` is t
   }
   ```
 - **Hooks:** `useState`, `useEffect`, `useQueryClient`, [[../hooks/use-places|`useCreatePlace`]], [[../hooks/use-categories|`useCategories`]], [[../hooks/use-lists|`useLists`]].
-- **API:** `POST /api/places` (with `source: "mapbox_search"`), optional fire-and-forget `POST /api/places/[id]/enrich?step=reviews` when DataForSEO returned a `cid`.
+- **API:**
+  - `POST /api/places` with `source: "mapbox_search"`.
+  - **Awaited** `POST /api/places/[id]/enrich?step=info` (DataForSEO business_info refresh + photo, hands back `cid`). Mirrors `AddPlaceDialog`'s two-step pattern to avoid a polling race vs. POST `/api/places`'s async photo-download UPDATE.
+  - **Fire-and-forget** `POST /api/places/[id]/enrich?step=reviews` using the info response's `cid` (falls back to `_extended.cid`).
 - **UI:** Right slide-in panel mirroring the place-detail panel; pre-filled photo / address / quick-facts (rating, opening hours, website, phone, city/country), form for category / lists / tags / visit status / rating / notes. Sticky bottom "Save to my places" action.
 - **Behavior:**
   - Auto-resolves category from `place.types` via `resolveCategoryId`; falls back to "Other".
-  - On save success: toast, close, invalidate `["places"]`, kick reviews enrichment.
+  - On save success: toast, close, await `step=info` → invalidate `["places"]` → kick `step=reviews`.
+  - On `step=info` error (e.g. mapbox-only result without `google_place_id`): still invalidates the cache so the new place renders without enrichment.
 - **Used by:** `MapContent`.
 
 ## `src/lib/map/category-icons.ts`

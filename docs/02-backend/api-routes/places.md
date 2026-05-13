@@ -193,8 +193,14 @@ All require auth.
 - **Source:** `src/app/api/places/parse-link/route.ts`
 - **Body:** `{ url: string }`.
 - **DB:** `profiles` SELECT (via `getUserApiKeys`).
-- **External:** `parseMapsUrl`; Google Places (`getPlaceDetails` / `searchPlace`) when enabled + keyed; DataForSEO `fetchBusinessInfoLive` fallback; transforms; `trackUsage`.
+- **External:** `parseMapsUrl`; Google Places (`getPlaceDetails` / `searchPlace`) when enabled + keyed; DataForSEO `fetchBusinessInfoLive` fallback; Mapbox `reverseGeocode` (for short-query padding); transforms; `trackUsage`.
 - **Response:** Place data + `_provider: "google"|"dataforseo"`, `_fetchTimeMs`, optional `_extended` (DataForSEO). `200` / `400` (invalid URL, no credentials, no results) / `404`.
+- **DataForSEO keyword branching** (in order of preference):
+  - `cidFromUrl` (raw URL has `?cid=` or FTid) → `keyword: cid:<decimal>`.
+  - `parsed.type === "cid"` (parser extracted CID from FTid's second hex) → `keyword: cid:<decimal>` — exact match, bypasses text search.
+  - `parsed.type === "place_id"` → `keyword: place_id:ChIJ...`.
+  - `parsed.type === "search"` with coords → **reverse-geocodes via Mapbox** to fetch `full_address`, appends to keyword (`"<query>, <full_address>"`), widens coord bias to 2 km. Without the address suffix Google's text-search loses bare names (`"Beam"`) against global namesakes.
+  - Bare `lat/lng` → `keyword: "lat,lng"` + 200 m bias (weakest fallback).
 - **Notes:** Dual-path resolution. `photoRef` deferred to a later enrichment step.
 
 ## Cross-route concerns

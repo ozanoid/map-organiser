@@ -78,11 +78,17 @@ User focuses the search input that sits on top of the map view (top-left, beside
        │  • Downloads photoRef to Supabase Storage if present
        │
        ▼
-8. onSuccess
-       │  • Toast "<name> saved!"
-       │  • Panel closes (clears searchResult)
-       │  • React Query invalidates ["places"]
-       │  • If `cid` present, fire-and-forget POST /api/places/[id]/enrich?step=reviews
+8. onSuccess (mirrors AddPlaceDialog's two-step pattern)
+       │  • Toast "<name> saved!", panel closes (clears searchResult)
+       │  • AWAIT POST /api/places/[id]/enrich?step=info
+       │      → DataForSEO business_info refresh + photo idempotent re-write
+       │      → returns { ok: true, cid?: "<decimal>" }
+       │      → React Query invalidates ["places"] after info resolves
+       │  • If cid (from info response, or _extended.cid as fallback):
+       │      fire-and-forget POST /api/places/[id]/enrich?step=reviews
+       │      → /places/[id] polling picks it up within ~30s
+       │  • On info error (e.g. mapbox-only result with no google_place_id):
+       │      caught silently, still invalidate ["places"]
        ▼
 9. New place appears on map (existing places source refetched)
 ```
@@ -94,7 +100,8 @@ User focuses the search input that sits on top of the map view (top-left, beside
 | 2 | search string + session token | up to 8 Mapbox POI suggestions |
 | 4 | mapbox_id + session token | unified place payload (DataForSEO-enriched when match) |
 | 7 | full form | new `places` row + optional `list_places` + `place_tags` + Storage photo |
-| 8 (optional) | `cid` | reviews merged into `google_data.reviews` |
+| 8a (awaited) | place id | DataForSEO info merged into `google_data`, cid surfaced |
+| 8b (optional) | `cid` | reviews merged into `google_data.reviews` |
 
 ## Provider preference
 
@@ -119,7 +126,8 @@ For one suggest→retrieve→save:
 
 - ≥ 1 Mapbox suggest HTTP call (per keystroke after debounce). All within one session.
 - 1 Mapbox retrieve HTTP call. → **1 billable Mapbox session** ($11.50/1000, 500 free/month).
-- 1 DataForSEO business_info call (when env set + match found). ($5.40/1000).
+- 1 DataForSEO business_info call during retrieve (when env set + match found). ($5.40/1000).
+- **1 extra DataForSEO business_info call on save** via `step=info` — re-asserts google_data + DB roundtrip guarantee. (~$0.0054, matches AddPlaceDialog's cost profile.)
 - 0 or 1 DataForSEO reviews call (background, when cid).
 - 1 Supabase `INSERT places` (+ junction inserts + 1 Storage upload if photoRef).
 

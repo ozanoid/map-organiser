@@ -6,6 +6,17 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 13.05.2026 — v1.1.3 — patch: search-save reviews loading loop
+
+Places saved via the `/map` search box stayed in "Loading reviews..." forever on `/places/[id]` — polling was triggered (`google_data.cid` was set) but reviews never landed.
+
+- `SearchResultPanel` now mirrors `AddPlaceDialog`'s two-step enrichment: await `step=info`, then fire-and-forget `step=reviews` using the CID from the info response (falls back to `_extended.cid`). The await acts as a DB roundtrip guarantee, eliminating the race against POST `/api/places`'s async photo-download UPDATE.
+- Falls back to invalidating the `["places"]` cache when `step=info` itself errors (e.g. mapbox-only path with no `google_place_id`).
+
+Extra cost: 1 DataForSEO `business_info_live` call per save (~$0.0054), matching the URL-paste flow.
+
+---
+
 ## 13.05.2026 — v1.1.2 — patch: extract CID from FTid + prefer POI coords
 
 Short-link shares (`maps.app.goo.gl/...`) resolve to URLs whose `data=` blob carries an FTid (`!1s0xCELL:0xCID`) and the POI's actual coordinates (`!3d!4d`), but the parser was throwing both away and falling back to text search with the viewport center.

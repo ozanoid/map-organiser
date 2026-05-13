@@ -116,6 +116,15 @@ For inbound Places, coordinates are filled by:
 
 The `s2-geometry` npm package (^1.2.10) is used **only** in `src/lib/google/parse-maps-url.ts` to decode Google's FTid into approximate coordinates.
 
+### FTid carries two payloads
+
+A Google FTid is the form **`0xCELL:0xCID`**:
+
+1. **First hex (`0xCELL`)** — an S2 cell ID, decodable to approximate coords (the historical fallback).
+2. **Second hex (`0xCID`)** — the Google **CID** for the business. `BigInt("0x...").toString()` gives a decimal CID that DataForSEO accepts as `keyword: cid:<decimal>` for exact-match Business Info lookups.
+
+The parser now prefers the CID path (`type: "cid"`) and falls back to S2 decoding only when CID extraction fails. This is what makes short-link shares like `https://maps.app.goo.gl/...` resolve reliably even when their viewport center sits a kilometer away from the actual POI.
+
 ### What's an FTid?
 
 When a Google Maps URL doesn't carry `@lat,lng,zoom`, it often carries an FTid:
