@@ -61,6 +61,10 @@ opens the dialog with `initialUrl`. Either way, `parseLink.mutate()` runs.
        │       ├─ matchTagsFromFeatures(features, tags)
        │       │     → suggested_tags.matched_existing
        │       │     (new_proposals stays [] — lite path doesn't speculate)
+       │       │     • SUPPRESSED_FROM_SUGGESTIONS filter: wifi, parking,
+       │       │       reservations, photogenic, unclaimed, indoor, outdoor,
+       │       │       price_range. Too common to be useful as chips;
+       │       │       they stay in features.* for Phase 4 LLM + filters.
        │       └─ matchListsFromProfile(features, ctx, lists)
        │             → city/country/category/cuisine fuzzy match
        │
@@ -132,8 +136,31 @@ Sub-second overhead. Worst case (~70 user subcategories + 50 attributes + 10 tag
 - **UI integration**: `src/components/places/add-place-dialog.tsx` — `aiSuggestions` memo + `suggestedSubcategory` memo + the "AI Suggestions" panel.
 - **POST consumer**: `src/app/api/places/route.ts` and `src/lib/hooks/use-places.ts#CreatePlaceInput` now accept `subcategory_id`.
 
+## Noise control — `SUPPRESSED_FROM_SUGGESTIONS`
+
+DataForSEO emits a wide attribute bag (`has_wi_fi`, `has_seating_outdoors`, `has_onsite_parking`, …). Without filtering, the lite path would surface `wifi` and `outdoor` chips on almost every paste-link — true but uninteresting, since they're commodity features in 2026. The chip rail would teach users to dismiss suggestions instead of acting on them.
+
+`suggestions-from-profile.ts` keeps a small **suppress set** that the candidate collector skips:
+
+| Suppressed | Why |
+|---|---|
+| `wifi` | Universal in modern cafes/restaurants |
+| `parking` | Common, location-dependent |
+| `reservations` | Common, expected at most full-service places |
+| `photogenic` | Heuristic from `total_photos > 500`; doesn't map cleanly to a tag |
+| `unclaimed` | Anti-feature; reminder, not a tag |
+| `indoor`, `outdoor` | Almost every venue has at least one |
+| `$`, `$$`, `$$$`, `$$$$` | Price level as a tag is rarely meaningful |
+
+**Important:** suppression is **chip-only**. `features.*` keeps the full attribute set — Phase 4's LLM still sees them in context (and can override based on review salience), and future filter dimensions can still use them. Suppressing here is a "don't bug the user with this" call, not a data deletion.
+
+What stays (a value can still surface if the user has a matching tag): `vegan` and other `dietary`, `live-music`, `dog-friendly`, `lgbtq-friendly`, `accessible`, `family-friendly`, all `cuisine_types`, `private-room`, `bar-seating`, `rooftop`.
+
+**Phase 4 fallback role:** When the full profile starts producing tag proposals, the same suppress set runs over the LLM's `new_proposals` output so that even if Gemini suggests `"wifi"` as a new tag, it gets dropped before reaching the moderation queue. The set is the safety net under the LLM, not a replacement for it.
+
 ## Open questions
 
 - **Bulk import path (`/api/places/import-batch`)** doesn't yet call `buildLiteProfile`. Phase 4 will integrate AI categorization there (likely with the full LLM call for the smaller, slower batch path). Until then, batch-imported places still rely on the existing `resolveCategoryId` rule-based mapping with NO sub-category, NO tag/list suggestions.
 - **Sub-category creation when user has none yet for that parent**: the strip simply doesn't render. Phase 5's moderation queue handles AI-proposed new sub-cats from the full profile, but a "create on the fly" affordance in the dialog could close the gap earlier.
 - **Tag chip dedup**: the strip can show duplicates if two user tags fuzzy-match the same feature. Today the matcher de-dups by tag ID, so this is theoretically OK; worth verifying with multilingual tag names.
+- **Locale-aware suppress list**: today's suppress set assumes a 2026 urban-Western baseline (wifi everywhere, outdoor seating common). In regions where these are genuinely distinctive, the chip rail would lose useful signal. Phase 4 LLM salience will handle this implicitly; a per-region static list is overkill.

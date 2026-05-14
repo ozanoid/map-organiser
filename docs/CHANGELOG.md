@@ -22,6 +22,7 @@ zero LLM calls** — all rule-based extraction off DataForSEO + Google types.
 - **`/api/places` POST + `useCreatePlace`** — accept `subcategory_id`. Phase 2's table now has a write path from the Add dialog.
 - **`AddPlaceDialog`** — new "✨ AI Suggestions" panel: tag chips + list chips (opt-in, user clicks). Sub-category strip under the Category dropdown shows all parent sub-cats with a Sparkles icon on the AI-suggested one. Auto-pre-select sub-cat when confidence ≥ 0.85. Reset clears AI state too.
 - **Auto-apply policy in dialog**: tag/list chips stay opt-in (user is right there); sub-category auto-selects on high confidence (one click deep behind a dropdown, removes friction). Per the 3-band design discussed before Phase 3.
+- **Noise control — `SUPPRESSED_FROM_SUGGESTIONS`** (post-merge patch on top of the same PR): lite path now drops too-common attributes (`wifi`, `parking`, `reservations`, `photogenic`, `unclaimed`, `indoor`, `outdoor`, price-level strings) from tag-suggestion candidates. `features.*` keeps them in full; only the chip rail is filtered. Phase 4 LLM proposals will run through the same filter as a safety net. Rationale + Phase 4 fallback role documented in [[05-flows/lite-profile-flow#noise-control--suppressed_from_suggestions]].
 - **Vault**: new [[05-flows/lite-profile-flow]] + parse-link section updated.
 
 ---

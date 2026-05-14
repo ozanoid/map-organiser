@@ -23,19 +23,65 @@ interface ListRef {
 }
 
 /**
+ * Feature values that are technically present on the place but are too
+ * common (or anti-features) to surface as suggestion chips.
+ *
+ * Rationale: `extractDistinctive` flags every wifi-equipped venue with
+ * "wifi", which is true but not interesting — almost every modern
+ * restaurant/cafe has wifi. Showing "wifi" as a chip on every paste-link
+ * teaches users to dismiss suggestions, not act on them.
+ *
+ * IMPORTANT: features.* still contains these — the suppression is purely
+ * for the suggestion-chip UI. Phase 4's LLM full profile still sees the
+ * full feature set in context (and can override with salience), and
+ * future filter dimensions can still use them.
+ *
+ * Suppress list is intentionally conservative. Anything truly distinctive
+ * (vegan, live-music, dog-friendly, accessible, lgbtq-friendly,
+ * cuisine_types, private-room) stays.
+ */
+const SUPPRESSED_FROM_SUGGESTIONS = new Set<string>([
+  // Distinctive flags that are too common to be useful as tags
+  "wifi",
+  "parking",
+  "reservations",
+  // Heuristic flags that don't translate to a clean tag
+  "photogenic",
+  "unclaimed",
+  // Seating: indoor/outdoor are too common; rooftop / private-room / bar-seating stay
+  "indoor",
+  "outdoor",
+  // Price range as a tag is rarely what users want ("$$" tag = noise)
+  "$",
+  "$$",
+  "$$$",
+  "$$$$",
+]);
+
+/**
  * Tag candidates derived from feature values. Each candidate is matched
  * against existing user tags via `isFuzzyMatch` and only emitted when a
  * match is found (lite path = `matched_existing` only).
+ *
+ * Values in SUPPRESSED_FROM_SUGGESTIONS are skipped here — they remain in
+ * `features.*` for downstream consumers (Phase 4 LLM, future filters)
+ * but never appear as a suggestion chip in the Add dialog.
  */
 function collectTagCandidates(features: Features): string[] {
   const candidates = new Set<string>();
-  features.cuisine_types.forEach((c) => candidates.add(c));
-  features.dietary.forEach((d) => candidates.add(d));
-  features.distinctive.forEach((d) => candidates.add(d));
-  features.seating.forEach((s) => candidates.add(s));
-  features.atmosphere.forEach((a) => candidates.add(a));
-  features.occasions.forEach((o) => candidates.add(o));
-  if (features.price_range) candidates.add(features.price_range);
+  const push = (value: string | null | undefined) => {
+    if (!value) return;
+    if (SUPPRESSED_FROM_SUGGESTIONS.has(value)) return;
+    candidates.add(value);
+  };
+
+  features.cuisine_types.forEach(push);
+  features.dietary.forEach(push);
+  features.distinctive.forEach(push);
+  features.seating.forEach(push);
+  features.atmosphere.forEach(push);
+  features.occasions.forEach(push);
+  push(features.price_range ?? undefined);
   return [...candidates];
 }
 
