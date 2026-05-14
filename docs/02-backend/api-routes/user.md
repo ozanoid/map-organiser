@@ -2,18 +2,24 @@
 title: User routes
 type: route-group
 domain: backend
-version: 1.0.0
-last_updated: 12.05.2026
+version: 1.1.0
+last_updated: 14.05.2026
 status: stable
 sources:
   - src/app/api/user/api-keys/route.ts
   - src/app/api/user/usage/route.ts
+  - src/app/api/user/ai-settings/route.ts
+  - src/app/api/user/ai-suggestions/route.ts
+  - src/app/api/user/ai-suggestions/[id]/accept/route.ts
+  - src/app/api/user/ai-suggestions/[id]/reject/route.ts
 related:
   - "[[_README]]"
   - "[[../schema/profiles]]"
   - "[[../schema/api_usage]]"
+  - "[[../schema/ai_suggestions_queue]]"
   - "[[../../01-domain/users-and-profiles]]"
   - "[[../../06-ops/encryption]]"
+  - "[[../../05-flows/full-profile-flow]]"
 ---
 
 # User routes
@@ -27,6 +33,11 @@ Two endpoints under `/api/user/*` — both about the **caller's own** profile.
 | `GET` | `/api/user/api-keys` | Read masked API key state + `googlePlacesEnabled` flag. |
 | `PUT` | `/api/user/api-keys` | Update / clear encrypted API keys + flag. |
 | `GET` | `/api/user/usage` | Monthly API usage rollup + estimated cost. |
+| `GET` | `/api/user/ai-settings` | Read the master AI toggle + server-side availability flag. |
+| `PUT` | `/api/user/ai-settings` | Flip `profiles.ai_features_enabled`. |
+| `GET` | `/api/user/ai-suggestions` | List pending AI proposals (Phase 5 moderation queue), pre-grouped by `(type, slug, parent)`. |
+| `POST` | `/api/user/ai-suggestions/[id]/accept` | Create the proposed tag / sub-category and apply it to every queued place. |
+| `POST` | `/api/user/ai-suggestions/[id]/reject` | Mark proposal (and siblings) as `rejected`. Vocabulary untouched. |
 
 All require auth.
 
@@ -78,6 +89,40 @@ All require auth.
 ```
 
 - **Notes:** Estimated cost = `(count / 1000) * cost_per_1k` per row; summed for the total. Month string is current month.
+
+### `GET /api/user/ai-settings`
+
+- **Source:** `src/app/api/user/ai-settings/route.ts`
+- **DB:** `profiles` SELECT (`ai_features_enabled`).
+- **Response:** `{ enabled: boolean, available: boolean }`. `available` reflects the presence of `GOOGLE_GENERATIVE_AI_API_KEY` on the server.
+
+### `PUT /api/user/ai-settings`
+
+- **Body:** `{ enabled: boolean }` (Zod-validated).
+- **DB:** `profiles` UPDATE.
+- **Response:** `{ success: true, enabled }`.
+- **Notes:** Phase 1 master toggle. When `false`, every other AI endpoint short-circuits and the UI hides AI affordances.
+
+### `GET /api/user/ai-suggestions`
+
+- **Source:** `src/app/api/user/ai-suggestions/route.ts`
+- **DB:** `ai_suggestions_queue` SELECT scoped to `user_id` + `status='pending'`, joined with `places(name)` and `categories(name)` for UI context.
+- **Pre-aggregation:** rows with the same `(type, lower(proposed_value), parent_category_id)` collapse into a single entry carrying `occurrences`, `ids[]`, and the most-recent `created_at`. Sorted by `occurrences DESC` so frequently-proposed concepts surface first.
+- **Response:** `{ suggestions: AiSuggestion[] }` where each `AiSuggestion` includes `type`, `proposed_value`, `parent_category_id`, `parent_category_name`, `confidence`, `occurrences`, `sample_place_name`, `ids`.
+
+### `POST /api/user/ai-suggestions/[id]/accept`
+
+- **DB:** Looks up the source row; collects all sibling pending rows (same user + type + normalized value + parent). Then:
+  - **tag**: reuses an existing tag with the same name if present (avoids dupes when the user manually created the same tag meanwhile); else INSERT into `tags`. Attaches to every queued place via `place_tags` (skips pre-existing `(place_id, tag_id)`).
+  - **subcategory**: reuses an existing slug under the same parent if present (flips `is_pending`→false); else INSERT into `subcategories` with `is_default=false`, `is_pending=false`, `approved_at=now()`. Updates `places.subcategory_id` for every queued place.
+- All sibling queue rows transition to `status='accepted'` with `resolved_at`.
+- **Response:** `{ success: true, accepted_count, affected_places }`.
+- **Idempotency:** safe to call twice; second call returns `409 Already accepted`.
+
+### `POST /api/user/ai-suggestions/[id]/reject`
+
+- **DB:** Marks the source row and all siblings as `status='rejected'`. No entity created, no places mutated.
+- **Response:** `{ success: true, rejected_count }`.
 
 ## Cross-route concerns
 

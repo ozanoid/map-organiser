@@ -6,6 +6,49 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 14.05.2026 — v1.6.0 — AI Phase 5: Moderation Queue UI
+
+The Phase 4 background pipeline has been silently writing proposals to
+`ai_suggestions_queue` since merge. This phase closes the loop with the
+**human-in-the-loop UI**: Settings → AI tab now lists pending tag and
+sub-category proposals with accept/reject controls, and a live count
+badge on the tab itself surfaces backlog at a glance.
+
+- **API routes**:
+  - `GET /api/user/ai-suggestions` — lists pending proposals, pre-aggregated
+    server-side by `(type, lower(value), parent_category_id)` so the same
+    concept proposed by multiple places renders as one row with
+    `occurrences` count. Joined with `places(name)` and `categories(name)`
+    for UI context (sample place name, parent category label).
+  - `POST /api/user/ai-suggestions/[id]/accept` — creates the entity
+    (reuses if user already has one with that name/slug to avoid dupes),
+    attaches it to every queued place (tag → `place_tags` insert with
+    dedupe; sub-cat → `places.subcategory_id` update), and marks all
+    sibling queue rows `status='accepted'`. Idempotent: second accept
+    returns 409 `Already accepted`.
+  - `POST /api/user/ai-suggestions/[id]/reject` — flips siblings to
+    `status='rejected'`. Vocabulary untouched.
+- **`useAiSuggestions` hook** — `useAiSuggestions` + `useAcceptAiSuggestion`
+  + `useRejectAiSuggestion`. Mutations invalidate `["ai-suggestions"]`
+  plus `["tags"]` / `["subcategories"]` / `["places"]` on accept so all
+  consuming UIs refresh.
+- **`AiSuggestionsQueue` component** — lives under the AI tab below the
+  master toggle. Hidden when AI is disabled or unavailable. Empty-state
+  copy explains where suggestions come from. Two grouped sections (Tags,
+  Sub-categories) with per-row Accept (emerald button) + Reject (× icon)
+  controls, in-flight loading states, and toast feedback. Each row shows
+  the proposed value, parent (for sub-cats), the sample place that
+  triggered it, occurrence count, and confidence percentage.
+- **`AiTabTrigger`** — live count badge on the AI tab in Settings.
+  Wraps `useAiSuggestions`; renders an emerald pill with the number when
+  > 0. Single source of truth for the moderation backlog indicator.
+- **Vault**:
+  - [[02-backend/api-routes/user]] bumped to v1.1.0 with the 5 new endpoints
+    documented (settings + suggestions group).
+  - [[03-frontend/hooks/use-ai-suggestions]] (new).
+
+---
+
 ## 14.05.2026 — v1.5.0 — AI Phase 4: Full Profile (first real LLM call)
 
 **The big one.** First end-to-end Gemini Flash call in production: place is

@@ -7,6 +7,7 @@ import {
   useCreateSubcategory,
   useDeleteSubcategory,
 } from "@/lib/hooks/use-subcategories";
+import { useAiSuggestions } from "@/lib/hooks/use-ai-suggestions";
 import { useTags, useCreateTag, useDeleteTag } from "@/lib/hooks/use-tags";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -77,10 +78,7 @@ export default function SettingsPage() {
             <span className="hidden sm:inline">API & Usage</span>
             <span className="sm:hidden">API</span>
           </TabsTrigger>
-          <TabsTrigger value="ai" className="cursor-pointer shrink-0">
-            <Sparkles className="h-4 w-4 mr-1.5" />
-            AI
-          </TabsTrigger>
+          <AiTabTrigger />
           <TabsTrigger value="appearance" className="cursor-pointer shrink-0">
             <Paintbrush className="h-4 w-4 mr-1.5" />
             <span className="hidden sm:inline">Appearance</span>
@@ -107,6 +105,30 @@ export default function SettingsPage() {
         </TabsContent>
       </Tabs>
     </div>
+  );
+}
+
+/**
+ * AI tab trigger with a pending-count badge. The badge wraps the live
+ * `useAiSuggestions` query so it shows the moderation backlog at a glance
+ * (only counts >0 render).
+ */
+function AiTabTrigger() {
+  const { data: suggestions = [] } = useAiSuggestions();
+  const pendingCount = suggestions.length;
+  return (
+    <TabsTrigger value="ai" className="cursor-pointer shrink-0">
+      <Sparkles className="h-4 w-4 mr-1.5" />
+      AI
+      {pendingCount > 0 && (
+        <span
+          className="ml-1.5 inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full text-[10px] font-semibold bg-emerald-600 text-white"
+          aria-label={`${pendingCount} pending AI suggestion${pendingCount === 1 ? "" : "s"}`}
+        >
+          {pendingCount}
+        </span>
+      )}
+    </TabsTrigger>
   );
 }
 
