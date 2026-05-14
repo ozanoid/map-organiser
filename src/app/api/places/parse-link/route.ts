@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { parseMapsUrl } from "@/lib/google/parse-maps-url";
 import { getUserApiKeys } from "@/lib/google/get-user-api-keys";
@@ -12,6 +13,9 @@ import {
 } from "@/lib/dataforseo/transform";
 import { reverseGeocode } from "@/lib/mapbox/search-box";
 import { trackUsage } from "@/lib/google/track-usage";
+import { buildLiteProfile } from "@/lib/ai/extract/lite-profile";
+import type { PlaceProfile } from "@/lib/ai/schemas/place-profile";
+import type { ParsedPlaceData } from "@/lib/types";
 
 /**
  * Extract CID from a resolved Google Maps URL's FTid.
@@ -34,6 +38,58 @@ function getDataForSEOClient(): DataForSEOClient | null {
   const password = process.env.DATAFORSEO_PASSWORD;
   if (!login || !password) return null;
   return new DataForSEOClient({ login, password });
+}
+
+/**
+ * Build a lite_profile for the parsed place, gated on the user's
+ * ai_features_enabled flag. Returns null when AI is disabled or the build
+ * throws (fail-soft: never block the parse).
+ */
+async function buildLiteProfileForResponse(
+  supabase: SupabaseClient,
+  userId: string,
+  placeData: ParsedPlaceData,
+  extended?: {
+    attributes?: Record<string, boolean>;
+    place_topics?: Record<string, number>;
+    is_claimed?: boolean;
+    total_photos?: number;
+  } | null
+): Promise<PlaceProfile | null> {
+  try {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("ai_features_enabled")
+      .eq("id", userId)
+      .single();
+    if (!profile?.ai_features_enabled) return null;
+
+    const [{ data: tags }, { data: lists }] = await Promise.all([
+      supabase.from("tags").select("id, name").eq("user_id", userId),
+      supabase.from("lists").select("id, name").eq("user_id", userId),
+    ]);
+
+    return buildLiteProfile(
+      {
+        name: placeData.name,
+        city: placeData.city,
+        country: placeData.country,
+        types: placeData.types,
+        price_level: placeData.priceLevel,
+        attributes: extended?.attributes,
+        place_topics: extended?.place_topics,
+        total_photos: extended?.total_photos,
+        is_claimed: extended?.is_claimed,
+      },
+      {
+        tags: (tags ?? []) as Array<{ id: string; name: string }>,
+        lists: (lists ?? []) as Array<{ id: string; name: string }>,
+      }
+    );
+  } catch (e) {
+    console.warn("[parse-link] lite_profile build failed:", e);
+    return null;
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -87,11 +143,18 @@ export async function POST(request: NextRequest) {
       if (placeData) {
         const fetchTimeMs = Date.now() - startTime;
         console.log(`[parse-link] Success: "${placeData.name}" in ${fetchTimeMs}ms via Google`);
+        const lite_profile = await buildLiteProfileForResponse(
+          supabase,
+          user.id,
+          placeData,
+          null
+        );
         return NextResponse.json({
           ...placeData,
           photoRef: null, // DataForSEO handles photos in background enrichment
           _provider: "google",
           _fetchTimeMs: fetchTimeMs,
+          lite_profile,
         });
       }
 
@@ -166,11 +229,19 @@ export async function POST(request: NextRequest) {
 
     console.log(`[parse-link] Success: "${placeData.name}" in ${fetchTimeMs}ms via DataForSEO`);
 
+    const lite_profile = await buildLiteProfileForResponse(
+      supabase,
+      user.id,
+      placeData,
+      extended ?? null
+    );
+
     return NextResponse.json({
       ...placeData,
       _provider: "dataforseo",
       _fetchTimeMs: fetchTimeMs,
       _extended: extended,
+      lite_profile,
     });
   } catch (error) {
     console.error("Parse link error:", error);

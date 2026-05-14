@@ -6,6 +6,27 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 14.05.2026 — v1.4.0 — AI Phase 3: Lite Profile in parse-link
+
+First **user-visible AI surface**: paste a Google Maps URL into Add Place →
+"✨ AI Suggestions" panel materializes instantly with tag/list chips and the
+matching sub-category gets pre-selected when confidence is high. **Still
+zero LLM calls** — all rule-based extraction off DataForSEO + Google types.
+
+- **`src/lib/ai/extract/`** new directory:
+  - `category-resolver.ts` — Google types → `(primary, sub_category, confidence)` via strict + loose mapping tables. Detects hybrid venues (restaurant + bar → `secondary_role`). Confidence: strict 0.95, loose 0.75, name-heuristic 0.7, no match 0.
+  - `features-extractor.ts` — DataForSEO `attributes` + `price_level` + `total_photos` + `is_claimed` → `features` slice (cuisine/dietary/seating/distinctive/price_range). LLM-only fields (atmosphere/occasions/music/crowd) left empty.
+  - `suggestions-from-profile.ts` — `matchTagsFromFeatures` (fuzzy match cuisines/dietary/distinctive against user tags) + `matchListsFromProfile` (city/country/category/cuisine match against user list names). Lite path emits matched_existing only; no new tag proposals (Phase 4 territory).
+  - `lite-profile.ts` — top-level orchestrator returning a `lite` `PlaceProfile`.
+- **`/api/places/parse-link` route** — appends `lite_profile` to both Google and DataForSEO response paths. New helper `buildLiteProfileForResponse` fetches `ai_features_enabled` + user's tags + lists, builds the profile, returns null on errors (fail-soft). Adds ~100ms to a ~3-4s parse.
+- **`/api/places` POST + `useCreatePlace`** — accept `subcategory_id`. Phase 2's table now has a write path from the Add dialog.
+- **`AddPlaceDialog`** — new "✨ AI Suggestions" panel: tag chips + list chips (opt-in, user clicks). Sub-category strip under the Category dropdown shows all parent sub-cats with a Sparkles icon on the AI-suggested one. Auto-pre-select sub-cat when confidence ≥ 0.85. Reset clears AI state too.
+- **Auto-apply policy in dialog**: tag/list chips stay opt-in (user is right there); sub-category auto-selects on high confidence (one click deep behind a dropdown, removes friction). Per the 3-band design discussed before Phase 3.
+- **Noise control — `SUPPRESSED_FROM_SUGGESTIONS`** (post-merge patch on top of the same PR): lite path now drops too-common attributes (`wifi`, `parking`, `reservations`, `photogenic`, `unclaimed`, `indoor`, `outdoor`, price-level strings) from tag-suggestion candidates. `features.*` keeps them in full; only the chip rail is filtered. Phase 4 LLM proposals will run through the same filter as a safety net. Rationale + Phase 4 fallback role documented in [[05-flows/lite-profile-flow#noise-control--suppressed_from_suggestions]].
+- **Vault**: new [[05-flows/lite-profile-flow]] + parse-link section updated.
+
+---
+
 ## 14.05.2026 — v1.3.0 — AI Phase 2: Subcategory infrastructure
 
 Per-user subcategory table (under each parent category) + default

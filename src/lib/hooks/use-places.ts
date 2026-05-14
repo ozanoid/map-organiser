@@ -53,6 +53,7 @@ interface CreatePlaceInput {
   lat: number;
   lng: number;
   category_id?: string;
+  subcategory_id?: string;
   rating?: number;
   notes?: string;
   google_place_id?: string;
