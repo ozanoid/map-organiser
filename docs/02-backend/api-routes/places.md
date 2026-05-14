@@ -194,7 +194,8 @@ All require auth.
 - **Body:** `{ url: string }`.
 - **DB:** `profiles` SELECT (via `getUserApiKeys`).
 - **External:** `parseMapsUrl`; Google Places (`getPlaceDetails` / `searchPlace`) when enabled + keyed; DataForSEO `fetchBusinessInfoLive` fallback; Mapbox `reverseGeocode` (for short-query padding); transforms; `trackUsage`.
-- **Response:** Place data + `_provider: "google"|"dataforseo"`, `_fetchTimeMs`, optional `_extended` (DataForSEO). `200` / `400` (invalid URL, no credentials, no results) / `404`.
+- **Response:** Place data + `_provider: "google"|"dataforseo"`, `_fetchTimeMs`, optional `_extended` (DataForSEO), optional `lite_profile: PlaceProfile | null` (Phase 3+). `200` / `400` (invalid URL, no credentials, no results) / `404`.
+- **lite_profile (Phase 3):** Inline rule-based profile (no LLM call). Built by `buildLiteProfileForResponse` after the main fetch, gated by `profiles.ai_features_enabled`. Carries `category_signals` (primary + sub-category slug + confidence), `features` (cuisine/dietary/seating/distinctive/price_range — atmosphere/occasions/music/crowd left empty for Phase 4), `suggested_tags.matched_existing` (no new_proposals in lite path), and `suggested_lists` (city/country/category/cuisine fuzzy match). Fail-soft: any error logs and returns `lite_profile: null` rather than failing the parse. See [[../../05-flows/lite-profile-flow]].
 - **DataForSEO keyword branching** (in order of preference):
   - `cidFromUrl` (raw URL has `?cid=` or FTid) → `keyword: cid:<decimal>`.
   - `parsed.type === "cid"` (parser extracted CID from FTid's second hex) → `keyword: cid:<decimal>` — exact match, bypasses text search.

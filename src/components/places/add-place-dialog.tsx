@@ -1,11 +1,14 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useParseLink, useCreatePlace } from "@/lib/hooks/use-places";
 import { useCategories } from "@/lib/hooks/use-categories";
+import { useSubcategories } from "@/lib/hooks/use-subcategories";
 import { useLists } from "@/lib/hooks/use-lists";
+import { useTags } from "@/lib/hooks/use-tags";
 import { resolveCategoryId } from "@/lib/google/category-mapping";
+import type { PlaceProfile } from "@/lib/ai/schemas/place-profile";
 import {
   Dialog,
   DialogContent,
@@ -31,6 +34,7 @@ import {
   Loader2,
   Check,
   X,
+  Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { ParsedPlaceData, VisitStatus } from "@/lib/types";
@@ -45,8 +49,10 @@ interface AddPlaceDialogProps {
 export function AddPlaceDialog({ open, onOpenChange, initialUrl }: AddPlaceDialogProps) {
   const [url, setUrl] = useState("");
   const [placeData, setPlaceData] = useState<ParsedPlaceData | null>(null);
+  const [liteProfile, setLiteProfile] = useState<PlaceProfile | null>(null);
   const [providerInfo, setProviderInfo] = useState<{ name: string; timeMs: number } | null>(null);
   const [categoryId, setCategoryId] = useState<string>("");
+  const [subcategoryId, setSubcategoryId] = useState<string | null>(null);
   const [notes, setNotes] = useState("");
   const [rating, setRating] = useState<number>(0);
   const [selectedListIds, setSelectedListIds] = useState<string[]>([]);
@@ -59,7 +65,42 @@ export function AddPlaceDialog({ open, onOpenChange, initialUrl }: AddPlaceDialo
   const parseLink = useParseLink();
   const createPlace = useCreatePlace();
   const { data: categories = [] } = useCategories();
+  const { data: subcategories = [] } = useSubcategories();
   const { data: lists = [] } = useLists();
+  const { data: tags = [] } = useTags();
+
+  /**
+   * Resolve the lite_profile suggestions into UI-friendly shapes.
+   * Memoized so the chip lists don't recompute on every keystroke.
+   */
+  const aiSuggestions = useMemo(() => {
+    if (!liteProfile) return null;
+    const suggestedTagObjects = liteProfile.suggested_tags.matched_existing
+      .map((id) => tags.find((t) => t.id === id))
+      .filter((t): t is NonNullable<typeof t> => Boolean(t));
+    const suggestedListObjects = liteProfile.suggested_lists
+      .map((id) => lists.find((l) => l.id === id))
+      .filter((l): l is NonNullable<typeof l> => Boolean(l));
+    return {
+      suggestedTags: suggestedTagObjects,
+      suggestedLists: suggestedListObjects,
+      subCategorySlug: liteProfile.category_signals.sub_category,
+      subCategoryConfidence: liteProfile.category_signals.sub_category_confidence,
+    };
+  }, [liteProfile, tags, lists]);
+
+  /**
+   * Resolve the suggested sub-category slug → user's subcategory row
+   * (must be under the currently selected parent category).
+   */
+  const suggestedSubcategory = useMemo(() => {
+    if (!aiSuggestions?.subCategorySlug || !categoryId) return null;
+    return subcategories.find(
+      (s) =>
+        s.slug === aiSuggestions.subCategorySlug &&
+        s.parent_category_id === categoryId
+    );
+  }, [aiSuggestions, categoryId, subcategories]);
 
   // Auto-parse when opened via share target with initialUrl
   useEffect(() => {
@@ -71,11 +112,27 @@ export function AddPlaceDialog({ open, onOpenChange, initialUrl }: AddPlaceDialo
           if (data._provider) {
             setProviderInfo({ name: data._provider, timeMs: data._fetchTimeMs || 0 });
           }
+          if (data.lite_profile) setLiteProfile(data.lite_profile);
         },
         onError: (err) => toast.error(err.message),
       });
     }
   }, [open, initialUrl]);
+
+  /**
+   * Auto-pre-select the suggested sub-category when confidence is high.
+   * Per the Phase 3 plan: in the Add dialog (Moment 1), tags & lists stay
+   * opt-in (user clicks chip), but sub-category auto-selects on high
+   * confidence so the user doesn't have to dig through a cascading filter
+   * just to confirm "Cocktail Bar" on a place Google already calls one.
+   */
+  useEffect(() => {
+    if (!suggestedSubcategory) return;
+    if (subcategoryId) return; // don't override manual choice
+    if ((aiSuggestions?.subCategoryConfidence ?? 0) >= 0.85) {
+      setSubcategoryId(suggestedSubcategory.id);
+    }
+  }, [suggestedSubcategory, aiSuggestions, subcategoryId]);
 
   // Auto-resolve category when placeData arrives
   useEffect(() => {
@@ -101,8 +158,10 @@ export function AddPlaceDialog({ open, onOpenChange, initialUrl }: AddPlaceDialo
   function reset() {
     setUrl("");
     setPlaceData(null);
+    setLiteProfile(null);
     setProviderInfo(null);
     setCategoryId("");
+    setSubcategoryId(null);
     setNotes("");
     setRating(0);
     setSelectedListIds([]);
@@ -121,9 +180,16 @@ export function AddPlaceDialog({ open, onOpenChange, initialUrl }: AddPlaceDialo
         if (data._provider) {
           setProviderInfo({ name: data._provider, timeMs: data._fetchTimeMs || 0 });
         }
+        if (data.lite_profile) setLiteProfile(data.lite_profile);
       },
       onError: (err) => toast.error(err.message),
     });
+  }
+
+  function toggleTagSuggestion(tagId: string) {
+    setSelectedTagIds((prev) =>
+      prev.includes(tagId) ? prev.filter((id) => id !== tagId) : [...prev, tagId]
+    );
   }
 
   async function handleSave() {
@@ -138,6 +204,7 @@ export function AddPlaceDialog({ open, onOpenChange, initialUrl }: AddPlaceDialo
         lat: placeData.lat,
         lng: placeData.lng,
         category_id: categoryId || undefined,
+        subcategory_id: subcategoryId || undefined,
         rating: rating || undefined,
         notes: notes || undefined,
         google_place_id: placeData.placeId,
@@ -359,7 +426,113 @@ export function AddPlaceDialog({ open, onOpenChange, initialUrl }: AddPlaceDialo
                   onCreated={(id) => setCategoryId(id)}
                 />
               </div>
+
+              {/* Sub-category chip (under selected parent) */}
+              {categoryId && (() => {
+                const parentSubs = subcategories.filter(
+                  (s) => s.parent_category_id === categoryId
+                );
+                if (parentSubs.length === 0) return null;
+                return (
+                  <div className="flex flex-wrap gap-1 mt-2">
+                    {parentSubs.map((sub) => {
+                      const isActive = subcategoryId === sub.id;
+                      const isSuggested = suggestedSubcategory?.id === sub.id;
+                      return (
+                        <button
+                          key={sub.id}
+                          type="button"
+                          onClick={() =>
+                            setSubcategoryId(isActive ? null : sub.id)
+                          }
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium cursor-pointer transition-colors ${
+                            isActive
+                              ? "bg-emerald-600 text-white"
+                              : "bg-gray-50 text-gray-600 hover:bg-gray-100 dark:bg-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 border border-gray-200 dark:border-gray-700"
+                          }`}
+                        >
+                          {isSuggested && (
+                            <Sparkles className="h-2.5 w-2.5" />
+                          )}
+                          {sub.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
             </div>
+
+            {/* AI suggestion chips (tags + lists from lite_profile) */}
+            {aiSuggestions &&
+              (aiSuggestions.suggestedTags.length > 0 ||
+                aiSuggestions.suggestedLists.length > 0) && (
+                <div className="rounded-lg border border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/50 dark:bg-emerald-950/20 p-3 space-y-2">
+                  <p className="text-[11px] font-medium text-emerald-700 dark:text-emerald-400 flex items-center gap-1">
+                    <Sparkles className="h-3 w-3" /> AI Suggestions
+                  </p>
+
+                  {aiSuggestions.suggestedTags.length > 0 && (
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">
+                        Tags
+                      </p>
+                      <div className="flex flex-wrap gap-1">
+                        {aiSuggestions.suggestedTags.map((tag) => {
+                          const isSelected = selectedTagIds.includes(tag.id);
+                          return (
+                            <button
+                              key={tag.id}
+                              type="button"
+                              onClick={() => toggleTagSuggestion(tag.id)}
+                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium cursor-pointer transition-colors ${
+                                isSelected
+                                  ? "bg-emerald-600 text-white"
+                                  : "bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 border border-emerald-200 dark:border-emerald-900 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+                              }`}
+                            >
+                              {tag.name}
+                              {isSelected && <Check className="h-2.5 w-2.5" />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {aiSuggestions.suggestedLists.length > 0 && (
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">
+                        Lists
+                      </p>
+                      <div className="flex flex-wrap gap-1">
+                        {aiSuggestions.suggestedLists.map((list) => {
+                          const isSelected = selectedListIds.includes(list.id);
+                          return (
+                            <button
+                              key={list.id}
+                              type="button"
+                              onClick={() => toggleList(list.id)}
+                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium cursor-pointer transition-colors ${
+                                isSelected
+                                  ? "bg-emerald-600 text-white"
+                                  : "bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 border border-emerald-200 dark:border-emerald-900 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+                              }`}
+                            >
+                              <span
+                                className="w-1.5 h-1.5 rounded-full"
+                                style={{ backgroundColor: list.color }}
+                              />
+                              {list.name}
+                              {isSelected && <Check className="h-2.5 w-2.5" />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
             {/* Lists */}
             <div>

@@ -134,7 +134,7 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  const { name, address, country, city, lat, lng, category_id, rating, notes, google_place_id, google_data, source, tag_ids, list_ids, visit_status, photoRef } = body;
+  const { name, address, country, city, lat, lng, category_id, subcategory_id, rating, notes, google_place_id, google_data, source, tag_ids, list_ids, visit_status, photoRef } = body;
 
   if (!name || lat === undefined || lng === undefined) {
     return NextResponse.json(
@@ -195,6 +195,7 @@ export async function POST(request: NextRequest) {
       city,
       location: `POINT(${lng} ${lat})`,
       category_id: resolvedCategoryId,
+      subcategory_id: subcategory_id || null,
       rating: rating || null,
       notes: notes || null,
       google_place_id: google_place_id || null,
