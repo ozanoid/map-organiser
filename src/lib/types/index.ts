@@ -163,6 +163,10 @@ export interface GooglePlaceData {
   local_business_links?: Array<{ type: string; url: string; title?: string }>;
   people_also_search?: Array<{ title: string; cid?: string; rating?: number }>;
   enriched_at?: string;
+  /** AI place profile (Phase 4). Carries lite or full completeness. Typed
+   *  loosely here to avoid pulling the full Zod schema into client bundles;
+   *  the consuming components cast to PlaceProfile from the schema. */
+  place_profile?: Record<string, unknown>;
 }
 
 export interface PlaceFilters {

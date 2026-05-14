@@ -102,9 +102,14 @@ export function matchTagsFromFeatures(
 
 /**
  * Match user lists against the place's signal set:
- *   - List name contains the place's city → match
- *   - List name fuzzy-matches a cuisine_type or distinctive feature → match
- *   - List name fuzzy-matches the primary or secondary parent category → match
+ *   - List name contains a location token from the place (city / country /
+ *     address) → match. The address is included because DataForSEO often
+ *     returns the district as `city` ("Kadıköy") while the user's list name
+ *     references the metropolitan city ("Istanbul Cafes"). The metropolitan
+ *     city only appears in the address string, so we tokenize the address
+ *     and probe each segment.
+ *   - List name fuzzy-matches a cuisine_type or distinctive feature → match.
+ *   - List name fuzzy-matches the primary or secondary parent category → match.
  *
  * Conservative by design — false positives feel like "AI nagging".
  */
@@ -113,29 +118,56 @@ export function matchListsFromProfile(
   context: {
     city?: string | null;
     country?: string | null;
+    /**
+     * Free-form address string. Tokenized into comma/slash-separated
+     * segments so "Osmanağa, Pavlonya Sk. no9, 34714 Kadıköy/İstanbul"
+     * yields probes for both Kadıköy and İstanbul.
+     */
+    address?: string | null;
     primaryCategory: string;
     secondaryRole: string | null;
   },
   userLists: ListRef[]
 ): string[] {
   const matched = new Set<string>();
-  const cityNorm = context.city ? normalize(context.city) : null;
-  const countryNorm = context.country ? normalize(context.country) : null;
+
+  /** Collect a unique, normalized set of location tokens to test against
+   *  list names. Short tokens (< 3 chars) are dropped — they false-match
+   *  way too often. */
+  const locationTokens = new Set<string>();
+  const pushToken = (raw: string | null | undefined) => {
+    if (!raw) return;
+    const n = normalize(raw);
+    if (n.length >= 3) locationTokens.add(n);
+  };
+  pushToken(context.city);
+  pushToken(context.country);
+  // Address segments — split on , / and (Turkish) slash variants
+  if (context.address) {
+    context.address
+      .split(/[,/\\]+/)
+      .map((seg) => seg.trim())
+      // Strip leading postal codes and house numbers
+      .map((seg) => seg.replace(/^[\d\s.-]+/, "").trim())
+      .filter(Boolean)
+      .forEach(pushToken);
+  }
 
   for (const list of userLists) {
     const listNorm = normalize(list.name);
-    if (listNorm.length < 3) continue; // too short to safely match
+    if (listNorm.length < 3) continue;
 
-    // City inclusion (e.g. "Istanbul Cafes" + place.city="Istanbul")
-    if (cityNorm && listNorm.includes(cityNorm)) {
-      matched.add(list.id);
-      continue;
+    // Location-token inclusion (city / country / any address segment)
+    let hit = false;
+    for (const token of locationTokens) {
+      if (listNorm.includes(token)) {
+        matched.add(list.id);
+        hit = true;
+        break;
+      }
     }
-    // Country inclusion (e.g. "Japan Trip" + place.country="Japan")
-    if (countryNorm && listNorm.includes(countryNorm)) {
-      matched.add(list.id);
-      continue;
-    }
+    if (hit) continue;
+
     // Primary or secondary category mention
     if (
       isFuzzyMatch(list.name, context.primaryCategory) ||

@@ -35,6 +35,7 @@ All user-facing tables in the `public` schema of the Supabase project `hukppmaev
 | `trip_days` | [[trip_days]] | 33 | Days within a trip |
 | `trip_day_places` | [[trip_day_places]] | 102 | Places within a trip day, ordered |
 | `shared_links` | [[shared_links]] | 3 | Public slug links to lists/trips |
+| `ai_suggestions_queue` | [[ai_suggestions_queue]] | 0 | Moderation queue for AI-proposed tags & sub-categories (Phase 4 writer, Phase 5 reader) |
 
 > `public.spatial_ref_sys` exists but it's a PostGIS internal table (8500 rows of SRID reference data). Not documented separately.
 

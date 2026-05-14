@@ -16,7 +16,9 @@ import {
   VisitStatusBadge,
 } from "@/components/places/visit-status-toggle";
 import { InlineTagInput } from "@/components/places/inline-tag-input";
+import { AiSummaryCard } from "@/components/places/ai-summary-card";
 import { useLists } from "@/lib/hooks/use-lists";
+import type { PlaceProfile } from "@/lib/ai/schemas/place-profile";
 import {
   ArrowLeft,
   Star,
@@ -98,6 +100,42 @@ export default function PlaceDetailPage() {
       return () => clearInterval(interval);
     }
   }, [place?.google_data?.reviews, place?.google_data?.cid, params.id]);
+
+  // Poll for full place_profile (Phase 4 background pipeline).
+  // Reviews arrived but place_profile not "full" yet → keep polling until it lands.
+  useEffect(() => {
+    if (!place) return;
+    const gd = (place.google_data || {}) as Record<string, unknown>;
+    const hasReviews = Array.isArray(gd.reviews) && (gd.reviews as unknown[]).length > 0;
+    const profile = gd.place_profile as PlaceProfile | undefined;
+    const isFull = profile?.completeness === "full";
+
+    if (hasReviews && !isFull) {
+      const interval = setInterval(() => {
+        fetch(`/api/places/${params.id}`)
+          .then((res) => res.json())
+          .then((data) => {
+            const newProfile = data.google_data?.place_profile;
+            if (newProfile?.completeness === "full") {
+              setPlace(data);
+              clearInterval(interval);
+            }
+          })
+          .catch(() => {});
+      }, 5000); // check every 5 seconds — profile takes ~5s typically
+
+      // Cap polling at 2 minutes to avoid endless loops on failures
+      const cap = setTimeout(() => clearInterval(interval), 120_000);
+
+      return () => {
+        clearInterval(interval);
+        clearTimeout(cap);
+      };
+    }
+  }, [
+    place?.google_data,
+    params.id,
+  ]);
 
   async function handleDelete() {
     const tripNames = ((place as any)?.trips || []).map((t: any) => t.name);
@@ -596,6 +634,18 @@ export default function PlaceDetailPage() {
               ))}
             </section>
           )}
+
+          {/* AI Summary (Phase 4) — only renders when ai_features_enabled
+              AND reviews exist (handled inside the card via reviewsAvailable). */}
+          <AiSummaryCard
+            placeId={params.id as string}
+            profile={(googleData.place_profile as PlaceProfile | undefined) ?? null}
+            reviewsAvailable={
+              Array.isArray((googleData as { reviews?: unknown[] }).reviews) &&
+              ((googleData as { reviews?: unknown[] }).reviews as unknown[]).length > 0
+            }
+            onRefreshed={fetchPlace}
+          />
 
           {/* Business Attributes */}
           {googleData.attributes &&

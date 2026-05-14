@@ -23,6 +23,11 @@ import {
 
 interface LiteProfileInput {
   name: string;
+  /**
+   * Free-form address — feeds list-matching when the metropolitan city only
+   * appears in the address ("Kadıköy/İstanbul" → "Istanbul Cafes" match).
+   */
+  address?: string | null;
   city?: string | null;
   country?: string | null;
   /** Google Places types array (DataForSEO returns these too). */
@@ -76,6 +81,7 @@ export function buildLiteProfile(
     {
       city: data.city,
       country: data.country,
+      address: data.address,
       primaryCategory: categorySignals.primary,
       secondaryRole: categorySignals.secondary_role,
     },
