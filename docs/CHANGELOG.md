@@ -56,6 +56,19 @@ proposals queue for moderation (Phase 5 UI).
   - [[02-backend/schema/ai_suggestions_queue]] (new).
   - [[05-flows/full-profile-flow]] (new) — end-to-end including 3-band
     auto-apply matrix, failure modes, manual refresh, open questions.
+- **Post-merge patches on the same PR**:
+  - **Address-aware list matching**: `matchListsFromProfile` (Phase 3 lite
+    path) now also tokenizes the place's `address` string on `, / \` and
+    probes each segment against list names. Fixes the "Istanbul Cafes"
+    list not matching when DataForSEO returns `city = "Kadıköy"` (the
+    metropolitan city only appeared in the address). Short tokens (< 3
+    chars) and house-number prefixes are stripped.
+  - **AI Summary skeleton state Generate button**: pre-Phase-4 places
+    have reviews but no auto-trigger ever fired for them. The skeleton
+    state's refresh button (previously full-state only) is now visible
+    in both states with copy "generate" (skeleton) / "refresh" (full).
+    Gives users a manual escape hatch for older places + transient
+    background failures.
 
 ---
 

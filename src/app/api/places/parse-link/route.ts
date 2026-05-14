@@ -72,6 +72,7 @@ async function buildLiteProfileForResponse(
     return buildLiteProfile(
       {
         name: placeData.name,
+        address: placeData.address,
         city: placeData.city,
         country: placeData.country,
         types: placeData.types,

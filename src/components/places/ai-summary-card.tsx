@@ -90,20 +90,43 @@ export function AiSummaryCard({
       return null; // Reviews not in yet — let the existing "loading reviews"
       // banner own this state. Profile card will appear after reviews land.
     }
+    // Pre-Phase-4 places have reviews but no auto-trigger ever fired for
+    // them. The Generate button gives the user a manual escape hatch
+    // (it's also useful when the background chain failed transiently).
     return (
       <section className="rounded-lg border border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/40 dark:bg-emerald-950/20 p-4 space-y-2">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-2">
           <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5">
             <Sparkles className="h-3.5 w-3.5" />
             AI Summary
           </p>
-          <span className="text-[10px] text-muted-foreground">analyzing…</span>
+          <button
+            type="button"
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="text-[10px] text-emerald-700 dark:text-emerald-400 hover:underline cursor-pointer flex items-center gap-1 disabled:opacity-50"
+            title="Generate AI summary now"
+          >
+            {refreshing ? (
+              <>
+                <Loader2 className="h-3 w-3 animate-spin" />
+                analyzing…
+              </>
+            ) : (
+              <>
+                <RefreshCw className="h-3 w-3" />
+                generate
+              </>
+            )}
+          </button>
         </div>
         <Skeleton className="h-3 w-full" />
         <Skeleton className="h-3 w-4/5" />
         <Skeleton className="h-3 w-2/3" />
         <p className="text-[10px] text-muted-foreground pt-1">
-          This usually takes ~5 seconds after reviews land.
+          {refreshing
+            ? "This usually takes ~5 seconds."
+            : "Newly-added places generate automatically. For older places, tap Generate."}
         </p>
       </section>
     );
