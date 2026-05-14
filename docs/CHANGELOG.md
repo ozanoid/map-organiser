@@ -6,6 +6,59 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 14.05.2026 — v1.5.0 — AI Phase 4: Full Profile (first real LLM call)
+
+**The big one.** First end-to-end Gemini Flash call in production: place is
+saved → reviews land → background pipeline triggers `step=profile` → a
+structured `PlaceProfile` (TLDR + pros/cons + theme insights + refined
+features) gets persisted to `places.google_data.place_profile`. The place
+detail page polls for it and renders the AI Summary card. Tag / list /
+sub-category suggestions auto-apply where they match user entities; new
+proposals queue for moderation (Phase 5 UI).
+
+- **DB migration** `create_ai_suggestions_queue_table` — per-user moderation
+  queue with type='tag'|'subcategory', confidence, status, partial UNIQUE
+  index for case-insensitive dedup per pending row.
+- **New extractors / prompt** (`src/lib/ai/`):
+  - `prompts/place-profile-full.ts` — system+user prompt builder. Bakes user
+    context (tags, categories, subcategories, lists, cities) inline and lists
+    sub-cat slugs per parent so the LLM picks from the right vocabulary.
+    Translates non-English reviews. 50-review window, 400-char-per-review cap.
+  - `apply-suggestions.ts` — 3-band auto-apply policy. matched_existing
+    tags/lists silent-apply (place_tags / list_places INSERT). new_proposals
+    run through Phase 1's fuzzy dedup; rerouted ones silent-apply, true new
+    ones queue. Sub-category: silent apply on existing match at conf ≥ 0.85;
+    queue new proposal at conf ≥ 0.9.
+- **`/api/places/[id]/enrich?step=profile`** — new branch in the existing
+  enrich route. AI-features-gated, AI-key-gated, no-reviews-gated. Calls
+  `generateText({ model: google('gemini-flash-latest'), output: Output.object({ schema: PlaceProfileSchema }) })`
+  and persists the typed result. Tracks usage as SKU `ai_place_profile`
+  (~$1/1k calls baseline). Force-stamps `completeness='full'`, `model_version`,
+  `source_review_count` after the call to override anything the LLM gets wrong
+  on meta fields.
+- **Pipeline chain** — `step=reviews` now fires `step=profile`
+  fire-and-forget at the end (gated by `ai_features_enabled`). Cookies are
+  forwarded so the chained request runs as the user.
+- **`AiSummaryCard`** — new client component in `src/components/places/`:
+  - Skeleton state while waiting (`reviewsAvailable` AND
+    `completeness !== 'full'`).
+  - Full state: TLDR + 2-column highlights/cons + theme-insights pills
+    (sentiment emoji + count + click-to-expand evidence quote) +
+    distinctive feature pills.
+  - Refresh button calls `step=profile` manually.
+- **Place detail page** — new polling effect: 5s interval while
+  `hasReviews && !isFullProfile`, capped at 2 minutes. Card slots in
+  before the Amenities section.
+- **Types** — `GooglePlaceData.place_profile?: Record<string, unknown>`
+  (loosely typed in shared types; consumers cast to `PlaceProfile` from
+  the Zod schema).
+- **Vault**:
+  - [[02-backend/schema/ai_suggestions_queue]] (new).
+  - [[05-flows/full-profile-flow]] (new) — end-to-end including 3-band
+    auto-apply matrix, failure modes, manual refresh, open questions.
+
+---
+
 ## 14.05.2026 — v1.4.0 — AI Phase 3: Lite Profile in parse-link
 
 First **user-visible AI surface**: paste a Google Maps URL into Add Place →
