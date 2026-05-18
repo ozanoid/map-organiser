@@ -2,8 +2,8 @@
 title: AI Search Flow (NL filtering, Phase 6)
 type: flow
 domain: places
-version: 1.0.0
-last_updated: 18.05.2026
+version: 1.1.0
+last_updated: 19.05.2026
 status: stable
 sources:
   - src/app/api/ai/parse-query/route.ts
@@ -27,13 +27,32 @@ related:
 User types something like `"cozy cafes in Shoreditch for remote work"`
 and the app:
 
-1. Parses the query into structured filters + a semantic intent string.
-2. Applies the structured filters through the existing places pipeline.
+1. Parses the query into a **three-layer match spec**: hard exclusion
+   filters, soft feature axes, and semantic boosts.
+2. Applies the hard + soft layers through the existing places pipeline.
 3. If the query has fuzzy intent beyond filters, ranks the result list
-   with a second LLM call against each place's `searchable_summary`.
+   with a second LLM call against each place's `searchable_summary`,
+   applying a score bump to boost-matched candidates.
 
 This is the first AI feature where the model is on the **interactive path**
 (versus background enrichment). The full round-trip target is ~2-3s.
+
+## Three-layer match model
+
+| Layer | What | Where applied | Excludes? |
+|---|---|---|---|
+| **Hard** | Categories, cities, visit_status, explicit sub-cat/tag/list refs | SQL filter in `/api/places` | **Yes** |
+| **Soft features** | atmosphere, dietary, occasions, seating, cuisine_types | JSONB intersect server-side | Yes (when set) |
+| **Boosts** | Semantic associations with curated tags/lists/sub-cats | Score bump in rank-results + opt-in UI hint chips | **No** |
+
+**Why three layers and not two.** A previous design tried to put
+everything into `hard` filters when the LLM saw a curated taxonomy match.
+That broke discovery: query `"best date restaurants in london"` would
+auto-filter by the user's "Date Spot" tag and "London Trip" list,
+returning only places the user had ALREADY manually marked — which is
+the opposite of what AI search should do. Boosts let the model say
+"this curated item is thematically related" without excluding
+non-matching candidates.
 
 ## Trigger
 
@@ -73,6 +92,8 @@ is false or `GOOGLE_GENERATIVE_AI_API_KEY` is missing.
        │  ◄── ParseQueryOutput
        │      { hard: { category_ids: [cafeId] },
        │        soft_features: { atmosphere: ["cozy"], occasions: ["working"] },
+       │        boosts: { matching_tag_ids: [], matching_list_ids: [],
+       │                  matching_subcategory_ids: [] },
        │        semantic_intent: "cafes in Shoreditch good for remote work",
        │        requires_semantic_ranking: true,
        │        needs_clarification: null }
@@ -100,7 +121,8 @@ is false or `GOOGLE_GENERATIVE_AI_API_KEY` is missing.
        │  → POST /api/ai/rank-results  {
        │       semantic_intent,
        │       candidates: top-50 by recency, each with
-       │                  { id, name, searchable_summary }
+       │                  { id, name, searchable_summary, subcategory_id },
+       │       boost_tag_ids?, boost_list_ids?, boost_subcategory_ids?
        │     }
        │
        │  Server:
@@ -108,6 +130,12 @@ is false or `GOOGLE_GENERATIVE_AI_API_KEY` is missing.
        │    • buildRankResultsPrompt(intent, candidates)
        │    • generateText({ model, output: RankResultsSchema, … })
        │    • Strip IDs not in input
+       │    • Boost post-process:
+       │       - sub-cat boost: in-memory check vs candidates[i].subcategory_id
+       │       - tag boost: SELECT place_id FROM place_tags WHERE tag_id IN
+       │         (boost_tag_ids) AND place_id IN (candidates)
+       │       - list boost: same against list_places
+       │       - boosted scores: score = min(1, score + 0.15)
        │    • Track usage: ai_rank_results SKU
        │
        │  ◄── { ranked: [{ id, score: 0-1, why: "…" }, ...] }
@@ -144,10 +172,29 @@ content — **not** on result count.
 | `"cozy cafes for remote work"` | `true` — subjective fit |
 | `"date night spots with great views"` | `true` |
 | `"romantic dinner places"` | `true` |
+| `"best X" / "good X" / "recommend X" / "find me X"` | `true` (hard rule in prompt) |
 
 Driving the decision from query content means small result sets (e.g. 5
 cafes total) still get reranked when the query has semantic intent,
 instead of being silently returned in default order.
+
+## When does a tag/list/sub-cat go to `hard` vs `boosts`?
+
+This is the most consequential prompt rule. The LLM must distinguish
+between EXPLICIT reference (→ hard) and SEMANTIC association (→ boost):
+
+| Query | Goes to `hard.*` | Goes to `boosts.*` |
+|---|---|---|
+| `"show me my date spot places"` | `tag_ids=[date_spot_id]` | — |
+| `"places in my london trip list"` | `list_id=london_trip_id` | — |
+| `"sushi restaurants"` | `subcategory_ids=[sushi_id]` | — |
+| `"best date restaurants in london"` | `category_ids=[restaurant_id], city='London'` | `matching_tag_ids=[date_spot_id], matching_subcategory_ids=[fine_dining_id]` |
+| `"good cafes for working"` | `category_ids=[cafe_id]` | possibly `matching_tag_ids=[work_friendly_id]` if such a tag exists |
+| `"romantic dinner spots"` | `category_ids=[restaurant_id]` | `matching_tag_ids=[romantic_id]`, `matching_subcategory_ids=[fine_dining_id]` |
+
+Rule of thumb: if the user could be looking for **additional** places
+beyond the curated ones, it's a boost. If the user is asking to **list
+the curated ones**, it's a hard filter.
 
 ## Failure modes
 

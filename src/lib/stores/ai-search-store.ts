@@ -18,6 +18,13 @@ interface Ranking {
   why: string;
 }
 
+/** Boost IDs sent to rank-results for upweighting; also surfaced as UI hints. */
+interface BoostIds {
+  matching_tag_ids: string[];
+  matching_list_ids: string[];
+  matching_subcategory_ids: string[];
+}
+
 interface AiSearchState {
   /** English restatement; passed to rank-results. Null until parse-query lands. */
   semanticIntent: string | null;
@@ -31,19 +38,30 @@ interface AiSearchState {
   clarification: string | null;
   /** The raw query the user typed, kept so chips can label it. */
   lastQuery: string | null;
+  /** Semantic associations with user's curated taxonomy. NOT applied as
+   *  hard filter — only used to (a) boost rank-results scores, (b) render
+   *  opt-in hint chips for the user to convert into hard filters. */
+  boosts: BoostIds;
 
-  /** Apply parse-query output: clear stale rankings, set new intent. */
+  /** Apply parse-query output: clear stale rankings, set new intent + boosts. */
   applyParse: (input: {
     semantic_intent: string;
     requires_semantic_ranking: boolean;
     needs_clarification: string | null;
     query: string;
+    boosts: BoostIds;
   }) => void;
   beginRerank: () => void;
   applyRankings: (rankings: { id: string; score: number; why: string }[]) => void;
   failRerank: () => void;
   reset: () => void;
 }
+
+const EMPTY_BOOSTS: BoostIds = {
+  matching_tag_ids: [],
+  matching_list_ids: [],
+  matching_subcategory_ids: [],
+};
 
 export const useAiSearchStore = create<AiSearchState>((set) => ({
   semanticIntent: null,
@@ -52,12 +70,14 @@ export const useAiSearchStore = create<AiSearchState>((set) => ({
   rerankStatus: "idle",
   clarification: null,
   lastQuery: null,
+  boosts: EMPTY_BOOSTS,
 
   applyParse: ({
     semantic_intent,
     requires_semantic_ranking,
     needs_clarification,
     query,
+    boosts,
   }) =>
     set({
       semanticIntent: semantic_intent,
@@ -66,6 +86,7 @@ export const useAiSearchStore = create<AiSearchState>((set) => ({
       rerankStatus: requires_semantic_ranking ? "pending" : "idle",
       clarification: needs_clarification,
       lastQuery: query,
+      boosts,
     }),
 
   beginRerank: () => set({ rerankStatus: "pending" }),
@@ -88,6 +109,7 @@ export const useAiSearchStore = create<AiSearchState>((set) => ({
       rerankStatus: "idle",
       clarification: null,
       lastQuery: null,
+      boosts: EMPTY_BOOSTS,
     }),
 }));
 

@@ -6,6 +6,111 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 19.05.2026 — v1.7.1 — Phase 6: hard/soft/boosts split (discovery fix)
+
+Test of `"best date restaurants in london"` exposed a critical design
+flaw in the v1.7.0 prompt: the LLM was eager to map ANY semantic match
+in the user's curated taxonomy to a hard filter — picking `tag=Date Spot`
+and `list=London Trip` automatically. Two problems:
+
+1. **Discovery-killer.** Filtering by the user's "Date Spot" tag returns
+   only places they've ALREADY manually marked. The user is looking for
+   recommendations — they want both their curated favorites AND new
+   candidates the AI thinks fit. The original behavior was the opposite.
+2. **List trap.** "London Trip" matched on word-overlap with the query;
+   filtering by it locked the result to a pre-curated set, again killing
+   discovery.
+
+### The fix: three-layer match model
+
+The parse-query schema now returns a third layer, `boosts`, alongside
+the existing `hard` and `soft_features`:
+
+- **`hard`** — exclusion filters. Tag/list/sub-cat go here ONLY when the
+  user EXPLICITLY references them ("my date-spot places", "in my London
+  trip list", "sushi restaurants").
+- **`soft_features`** — per-axis descriptor match against
+  place_profile.features.*. Unchanged from v1.7.0.
+- **`boosts`** (NEW) — semantic associations with curated taxonomy.
+  These DON'T filter; rank-results upweights matched candidates by +0.15.
+  Also surfaced as opt-in UI hint chips so the user can manually convert
+  them into hard filters if they want to narrow.
+
+### Prompt rewrite
+
+`src/lib/ai/prompts/parse-query.ts` now opens with the core principle
+("Hard filter ≠ Soft signal"), enumerates EXPLICIT vs SEMANTIC triggers,
+and includes six few-shot examples covering all the failure modes:
+
+- `"best date restaurants in london"` → category+city hard, boosts for
+  date-related tags/sub-cats, soft features romantic/intimate
+- `"show me my date spot places"` → hard tag filter (EXPLICIT "my")
+- `"sushi restaurants i haven't been to"` → all hard (explicit names)
+- `"cozy cafes for remote work"` → hard category + soft only
+- `"places from my london trip with great reviews"` → hard list+rating
+- `"good vegan brunch in berlin"` → hard city + soft + rerank
+
+Also: `requires_semantic_ranking = true` is now MANDATORY for queries
+containing "best", "good", "recommend", or "find" — these are
+discovery signals that always need rerank.
+
+### Boost post-processing in rank-results
+
+`POST /api/ai/rank-results` now accepts optional `boost_tag_ids`,
+`boost_list_ids`, `boost_subcategory_ids`. After base scores come back
+from the LLM:
+
+- **Sub-cat boost** — in-memory check against each candidate's
+  `subcategory_id` (now carried in the candidate payload).
+- **Tag boost** — single Supabase query: `place_tags WHERE tag_id IN
+  (boosts) AND place_id IN (candidates)`. RLS handles user scoping.
+- **List boost** — same against `list_places`.
+
+Boosted candidates: `score = min(1, score + 0.15)`. Empirical delta —
+moves a borderline 0.5 match past an un-boosted 0.6, but doesn't
+override a strong 0.85+ match.
+
+### UI: hint chips
+
+`AiSearchInput` renders a row of small clickable chips below the
+clarification line when boosts are non-empty:
+
+```
+💡 You have curated items that may match. Narrow further?
+   [tag · Date Spot]  [sub-cat · Fine Dining]  [list · London Trip]
+```
+
+One click → `setFilters({ tag_ids: [id] })` (or list/sub-cat
+equivalent) → opt-in narrowing. Chip labels resolved via existing
+`useTags`/`useLists`/`useSubcategories` hooks.
+
+### Files changed
+
+**Backend**
+- `src/lib/ai/schemas/parse-query.ts` — added `boosts` field
+- `src/lib/ai/prompts/parse-query.ts` — three-layer rewrite + 6 few-shots
+- `src/app/api/ai/parse-query/route.ts` — sanitize boost IDs
+- `src/app/api/ai/rank-results/route.ts` — accept boosts, score bump
+
+**Frontend**
+- `src/lib/stores/ai-search-store.ts` — `boosts` in session state
+- `src/lib/hooks/use-ai-search.ts` — passes boosts to applyParse + rerank
+- `src/components/search/ai-search-input.tsx` — hint chips UI
+
+**Vault**
+- `02-backend/api-routes/ai.md` — boost field + post-processing docs
+- `03-frontend/components/search.md` — hint chips + state shape update
+- `05-flows/ai-search-flow.md` — three-layer model section + when-to-hard-vs-boost table
+
+### Cost impact
+
+- `ai_parse_query` — slightly larger prompt (+200 tokens for few-shots).
+  Marginal cost increase ~$0.00005/call.
+- `ai_rank_results` — boost lookup is 0-2 small Supabase queries; no LLM
+  cost change.
+
+---
+
 ## 18.05.2026 — v1.7.0 — Phase 6: AI-01 natural-language filtering
 
 First **interactive** AI feature in the app — the model is on the user-

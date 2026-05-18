@@ -82,6 +82,11 @@ export function useAiSearch() {
         requires_semantic_ranking: data.requires_semantic_ranking,
         needs_clarification: data.needs_clarification,
         query,
+        boosts: {
+          matching_tag_ids: data.boosts.matching_tag_ids ?? [],
+          matching_list_ids: data.boosts.matching_list_ids ?? [],
+          matching_subcategory_ids: data.boosts.matching_subcategory_ids ?? [],
+        },
       });
     },
     onError: () => {
@@ -104,6 +109,7 @@ export function useAiRerankOrchestrator(filters: PlaceFilters) {
   const semanticIntent = useAiSearchStore((s) => s.semanticIntent);
   const needsRerank = useAiSearchStore((s) => s.needsRerank);
   const rerankStatus = useAiSearchStore((s) => s.rerankStatus);
+  const boosts = useAiSearchStore((s) => s.boosts);
   const applyRankings = useAiSearchStore((s) => s.applyRankings);
   const failRerank = useAiSearchStore((s) => s.failRerank);
 
@@ -130,6 +136,7 @@ export function useAiRerankOrchestrator(filters: PlaceFilters) {
     void runRerank({
       semanticIntent,
       places,
+      boosts,
       onSuccess: applyRankings,
       onError: failRerank,
     });
@@ -145,11 +152,17 @@ const TOP_N = 50;
 async function runRerank({
   semanticIntent,
   places,
+  boosts,
   onSuccess,
   onError,
 }: {
   semanticIntent: string;
   places: Place[];
+  boosts: {
+    matching_tag_ids: string[];
+    matching_list_ids: string[];
+    matching_subcategory_ids: string[];
+  };
   onSuccess: (rows: { id: string; score: number; why: string }[]) => void;
   onError: () => void;
 }) {
@@ -165,8 +178,16 @@ async function runRerank({
       id: p.id,
       name: p.name,
       searchable_summary: profile?.searchable_summary ?? "",
+      // Sub-cat is on the place row directly; server uses this for the
+      // sub-cat boost without an extra Supabase query.
+      subcategory_id: p.subcategory_id ?? null,
     };
   });
+
+  const hasBoosts =
+    boosts.matching_tag_ids.length > 0 ||
+    boosts.matching_list_ids.length > 0 ||
+    boosts.matching_subcategory_ids.length > 0;
 
   try {
     const res = await fetch("/api/ai/rank-results", {
@@ -175,6 +196,13 @@ async function runRerank({
       body: JSON.stringify({
         semantic_intent: semanticIntent,
         candidates,
+        ...(hasBoosts
+          ? {
+              boost_tag_ids: boosts.matching_tag_ids,
+              boost_list_ids: boosts.matching_list_ids,
+              boost_subcategory_ids: boosts.matching_subcategory_ids,
+            }
+          : {}),
       }),
     });
     if (!res.ok) throw new Error(`rank-results ${res.status}`);

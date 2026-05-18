@@ -2,8 +2,8 @@
 title: Search components
 type: component
 domain: frontend
-version: 1.0.0
-last_updated: 18.05.2026
+version: 1.1.0
+last_updated: 19.05.2026
 status: stable
 sources:
   - src/components/search/ai-search-input.tsx
@@ -67,6 +67,24 @@ state.
 8. The `X` button clears the draft, resets the AI search store, and
    leaves the URL filters alone (so the user can fine-tune).
 
+### Hint chips (Phase 6 v1.7.1)
+
+When the LLM identifies a curated tag/list/sub-cat that's semantically
+related to the query but chose NOT to hard-filter (preserving discovery),
+those associations come back in `parseQuery.boosts.*`. The component
+renders them below the input as small clickable chips:
+
+```
+💡 You have curated items that may match. Narrow further?
+   [tag · Date Spot]  [sub-cat · Fine Dining]  [list · London Trip]
+```
+
+Each chip resolves its ID to the user-friendly name via `useTags` /
+`useLists` / `useSubcategories`. Click → `setFilters({ tag_ids: [id] })`
+(or the equivalent for list/sub-cat). This converts the soft boost
+into an explicit hard filter on user demand — opt-in narrowing without
+the LLM making that call automatically.
+
 ## State shape — `useAiSearchStore` (Zustand)
 
 | Field | Type | Notes |
@@ -77,6 +95,7 @@ state.
 | `rerankStatus` | `"idle" \| "pending" \| "ready" \| "failed"` | UI-visible. |
 | `clarification` | `string \| null` | LLM follow-up question. |
 | `lastQuery` | `string \| null` | Display label. |
+| `boosts` | `{ matching_tag_ids, matching_list_ids, matching_subcategory_ids }` | Semantic associations from `parse-query.boosts.*`. Drives hint chips + rank-results boost lookup. NOT applied as hard filter. |
 
 Cleared by user-initiated "Clear" in the FilterPanel and on every new
 NL search submission.

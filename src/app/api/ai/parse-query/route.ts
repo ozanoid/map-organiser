@@ -111,7 +111,8 @@ export async function POST(request: NextRequest) {
 
 /**
  * Strip any UUIDs from the LLM output that don't appear in the user's context.
- * Catches hallucinated IDs even though the prompt forbids them.
+ * Catches hallucinated IDs even though the prompt forbids them. Applies to
+ * BOTH `hard` and `boosts` layers.
  *
  * Returns the same shape with arrays filtered. Non-ID fields pass through.
  */
@@ -143,5 +144,27 @@ function sanitizeAgainstContext(
     delete hard.list_id;
   }
 
-  return { ...out, hard };
+  const boosts = { ...out.boosts };
+  if (boosts.matching_tag_ids) {
+    boosts.matching_tag_ids = boosts.matching_tag_ids.filter((id) =>
+      tagIds.has(id)
+    );
+    if (boosts.matching_tag_ids.length === 0) delete boosts.matching_tag_ids;
+  }
+  if (boosts.matching_list_ids) {
+    boosts.matching_list_ids = boosts.matching_list_ids.filter((id) =>
+      listIds.has(id)
+    );
+    if (boosts.matching_list_ids.length === 0) delete boosts.matching_list_ids;
+  }
+  if (boosts.matching_subcategory_ids) {
+    boosts.matching_subcategory_ids = boosts.matching_subcategory_ids.filter(
+      (id) => subcategoryIds.has(id)
+    );
+    if (boosts.matching_subcategory_ids.length === 0) {
+      delete boosts.matching_subcategory_ids;
+    }
+  }
+
+  return { ...out, hard, boosts };
 }

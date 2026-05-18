@@ -2,8 +2,8 @@
 title: AI routes
 type: route-group
 domain: backend
-version: 1.0.0
-last_updated: 18.05.2026
+version: 1.1.0
+last_updated: 19.05.2026
 status: stable
 sources:
   - src/app/api/ai/parse-query/route.ts
@@ -77,14 +77,26 @@ Turn natural-language input into the three-layer match spec.
 | `soft_features.occasions` | `string[]?` | Same for `.occasions`. |
 | `soft_features.seating` | `string[]?` | Same for `.seating`. |
 | `soft_features.cuisine_types` | `string[]?` | Same for `.cuisine_types`. |
+| `boosts.matching_tag_ids` | `uuid[]?` | **Soft signal, NOT a filter.** Tags the LLM semantically associates with the query — passed to rank-results for score upweighting. Surfaced as opt-in UI hint chips. |
+| `boosts.matching_list_ids` | `uuid[]?` | Same shape, for lists. |
+| `boosts.matching_subcategory_ids` | `uuid[]?` | Same shape, for sub-categories the LLM associates but didn't filter. |
 | `semantic_intent` | `string` | Clean English restatement. Used by rank-results. |
-| `requires_semantic_ranking` | `bool` | **Set by the LLM**, not by candidate count. |
+| `requires_semantic_ranking` | `bool` | **Set by the LLM**, not by candidate count. Always true for "best", "good", "recommend", "find" phrasing. |
 | `needs_clarification` | `string \| null` | Short follow-up question when query is genuinely ambiguous. |
 
+**Why `boosts` exists.** Filtering by user-curated tags/lists for a
+semantic query like *"best date restaurants"* self-defeats discovery —
+the result would only contain places the user has ALREADY tagged
+"Date Spot", which is exactly what they're trying to find more of.
+Boosts let the LLM signal "this tag is thematically relevant" without
+removing un-tagged candidates from the set; rank-results then upweights
+matches by +0.15.
+
 **Defense in depth.** Even though the prompt forbids made-up IDs, the
-route re-validates `category_ids / subcategory_ids / tag_ids / list_id`
-against the user's context (`buildUserContext`) and strips unknowns
-before returning. Empty arrays collapse to `undefined`.
+route re-validates ALL `category_ids / subcategory_ids / tag_ids /
+list_id / matching_*_ids` against the user's context
+(`buildUserContext`) and strips unknowns before returning. Empty
+arrays collapse to `undefined`.
 
 **SKU:** `ai_parse_query` — ~$0.0001/call (~500 input + ~150 output
 tokens against Gemini Flash). Tracked via `trackAiUsage`.
@@ -103,7 +115,13 @@ query's semantic intent using its `place_profile.searchable_summary`.
     id: string;                     // uuid
     name: string;
     searchable_summary: string;     // capped at 1500 chars server-side
+    subcategory_id?: string | null; // for sub-cat boost (no extra query)
   }[];                              // 1 ≤ length ≤ 200
+
+  // All three optional. Pass-through from parse-query.boosts.*
+  boost_tag_ids?: string[];
+  boost_list_ids?: string[];
+  boost_subcategory_ids?: string[];
 }
 ```
 
@@ -136,6 +154,17 @@ without profiles), the LLM falls back to `name` and caps the score at
   cost from a hypothetical "all places" client bug.
 - Client: pre-caps at `TOP_N = 50` (recency pre-sort). Anything past
   that goes into a tail rendered without scores.
+
+**Boost post-processing.** After the LLM returns base scores:
+- **Sub-cat boost** — checked in-memory against each candidate's
+  `subcategory_id`. No Supabase call.
+- **Tag boost** — single query against `place_tags WHERE tag_id IN
+  (boost_tag_ids) AND place_id IN (candidate_ids)`. RLS scopes by user.
+- **List boost** — same pattern against `list_places`.
+
+Boosted candidates get `score = min(1, score + 0.15)`. The delta is
+empirical: 0.15 lifts a borderline 0.5 match comfortably past an
+un-boosted 0.6, but doesn't override a strong 0.85+ match.
 
 **Defense in depth.** Output `ranked[].id` values not in the input are
 stripped before returning.
