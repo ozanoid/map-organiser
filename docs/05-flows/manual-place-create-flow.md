@@ -2,8 +2,8 @@
 title: Manual Place Create Flow
 type: flow
 domain: places
-version: 1.0.0
-last_updated: 12.05.2026
+version: 1.1.0
+last_updated: 18.05.2026
 status: stable
 sources:
   - src/components/places/add-place-dialog.tsx
@@ -13,10 +13,13 @@ sources:
 related:
   - "[[place-import-flow]]"
   - "[[share-target-flow]]"
+  - "[[lite-profile-flow]]"
+  - "[[full-profile-flow]]"
   - "[[../01-domain/places]]"
   - "[[../02-backend/api-routes/places]]"
   - "[[../04-integrations/google-places]]"
   - "[[../04-integrations/dataforseo]]"
+  - "[[../04-integrations/gemini]]"
 ---
 
 # Manual Place Create Flow
@@ -57,16 +60,21 @@ User opens the Add Place dialog from:
        │      - lat/lng fallback → keyword: "lat,lng" + 200m
        │      - fetchBusinessInfoLive → transformBusinessInfoToPlaceData
        │  • trackUsage tracks the API call
-       │  • Returns { ...ParsedPlaceData, _provider, _fetchTimeMs, _extended? }
+       │  • If ai_features_enabled: buildLiteProfileForResponse populates
+       │    lite_profile inline (rule-based, no LLM call — see [[lite-profile-flow]])
+       │  • Returns { ...ParsedPlaceData, _provider, _fetchTimeMs, _extended?, lite_profile? }
        │
        ▼
 4. Dialog shows preview (photo, rating, hours, website, phone)
        │  • Auto-resolves category via resolveCategoryId (Google types → default category)
-       │  • User edits: category, rating, notes, lists, tags, visit_status
+       │  • Sub-category strip auto-pre-selects when lite_profile confidence ≥ 0.85
+       │    (✨ Sparkles icon on the suggested pill)
+       │  • AI Suggestions panel renders tag + list chips (opt-in — user clicks to accept)
+       │  • User edits: category, sub-category, rating, notes, lists, tags, visit_status
        │
        ▼
-5. Click "Save" → useCreatePlace → POST /api/places  { all fields, photoRef? }
-       │  • Server INSERTs into places
+5. Click "Save" → useCreatePlace → POST /api/places  { all fields, photoRef?, subcategory_id? }
+       │  • Server INSERTs into places (now with subcategory_id since Phase 3)
        │  • If photoRef provided: downloadAndStorePhotoFromUrl → google_data.photo_storage_url
        │  • If list_ids: INSERT list_places (auto sort_order)
        │  • If tag_ids: INSERT place_tags
@@ -86,6 +94,7 @@ User opens the Add Place dialog from:
        │  • Background fetch reviews
        │  • Merges into google_data.reviews
        │  • Takes ~30s; UI doesn't wait
+       │  • When ai_features_enabled: chain-fires step=profile (Phase 4) — see [[full-profile-flow]]
        │
        ▼
 8. Dialog closes; React Query invalidates ["places"] → list and map refetch

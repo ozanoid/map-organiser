@@ -6,6 +6,79 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 18.05.2026 — v1.6.3 — vault sync for AI Phases 1-5.5
+
+Documentation-only rollup. After Phases 1 through 5.5 shipped across PRs
+#30-#35, an audit found 17 stale docs (referenced obsolete behavior or
+missed new surfaces) plus 1 missing integration doc. This release brings
+the vault back in sync with code as of the post-Phase-5.5 main branch.
+No code changes.
+
+### Updated (17 docs)
+- `00-overview/system-overview.md` — added AI subsystem row + `src/lib/ai/`
+  to sources.
+- `00-overview/repo-structure.md` — added `src/lib/ai/` tree (client,
+  schemas, prompts, extract); refreshed places/, settings/ component
+  listings; updated API route group list and counts.
+- `00-overview/tech-stack.md` — new **AI** section (ai SDK v6,
+  @ai-sdk/google v3); added Gemini to external integrations.
+- `00-overview/glossary.md` — added Sub-category entry + new **AI**
+  section (place_profile, lite/full paths, 4-band auto-apply, AI master
+  toggle, AI Suggestions queue, category change proposal, ai_place_profile
+  SKU, Gemini Flash).
+- `01-domain/categories-and-tags.md` — renamed to include sub-categories;
+  documented 62-slug default dictionary across 11 parents; added AI
+  interaction section.
+- `01-domain/places.md` — added `subcategory_id` field;  new section
+  documenting `google_data.place_profile` shape (lite vs. full).
+- `01-domain/users-and-profiles.md` — `ai_features_enabled` row + its
+  semantics across the system.
+- `02-backend/schema/profiles.md` — `ai_features_enabled` column +
+  migration entry.
+- `02-backend/schema/places.md` — `subcategory_id` column + FK + index;
+  `place_profile` note in the `google_data` description.
+- `02-backend/api-routes/_README.md` — Subcategories route group; User
+  group extended with `/ai-settings` + `/ai-suggestions`; AI helpers
+  added to common helpers table.
+- `03-frontend/state-management.md` — Subcategories + AI suggestions
+  query keys; invalidation conventions.
+- `03-frontend/hooks/_README.md` — `useSubcategories` + `useAiSuggestions`
+  in the hooks index.
+- `03-frontend/components/_README.md` — updated folder index for the
+  new component files per folder.
+- `03-frontend/components/places.md` — AddPlaceDialog gains the AI
+  Suggestions panel + sub-cat strip; new `AiSummaryCard` section
+  (skeleton / full states).
+- `03-frontend/components/settings.md` — new `AiSettings` and
+  `AiSuggestionsQueue` sections; header updated from "Two components"
+  to "Four components".
+- `03-frontend/components/filters.md` — `CategoryFilter` cascade
+  behavior documented.
+- `04-integrations/_README.md` — Gemini under external services; AI
+  SDK v6 under runtime libraries; `ai_place_profile` SKU; both trackers
+  (`trackUsage`, `trackAiUsage`).
+- `05-flows/_README.md` — added lite-profile-flow + full-profile-flow
+  to the flow index.
+- `05-flows/manual-place-create-flow.md` — flow now references inline
+  lite_profile build at parse-link, sub-cat strip + AI panel in the
+  dialog, and the step=profile chain after step=reviews.
+
+### Added (1 doc)
+- `04-integrations/gemini.md` — full integration doc. Account & access,
+  NPM packages (`ai` + `@ai-sdk/google` direct, **not** Gateway), env
+  vars, wiring snippet from `src/lib/ai/client.ts`, canonical AI SDK v6
+  structured-output pattern, cost & limits (~$0.001/profile,
+  $1/1000 calls), "Why direct, not Gateway?" rationale, prompt strategy,
+  failure modes, open questions.
+
+### Notes
+- Frontmatter `last_updated` bumped to 18.05.2026 and `version` minor-
+  bumped on every touched doc.
+- Cross-links added between AI-touching docs and the new flows.
+- `_archive/` and Phase 6+ planning docs intentionally untouched.
+
+---
+
 ## 18.05.2026 — v1.6.2 — Phase 5.5: category-mismatch detection
 
 The Hackney Comedy Club incident exposed a tutarsızlık: lite mapping

@@ -2,8 +2,8 @@
 title: Components
 type: overview
 domain: frontend
-version: 1.0.0
-last_updated: 12.05.2026
+version: 1.1.0
+last_updated: 18.05.2026
 status: stable
 sources:
   - src/components/
@@ -20,11 +20,11 @@ Feature components organized by area. shadcn primitives live separately in `src/
 
 | Folder | Purpose | Doc |
 |---|---|---|
-| `filters/` | All filter UI (category, country/city, list, tag, visit-status, search, panel + sheet) | [[filters]] |
+| `filters/` | All filter UI (category w/ sub-cat cascade, country/city, list, tag, visit-status, search, panel + sheet) | [[filters]] |
 | `layout/` | App chrome (header, sidebar, mobile nav, offline banner) | [[layout]] |
 | `map/` | Mapbox view + the page-level map container | [[map]] |
-| `places/` | Place cards, dialogs, bulk actions, inline creators, visit-status toggle | [[places]] |
-| `settings/` | API key manager, cost tracker | [[settings]] |
+| `places/` | Place cards, dialogs (incl. lite-profile AI Suggestions panel), bulk actions, inline creators, visit-status toggle, AI Summary card (place detail) | [[places]] |
+| `settings/` | API key manager, cost tracker, AI master toggle (`AiSettings`), AI moderation queue (`AiSuggestionsQueue`) | [[settings]] |
 | `ui/` | shadcn primitives (avatar, button, card, dialog, etc.) | [[ui-shadcn]] |
 | (root) | `sw-register.tsx` — service worker registration | [[sw-register]] |
 

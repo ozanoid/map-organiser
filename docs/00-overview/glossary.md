@@ -2,8 +2,8 @@
 title: Glossary
 type: overview
 domain: overview
-version: 1.0.0
-last_updated: 12.05.2026
+version: 1.1.0
+last_updated: 18.05.2026
 status: stable
 related:
   - "[[system-overview]]"
@@ -24,8 +24,9 @@ Single source of truth for every domain term, abbreviation, and acronym used in 
 
 | Term | Meaning |
 |---|---|
-| **Place** | A single saved location (restaurant, museum, hotel…). Has coords, name, address, category, optional tags, rich Google/DataForSEO data, visit status. See [[../01-domain/places]]. |
+| **Place** | A single saved location (restaurant, museum, hotel…). Has coords, name, address, category, optional sub-category, tags, rich Google/DataForSEO/AI data, visit status. See [[../01-domain/places]]. |
 | **Category** | A single classification a Place can belong to (1:1 optional). 12 defaults seeded on signup. See [[../01-domain/categories-and-tags]]. |
+| **Sub-category** | An optional granular classification under a parent Category (e.g. *Cocktail Bar* under *Bar & Nightlife*). Per-user, ~62 defaults seeded on signup, AI can propose new ones via moderation queue. See [[../02-backend/schema/subcategories]]. |
 | **Tag** | A free-form label attached to a Place (M:N). User-created. See [[../01-domain/categories-and-tags]]. |
 | **List** | A named, ordered grouping of Places. Many-to-many with Places via `list_places`. See [[../01-domain/lists]]. |
 | **Trip** | A date-ranged plan made up of Trip Days, each holding ordered Places. Often linked to a source List. See [[../01-domain/trips]]. |
@@ -43,6 +44,20 @@ Single source of truth for every domain term, abbreviation, and acronym used in 
 | **Enrichment** | Fetching rich data (rating, photos, opening hours, reviews) for a Place from Google Places API or DataForSEO. Stored in `places.google_data` (jsonb). |
 | **Batch import** | The client-driven flow that parses a Google Takeout file, then loops `POST /api/places/import-batch` in chunks of 3. Progress tracked in [[../03-frontend/stores/import-store]]. |
 | **Share target** | The PWA `share_target` declaration in `src/app/manifest.ts` that lets mobile browsers send `url`/`text`/`title` to `/api/share-target`. |
+
+## AI
+
+| Term | Meaning |
+|---|---|
+| **Place Profile** | The pivot AI data layer attached to each place at `places.google_data.place_profile` (jsonb). Two completeness levels: **lite** (rule-based, produced inline by `parse-link` — no LLM) and **full** (Gemini Flash output produced by `step=profile` background pipeline). Schema: `src/lib/ai/schemas/place-profile.ts`. See [[../05-flows/lite-profile-flow]], [[../05-flows/full-profile-flow]]. |
+| **Lite path** | The synchronous, LLM-less branch of AI features. Runs in `parse-link` route via `buildLiteProfile()`. Used to surface AI chips in the Add Place dialog. |
+| **Full path** | The Gemini-powered branch. Runs in background after place save via `enrich?step=profile`. Writes the full place_profile + applies suggestions via the moderation queue. |
+| **AI master toggle** | `profiles.ai_features_enabled boolean` — per-user kill switch. When false, every AI route short-circuits and AI UI is hidden. Surfaced as Settings → AI tab toggle. |
+| **AI Suggestions queue** | `public.ai_suggestions_queue` table. Holds pending tag / sub-category / category-change proposals the LLM produced but couldn't auto-apply silently. Phase 5 moderation UI consumes it. |
+| **4-band auto-apply** | The policy in `src/lib/ai/apply-suggestions.ts`: silent apply / queue / category-change-queue / ignore — by confidence × existing-entity match × parent-mismatch. See [[../05-flows/full-profile-flow#auto-apply-policy-4-band]]. |
+| **Category change proposal** | A queue entry where the LLM disagrees with the rule-based parent-category assignment from save time (Phase 5.5). Accept atomically moves the place to the new parent (and nulls out the now-invalid subcategory_id). |
+| **AI SKU** | Per-call usage counter in `public.api_usage` under `sku` prefixed `ai_*` (e.g. `ai_place_profile`). Powers the Settings → API & Usage cost tracker for AI calls. |
+| **Gemini Flash** | The default LLM provider — `gemini-flash-latest` via `@ai-sdk/google`. Key: `GOOGLE_GENERATIVE_AI_API_KEY`. See [[../04-integrations/gemini]]. |
 
 ## Geo
 

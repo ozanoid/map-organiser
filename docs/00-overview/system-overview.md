@@ -2,8 +2,8 @@
 title: System Overview
 type: overview
 domain: overview
-version: 1.0.0
-last_updated: 12.05.2026
+version: 1.1.0
+last_updated: 18.05.2026
 status: stable
 sources:
   - AGENTS.md
@@ -12,6 +12,7 @@ sources:
   - src/lib/providers.tsx
   - src/app/manifest.ts
   - src/app/layout.tsx
+  - src/lib/ai/
 related:
   - "[[tech-stack]]"
   - "[[repo-structure]]"
@@ -86,10 +87,11 @@ Typical session:
 | Map | `src/components/map/`, `src/lib/map/` | Mapbox GL view with cluster, popups, route polylines, custom markers. |
 | Stats | `src/app/api/stats/`, `src/app/(app)/stats/` | Recharts dashboard backed by aggregate queries. |
 | Import | `src/app/api/places/import-*`, `src/app/(app)/import/`, `src/lib/stores/import-store.ts` | Client-driven batched import with Zustand progress. |
-| Settings | `src/app/(app)/settings/`, `src/components/settings/` | Categories, tags, encrypted API keys, theme. |
+| Settings | `src/app/(app)/settings/`, `src/components/settings/` | Categories, sub-categories (per parent), tags, encrypted API keys, theme, AI master toggle, AI moderation queue. |
 | Theme | `src/lib/providers.tsx`, `src/lib/hooks/use-map-style.ts` | next-themes light/dark/system; map style and marker style preferences. |
 | PWA | `src/app/manifest.ts`, `public/sw.js`, `src/components/sw-register.tsx`, `src/app/offline/` | `share_target` POST to `/api/share-target`, offline fallback. |
-| Observability | `src/lib/google/track-usage.ts` + `public.api_usage` table + `increment_api_usage()` RPC | Per-SKU API counter for cost tracking. |
+| Observability | `src/lib/google/track-usage.ts` + `public.api_usage` table + `increment_api_usage()` RPC | Per-SKU API counter for cost tracking (now includes AI SKUs). |
+| **AI** | `src/lib/ai/` (client, schemas, prompts, extractors, apply-suggestions), `src/app/api/places/[id]/enrich?step=profile`, `src/app/api/user/ai-{settings,suggestions}/`, `src/components/places/ai-summary-card.tsx`, `src/components/settings/ai-{settings,suggestions-queue}.tsx`, `public.ai_suggestions_queue`, `public.subcategories` | Gemini Flash + AI SDK v6. Two layers: rule-based lite_profile inline in parse-link (no LLM), and full place_profile via background `step=profile` LLM call. 4-band auto-apply (silent / queue / category-change / ignore). Phase 5 moderation UI consumes the queue. See [[../05-flows/lite-profile-flow]], [[../05-flows/full-profile-flow]], [[../04-integrations/gemini]]. |
 
 ## Cross-cutting
 

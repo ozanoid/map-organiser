@@ -1,17 +1,19 @@
 ---
-title: Categories & Tags
+title: Categories, Sub-categories & Tags
 type: entity
 domain: places
-version: 1.0.0
-last_updated: 12.05.2026
+version: 1.1.0
+last_updated: 18.05.2026
 status: stable
 sources:
   - src/lib/types/index.ts
   - src/lib/hooks/use-categories.ts
+  - src/lib/hooks/use-subcategories.ts
   - src/lib/hooks/use-tags.ts
   - src/lib/map/category-icons.ts
   - src/lib/google/category-mapping.ts
   - src/lib/dataforseo/category-adapter.ts
+  - src/lib/ai/extract/category-resolver.ts
   - src/components/filters/category-filter.tsx
   - src/components/filters/tag-filter.tsx
   - src/components/places/inline-category-creator.tsx
@@ -21,18 +23,53 @@ related:
   - "[[places]]"
   - "[[users-and-profiles]]"
   - "[[../02-backend/schema/categories]]"
+  - "[[../02-backend/schema/subcategories]]"
   - "[[../02-backend/schema/tags]]"
   - "[[../02-backend/schema/place_tags]]"
+  - "[[../05-flows/full-profile-flow]]"
 ---
 
-# Categories & Tags
+# Categories, Sub-categories & Tags
 
-Two parallel classification systems for Places:
+Three parallel classification systems for Places:
 
-- **Categories** — single-select classification per place (1:1 optional). Used to color/icon markers on the map. 12 defaults are seeded on signup; users can add more.
-- **Tags** — free-form multi-select labels. Many-to-many with places via `place_tags`. No defaults.
+- **Categories** — single-select parent classification per place (1:1 optional). Used to color/icon markers on the map. 12 defaults are seeded on signup; users can add more.
+- **Sub-categories** — single-select granular classification under a parent category (Phase 2). Per-user, ~62 defaults seeded on signup. AI can propose new ones via the moderation queue (Phase 5). Powers a cascading filter UI and finer-grained taxonomy without bloating the parent list. See [[../02-backend/schema/subcategories]].
+- **Tags** — free-form multi-select labels. Many-to-many with places via `place_tags`. No defaults. AI can propose new tag names via the moderation queue (Phase 5).
 
-Both are per-user. Both have free-form `color`. Both filter the places list.
+All three are per-user. Categories and Tags have free-form `color`. All three filter the places list (sub-cat as cascade pills under the parent).
+
+## Sub-categories at a glance
+
+Each parent category carries an optional bag of sub-cat slugs. Defaults seeded by `seed_default_subcategories_for_user()` (DB trigger, fires after `create_default_categories` on signup):
+
+| Parent | Default sub-cat slugs (snapshot — see [[../02-backend/schema/subcategories]] for the canonical seed) |
+|---|---|
+| Restaurant | fine-dining, casual, brunch, steakhouse, seafood, sushi, pizza, kebab, vegan-restaurant, fast-food |
+| Cafe | specialty-coffee, brunch-cafe, dessert-cafe, bakery-cafe, book-cafe |
+| Bar & Nightlife | cocktail-bar, wine-bar, pub, beer-garden, nightclub, rooftop-bar, sports-bar, jazz-bar, karaoke-bar |
+| Hotel & Accommodation | boutique-hotel, luxury-hotel, hostel, bed-and-breakfast, resort |
+| Shopping | mall, boutique, local-market, department-store, souvenir-shop |
+| Museum & Culture | art-museum, history-museum, science-museum, contemporary-art, gallery |
+| Park & Nature | urban-park, national-park, botanical-garden, viewpoint, hiking-trail |
+| Beach | sandy-beach, rocky-beach, beach-club, secluded-cove |
+| Gym & Sports | fitness-center, yoga-studio, climbing-gym, swimming-pool, sports-arena |
+| Health & Medical | pharmacy, clinic, hospital, spa, dental |
+| Entertainment | cinema, theater, concert-venue, amusement-park, escape-room, comedy-club |
+| Other | (empty by design) |
+
+Places carry `places.subcategory_id uuid REFERENCES subcategories.id ON DELETE SET NULL`. The cascading filter UI (`CategoryFilter`) renders sub-cat pills under each *active* parent; URL state mirrors via `?subcategory=<id,id>`.
+
+### AI interaction with sub-categories
+
+- **Lite path** (Add Place dialog): `src/lib/ai/extract/category-resolver.ts` maps Google `types` to a `(primary, sub_category)` tuple. The dialog auto-pre-selects the sub-cat pill when `sub_category_confidence ≥ 0.85`.
+- **Full path** (background): the Gemini full profile can propose new sub-cat slugs. The 4-band apply policy in `src/lib/ai/apply-suggestions.ts` silent-applies existing matches and queues new ones for moderation. Phase 5.5 added a 4th band — if the LLM's parent category disagrees with the place's current category, the proposal is bundled with a category move; accept-time atomically updates `places.category_id` AND `places.subcategory_id`. See [[../05-flows/full-profile-flow#auto-apply-policy-4-band]].
+
+## Tags (unchanged, with new AI consumers)
+
+Free-form, per-user, multi-select. The AI Phase 4 full profile produces two tag signals: `matched_existing` (UUIDs of user tags the LLM recognized) and `new_proposals` (lowercase-hyphenated strings). Existing matches silent-apply; new proposals run through `src/lib/ai/dedup.ts` fuzzy match — variations of existing tags get rerouted, true novelty lands in the moderation queue. See [[../02-backend/schema/ai_suggestions_queue]].
+
+Both categories and tags also feed the AI's prompt context — the LLM sees the user's full vocabulary so it can pick from existing entities rather than invent variations.
 
 ## Categories
 

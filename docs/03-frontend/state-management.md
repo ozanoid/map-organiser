@@ -2,8 +2,8 @@
 title: State Management
 type: overview
 domain: frontend
-version: 1.0.0
-last_updated: 12.05.2026
+version: 1.1.0
+last_updated: 18.05.2026
 status: stable
 sources:
   - src/lib/providers.tsx
@@ -55,6 +55,7 @@ const [queryClient] = useState(
 |---|---|---|
 | Places (filtered) | `["places", filters]` | `usePlaces(filters)` |
 | Categories | `["categories"]` | `useCategories()` |
+| Subcategories | `["subcategories", { includePending }]` | `useSubcategories()` (Phase 2) |
 | Tags | `["tags"]` | `useTags()` |
 | Tags for a place | `["place-tags", placeId]` | `usePlaceTags(placeId)` |
 | Lists | `["lists"]` | `useLists()` |
@@ -63,6 +64,7 @@ const [queryClient] = useState(
 | Trip (detail) | `["trip", tripId]` | `useTrip(id)` |
 | Stats | `["stats"]` | `useStats()` (staleTime override 5 min) |
 | Shared link | `["shared-link", resourceType, resourceId]` | `useSharedLink(...)` (disabled by default) |
+| AI suggestions | `["ai-suggestions"]` | `useAiSuggestions()` (Phase 5; pre-aggregated server-side; staleTime 30 s) |
 
 **Pattern:** array starting with a stable string identifier (the entity name), then optional sub-arguments (filters, IDs).
 
@@ -71,7 +73,11 @@ const [queryClient] = useState(
 - Place delete → `["places"]` + `["lists"]` + `["trips"]` (lists/trips counts change).
 - Place mutation → `["places"]`.
 - Category/tag/list mutation → its own key + `["places"]` (places carry joined data).
+- Subcategory mutation → `["subcategories"]` + `["places"]` (places carry joined sub-cat data).
 - Trip mutation → `["trips"]` (list refreshes counts) and/or `["trip", tripId]` (detail).
+- AI suggestion accept → `["ai-suggestions"]` + `["tags"]` + `["subcategories"]` + `["places"]` (entity is created and joined onto places). Reject → only `["ai-suggestions"]`.
+
+`PlaceFilters` carries `subcategory_ids?: string[]` alongside `category_ids` since Phase 2; URL-state mirror is `?subcategory=<id,id>` and the cascade filter UI (CategoryFilter) drives it.
 
 ## Server-state rules
 

@@ -2,8 +2,8 @@
 title: Hooks
 type: overview
 domain: frontend
-version: 1.1.0
-last_updated: 13.05.2026
+version: 1.2.0
+last_updated: 18.05.2026
 status: stable
 sources:
   - src/lib/hooks/
@@ -21,6 +21,7 @@ Every custom hook lives in `src/lib/hooks/`. Convention: file `use-x.ts` exports
 | Hook | Flavor | Query key | Doc |
 |---|---|---|---|
 | `useCategories` | react-query | `["categories"]` | [[use-categories]] |
+| `useSubcategories` + 2 mutations | react-query + mutations | `["subcategories", { includePending }]` | [[use-subcategories]] |
 | `usePlaceSearch` | react-query + mutation | `["place-search", "suggest", q, proximity]` | [[use-place-search]] |
 | `useCreateCategory` / `useDeleteCategory` | mutation | invalidates `["categories"]`, `["places"]` | [[use-categories]] |
 | `useDebouncedCallback` | utility | — | [[use-debounce]] |
@@ -32,6 +33,7 @@ Every custom hook lives in `src/lib/hooks/`. Convention: file `use-x.ts` exports
 | `useStats` | react-query (staleTime 5min) | `["stats"]` | [[use-stats]] |
 | `useTags` + 4 mutations | react-query + mutations | `["tags"]`, `["place-tags", placeId]` | [[use-tags]] |
 | `useTrips` + 9 mutations | react-query + mutations | `["trips"]`, `["trip", id]` | [[use-trips]] |
+| `useAiSuggestions` + 2 mutations | react-query + mutations | `["ai-suggestions"]` (staleTime 30 s) | [[use-ai-suggestions]] |
 
 ## Conventions
 

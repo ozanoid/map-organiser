@@ -2,8 +2,8 @@
 title: places
 type: table
 domain: backend
-version: 1.1.0
-last_updated: 13.05.2026
+version: 1.2.0
+last_updated: 18.05.2026
 status: stable
 sources:
   - Supabase project hukppmaevcapvbrvxtph (live)
@@ -12,10 +12,12 @@ related:
   - "[[../../01-domain/places]]"
   - "[[../../01-domain/geo-and-s2]]"
   - "[[categories]]"
+  - "[[subcategories]]"
   - "[[place_tags]]"
   - "[[list_places]]"
   - "[[place_photos]]"
   - "[[trip_day_places]]"
+  - "[[ai_suggestions_queue]]"
 tags:
   - core
   - geo
@@ -38,6 +40,7 @@ The core entity — user-saved locations. 458 rows in the current snapshot. Geog
 | `city` | text | yes | — | Drives city filter pills. |
 | `location` | `geography` | no | — | PostGIS Point, SRID 4326. Always present. |
 | `category_id` | uuid | yes | — | FK → `categories.id`. 0..1 per place. |
+| `subcategory_id` | uuid | yes | — | FK → `subcategories.id` ON DELETE SET NULL. Phase 2 (`add_subcategory_id_to_places`, 13.05.2026). Set automatically by Phase 4 silent apply, Phase 5 accept, or the AddPlaceDialog lite-profile chip. |
 | `rating` | smallint | yes | — | User's 1–5 rating. Check `rating >= 1 AND rating <= 5`. |
 | `notes` | text | yes | — | Free-form. |
 | `google_data` | jsonb | yes | `'{}'::jsonb` | Provider data (see [[../../01-domain/places#google_data-shape]]). |
@@ -59,6 +62,7 @@ The core entity — user-saved locations. 458 rows in the current snapshot. Geog
 | `idx_places_google_id` | `(user_id, google_place_id)` | btree | Dedup checks on import/parse-link. |
 | `idx_places_location` | `location` | **GIST** | Spatial queries (`ST_DWithin` and friends). |
 | `idx_places_visit_status` | `(user_id, visit_status) WHERE visit_status IS NOT NULL` | btree partial | Visit-status filter. |
+| `idx_places_subcategory` | `subcategory_id WHERE subcategory_id IS NOT NULL` | btree partial | Sub-category filter (Phase 2). |
 
 ## RLS policies
 
@@ -74,6 +78,7 @@ The core entity — user-saved locations. 458 rows in the current snapshot. Geog
 |---|---|---|---|
 | `user_id` | `auth.users.id` | (cascading via auth) | — |
 | `category_id` | `categories.id` | (default NO ACTION) | — |
+| `subcategory_id` | `subcategories.id` | SET NULL | — |
 
 ### Incoming (other tables → `places.id`)
 
@@ -92,8 +97,9 @@ None on this table directly.
 
 ## Notes
 
-- **Migration history.** `create_places` (2026-04-09), `add_visit_status` (2026-04-10), `create_place_categories_junction` (2026-04-14) then `drop_place_categories_junction` (2026-04-14) — the team briefly experimented with M:N category before reverting to single-category, `add_cascade_delete_trip_day_places_place_id` (2026-04-15).
+- **Migration history.** `create_places` (2026-04-09), `add_visit_status` (2026-04-10), `create_place_categories_junction` (2026-04-14) then `drop_place_categories_junction` (2026-04-14) — the team briefly experimented with M:N category before reverting to single-category, `add_cascade_delete_trip_day_places_place_id` (2026-04-15), `add_source_check_with_mapbox_search` (2026-05-13), `add_subcategory_id_to_places` (2026-05-13).
 - **`google_data` size discipline.** API routes strip `reviews`, `editorialSummary`, `editorial_summary`, and `photos` from the inbound payload before insert. Reviews come back later via the enrichment step. Photos are replaced by `photo_storage_url` after download. This keeps the row size sane.
+- **`google_data.place_profile` (Phase 4).** AI pivot data nested under `google_data`. Schema in `src/lib/ai/schemas/place-profile.ts`. Two completeness levels (`"lite"` / `"full"`). Written by `POST /api/places/[id]/enrich?step=profile`. Detail page renders via `AiSummaryCard`. See [[../../01-domain/places#google_dataplace_profile-shape-phase-4]] for the field-by-field shape.
 - **`location` is canonical.** Frontend `Place.location` of type `{ lat, lng }` is the post-parser shape; raw EWKB comes back from PostgREST and is parsed by `src/lib/geo.ts#parsePostgisPoint` on every read.
 - Consumed by: every `/api/places/*` route, `/api/trips/*` (via join), `/api/shared/[slug]` (via join), `/api/stats`.
 

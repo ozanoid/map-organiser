@@ -2,8 +2,8 @@
 title: Repo Structure
 type: overview
 domain: overview
-version: 1.0.0
-last_updated: 12.05.2026
+version: 1.1.0
+last_updated: 18.05.2026
 status: stable
 sources:
   - src/
@@ -69,7 +69,7 @@ src/
 │   │   ├── trips/[id]/page.tsx Timeline + map
 │   │   ├── stats/page.tsx     Recharts dashboard
 │   │   ├── import/page.tsx    Batch import + Zustand progress
-│   │   └── settings/page.tsx  Categories/Tags/API/Theme tabs
+│   │   └── settings/page.tsx  Categories (with sub-cat manage) / Tags / API & Usage / AI / Theme tabs
 │   ├── (auth)/                Public auth pages (route group)
 │   │   ├── layout.tsx
 │   │   ├── login/page.tsx
@@ -79,34 +79,42 @@ src/
 │   ├── shared/layout.tsx
 │   ├── offline/page.tsx       PWA offline fallback
 │   └── api/                   Route handlers (see [[../02-backend/api-routes/_README]])
-│       ├── places/            CRUD + bulk + enrich + import + parse-link + migrate-photos
+│       ├── places/            CRUD + bulk + enrich (info/reviews/profile) + import + parse-link (returns lite_profile) + migrate-photos
 │       ├── trips/             CRUD + auto-plan + day reorder + day places + swap-days
 │       ├── lists/[id]/reorder
+│       ├── subcategories/     CRUD (per-user; default seed via signup trigger)
 │       ├── shared/            Create + public-read + save-to-account
 │       ├── stats/             Aggregated stats
-│       ├── user/              api-keys + usage
+│       ├── user/              api-keys + usage + ai-settings + ai-suggestions (list/accept/reject)
 │       └── share-target/      PWA share_target sink
 ├── components/
 │   ├── filters/               Category / country-city / list / tag / visit-status / search filter UIs
 │   ├── layout/                AppHeader, AppSidebar, MobileNav, OfflineBanner
 │   ├── map/                   MapView, MapContent
-│   ├── places/                PlaceCard, AddPlaceDialog, BulkActionBar, inline creators, VisitStatusToggle
-│   ├── settings/              ApiKeysManager, CostTracker
+│   ├── places/                PlaceCard, AddPlaceDialog (with AI Suggestions panel + sub-cat strip), BulkActionBar, inline creators, VisitStatusToggle, AiSummaryCard
+│   ├── settings/              ApiKeysManager, CostTracker, AiSettings (master toggle), AiSuggestionsQueue (moderation UI)
 │   ├── sw-register.tsx        Service worker registration (client component)
 │   └── ui/                    shadcn primitives (avatar, badge, button, card, command, dialog, dropdown-menu, input, input-group, popover, select, separator, sheet, skeleton, sonner, tabs, textarea)
 └── lib/
+    ├── ai/                    AI SDK v6 wiring (Gemini Flash). client.ts, context-builder.ts,
+    │                          dedup.ts, normalize.ts, track-usage.ts; schemas/ (Zod);
+    │                          prompts/ (place-profile-full.ts); extract/ (lite-profile.ts,
+    │                          category-resolver.ts, features-extractor.ts,
+    │                          suggestions-from-profile.ts); apply-suggestions.ts.
     ├── dataforseo/            DataForSEO client + types + adapters + transform + reviews + photo
     ├── google/                Google Places + URL parser + category mapping + Takeout parser + usage tracker + key access
-    ├── hooks/                 React Query hooks: useCategories, useDebounce, useFilters, useLists, useMapStyle, usePlaces, useSharedLinks, useStats, useTags, useTrips
+    ├── hooks/                 React Query hooks: useCategories, useDebounce, useFilters, useLists, useMapStyle, usePlaces, useSharedLinks, useStats, useTags, useTrips, useSubcategories, useAiSuggestions
     ├── stores/                Zustand stores (currently just import-store.ts)
     ├── map/                   category-icons.ts (canvas marker rendering)
     ├── trip/                  auto-plan.ts (k-means clustering), directions.ts (Mapbox wrapper)
     ├── supabase/              client.ts (browser), server.ts (+ createServiceClient), middleware.ts (updateSession)
-    ├── types/                 index.ts — domain types (Place, Trip, Category, Tag, …)
+    ├── types/                 index.ts — domain types (Place, Trip, Category, Subcategory, Tag, …)
     ├── geo.ts                 Shared PostGIS point parser (EWKB hex / WKT / GeoJSON / plain object)
     ├── providers.tsx          ThemeProvider + QueryClientProvider
     └── utils.ts               cn() Tailwind class merger
 ```
+
+> The `src/lib/ai/` tree was added across PRs #30–#35 (AI Phases 1–5.5). The structure is documented in detail under [[../04-integrations/gemini]] and consumed by `src/app/api/places/[id]/enrich/route.ts` (step=profile) and the AI suggestion UI.
 
 ## `public/` — static assets
 
@@ -158,9 +166,9 @@ Counts (approximate, as of `last_updated`):
 | Area | Files |
 |---|---|
 | App routes (`src/app/**/page.tsx`) | 12 page files |
-| API route handlers (`src/app/api/**/route.ts`) | ~24 routes |
+| API route handlers (`src/app/api/**/route.ts`) | ~31 routes (added: 4 subcategories + 5 user/ai-* + step=profile branch) |
 | Feature components (`src/components/{filters,layout,map,places,settings}`) | ~25 |
 | shadcn UI (`src/components/ui/`) | 19 primitives |
-| Custom hooks (`src/lib/hooks/`) | 10 |
+| Custom hooks (`src/lib/hooks/`) | 12 (added: useSubcategories, useAiSuggestions) |
 | Supabase clients (`src/lib/supabase/`) | 3 (browser, server, middleware) |
 | Vault docs (`docs/**/*.md`, excl. `_archive`) | tracked in [[../CHANGELOG]] |
