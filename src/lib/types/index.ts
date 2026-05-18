@@ -181,6 +181,25 @@ export interface PlaceFilters {
   visit_status?: VisitStatus;
   search?: string;
   sort?: string;
+  /**
+   * Phase 6 — soft feature filters matched server-side against
+   * `places.google_data.place_profile.features.<axis>` arrays.
+   *
+   * - Within an axis: OR (place matches if any feature term overlaps).
+   * - Across axes: AND (must match every specified axis).
+   * - Places lacking a place_profile are excluded when this is set.
+   *
+   * Values are lowercase canonical keywords; the LLM in /api/ai/parse-query
+   * emits them. URL representation: one repeated param per axis,
+   * comma-separated values. Example: `?f_atmosphere=cozy&f_occasions=working`.
+   */
+  soft_features?: {
+    atmosphere?: string[];
+    dietary?: string[];
+    occasions?: string[];
+    seating?: string[];
+    cuisine_types?: string[];
+  };
 }
 
 export interface ParsedPlaceData {

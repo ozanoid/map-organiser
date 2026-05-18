@@ -30,6 +30,28 @@ export async function GET(request: NextRequest) {
   const search = searchParams.get("q");
   const sort = searchParams.get("sort");
 
+  // ─── Phase 6: soft-feature filters (matched against place_profile.features.*) ───
+  const SOFT_AXES = [
+    "atmosphere",
+    "dietary",
+    "occasions",
+    "seating",
+    "cuisine_types",
+  ] as const;
+  type SoftAxis = (typeof SOFT_AXES)[number];
+  const softFeatures: Partial<Record<SoftAxis, string[]>> = {};
+  for (const axis of SOFT_AXES) {
+    const raw = searchParams.get(`f_${axis}`);
+    if (raw) {
+      const values = raw
+        .split(",")
+        .map((v) => v.trim().toLowerCase())
+        .filter(Boolean);
+      if (values.length) softFeatures[axis] = values;
+    }
+  }
+  const hasSoftFilter = Object.keys(softFeatures).length > 0;
+
   // Determine sort field and direction
   const sortConfig: Record<string, { column: string; ascending: boolean }> = {
     newest: { column: "created_at", ascending: false },
@@ -100,6 +122,36 @@ export async function GET(request: NextRequest) {
         .filter((p) => orderMap.has(p.id))
         .sort((a, b) => (orderMap.get(a.id) ?? 0) - (orderMap.get(b.id) ?? 0));
     }
+  }
+
+  // ─── Phase 6: soft-feature filter (place_profile.features.*) ───
+  // Applied after the SQL query because the data lives in JSONB.
+  // Place is kept iff for EVERY requested axis, at least one of its profile's
+  // feature values matches one of the requested values (case-insensitive).
+  // Places without a place_profile are excluded entirely when soft filters are set.
+  if (hasSoftFilter) {
+    filteredPlaces = filteredPlaces.filter((p: any) => {
+      const profile = p.google_data?.place_profile as
+        | { features?: Record<string, unknown> }
+        | undefined;
+      const features = profile?.features as
+        | Record<string, unknown>
+        | undefined;
+      if (!features) return false;
+
+      for (const [axis, wanted] of Object.entries(softFeatures)) {
+        const have = features[axis];
+        if (!Array.isArray(have)) return false;
+        const haveLower = (have as unknown[])
+          .filter((v): v is string => typeof v === "string")
+          .map((v) => v.toLowerCase());
+        const matched = (wanted as string[]).some((w) =>
+          haveLower.includes(w)
+        );
+        if (!matched) return false;
+      }
+      return true;
+    });
   }
 
   // Post-query sort for google_rating (stored in JSONB, can't sort at query level)

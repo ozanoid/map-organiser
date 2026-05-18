@@ -15,6 +15,15 @@ async function fetchPlaces(filters: PlaceFilters): Promise<Place[]> {
   if (filters.visit_status) params.set("status", filters.visit_status);
   if (filters.search) params.set("q", filters.search);
   if (filters.sort) params.set("sort", filters.sort);
+  if (filters.subcategory_ids?.length)
+    params.set("subcategory", filters.subcategory_ids.join(","));
+  if (filters.soft_features) {
+    for (const [axis, vals] of Object.entries(filters.soft_features)) {
+      if (Array.isArray(vals) && vals.length > 0) {
+        params.set(`f_${axis}`, vals.join(","));
+      }
+    }
+  }
 
   const res = await fetch(`/api/places?${params}`);
   if (!res.ok) throw new Error("Failed to fetch places");
