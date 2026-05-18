@@ -18,6 +18,11 @@ import { usePlaces } from "@/lib/hooks/use-places";
 import { useCategories } from "@/lib/hooks/use-categories";
 import { useFilters } from "@/lib/hooks/use-filters";
 import { useMapStyle } from "@/lib/hooks/use-map-style";
+import { useAiRerankOrchestrator } from "@/lib/hooks/use-ai-search";
+import {
+  useAiSearchStore,
+  LESS_RELEVANT_SCORE,
+} from "@/lib/stores/ai-search-store";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   SlidersHorizontal,
@@ -38,6 +43,11 @@ import type { Place, VisitStatus } from "@/lib/types";
 export function MapContent({ mapboxToken }: { mapboxToken: string }) {
   const { filters, hasActiveFilters } = useFilters();
   const { data: places = [], isLoading } = usePlaces(filters);
+
+  // Phase 6: fire rerank when parse-query asked for it and the new filter
+  // result set has settled.
+  useAiRerankOrchestrator(filters);
+  const aiRankings = useAiSearchStore((s) => s.rankings);
   const { data: categories = [] } = useCategories();
   const { mapStyleUrl, markerStyle } = useMapStyle();
   const [addOpen, setAddOpen] = useState(false);
@@ -222,32 +232,52 @@ export function MapContent({ mapboxToken }: { mapboxToken: string }) {
 
             {placeListOpen && visiblePlaceIds.length > 0 && (
               <div className="mt-2 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm rounded-xl shadow-xl border max-h-[50dvh] overflow-y-auto w-64">
-                {visiblePlaceIds.map((id) => {
-                  const place = places.find((p) => p.id === id);
-                  if (!place) return null;
-                  return (
-                    <button
-                      key={id}
-                      type="button"
-                      onClick={() => {
-                        setPlaceListOpen(false);
-                        mapRef.current?.flyToPlace(id);
-                      }}
-                      className="w-full text-left px-3 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition-colors flex items-center gap-2.5 border-b last:border-b-0 border-gray-100 dark:border-gray-800"
-                    >
-                      <span
-                        className="h-5 w-5 rounded-full shrink-0"
-                        style={{ backgroundColor: place.category?.color || "#6B7280" }}
-                      />
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium truncate">{place.name}</p>
-                        {place.address && (
-                          <p className="text-[10px] text-muted-foreground truncate">{place.address}</p>
-                        )}
-                      </div>
-                    </button>
-                  );
-                })}
+                {(() => {
+                  // Phase 6: when AI rankings are present, sort by score
+                  // descending; ties keep the original (map-derived) order.
+                  const ordered = aiRankings
+                    ? [...visiblePlaceIds].sort((a, b) => {
+                        const sa = aiRankings.get(a)?.score ?? -1;
+                        const sb = aiRankings.get(b)?.score ?? -1;
+                        return sb - sa;
+                      })
+                    : visiblePlaceIds;
+                  return ordered.map((id) => {
+                    const place = places.find((p) => p.id === id);
+                    if (!place) return null;
+                    const ranking = aiRankings?.get(id);
+                    const lessRelevant =
+                      ranking !== undefined && ranking.score < LESS_RELEVANT_SCORE;
+                    return (
+                      <button
+                        key={id}
+                        type="button"
+                        onClick={() => {
+                          setPlaceListOpen(false);
+                          mapRef.current?.flyToPlace(id);
+                        }}
+                        className={`w-full text-left px-3 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition-colors flex items-center gap-2.5 border-b last:border-b-0 border-gray-100 dark:border-gray-800 ${
+                          lessRelevant ? "opacity-60" : ""
+                        }`}
+                      >
+                        <span
+                          className="h-5 w-5 rounded-full shrink-0"
+                          style={{ backgroundColor: place.category?.color || "#6B7280" }}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium truncate">{place.name}</p>
+                          {ranking ? (
+                            <p className="text-[10px] text-emerald-700 dark:text-emerald-400 italic truncate">
+                              {ranking.why}
+                            </p>
+                          ) : place.address ? (
+                            <p className="text-[10px] text-muted-foreground truncate">{place.address}</p>
+                          ) : null}
+                        </div>
+                      </button>
+                    );
+                  });
+                })()}
               </div>
             )}
           </div>
