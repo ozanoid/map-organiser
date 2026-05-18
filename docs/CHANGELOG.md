@@ -6,6 +6,88 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 18.05.2026 — v1.7.0 — Phase 6: AI-01 natural-language filtering
+
+First **interactive** AI feature in the app — the model is on the user-
+waiting path, not background enrichment. A search box at the top of the
+FilterPanel takes free-form queries ("cozy cafes in Shoreditch for
+remote work"), parses them into the existing filter shape, and reranks
+the result list when the query has fuzzy intent that hard + soft
+filters can't express.
+
+### Three-layer matching pipeline
+- **Layer 1 — hard:** LLM returns category/sub-cat/tag IDs, city,
+  visit_status, etc. Plain SQL filters via the existing `/api/places`
+  pipeline. Defense-in-depth: server strips any UUID the LLM emits
+  that isn't in the user's actual context.
+- **Layer 2 — soft features:** LLM returns per-axis descriptors
+  (atmosphere, dietary, occasions, seating, cuisine_types). `/api/places`
+  intersects these against `place_profile.features.*` server-side —
+  no LLM call. Places without a `place_profile` are excluded when soft
+  filters are set.
+- **Layer 3 — semantic rerank:** when the LLM sets
+  `requires_semantic_ranking: true`, `/api/ai/rank-results` scores the
+  filtered candidates against the query's semantic intent using each
+  place's `place_profile.searchable_summary`. The rerank trigger comes
+  from query content, NOT result count — a 5-candidate "cozy cafes for
+  remote work" query still gets reranked.
+
+### Added (code)
+- `src/app/api/ai/parse-query/route.ts` — Layer 1+2 dispatcher
+- `src/app/api/ai/rank-results/route.ts` — Layer 3 LLM-as-judge
+- `src/lib/ai/prompts/parse-query.ts`, `prompts/rank-results.ts`
+- `src/lib/ai/schemas/rank-results.ts` (parse-query schema was shipped
+  in Phase 1; route + prompt now consume it)
+- `src/lib/stores/ai-search-store.ts` — Zustand for transient
+  per-session state (semanticIntent, rankings, rerankStatus, clarification)
+- `src/lib/hooks/use-ai-search.ts` — `useAiSearch` mutation +
+  `useAiRerankOrchestrator` side-effect hook
+- `src/components/search/ai-search-input.tsx` — the input UI
+
+### Changed (code)
+- `src/lib/types/index.ts` — `PlaceFilters.soft_features` field
+- `src/app/api/places/route.ts` — parse `f_<axis>` params, post-filter
+  via JSONB intersect
+- `src/lib/hooks/use-filters.ts` — round-trip soft_features through
+  URL params (fan-out: `?f_atmosphere=cozy&f_occasions=working`)
+- `src/lib/hooks/use-places.ts` — forward `soft_features` to the API
+  fetcher; drive-by also adds `subcategory_ids` forwarding (missing
+  since Phase 2)
+- `src/components/filters/filter-panel.tsx` — mount `AiSearchInput`
+  at top; "Clear" resets the AI search store atomically
+- `src/components/map/map-content.tsx` — mount rerank orchestrator;
+  sort visiblePlaceIds by score; show LLM `why` line
+- `src/components/places/place-card.tsx` — same `why` line replaces
+  address when active; fade cards below 0.3 score
+
+### Added (vault)
+- `02-backend/api-routes/ai.md` — new AI route group doc
+- `03-frontend/components/search.md` — new search components doc
+- `05-flows/ai-search-flow.md` — full E2E flow
+
+### Updated (vault)
+- `02-backend/api-routes/_README.md` — AI group added, count bumped
+- `03-frontend/components/_README.md` — search folder added
+- `03-frontend/hooks/_README.md` — `useAiSearch` + orchestrator
+- `03-frontend/state-management.md` — `soft_features` filter slot +
+  `useAiSearchStore` documented
+- `05-flows/_README.md` — `ai-search-flow` linked in index
+- `04-integrations/gemini.md` — added two new SKUs to the callers
+  table; documented background vs interactive split
+- `docs/_plans/phase-6-nl-filtering.md` — v0.2 design doc that
+  governed this PR (kept for now; archive after merge)
+
+### Cost
+- `ai_parse_query` SKU — ~\$0.0001/call
+- `ai_rank_results` SKU — ~\$0.002/call at 50 candidates
+- Typical user (20 queries/day, half rerank) — ~\$0.66/mo
+
+### Known stale
+- ESLint v10.4.0 (from PR #36) crashes `eslint-plugin-react` —
+  unrelated to Phase 6; tsc clean; spawned as a separate fix-it task.
+
+---
+
 ## 18.05.2026 — v1.6.3 — vault sync for AI Phases 1-5.5
 
 Documentation-only rollup. After Phases 1 through 5.5 shipped across PRs

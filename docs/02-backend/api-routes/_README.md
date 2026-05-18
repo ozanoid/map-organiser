@@ -2,7 +2,7 @@
 title: API Routes
 type: overview
 domain: backend
-version: 1.2.0
+version: 1.3.0
 last_updated: 18.05.2026
 status: stable
 sources:
@@ -30,15 +30,16 @@ All Next.js route handlers grouped by area. Each linked doc is the canonical ref
 | Shared | `/api/shared/*` | **Mixed** — GET `/[slug]` public via service role | [[shared]] |
 | Stats | `/api/stats` | Required | [[stats]] |
 | User | `/api/user/*` — includes `ai-settings` (Phase 1) and `ai-suggestions/*` (Phase 5 moderation queue: list, accept, reject) | Required | [[user]] |
-| Search | `/api/search/*` | Required | [[search]] |
+| AI | `/api/ai/*` (Phase 6) — `parse-query`, `rank-results` for NL filtering | Required | [[ai]] |
+| Search | `/api/search/*` (Mapbox geocoder proxy) | Required | [[search]] |
 | Share target | `/api/share-target` | **None** (PWA inbound) | [[share-target]] |
 | Auth callback | `/auth/callback` | **None** (OAuth handshake) | [[auth-callback]] |
 
-> AI endpoints live under the **User** prefix because they all key off the cookie-authenticated user (toggle state, pending proposals, accept/reject). The actual LLM-calling endpoint is `POST /api/places/[id]/enrich?step=profile` — a new branch on the existing places enrich route, not a standalone group.
+> Two AI route locations on purpose: **user-initiated, latency-sensitive** calls (Phase 6 NL filtering) live in their own `/api/ai/*` group. The **background** profile-generation call is a branch on the existing places enrich route at `POST /api/places/[id]/enrich?step=profile`. Master toggle + moderation queue stay under `/api/user/*` because they key off the cookie-authenticated user.
 
 ## Counts
 
-- ~33 route handler files (`src/app/api/**/route.ts` + `src/app/auth/callback/route.ts`) — added across Phases 1–5.5: 4 subcategories + 5 user/ai-* + 1 new step branch on enrich.
+- ~35 route handler files (`src/app/api/**/route.ts` + `src/app/auth/callback/route.ts`) — Phase 6 adds 2: `/api/ai/parse-query`, `/api/ai/rank-results`.
 - ~58 HTTP method exports across them
 
 ## Cross-route conventions
