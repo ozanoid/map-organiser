@@ -110,10 +110,12 @@ const GOOGLE_TYPE_TO_CATEGORY: Record<string, string> = {
   winery: "Bar & Nightlife",
   night_club: "Bar & Nightlife",
   karaoke: "Bar & Nightlife",
-  live_music_venue: "Bar & Nightlife",
   dance_hall: "Bar & Nightlife",
-  comedy_club: "Bar & Nightlife",
   bar_and_grill: "Bar & Nightlife",
+  // Reclassified: live music + comedy are venue functions, not drinking
+  // establishments. AI Phase 5.5 caught Hackney Comedy Club ending up
+  // under Bar & Nightlife because comedy_club lived here.
+  // live_music_venue and comedy_club moved to Entertainment below.
 
   // --- Hotel & Accommodation ---
   hotel: "Hotel & Accommodation",
@@ -196,7 +198,9 @@ const GOOGLE_TYPE_TO_CATEGORY: Record<string, string> = {
   cultural_center: "Museum & Culture",
   tourist_attraction: "Museum & Culture",
   visitor_center: "Museum & Culture",
-  concert_hall: "Museum & Culture",
+  // concert_hall reclassified to Entertainment (event venue, not curated culture).
+  // opera_house / performing_arts_theater / philharmonic_hall / amphitheatre
+  // stay here — they're classical-arts institutions with cultural framing.
   opera_house: "Museum & Culture",
   performing_arts_theater: "Museum & Culture",
   philharmonic_hall: "Museum & Culture",
@@ -292,6 +296,10 @@ const GOOGLE_TYPE_TO_CATEGORY: Record<string, string> = {
   event_venue: "Entertainment",
   convention_center: "Entertainment",
   banquet_hall: "Entertainment",
+  // Phase 5.5 reclassifications — moved out of Bar & Nightlife / Museum.
+  comedy_club: "Entertainment",
+  live_music_venue: "Entertainment",
+  concert_hall: "Entertainment",
   wedding_venue: "Entertainment",
   community_center: "Entertainment",
   marina: "Entertainment",

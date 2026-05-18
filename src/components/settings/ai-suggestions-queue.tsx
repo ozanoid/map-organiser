@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, X, Loader2, Tag, FolderTree, Sparkles } from "lucide-react";
+import { Check, X, Loader2, Tag, FolderTree, Sparkles, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 import {
   useAiSuggestions,
@@ -19,9 +19,13 @@ import {
  *     as variations of existing tags)
  *   - new sub-category slugs (LLM proposed a slug not in the user's
  *     dictionary under the resolved parent category)
+ *   - category changes (LLM disagrees with the rule-based parent category
+ *     a place got at save time — Phase 5.5 addition)
  *
- * Accept → creates the entity + attaches to every place that produced
- * the proposal. Reject → status='rejected', vocabulary untouched.
+ * A sub-category proposal whose `target_category_name` differs from the
+ * sample place's current parent renders an inline "moves Hackney Comedy
+ * Club from Bar & Nightlife → Entertainment" note. Accept atomically moves
+ * the place AND creates/reuses the sub-cat under the new parent.
  */
 export function AiSuggestionsQueue() {
   const { data: suggestions = [], isLoading } = useAiSuggestions();
@@ -41,14 +45,17 @@ export function AiSuggestionsQueue() {
     return (
       <div className="text-xs text-muted-foreground italic">
         No pending suggestions. AI proposals show up here when the background
-        profile pipeline finds tags or sub-categories worth adding to your
-        vocabulary.
+        profile pipeline finds tags, sub-categories, or category changes
+        worth adding to your vocabulary.
       </div>
     );
   }
 
   const tagSuggestions = suggestions.filter((s) => s.type === "tag");
   const subSuggestions = suggestions.filter((s) => s.type === "subcategory");
+  const categoryChangeSuggestions = suggestions.filter(
+    (s) => s.type === "category_change"
+  );
 
   const handleAccept = (s: AiSuggestion) => {
     accept.mutate(s.ids[0], {
@@ -57,7 +64,9 @@ export function AiSuggestionsQueue() {
         toast.success(
           s.type === "tag"
             ? `Tag created and applied to ${d.affected_places ?? 0} places`
-            : `Sub-category created and applied to ${d.affected_places ?? 0} places`
+            : s.type === "category_change"
+              ? `Category updated for ${d.affected_places ?? 0} places`
+              : `Sub-category created and applied to ${d.affected_places ?? 0} places`
         );
       },
       onError: (err) => toast.error(err.message),
@@ -112,6 +121,19 @@ export function AiSuggestionsQueue() {
           isPending={accept.isPending || reject.isPending}
         />
       )}
+
+      {categoryChangeSuggestions.length > 0 && (
+        <SuggestionGroup
+          icon={ArrowRight}
+          title={`Category changes (${categoryChangeSuggestions.length})`}
+          items={categoryChangeSuggestions}
+          onAccept={handleAccept}
+          onReject={handleReject}
+          accepting={accept.variables}
+          rejecting={reject.variables}
+          isPending={accept.isPending || reject.isPending}
+        />
+      )}
     </div>
   );
 }
@@ -156,10 +178,31 @@ function SuggestionGroup({
             >
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium truncate">
-                  {s.proposed_value}
+                  {s.type === "category_change"
+                    ? `Move to ${s.proposed_value}`
+                    : s.proposed_value}
                 </p>
+                {/* Move annotation: shown when the proposal implies a parent
+                    change (target_category_name set AND differs from the
+                    sample place's current parent). For pure category_change
+                    rows we surface the same hop. */}
+                {(() => {
+                  const targetParent =
+                    s.target_category_name ?? s.parent_category_name ?? null;
+                  const currentParent = s.sample_place_category_name ?? null;
+                  const showMove =
+                    targetParent &&
+                    currentParent &&
+                    targetParent !== currentParent;
+                  return showMove ? (
+                    <p className="text-[10px] text-amber-700 dark:text-amber-400 truncate">
+                      moves &ldquo;{s.sample_place_name ?? "this place"}&rdquo;
+                      {" "}from {currentParent} → {targetParent}
+                    </p>
+                  ) : null;
+                })()}
                 <p className="text-[10px] text-muted-foreground truncate">
-                  {s.parent_category_name && (
+                  {s.type !== "category_change" && s.parent_category_name && (
                     <span className="mr-2">under {s.parent_category_name}</span>
                   )}
                   proposed by{" "}

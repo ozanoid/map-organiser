@@ -93,21 +93,31 @@ polling.
        │  • Refresh button (manual re-run)
 ```
 
-## Auto-apply policy (3-band)
+## Auto-apply policy (Phase 5.5 unified)
 
 Implemented in `src/lib/ai/apply-suggestions.ts`. The dialog (Moment 1)
 keeps tag/list chips opt-in, but the background (Moment 2) can't ask the
-user — so it follows a confidence × existence matrix:
+user — so it follows a confidence × existence × parent-match matrix.
 
-| LLM signal | Existing user entity match? | Action |
-|---|---|---|
-| `suggested_tags.matched_existing[]` (UUIDs LLM returned) | Yes (by construction) | **Silent apply** — INSERT place_tags. Skip rows already present. |
-| `suggested_tags.new_proposals[]` (LLM names a NEW tag) | Fuzzy-match passes (Levenshtein ≤ 2 against existing) | **Reroute** to matched existing tag, silent apply. |
-| `suggested_tags.new_proposals[]` (LLM names a NEW tag) | No match in existing | **Queue** — INSERT into `ai_suggestions_queue` with `type='tag'`, `status='pending'`. |
-| `suggested_lists[]` (UUIDs only) | — | **Ignored.** Lists are opt-in only via the Add Place dialog chips (Phase 3 lite_profile). Background silent-apply would contradict the user's explicit choice / non-choice made at save time. See "Why no list silent apply" below. |
-| `category_signals.sub_category` (slug) with conf ≥ 0.85 | Existing subcategory under the resolved parent | **Silent apply** — UPDATE places.subcategory_id. |
-| `category_signals.sub_category` (slug) with conf ≥ 0.9 | No existing match | **Queue** — INSERT into `ai_suggestions_queue` with `type='subcategory'`, `parent_category_id` set. |
-| `category_signals.sub_category` with conf < 0.85 | — | **Ignore** — too uncertain to act on. |
+**Phase 5.5 change**: the matrix now treats `category_signals.primary`
+as a first-class signal that can disagree with the place's currently
+assigned category. When that happens — e.g. Hackney Comedy Club saved
+to "Bar & Nightlife" by lite mapping, but LLM correctly identifies it
+as "Entertainment" — the proposal lands in the moderation queue as a
+move (paired with the sub-cat) instead of silent-applying a sub-cat
+under the wrong parent.
+
+| LLM signal | Existing user entity match? | LLM primary vs place's current category | Action |
+|---|---|---|---|
+| `suggested_tags.matched_existing[]` | Yes (by construction) | — | **Silent apply** — INSERT place_tags. |
+| `suggested_tags.new_proposals[]` | Fuzzy-match passes | — | **Reroute** silent apply. |
+| `suggested_tags.new_proposals[]` | No match | — | **Queue** type=`tag`. |
+| `suggested_lists[]` | — | — | **Ignored** (dialog-only). |
+| Sub-cat slug exists under LLM target parent, conf ≥ 0.85 | Yes | **MATCH** | **Silent apply** — UPDATE `places.subcategory_id`. |
+| Sub-cat slug new, conf ≥ 0.9 | No | **MATCH** | **Queue** type=`subcategory`, parent=current. |
+| Sub-cat slug (existing OR new), conf ≥ 0.9 | — | **MISMATCH** + primary conf ≥ 0.85 | **Queue** type=`subcategory`, parent=LLM target, `target_category_name` set. Accept moves the place AND creates/reuses the sub-cat atomically. |
+| No usable sub-cat, primary conf ≥ 0.85 | — | **MISMATCH** | **Queue** type=`category_change`, `target_category_name`=LLM primary. Accept moves the place; subcategory_id nulled (old sub-cat lived under old parent). |
+| Sub-cat conf < 0.85 AND primary matches | — | MATCH | **Ignore** — too uncertain. |
 
 The dedup helper from Phase 1 (`src/lib/ai/dedup.ts`) is the safety net under
 the LLM: even if Gemini emits `"japanese-food"` and the user has `"japanese"`,

@@ -6,6 +6,83 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 18.05.2026 — v1.6.2 — Phase 5.5: category-mismatch detection
+
+The Hackney Comedy Club incident exposed a tutarsızlık: lite mapping
+routed it to Bar & Nightlife at save time, but the LLM (correctly) read
+the reviews and proposed Entertainment + a new `comedy-club` sub-cat.
+The old apply-suggestions code wrote a sub-cat proposal targeting
+Entertainment.id while the place stayed in Bar & Nightlife — accepting
+it gave the user a comedy-club sub-cat under Entertainment that the
+cascade filter couldn't reach from the place's actual parent.
+
+This release fixes the root cause two ways: audit the rule-based lite
+mapping so similar venues route correctly from the start, AND give the
+LLM a structured way to override a save-time mistake via the moderation
+queue.
+
+### A) Lite mapping audit
+- `src/lib/google/category-mapping.ts`:
+  - `comedy_club`: Bar & Nightlife → **Entertainment**
+  - `live_music_venue`: Bar & Nightlife → **Entertainment**
+  - `concert_hall`: Museum & Culture → **Entertainment**
+- `src/lib/ai/extract/category-resolver.ts` STRICT_TYPE_TO_SUB
+  - `comedy_club` → `comedy-club` (Entertainment)
+  - `live_music_venue` → `concert-venue` (Entertainment)
+  - `karaoke` → `karaoke-bar` (Bar & Nightlife, was `jazz-bar`)
+- Default seed dictionary (migration
+  `update_default_subcategories_dict_with_comedy_karaoke`): added
+  `comedy-club` under Entertainment, `karaoke-bar` under Bar & Nightlife.
+  Backfill NOT performed for existing users — moderation queue handles
+  that case organically.
+
+### D) Category mismatch as a first-class signal
+- Migration `update_ai_suggestions_queue_for_category_change`:
+  - `type` CHECK extended with `'category_change'`.
+  - New column `target_category_name text` — LLM's proposed parent name
+    for `category_change` proposals and for `subcategory` proposals
+    that imply a move.
+- `place-profile-full.ts` prompt now includes `Currently assigned to
+  category: <name>` plus an inline instruction telling the LLM it's
+  allowed to push back when reviews contradict the rule-based mapping.
+- `apply-suggestions.ts` refactored to a unified A/B/C/D decision tree:
+  - **A** (same parent, existing sub-cat) → silent apply
+  - **B** (same parent, new sub-cat) → queue type=`subcategory`
+  - **C** (NEW parent + sub-cat) → queue type=`subcategory` with
+    `parent_category_id`=LLM target and `target_category_name`=LLM
+    primary; accept moves the place AND creates/reuses the sub-cat
+    atomically
+  - **D** (NEW parent, no usable sub-cat) → queue type=`category_change`
+    with `target_category_name`=LLM primary; accept moves the place
+    and nulls `places.subcategory_id` (old sub-cat lived under the old
+    parent and no longer applies)
+- `apply-suggestions.ts` context shape changed: takes `currentCategoryId`
+  + `currentCategoryName` + full `categories` list (was `parentCategoryId`).
+- Accept route `/api/user/ai-suggestions/[id]/accept`:
+  - `subcategory` branch: when `target_category_name` is set, accept also
+    updates `places.category_id` to `parent_category_id` atomically with
+    the sub-cat assignment.
+  - New `category_change` handler: resolves `target_category_name` →
+    `category_id` via exact + fuzzy match against the user's category
+    list, updates `places.category_id`, nulls `subcategory_id`.
+  - Sibling collapse key extended with `target_category_name`.
+- List route `/api/user/ai-suggestions` (GET):
+  - Returns `target_category_name` and `sample_place_category_name`
+    (the place's current parent, used by UI to render moves).
+  - Group key extended so a sub-cat proposal under current parent vs.
+    one paired with a category move appear as separate rows.
+- `useAiSuggestions` hook + `AiSuggestion` type: extended with
+  `'category_change'` and the two new fields.
+- `AiSuggestionsQueue` UI:
+  - 3rd group "Category changes" (ArrowRight icon).
+  - For subcategory rows where the proposal implies a parent move,
+    inline amber annotation: `moves "place name" from X → Y`.
+- Vault: [[02-backend/schema/ai_suggestions_queue]] updated with the
+  new column + lifecycle paths; [[05-flows/full-profile-flow]]
+  decision matrix bumped to "Phase 5.5 unified" with 8 rows.
+
+---
+
 ## 18.05.2026 — v1.6.1 — Phase 5 patch: drop list silent apply + accept-time fuzzy dedup
 
 Two fixes on top of the Phase 5 PR after live testing surfaced edge cases:

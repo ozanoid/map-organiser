@@ -35,7 +35,7 @@ review before they pollute the user's tag/sub-category vocabulary.
 | `id` | uuid | no | `gen_random_uuid()` | **PK**. |
 | `user_id` | uuid | no | — | FK → `auth.users.id` ON DELETE CASCADE. |
 | `place_id` | uuid | yes | — | FK → `places.id` ON DELETE CASCADE. The place that triggered the proposal. |
-| `type` | text | no | — | CHECK: `'tag'` or `'subcategory'`. |
+| `type` | text | no | — | CHECK: `'tag'`, `'subcategory'`, or `'category_change'` (Phase 5.5). |
 | `proposed_value` | text | no | — | The lowercase-hyphenated slug/name the LLM proposed. |
 | `parent_category_id` | uuid | yes | — | For subcategory proposals: which parent category. NULL for tag proposals. |
 | `confidence` | numeric | no | — | LLM confidence 0..1 (CHECK `>= 0 AND <= 1`). |
@@ -79,20 +79,33 @@ None.
 LLM produces place_profile.suggested_tags.new_proposals[] →
   dedupProposals against user.tags →
     rerouted (matches existing) → silent auto-apply (place_tags INSERT)
-    genuinely new                → INSERT here (status='pending')
+    genuinely new                → INSERT here (status='pending', type='tag')
 
-LLM produces place_profile.category_signals.sub_category (slug) →
-  matched in user.subcategories → silent auto-apply (places.subcategory_id)
-  not matched, confidence >= 0.9 → INSERT here (status='pending', type='subcategory')
+LLM produces place_profile.category_signals (primary + sub_category) →
+  apply-suggestions.ts decision tree (Phase 5.5):
+    primary == place.current_category, sub-cat existing → silent apply
+    primary == place.current_category, sub-cat NEW + conf ≥ 0.9
+      → INSERT here type='subcategory', parent_category_id=current,
+        target_category_name=NULL
+    primary ≠ place.current_category AND sub-cat present (existing or new)
+      AND sub-cat conf ≥ 0.9 →
+        INSERT here type='subcategory', parent_category_id=LLM target,
+        target_category_name=LLM target name
+        (accept moves the place AND creates/reuses the sub-cat atomically)
+    primary ≠ place.current_category AND no usable sub-cat AND
+      primary conf ≥ 0.85 →
+        INSERT here type='category_change', parent_category_id=NULL,
+        target_category_name=LLM target name
 
-Phase 5 moderation UI:
-  accept → status='accepted', resolved_at=now()
-           tag:        INSERT into public.tags + place_tags
-           subcategory: INSERT into public.subcategories (is_default=false, is_pending=false)
-                        + UPDATE places.subcategory_id where this was queued
-
-  reject → status='rejected', resolved_at=now()
-           (no entity created)
+Phase 5 + 5.5 moderation UI:
+  accept (tag) → INSERT into public.tags + place_tags
+  accept (subcategory, same parent) → INSERT subcategories + UPDATE places.subcategory_id
+  accept (subcategory, NEW parent) → INSERT subcategories under target parent
+                                     + UPDATE places.category_id + .subcategory_id atomically
+  accept (category_change) → resolve target_category_name → UPDATE places.category_id
+                             + NULL out places.subcategory_id (the old sub-cat lived
+                             under the old parent and no longer applies)
+  reject → status='rejected', resolved_at=now() (no entity created/changed)
 ```
 
 ## Notes

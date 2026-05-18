@@ -33,7 +33,7 @@ export async function POST(
   // Look up the source proposal
   const { data: source } = await supabase
     .from("ai_suggestions_queue")
-    .select("id, type, proposed_value, parent_category_id, status")
+    .select("id, type, proposed_value, parent_category_id, target_category_name, status")
     .eq("id", id)
     .eq("user_id", user.id)
     .single();
@@ -51,10 +51,13 @@ export async function POST(
   const slug = normalize(source.proposed_value);
 
   // Find all sibling pending rows (same user + type + normalized value +
-  // parent_category_id) — they collapse into a single accept.
+  // parent_category_id + target_category_name) — they collapse into a single
+  // accept. target_category_name is part of the key because a sub-cat
+  // proposed under the current parent vs. a sub-cat proposed alongside a
+  // category move are semantically different proposals.
   const { data: siblings } = await supabase
     .from("ai_suggestions_queue")
-    .select("id, place_id, parent_category_id, proposed_value")
+    .select("id, place_id, parent_category_id, target_category_name, proposed_value")
     .eq("user_id", user.id)
     .eq("type", source.type)
     .eq("status", "pending");
@@ -62,7 +65,8 @@ export async function POST(
   const siblingRows = (siblings ?? []).filter(
     (r) =>
       normalize(r.proposed_value as string) === slug &&
-      (r.parent_category_id ?? null) === (source.parent_category_id ?? null)
+      (r.parent_category_id ?? null) === (source.parent_category_id ?? null) &&
+      (r.target_category_name ?? null) === (source.target_category_name ?? null)
   );
 
   const queueIds = siblingRows.map((r) => r.id as string);
@@ -199,11 +203,71 @@ export async function POST(
       subcategoryId = newSub.id as string;
     }
 
-    // Assign every queued place to the (new or reused) sub-cat
+    // Assign every queued place to the (new or reused) sub-cat. When the
+    // proposal also implies a category move (target_category_name set), we
+    // update category_id in the same statement so the place lands under the
+    // correct parent atomically.
     if (placeIds.length > 0 && subcategoryId) {
+      const update: Record<string, unknown> = { subcategory_id: subcategoryId };
+      if (source.target_category_name) {
+        // Verify the target parent matches the stored parent_category_id
+        // (defensive — should always match by construction in apply layer).
+        update.category_id = source.parent_category_id;
+      }
       await supabase
         .from("places")
-        .update({ subcategory_id: subcategoryId })
+        .update(update)
+        .in("id", placeIds)
+        .eq("user_id", user.id);
+    }
+  } else if (source.type === "category_change") {
+    // Pure category move — no sub-cat involved. The LLM detected a primary
+    // mismatch and either there's no useful sub-cat or sub-cat slot was
+    // resolvable silently. We resolve target_category_name → category_id
+    // against the user's current category list (fuzzy match on the name) and
+    // update the place's category_id + null out subcategory_id (the prior
+    // sub-cat lived under the old parent and no longer applies).
+    if (!source.target_category_name) {
+      return NextResponse.json(
+        { error: "category_change proposal missing target_category_name" },
+        { status: 500 }
+      );
+    }
+
+    const { data: userCats } = await supabase
+      .from("categories")
+      .select("id, name")
+      .eq("user_id", user.id);
+    const userCatsList = (userCats ?? []) as Array<{ id: string; name: string }>;
+
+    const targetCat =
+      userCatsList.find(
+        (c) =>
+          c.name.toLowerCase() === (source.target_category_name as string).toLowerCase()
+      ) ??
+      userCatsList.find((c) =>
+        isFuzzyMatch(c.name, source.target_category_name as string)
+      );
+
+    if (!targetCat) {
+      return NextResponse.json(
+        {
+          error: `Category "${source.target_category_name}" not found in your category list`,
+        },
+        { status: 404 }
+      );
+    }
+
+    if (placeIds.length > 0) {
+      await supabase
+        .from("places")
+        .update({
+          category_id: targetCat.id,
+          // Old sub-cat lived under the old parent — invalidate it. A
+          // subsequent step=profile run will propose a fresh sub-cat under
+          // the new parent if appropriate.
+          subcategory_id: null,
+        })
         .in("id", placeIds)
         .eq("user_id", user.id);
     }

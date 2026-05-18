@@ -4,16 +4,26 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 /**
  * Pending AI proposal as exposed by GET /api/user/ai-suggestions.
- * Rows are pre-aggregated server-side: same (type, lower(value), parent)
- * collapses into one entry with `occurrences` and an `ids` array of the
- * underlying queue rows.
+ * Rows are pre-aggregated server-side: same (type, lower(value), parent,
+ * target_category_name) collapses into one entry with `occurrences` and
+ * an `ids` array of the underlying queue rows.
+ *
+ * Phase 5.5 adds `category_change` as a third type plus two move-aware
+ * fields: `target_category_name` (LLM's preferred parent) and
+ * `sample_place_category_name` (the place's current parent). A
+ * `subcategory` proposal where these two differ implies a category move
+ * gets applied together with the sub-cat at accept time.
  */
 export interface AiSuggestion {
   key: string;
-  type: "tag" | "subcategory";
+  type: "tag" | "subcategory" | "category_change";
   proposed_value: string;
   parent_category_id: string | null;
   parent_category_name: string | null;
+  target_category_name: string | null;
+  /** The current parent of the sample place — populated when the proposal
+   *  implies a move. */
+  sample_place_category_name: string | null;
   confidence: number;
   occurrences: number;
   latest_at: string;
@@ -50,6 +60,10 @@ export function useAcceptAiSuggestion() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ai-suggestions"] });
       // Acceptance creates a real tag or subcategory and assigns it to places.
+      // For category_change (and subcategory proposals with a move), the
+      // place's category_id changes too — but ["categories"] is the user's
+      // category list, which is unchanged; we just invalidate places so any
+      // filter / map UI keyed off category_id refetches.
       queryClient.invalidateQueries({ queryKey: ["tags"] });
       queryClient.invalidateQueries({ queryKey: ["subcategories"] });
       queryClient.invalidateQueries({ queryKey: ["places"] });
