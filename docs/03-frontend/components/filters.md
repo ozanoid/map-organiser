@@ -2,8 +2,8 @@
 title: Filters
 type: component
 domain: frontend
-version: 1.0.0
-last_updated: 12.05.2026
+version: 1.1.0
+last_updated: 18.05.2026
 status: stable
 sources:
   - src/components/filters/category-filter.tsx
@@ -28,13 +28,15 @@ Components under `src/components/filters/`. All `"use client"`. Two top-level co
 
 ## Per-component
 
-### `CategoryFilter`
+### `CategoryFilter` (with sub-category cascade)
 
 - **File:** `src/components/filters/category-filter.tsx`
-- **Props:** `{ selected?: string[]; onChange: (categoryIds: string[] | undefined) => void }`
-- **Hooks:** [[../hooks/use-categories|`useCategories`]]
-- **Renders:** "All" pill + one pill per category, color dot inline. Multi-select with toggle behavior.
-- **Used by:** `FilterPanel`, `FilterSheet`.
+- **Props:** `{ selected?: string[]; onChange; selectedSubcategories?: string[]; onSubcategoryChange? }` — sub-cat callbacks are optional; when omitted the legacy single-row UI renders (no cascade).
+- **Hooks:** [[../hooks/use-categories|`useCategories`]], [[../hooks/use-subcategories|`useSubcategories`]] (Phase 2).
+- **Renders:**
+  - Top row: "All" pill + one pill per category, color dot inline. Multi-select with toggle behavior.
+  - **Cascade (Phase 2):** when one or more parent categories are active AND `onSubcategoryChange` is provided, a labeled sub-cat section appears under each active parent — small-caps parent name + the parent's sub-cat pills as multi-select chips. Deselecting a parent drops that parent's selected sub-cats automatically. "All" at the top clears both parent and sub-cat state.
+- **Used by:** `FilterPanel`, `FilterSheet` — both wire `filters.subcategory_ids` / `setFilters({ subcategory_ids })` from [[../hooks/use-filters|`useFilters`]] so URL state mirrors via `?subcategory=<id,id>`.
 
 ### `CountryCityFilter`
 

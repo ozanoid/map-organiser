@@ -2,14 +2,15 @@
 title: Integrations
 type: overview
 domain: integrations
-version: 1.0.0
-last_updated: 12.05.2026
+version: 1.1.0
+last_updated: 18.05.2026
 status: stable
 related:
   - "[[supabase]]"
   - "[[mapbox]]"
   - "[[google-places]]"
   - "[[dataforseo]]"
+  - "[[gemini]]"
   - "[[s2-geometry]]"
   - "[[react-query]]"
   - "[[zustand]]"
@@ -28,6 +29,7 @@ Third-party services and runtime libraries that materially shape how this app wo
 | **Mapbox** | Map rendering (GL JS) + Directions API for trip routes | [[mapbox]] |
 | **Google Places API** | Authoritative place data when the user provides a key | [[google-places]] |
 | **DataForSEO Business Data** | Default enrichment provider (no per-user key) | [[dataforseo]] |
+| **Google Gemini** (Generative Language API) | AI feature provider — Phase 4 full place_profile, Phase 6 NL search (planned) | [[gemini]] |
 
 ## Runtime libraries (architecturally significant)
 
@@ -36,6 +38,7 @@ Third-party services and runtime libraries that materially shape how this app wo
 | **TanStack React Query** | Server-state cache + mutations | [[react-query]] |
 | **Zustand** | Client-state stores (cross-page) | [[zustand]] |
 | **S2 Geometry** | Decode Google Maps FTids → lat/lng (fallback) | [[s2-geometry]] |
+| **AI SDK v6** (`ai`) + `@ai-sdk/google` | Model-agnostic call layer + Gemini provider — `generateText({ output: Output.object(...) })` for structured JSON | [[gemini]] |
 
 Everything else (Tailwind, shadcn, lucide, sonner, …) is documented in [[../00-overview/tech-stack]].
 
@@ -50,13 +53,19 @@ The user can disable Google explicitly in Settings → API (`googlePlacesEnabled
 
 ## Cost-tracked SKUs
 
-Every external API call that costs money goes through `src/lib/google/track-usage.ts#trackUsage`, which calls the `increment_api_usage` RPC. Observed SKUs (see [[../02-backend/schema/api_usage#sku-naming-convention]]):
+Every external API call that costs money goes through one of two trackers, both writing to the same `api_usage` table via `increment_api_usage` RPC:
+
+- **`trackUsage`** in `src/lib/google/track-usage.ts` — for Google + DataForSEO.
+- **`trackAiUsage`** in `src/lib/ai/track-usage.ts` — for AI/LLM calls.
+
+Observed SKUs (see [[../02-backend/schema/api_usage#sku-naming-convention]]):
 
 - `google.text_search`
 - `google.place_details`
 - `google.place_photo`
 - `dataforseo.business_info`
 - `dataforseo.reviews`
+- `ai_place_profile` (Phase 4) — one Gemini Flash call per place_profile generation/refresh.
 
 Mapbox calls (map tile loads, Directions) are **not** tracked through `api_usage` — Mapbox tracks them on their dashboard.
 

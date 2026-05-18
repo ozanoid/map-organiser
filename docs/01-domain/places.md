@@ -2,8 +2,8 @@
 title: Place
 type: entity
 domain: places
-version: 1.0.0
-last_updated: 12.05.2026
+version: 1.1.0
+last_updated: 18.05.2026
 status: stable
 sources:
   - src/lib/types/index.ts
@@ -24,6 +24,9 @@ sources:
   - src/app/(app)/places/[id]/page.tsx
   - src/components/places/place-card.tsx
   - src/components/places/add-place-dialog.tsx
+  - src/components/places/ai-summary-card.tsx
+  - src/lib/ai/schemas/place-profile.ts
+  - src/lib/ai/apply-suggestions.ts
 related:
   - "[[categories-and-tags]]"
   - "[[lists]]"
@@ -35,6 +38,9 @@ related:
   - "[[../04-integrations/google-places]]"
   - "[[../04-integrations/dataforseo]]"
   - "[[../04-integrations/mapbox]]"
+  - "[[../04-integrations/gemini]]"
+  - "[[../05-flows/lite-profile-flow]]"
+  - "[[../05-flows/full-profile-flow]]"
 ---
 
 # Place
@@ -56,6 +62,7 @@ Source of truth: `public.places` table + `Place` interface in `src/lib/types/ind
 | `city` | text | no | Drives city filter pills. |
 | `location` | `geography(Point)` | yes | PostGIS geography. Sent over the wire as EWKB hex; parsed to `{lat, lng}` via `src/lib/geo.ts#parsePostgisPoint`. |
 | `category_id` | uuid | no | FK → `categories.id`. One category per place (1:1 optional). |
+| `subcategory_id` | uuid | no | FK → `subcategories.id` (Phase 2). One sub-cat per place; ON DELETE SET NULL. Set by lite path auto-pre-select, by Phase 4 silent apply, or by accepting a Phase 5 moderation queue proposal. See [[categories-and-tags#sub-categories-at-a-glance]]. |
 | `rating` | smallint | no | User's own 1–5 rating. Check constraint `rating >= 1 AND rating <= 5`. |
 | `notes` | text | no | Free-form. |
 | `google_data` | jsonb | no | Rich data from Google Places or DataForSEO (see [[#google_data shape]] below). |
@@ -92,6 +99,23 @@ DataForSEO-only extensions (set when `provider === "dataforseo"`):
 - `local_business_links?: Array<{ type, url, title? }>`.
 - `people_also_search?: Array<{ title, cid?, rating? }>`.
 - `enriched_at?: string` — ISO timestamp of last enrichment.
+
+### `google_data.place_profile` shape (Phase 4)
+
+AI pivot data attached to each place once Gemini full profile generation completes. Set by `POST /api/places/[id]/enrich?step=profile`. Two completeness levels:
+
+- **`completeness: "lite"`** — rule-based, no LLM. Only `category_signals`, `features` (DataForSEO-derived), and `suggested_tags.matched_existing` populated. Stays in this state if AI is disabled, reviews never land, or the LLM call fails. Lite profile is NOT persisted in the schema by default — it's returned inline by `parse-link` for the dialog. Full profile overwrites with `completeness: "full"`.
+- **`completeness: "full"`** — Gemini Flash output. All fields populated.
+
+Top-level fields:
+- `category_signals: { primary, primary_confidence, sub_category, sub_category_confidence, secondary_role }` — LLM's classification opinion. Apply layer compares `primary` to `places.category_id` and queues a category_change proposal if they disagree (Phase 5.5).
+- `features: { cuisine_types, dietary, atmosphere, occasions, seating, music, crowd, price_range, distinctive }` — LLM-derived attributes for future filtering / RAG.
+- `suggested_tags: { matched_existing: uuid[], new_proposals: string[] }` — tag UUIDs + new lowercase-hyphenated names.
+- `suggested_lists: uuid[]` — list UUIDs the LLM thinks fit. **Surfaced as chips in Add dialog; never silent-applied** (see [[../05-flows/full-profile-flow#why-no-list-silent-apply]]).
+- `tldr`, `pros[]`, `cons[]`, `theme_insights[]`, `searchable_summary` — content fields rendered by the AI Summary card.
+- `source_review_count`, `generated_at`, `model_version` — provenance.
+
+Schema definition: `src/lib/ai/schemas/place-profile.ts` (Zod). See [[../05-flows/full-profile-flow]] for the full lifecycle.
 
 ## Invariants
 

@@ -2,8 +2,8 @@
 title: User & Profile
 type: entity
 domain: users
-version: 1.0.0
-last_updated: 12.05.2026
+version: 1.1.0
+last_updated: 18.05.2026
 status: stable
 sources:
   - src/lib/supabase/client.ts
@@ -50,6 +50,7 @@ Auth credentials, password hashes, and OAuth identities all live in `auth.*` (ma
 | `dataforseo_login_enc` | text | no | Encrypted DataForSEO username. |
 | `dataforseo_password_enc` | text | no | Encrypted DataForSEO password. |
 | `google_places_enabled` | boolean | no | Default `true`. Toggle to use Google enrichment (if key present) vs DataForSEO-only. |
+| `ai_features_enabled` | boolean | yes | Default `true` (Phase 1). Master kill switch for every AI feature. When `false`: lite_profile not built in `parse-link`, `step=profile` skipped from background chain, Settings AI tab hides moderation queue, every `/api/ai/*` and `/api/user/ai-*` route short-circuits. Surfaced as the toggle in Settings → AI. |
 | `created_at` | timestamptz | no | `default now()`. |
 | `updated_at` | timestamptz | no | `default now()`. |
 
