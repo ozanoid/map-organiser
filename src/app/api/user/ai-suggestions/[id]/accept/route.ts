@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { normalize } from "@/lib/ai/normalize";
+import { isFuzzyMatch, normalize } from "@/lib/ai/normalize";
 
 /**
  * POST /api/user/ai-suggestions/[id]/accept
@@ -71,22 +71,30 @@ export async function POST(
     .filter((p): p is string => Boolean(p));
 
   if (source.type === "tag") {
-    // Reuse existing tag if user already has one with this slug, else create
+    // Resolve tag: prefer fuzzy match against the user's entire tag list
+    // so that accepting "Speakeasy Vibe" when "Speakeasy" already exists
+    // reuses the existing tag instead of creating a near-duplicate.
+    // Background apply runs the same dedup, but the user may have created
+    // a matching tag manually AFTER the queue row was written — accept
+    // time is the last line of defense.
     const titleCased = (source.proposed_value as string)
       .split("-")
       .map((s: string) => s.charAt(0).toUpperCase() + s.slice(1))
       .join(" ");
 
-    let tagId: string | null = null;
-    const { data: existingTag } = await supabase
+    const { data: allTags } = await supabase
       .from("tags")
-      .select("id")
-      .eq("user_id", user.id)
-      .ilike("name", titleCased)
-      .maybeSingle();
+      .select("id, name")
+      .eq("user_id", user.id);
+    const tagsList = (allTags ?? []) as Array<{ id: string; name: string }>;
 
-    if (existingTag) {
-      tagId = existingTag.id as string;
+    let tagId: string | null = null;
+    const fuzzyHit = tagsList.find((t) =>
+      isFuzzyMatch(t.name, source.proposed_value as string)
+    );
+
+    if (fuzzyHit) {
+      tagId = fuzzyHit.id;
     } else {
       const { data: newTag, error: tagErr } = await supabase
         .from("tags")
@@ -131,24 +139,39 @@ export async function POST(
       );
     }
 
-    // Reuse existing subcategory if slug already in user's vocabulary
-    // (e.g. they created it manually between propose and accept), else create.
-    let subcategoryId: string | null = null;
-    const { data: existingSub } = await supabase
+    // Resolve sub-category under the parent: fuzzy match against the user's
+    // existing slugs (and names) so accepting "speakeasy-vibe" when
+    // "speakeasy" already lives under Bar & Nightlife reuses the existing
+    // entry rather than creating a near-duplicate.
+    const { data: parentSubs } = await supabase
       .from("subcategories")
-      .select("id")
+      .select("id, name, slug, is_pending")
       .eq("user_id", user.id)
-      .eq("parent_category_id", source.parent_category_id)
-      .eq("slug", slug)
-      .maybeSingle();
+      .eq("parent_category_id", source.parent_category_id);
+    const parentSubsList = (parentSubs ?? []) as Array<{
+      id: string;
+      name: string;
+      slug: string;
+      is_pending: boolean;
+    }>;
+
+    let subcategoryId: string | null = null;
+    const existingSub =
+      parentSubsList.find((s) => s.slug === slug) ??
+      parentSubsList.find(
+        (s) =>
+          isFuzzyMatch(s.slug, source.proposed_value as string) ||
+          isFuzzyMatch(s.name, source.proposed_value as string)
+      );
 
     if (existingSub) {
-      subcategoryId = existingSub.id as string;
-      // Flip pending → approved if it was a leftover pending row.
-      await supabase
-        .from("subcategories")
-        .update({ is_pending: false, approved_at: new Date().toISOString() })
-        .eq("id", subcategoryId);
+      subcategoryId = existingSub.id;
+      if (existingSub.is_pending) {
+        await supabase
+          .from("subcategories")
+          .update({ is_pending: false, approved_at: new Date().toISOString() })
+          .eq("id", subcategoryId);
+      }
     } else {
       const titleCased = (source.proposed_value as string)
         .split("-")

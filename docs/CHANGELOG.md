@@ -6,6 +6,32 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 18.05.2026 — v1.6.1 — Phase 5 patch: drop list silent apply + accept-time fuzzy dedup
+
+Two fixes on top of the Phase 5 PR after live testing surfaced edge cases:
+
+- **Background list silent-apply removed.** `apply-suggestions.ts` no
+  longer touches `list_places`. `suggested_lists` stays on the persisted
+  `place_profile` for downstream use (search, future ranking) but is not
+  acted on after save. The Add Place dialog (Phase 3 lite chips) is the
+  only path that assigns places to lists from AI — opt-in by design.
+  Rationale: LLM is strict (taxonomy), user intent is loose (geography).
+  Silent-applying in the background contradicts whichever signal the user
+  gave at save time. Documented in [[05-flows/full-profile-flow#why-no-list-silent-apply]].
+- **Accept-time fuzzy dedup.** `POST /api/user/ai-suggestions/[id]/accept`
+  was using exact `ilike` against the tag name. If the user manually
+  created a near-match tag (e.g. `"Speakeasy"`) **after** the queue row
+  was written, the LLM's later proposal (e.g. `"Speakeasy Vibe"`) would
+  bypass dedup and create a duplicate. The accept handler now runs
+  `isFuzzyMatch` over the user's full tag list (and over the parent's
+  sub-categories for the subcategory branch) before deciding whether to
+  insert. Match → reuse existing entity; no match → create new.
+- Helper return shape: `applyProfileSuggestions` no longer returns
+  `listsApplied`. The `step=profile` enrich route log line was updated to
+  drop that field.
+
+---
+
 ## 14.05.2026 — v1.6.0 — AI Phase 5: Moderation Queue UI
 
 The Phase 4 background pipeline has been silently writing proposals to

@@ -14,6 +14,13 @@ import { normalize } from "@/lib/ai/normalize";
  * Called from POST /api/places/[id]/enrich?step=profile after the LLM call
  * resolves. Safe to re-run on the same place (existing junction rows are
  * skipped; pending queue entries dedupe by UNIQUE INDEX).
+ *
+ * Scope note: this layer applies tags and sub-categories. **Lists are
+ * intentionally NOT applied here.** Lists are surfaced as opt-in chips in
+ * the Add Place dialog (Phase 3 lite_profile) and that's the only place a
+ * user list assignment originates from AI. Once the dialog is closed,
+ * silently assigning the place to a list contradicts the user's explicit
+ * choice (or non-choice) and pollutes listed-grouped views.
  */
 
 interface ApplyContext {
@@ -36,13 +43,11 @@ export async function applyProfileSuggestions(
 ): Promise<{
   tagsApplied: number;
   tagsQueued: number;
-  listsApplied: number;
   subcategoryApplied: string | null;
   subcategoryQueued: string | null;
 }> {
   let tagsApplied = 0;
   let tagsQueued = 0;
-  let listsApplied = 0;
   let subcategoryApplied: string | null = null;
   let subcategoryQueued: string | null = null;
 
@@ -108,30 +113,7 @@ export async function applyProfileSuggestions(
     }
   }
 
-  // ───── Lists: suggested_lists → silent apply (preserve sort_order) ─────
-  for (const listId of profile.suggested_lists) {
-    const { data: row } = await supabase
-      .from("list_places")
-      .select("list_id")
-      .match({ list_id: listId, place_id: ctx.placeId })
-      .maybeSingle();
-    if (row) continue;
-
-    const { data: maxSort } = await supabase
-      .from("list_places")
-      .select("sort_order")
-      .eq("list_id", listId)
-      .order("sort_order", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    await supabase.from("list_places").insert({
-      list_id: listId,
-      place_id: ctx.placeId,
-      sort_order: ((maxSort?.sort_order as number | undefined) ?? -1) + 1,
-    });
-    listsApplied++;
-  }
+  // Lists deliberately not handled here — see file-level comment.
 
   // ───── Sub-category: high confidence + existing slug → silent apply ─────
   const cs = profile.category_signals;
@@ -172,7 +154,6 @@ export async function applyProfileSuggestions(
   return {
     tagsApplied,
     tagsQueued,
-    listsApplied,
     subcategoryApplied,
     subcategoryQueued,
   };

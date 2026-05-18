@@ -284,7 +284,7 @@ export async function POST(
     trackAiUsage(user.id, "ai_place_profile").catch(() => {});
 
     console.log(
-      `[enrich:profile] Done for ${id}: tagsApplied=${applied.tagsApplied} tagsQueued=${applied.tagsQueued} listsApplied=${applied.listsApplied} subCat=${applied.subcategoryApplied ?? applied.subcategoryQueued ?? "none"}`
+      `[enrich:profile] Done for ${id}: tagsApplied=${applied.tagsApplied} tagsQueued=${applied.tagsQueued} subCat=${applied.subcategoryApplied ?? applied.subcategoryQueued ?? "none"}`
     );
 
     return NextResponse.json({ ok: true, applied });
