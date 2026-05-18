@@ -211,12 +211,20 @@ export async function POST(
       (placeFull.google_data as Record<string, unknown> | null)?.place_profile ??
       undefined;
 
+    const currentCategoryId = (placeFull.category_id as string | null) ?? null;
+    const currentCategoryName =
+      currentCategoryId
+        ? userContext.categories.find((c) => c.id === currentCategoryId)
+            ?.name ?? null
+        : null;
+
     const { systemPrompt, userPrompt } = buildPlaceProfilePrompt(
       {
         name: placeFull.name as string,
         address: (placeFull.address as string | null) ?? null,
         city: (placeFull.city as string | null) ?? null,
         country: (placeFull.country as string | null) ?? null,
+        current_category_name: currentCategoryName,
         google_data: (placeFull.google_data as Record<string, unknown>) ?? {},
       },
       userContext,
@@ -262,12 +270,9 @@ export async function POST(
       })
       .eq("id", id);
 
-    // Resolve parent category_id by name match (LLM returns the NAME)
-    const parentCat = userContext.categories.find(
-      (c) => c.name === profile.category_signals.primary
-    );
-
-    // 3-band auto-apply
+    // Unified auto-apply (Phase 5.5): considers LLM's primary vs current
+    // category, queues a category_change or a sub-cat-with-move when they
+    // disagree.
     const applied = await applyProfileSuggestions(supabase, profile, {
       userId: user.id,
       placeId: id,
@@ -277,14 +282,19 @@ export async function POST(
         slug: s.slug,
         parent_category_id: s.parent_category_id,
       })),
-      parentCategoryId: parentCat?.id ?? null,
+      categories: userContext.categories.map(({ id: cid, name }) => ({
+        id: cid,
+        name,
+      })),
+      currentCategoryId,
+      currentCategoryName,
       modelVersion: MODEL_VERSION,
     });
 
     trackAiUsage(user.id, "ai_place_profile").catch(() => {});
 
     console.log(
-      `[enrich:profile] Done for ${id}: tagsApplied=${applied.tagsApplied} tagsQueued=${applied.tagsQueued} listsApplied=${applied.listsApplied} subCat=${applied.subcategoryApplied ?? applied.subcategoryQueued ?? "none"}`
+      `[enrich:profile] Done for ${id}: tagsApplied=${applied.tagsApplied} tagsQueued=${applied.tagsQueued} subCat=${applied.subcategoryApplied ?? applied.subcategoryQueued ?? "none"} catChange=${applied.categoryChangeQueued ?? "none"}`
     );
 
     return NextResponse.json({ ok: true, applied });

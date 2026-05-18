@@ -70,8 +70,12 @@ const STRICT_TYPE_TO_SUB: Record<string, string> = {
   night_club: "nightclub",
   dance_hall: "nightclub",
   sports_bar: "sports-bar",
-  live_music_venue: "jazz-bar",
-  karaoke: "jazz-bar",
+  // karaoke now has a dedicated sub-slug under Bar & Nightlife
+  // (seed dictionary updated in same migration).
+  karaoke: "karaoke-bar",
+  // live_music_venue moved to Entertainment in the parent mapping —
+  // its sub-slug now maps to "concert-venue" under Entertainment.
+  live_music_venue: "concert-venue",
 
   // Hotel & Accommodation
   hostel: "hostel",
@@ -134,6 +138,7 @@ const STRICT_TYPE_TO_SUB: Record<string, string> = {
   amphitheatre: "concert-venue",
   amusement_park: "amusement-park",
   amusement_center: "amusement-park",
+  comedy_club: "comedy-club",
 };
 
 /**

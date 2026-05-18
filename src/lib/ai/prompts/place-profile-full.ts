@@ -9,6 +9,13 @@ interface PromptInputPlace {
   address: string | null;
   city: string | null;
   country: string | null;
+  /** Current parent category name assigned at save time (via lite mapping).
+   *  Surfacing this to the LLM lets it consciously re-evaluate the rule-based
+   *  classification — if reviews show the place is e.g. an Entertainment venue
+   *  even though Google's types routed it to Bar & Nightlife, the LLM can
+   *  push back with a different `primary` value. The apply layer treats any
+   *  mismatch as a category_change proposal. */
+  current_category_name: string | null;
   google_data: Record<string, unknown>;
 }
 
@@ -118,6 +125,8 @@ CRITICAL RULES:
   const userPrompt = `PLACE
 Name: ${place.name}
 Address: ${place.address ?? "(unknown)"}, ${place.city ?? "(unknown city)"}, ${place.country ?? "(unknown country)"}
+Currently assigned to category: ${place.current_category_name ?? "(none)"}
+(This was set by a rule-based mapping at save time. Override with a different "primary" if the review evidence clearly contradicts it — e.g. a comedy club mis-routed to "Bar & Nightlife" should come back as "Entertainment".)
 Google types: ${types.join(", ") || "(none)"}
 DataForSEO attributes (true only): ${onAttrs.join(", ") || "(none)"}
 DataForSEO place_topics: ${JSON.stringify(placeTopics)}

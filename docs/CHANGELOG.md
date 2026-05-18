@@ -6,6 +6,152 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 18.05.2026 — v1.6.2 — Phase 5.5: category-mismatch detection
+
+The Hackney Comedy Club incident exposed a tutarsızlık: lite mapping
+routed it to Bar & Nightlife at save time, but the LLM (correctly) read
+the reviews and proposed Entertainment + a new `comedy-club` sub-cat.
+The old apply-suggestions code wrote a sub-cat proposal targeting
+Entertainment.id while the place stayed in Bar & Nightlife — accepting
+it gave the user a comedy-club sub-cat under Entertainment that the
+cascade filter couldn't reach from the place's actual parent.
+
+This release fixes the root cause two ways: audit the rule-based lite
+mapping so similar venues route correctly from the start, AND give the
+LLM a structured way to override a save-time mistake via the moderation
+queue.
+
+### A) Lite mapping audit
+- `src/lib/google/category-mapping.ts`:
+  - `comedy_club`: Bar & Nightlife → **Entertainment**
+  - `live_music_venue`: Bar & Nightlife → **Entertainment**
+  - `concert_hall`: Museum & Culture → **Entertainment**
+- `src/lib/ai/extract/category-resolver.ts` STRICT_TYPE_TO_SUB
+  - `comedy_club` → `comedy-club` (Entertainment)
+  - `live_music_venue` → `concert-venue` (Entertainment)
+  - `karaoke` → `karaoke-bar` (Bar & Nightlife, was `jazz-bar`)
+- Default seed dictionary (migration
+  `update_default_subcategories_dict_with_comedy_karaoke`): added
+  `comedy-club` under Entertainment, `karaoke-bar` under Bar & Nightlife.
+  Backfill NOT performed for existing users — moderation queue handles
+  that case organically.
+
+### D) Category mismatch as a first-class signal
+- Migration `update_ai_suggestions_queue_for_category_change`:
+  - `type` CHECK extended with `'category_change'`.
+  - New column `target_category_name text` — LLM's proposed parent name
+    for `category_change` proposals and for `subcategory` proposals
+    that imply a move.
+- `place-profile-full.ts` prompt now includes `Currently assigned to
+  category: <name>` plus an inline instruction telling the LLM it's
+  allowed to push back when reviews contradict the rule-based mapping.
+- `apply-suggestions.ts` refactored to a unified A/B/C/D decision tree:
+  - **A** (same parent, existing sub-cat) → silent apply
+  - **B** (same parent, new sub-cat) → queue type=`subcategory`
+  - **C** (NEW parent + sub-cat) → queue type=`subcategory` with
+    `parent_category_id`=LLM target and `target_category_name`=LLM
+    primary; accept moves the place AND creates/reuses the sub-cat
+    atomically
+  - **D** (NEW parent, no usable sub-cat) → queue type=`category_change`
+    with `target_category_name`=LLM primary; accept moves the place
+    and nulls `places.subcategory_id` (old sub-cat lived under the old
+    parent and no longer applies)
+- `apply-suggestions.ts` context shape changed: takes `currentCategoryId`
+  + `currentCategoryName` + full `categories` list (was `parentCategoryId`).
+- Accept route `/api/user/ai-suggestions/[id]/accept`:
+  - `subcategory` branch: when `target_category_name` is set, accept also
+    updates `places.category_id` to `parent_category_id` atomically with
+    the sub-cat assignment.
+  - New `category_change` handler: resolves `target_category_name` →
+    `category_id` via exact + fuzzy match against the user's category
+    list, updates `places.category_id`, nulls `subcategory_id`.
+  - Sibling collapse key extended with `target_category_name`.
+- List route `/api/user/ai-suggestions` (GET):
+  - Returns `target_category_name` and `sample_place_category_name`
+    (the place's current parent, used by UI to render moves).
+  - Group key extended so a sub-cat proposal under current parent vs.
+    one paired with a category move appear as separate rows.
+- `useAiSuggestions` hook + `AiSuggestion` type: extended with
+  `'category_change'` and the two new fields.
+- `AiSuggestionsQueue` UI:
+  - 3rd group "Category changes" (ArrowRight icon).
+  - For subcategory rows where the proposal implies a parent move,
+    inline amber annotation: `moves "place name" from X → Y`.
+- Vault: [[02-backend/schema/ai_suggestions_queue]] updated with the
+  new column + lifecycle paths; [[05-flows/full-profile-flow]]
+  decision matrix bumped to "Phase 5.5 unified" with 8 rows.
+
+---
+
+## 18.05.2026 — v1.6.1 — Phase 5 patch: drop list silent apply + accept-time fuzzy dedup
+
+Two fixes on top of the Phase 5 PR after live testing surfaced edge cases:
+
+- **Background list silent-apply removed.** `apply-suggestions.ts` no
+  longer touches `list_places`. `suggested_lists` stays on the persisted
+  `place_profile` for downstream use (search, future ranking) but is not
+  acted on after save. The Add Place dialog (Phase 3 lite chips) is the
+  only path that assigns places to lists from AI — opt-in by design.
+  Rationale: LLM is strict (taxonomy), user intent is loose (geography).
+  Silent-applying in the background contradicts whichever signal the user
+  gave at save time. Documented in [[05-flows/full-profile-flow#why-no-list-silent-apply]].
+- **Accept-time fuzzy dedup.** `POST /api/user/ai-suggestions/[id]/accept`
+  was using exact `ilike` against the tag name. If the user manually
+  created a near-match tag (e.g. `"Speakeasy"`) **after** the queue row
+  was written, the LLM's later proposal (e.g. `"Speakeasy Vibe"`) would
+  bypass dedup and create a duplicate. The accept handler now runs
+  `isFuzzyMatch` over the user's full tag list (and over the parent's
+  sub-categories for the subcategory branch) before deciding whether to
+  insert. Match → reuse existing entity; no match → create new.
+- Helper return shape: `applyProfileSuggestions` no longer returns
+  `listsApplied`. The `step=profile` enrich route log line was updated to
+  drop that field.
+
+---
+
+## 14.05.2026 — v1.6.0 — AI Phase 5: Moderation Queue UI
+
+The Phase 4 background pipeline has been silently writing proposals to
+`ai_suggestions_queue` since merge. This phase closes the loop with the
+**human-in-the-loop UI**: Settings → AI tab now lists pending tag and
+sub-category proposals with accept/reject controls, and a live count
+badge on the tab itself surfaces backlog at a glance.
+
+- **API routes**:
+  - `GET /api/user/ai-suggestions` — lists pending proposals, pre-aggregated
+    server-side by `(type, lower(value), parent_category_id)` so the same
+    concept proposed by multiple places renders as one row with
+    `occurrences` count. Joined with `places(name)` and `categories(name)`
+    for UI context (sample place name, parent category label).
+  - `POST /api/user/ai-suggestions/[id]/accept` — creates the entity
+    (reuses if user already has one with that name/slug to avoid dupes),
+    attaches it to every queued place (tag → `place_tags` insert with
+    dedupe; sub-cat → `places.subcategory_id` update), and marks all
+    sibling queue rows `status='accepted'`. Idempotent: second accept
+    returns 409 `Already accepted`.
+  - `POST /api/user/ai-suggestions/[id]/reject` — flips siblings to
+    `status='rejected'`. Vocabulary untouched.
+- **`useAiSuggestions` hook** — `useAiSuggestions` + `useAcceptAiSuggestion`
+  + `useRejectAiSuggestion`. Mutations invalidate `["ai-suggestions"]`
+  plus `["tags"]` / `["subcategories"]` / `["places"]` on accept so all
+  consuming UIs refresh.
+- **`AiSuggestionsQueue` component** — lives under the AI tab below the
+  master toggle. Hidden when AI is disabled or unavailable. Empty-state
+  copy explains where suggestions come from. Two grouped sections (Tags,
+  Sub-categories) with per-row Accept (emerald button) + Reject (× icon)
+  controls, in-flight loading states, and toast feedback. Each row shows
+  the proposed value, parent (for sub-cats), the sample place that
+  triggered it, occurrence count, and confidence percentage.
+- **`AiTabTrigger`** — live count badge on the AI tab in Settings.
+  Wraps `useAiSuggestions`; renders an emerald pill with the number when
+  > 0. Single source of truth for the moderation backlog indicator.
+- **Vault**:
+  - [[02-backend/api-routes/user]] bumped to v1.1.0 with the 5 new endpoints
+    documented (settings + suggestions group).
+  - [[03-frontend/hooks/use-ai-suggestions]] (new).
+
+---
+
 ## 14.05.2026 — v1.5.0 — AI Phase 4: Full Profile (first real LLM call)
 
 **The big one.** First end-to-end Gemini Flash call in production: place is

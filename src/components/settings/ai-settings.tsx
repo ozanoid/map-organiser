@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { Sparkles, Loader2, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
+import { Separator } from "@/components/ui/separator";
+import { AiSuggestionsQueue } from "@/components/settings/ai-suggestions-queue";
 
 interface AiSettingsState {
   enabled: boolean;
@@ -12,8 +14,10 @@ interface AiSettingsState {
 /**
  * Settings → AI tab.
  *
- * Phase 1: Master toggle only. Future phases will add a "Pending Suggestions"
- * section (Phase 5) under this same component.
+ * Phase 1: Master toggle.
+ * Phase 5: Pending suggestions moderation queue (rendered below the toggle
+ *          when AI is enabled — disabled state hides it since no proposals
+ *          can land).
  */
 export function AiSettings() {
   const [state, setState] = useState<AiSettingsState | null>(null);
@@ -123,7 +127,15 @@ export function AiSettings() {
         </div>
       )}
 
-      {/* Phase 5 placeholder: Pending Suggestions section will live here. */}
+      {/* Phase 5: moderation queue. Hidden when AI is disabled — no new
+          proposals can land while off, and stale ones from prior usage are
+          better surfaced after re-enabling than silently active. */}
+      {state.enabled && state.available && (
+        <>
+          <Separator />
+          <AiSuggestionsQueue />
+        </>
+      )}
     </div>
   );
 }
