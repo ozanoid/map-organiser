@@ -215,8 +215,21 @@ export const BROADEN_THRESHOLD = 10;
 
 // ─── Debug: expose the store to window for browser-console inspection ───
 // Usage: `window.__aiSearchStore.getState().rankings` etc.
-// Kept ON during F&F stabilization; gate by env or remove for true prod.
+// Gated to development OR `localStorage["ai-debug"] === "1"` so prod
+// builds don't carry the global. Flip on in prod for debug:
+//   localStorage.setItem("ai-debug", "1"); location.reload();
 if (typeof window !== "undefined") {
-  (window as unknown as { __aiSearchStore: typeof useAiSearchStore }).__aiSearchStore =
-    useAiSearchStore;
+  const enabled =
+    process.env.NODE_ENV !== "production" ||
+    (() => {
+      try {
+        return window.localStorage?.getItem("ai-debug") === "1";
+      } catch {
+        return false;
+      }
+    })();
+  if (enabled) {
+    (window as unknown as { __aiSearchStore: typeof useAiSearchStore }).__aiSearchStore =
+      useAiSearchStore;
+  }
 }

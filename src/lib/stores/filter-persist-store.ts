@@ -37,9 +37,20 @@ export const useFilterPersistStore = create<FilterPersistState>((set) => ({
 }));
 
 // ─── Debug: expose to window for console inspection ───
-// Pattern matches useAiSearchStore exposure in ai-search-store.ts.
+// Same gating as ai-search-store: dev OR localStorage["ai-debug"]="1".
 if (typeof window !== "undefined") {
-  (window as unknown as {
-    __filterPersistStore: typeof useFilterPersistStore;
-  }).__filterPersistStore = useFilterPersistStore;
+  const enabled =
+    process.env.NODE_ENV !== "production" ||
+    (() => {
+      try {
+        return window.localStorage?.getItem("ai-debug") === "1";
+      } catch {
+        return false;
+      }
+    })();
+  if (enabled) {
+    (window as unknown as {
+      __filterPersistStore: typeof useFilterPersistStore;
+    }).__filterPersistStore = useFilterPersistStore;
+  }
 }
