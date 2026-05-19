@@ -7,17 +7,12 @@ import {
 /**
  * Build the system + user prompt for /api/ai/parse-query.
  *
- * Phase 6.5 LLM-as-judge architecture. Three output concerns:
+ * Phase 6.5 LLM-as-judge architecture. Two output concerns:
  *
  *   1. `hard` — EXCLUSION filters (10 structural axes).
  *      SQL-applied in /api/places; a place not matching gets removed.
  *
- *   2. `boosts` — semantic associations with the user's curated tags/
- *      lists/sub-categories. NOT a scoring signal. Only drives opt-in
- *      UI hint chips ("you have curated items that may match — show
- *      only?"). Click converts to hard filter.
- *
- *   3. `semantic_intent` — single RICH natural-language string capturing
+ *   2. `semantic_intent` — single RICH natural-language string capturing
  *      everything else: mood, occasion fit, dietary preferences, cuisine
  *      hints, vibe, dealbreakers. The rank-results LLM consumes this
  *      alongside each candidate's full place_profile and judges holistically.
@@ -25,11 +20,17 @@ import {
  * Plus `requires_semantic_ranking` (token consumption rule) and
  * `needs_clarification` (only when query is genuinely ambiguous).
  *
+ * The `boosts` concern (curated-taxonomy hint chips) was REMOVED in
+ * v1.8.1 — it produced redundant suggestions (e.g. 'london' tag boost
+ * when hard.city='London' was already set), and any signal it carried
+ * is already accessible to the rank-results LLM which reads the full
+ * place_profile.
+ *
  * The vocabulary-mismatch and synonym-blindness bugs of the v1.7.x
  * soft_features layer are GONE because string matching is gone. The
  * LLM does semantic matching with natural language on both sides.
  *
- * Token budget: ~800 input + ~250 output ≈ $0.0002/call.
+ * Token budget: ~700 input + ~200 output ≈ $0.00015/call.
  */
 export function buildParseQueryPrompt(query: string, context: UserContext) {
   const ctxBlock = serializeUserContext(context);
@@ -47,30 +48,27 @@ export function buildParseQueryPrompt(query: string, context: UserContext) {
     "You parse natural-language search queries about a personal collection of saved places.",
     "Your output is structured JSON. The downstream system is an ANSWER ENGINE: the user asks,",
     "the system returns the BEST matches and HIDES irrelevant ones. Your job is to extract",
-    "what's structurally fixed (hard filters), describe what's semantically wanted",
-    "(semantic_intent), and flag curated taxonomy associations as opt-in hints (boosts).",
+    "what's structurally fixed (hard filters) and describe what's semantically wanted",
+    "(semantic_intent). Curated-taxonomy semantic associations stay in semantic_intent;",
+    "the rank-results LLM has the user's curated tags/lists in scope and judges from there.",
     "",
-    "## Three output concerns",
+    "## Two output concerns",
     "",
     "1. `hard` — EXCLUSION filters that the system applies as SQL. Use ONLY for things the",
     "   user clearly wants to exclude or constrain.",
     "",
-    "2. `boosts` — semantic associations with the user's curated taxonomy. NOT a scoring",
-    "   signal. Drives opt-in UI hint chips. Click converts to hard filter.",
-    "",
-    "3. `semantic_intent` — single rich natural-language string capturing ALL soft niyet:",
+    "2. `semantic_intent` — single rich natural-language string capturing ALL soft niyet:",
     "   mood, occasion, dietary, cuisine, vibe, dealbreakers, anything subjective. The",
     "   rank-results LLM consumes this alongside each candidate's full place_profile.",
     "",
     "## Processing order — apply EACH step INDEPENDENTLY",
     "",
-    "A later step NEVER cancels an earlier step's assignment. Setting a boost does NOT",
-    "free you from setting hard fields. semantic_intent is ALWAYS populated.",
+    "A later step NEVER cancels an earlier step's assignment. semantic_intent is ALWAYS",
+    "populated.",
     "",
     "  1. LOCATION. If the query contains a city word in the 'Cities by country' mapping",
     "     below, set BOTH `hard.city` AND `hard.country` together (a PAIR — never one",
-    "     without the other). This step is ATOMIC and runs even if the same word also",
-    "     matches a tag/list/sub-cat name.",
+    "     without the other). This step is ATOMIC.",
     "",
     "  2. CATEGORY. Map category words ('restaurant', 'cafe', 'bar', …) to",
     "     `hard.category_ids` using IDs from the user's categories list.",
@@ -81,15 +79,12 @@ export function buildParseQueryPrompt(query: string, context: UserContext) {
     "  4. STATE filters. `visit_status`, `rating_min`, `google_rating_min`,",
     "     `created_after` — only when EXPLICITLY mentioned.",
     "",
-    "  5. BOOSTS. Semantic associations with curated taxonomy. Boosts COEXIST with hard",
-    "     fields. Setting a boost is ADDITIVE — never a substitute for hard.*.",
-    "",
-    "  6. semantic_intent. Write a rich English description of EVERYTHING the user wants",
+    "  5. semantic_intent. Write a rich English description of EVERYTHING the user wants",
     "     that isn't already captured by hard. See dedicated section below.",
     "",
-    "  7. requires_semantic_ranking. Apply the token consumption rule (below).",
+    "  6. requires_semantic_ranking. Apply the token consumption rule (below).",
     "",
-    "  8. needs_clarification. Only when genuinely ambiguous.",
+    "  7. needs_clarification. Only when genuinely ambiguous.",
     "",
     "## Layer 1 — `hard` (EXCLUSION filters)",
     "",
@@ -121,23 +116,7 @@ export function buildParseQueryPrompt(query: string, context: UserContext) {
     "  - `hard.list_id` — ONLY when query says 'in my X list', 'from my X', 'from",
     "    <list-name>'. NEVER because the list name shares a word with the query.",
     "",
-    "## Layer 2 — `boosts` (curated taxonomy hints)",
-    "",
-    "When the query SEMANTICALLY relates to one of the user's existing tags, lists, or",
-    "sub-categories, put the ID in `boosts.*`. The system uses these to surface opt-in",
-    "UI hint chips for the user (e.g. 'You have places tagged Date Spot — show only?').",
-    "Click converts to hard filter. There is NO automatic scoring impact.",
-    "",
-    "Boosts COEXIST with hard fields. Always additive.",
-    "",
-    "When to add a boost:",
-    "  - 'date' / 'romantic' / 'anniversary' → if user has a tag like 'Date Spot' or",
-    "    'Romantic' → add to boosts.matching_tag_ids.",
-    "  - city name matches the name of a tag/list/sub-cat (e.g. 'london' query word",
-    "    matches user's 'london' tag) → add to boosts. THIS DOES NOT CANCEL hard.city.",
-    "  - Any conceptual overlap between the query and a curated label.",
-    "",
-    "## Layer 3 — `semantic_intent` (the RICH soft-niyet description)",
+    "## Layer 2 — `semantic_intent` (the RICH soft-niyet description)",
     "",
     "This is the heart of the LLM-as-judge architecture. Write a natural-language",
     "string (1-3 sentences) that captures EVERYTHING the user wants beyond hard filters.",
@@ -212,26 +191,20 @@ export function buildParseQueryPrompt(query: string, context: UserContext) {
     "## Few-shot examples",
     "",
     "Example 1 — 'best date restaurants in london'",
-    "    (user has city 'London' under 'United Kingdom', tag 'london',",
-    "     tag 'Date Spot', list 'london trip')",
+    "    (user has city 'London' under 'United Kingdom')",
     "  hard: { category_ids=[restaurant_id], city='London',",
     "          country='United Kingdom' }",
-    "  boosts: { matching_tag_ids=[london_tag_id, date_spot_id],",
-    "           matching_list_ids=[london_trip_id] }",
     "  semantic_intent: 'Restaurants in London suitable for a romantic date:",
     "    intimate, candlelit, dimly-lit atmosphere preferred; date night or",
     "    special occasion fit; avoid loud sports-bar or fast-food settings.'",
     "  requires_semantic_ranking: true",
-    "  WHY: 'london' triggers hard.city+country AND tag/list boosts (both",
-    "    coexist). 'best' and 'date' are unconsumed by hard → semantic ranking.",
+    "  WHY: 'london' triggers hard.city+country (atomic pair). 'best' and",
+    "    'date' are unconsumed by hard → semantic ranking carries them.",
     "",
     "Example 2 — 'fine dining restaurants in london'",
-    "    (user has city 'London', sub-cat 'fine-dining', tag 'london',",
-    "     list 'london trip')",
+    "    (user has city 'London', sub-cat 'fine-dining')",
     "  hard: { category_ids=[restaurant_id], city='London',",
     "          country='United Kingdom', subcategory_ids=[fine_dining_id] }",
-    "  boosts: { matching_tag_ids=[london_tag_id],",
-    "           matching_list_ids=[london_trip_id] }",
     "  semantic_intent: 'Fine dining restaurants in London.'",
     "  requires_semantic_ranking: false",
     "  WHY: 'fine dining' literal sub-cat → hard. 'london' → city+country.",
@@ -240,14 +213,12 @@ export function buildParseQueryPrompt(query: string, context: UserContext) {
     "Example 3 — 'show me my date spot places'",
     "    (user has tag 'Date Spot')",
     "  hard: { tag_ids=[date_spot_id] }",
-    "  boosts: {}",
     "  semantic_intent: 'Places the user has tagged as Date Spot.'",
     "  requires_semantic_ranking: false",
     "  WHY: 'my X' is EXPLICIT tag reference → hard tag filter.",
     "",
     "Example 4 — 'cozy cafes for remote work'",
     "  hard: { category_ids=[cafe_id] }",
-    "  boosts: {}",
     "  semantic_intent: 'Cafes with a cozy, quiet, work-friendly atmosphere:",
     "    spots good for sitting with a laptop; not too loud or crowded; good",
     "    wifi implied.'",
@@ -257,7 +228,6 @@ export function buildParseQueryPrompt(query: string, context: UserContext) {
     "Example 5 — 'places from my london trip with great reviews'",
     "    (user has list 'london trip')",
     "  hard: { list_id=london_trip_id, google_rating_min=4 }",
-    "  boosts: {}",
     "  semantic_intent: 'Highly-rated places from the London trip list.'",
     "  requires_semantic_ranking: false",
     "  WHY: 'from my X' explicit list → hard. 'great reviews' = rating",
@@ -266,7 +236,6 @@ export function buildParseQueryPrompt(query: string, context: UserContext) {
     "Example 6 — 'all my vegan restaurants'",
     "    (user has no vegan tag; dietary is LLM-judge in this architecture)",
     "  hard: { category_ids=[restaurant_id] }",
-    "  boosts: {}",
     "  semantic_intent: 'Restaurants that are vegan or have substantial",
     "    vegan menu options.'",
     "  requires_semantic_ranking: true",
@@ -277,7 +246,6 @@ export function buildParseQueryPrompt(query: string, context: UserContext) {
     "Example 7 — 'cheap thai food in istanbul'",
     "    (user has 'İstanbul' under 'Türkiye')",
     "  hard: { city='İstanbul', country='Türkiye' }",
-    "  boosts: {}",
     "  semantic_intent: 'Affordable Thai restaurants in Istanbul: budget-",
     "    conscious price range; Thai or Thai-fusion cuisine; casual dining OK.'",
     "  requires_semantic_ranking: true",
@@ -285,19 +253,22 @@ export function buildParseQueryPrompt(query: string, context: UserContext) {
     "",
     "## ANTI-PATTERNS — DO NOT PRODUCE THESE",
     "",
-    "Anti-pattern A — dropping hard.city because a tag/list matches the word",
+    "Anti-pattern A — dropping hard.city because a tag/list shares the word",
     "  Query: 'fine dining restaurants in london'",
-    "  ✗ WRONG: hard={ category_ids, subcategory_ids },",
-    "           boosts={ matching_list_ids=[london_trip] }",
+    "  ✗ WRONG: hard={ category_ids, subcategory_ids }",
     "    (city + country missing — query mentions London but it's not in hard)",
     "  ✓ RIGHT: hard={ category_ids, city='London', country='United Kingdom',",
-    "                  subcategory_ids },",
-    "           boosts={ matching_list_ids=[london_trip] }",
+    "                  subcategory_ids }",
     "",
     "Anti-pattern B — auto-applying a tag for semantic similarity",
     "  Query: 'date restaurants in london'",
-    "  ✗ WRONG: hard={ tag_ids=[date_spot] }  (filter excludes untagged places)",
-    "  ✓ RIGHT: boosts={ matching_tag_ids=[date_spot] }  (opt-in hint, doesn't exclude)",
+    "  ✗ WRONG: hard={ tag_ids=[date_spot] }",
+    "    (excludes every untagged restaurant — defeats discovery; the user",
+    "     didn't say 'my date-spot tagged places')",
+    "  ✓ RIGHT: hard={ city, country, category_ids },",
+    "    semantic_intent: 'Restaurants suitable for a romantic date: …'",
+    "    (rank-results sees user's tag context + each candidate's profile",
+    "     and judges holistically)",
     "",
     "Anti-pattern C — setting hard.city without hard.country",
     "  Query: 'restaurants for dating in london'",

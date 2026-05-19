@@ -3,23 +3,24 @@ import { z } from "zod";
 /**
  * Output of POST /api/ai/parse-query (Phase 6.5 LLM-as-judge pivot).
  *
- * The schema now has three TOP-level concerns:
+ * The schema now has TWO concerns:
  *
  *   1. `hard`: EXCLUSION filters mapped to PlaceFilters. Used ONLY when
  *      the user wants exclusion (categories, cities, visit_status, etc.).
  *      Sub-categories/tags/lists go here ONLY when EXPLICITLY referenced
  *      ("sushi restaurants", "my date-spot tag", "in my London trip list").
  *
- *   2. `boosts`: semantic associations from user's curated taxonomy.
- *      NOT a scoring signal anymore — kept only to drive opt-in UI hint
- *      chips ("You have places tagged Date Spot — show only?"). Click
- *      converts to hard filter. Discovery is preserved because the
- *      rank-results LLM no longer applies a +0.15 score bump.
- *
- *   3. `semantic_intent` (single rich string): everything else the LLM
+ *   2. `semantic_intent` (single rich string): everything else the LLM
  *      gleans from the query — mood, occasion fit, dietary preferences,
  *      cuisine hints, dealbreakers, vibe. Rank-results consumes this as
  *      natural language, alongside each candidate's full place_profile.
+ *
+ * The `boosts` field (curated-taxonomy hint chips) was removed in the
+ * v1.8.1 follow-up: it duplicated signal the rank-results LLM already
+ * has access to (it sees the full place_profile) and produced redundant
+ * suggestions when the hard filter already located the user spatially
+ * (e.g., 'london' tag suggestion when hard.city='London' was set). UI
+ * surface (hint chip block) and `applyHintAsFilter` were also removed.
  *
  * The vocabulary-mismatch and synonym-blindness bugs that plagued the
  * v1.7.x soft_features layer are GONE because string matching is gone;
@@ -76,19 +77,11 @@ export const ParseQuerySchema = z.object({
   // matching (atmosphere/occasions/dietary/seating/cuisine/music/crowd/
   // distinctive/price/theme_insights) now happens inside rank-results
   // where the LLM reads the full place_profile and judges holistically.
-
-  /**
-   * Semantic associations from the user's curated taxonomy. NOT a scoring
-   * signal anymore (boost post-process removed in 6.5) — kept only to
-   * drive opt-in UI hint chips that the user can click to convert into
-   * hard filters.
-   * IDs MUST come from the user's context (validated server-side).
-   */
-  boosts: z.object({
-    matching_tag_ids: llmOptionalUuidArray,
-    matching_list_ids: llmOptionalUuidArray,
-    matching_subcategory_ids: llmOptionalUuidArray,
-  }),
+  //
+  // Phase 6.5 follow-up (v1.8.1): `boosts` was removed. The hint chip
+  // UI it drove duplicated signal the rank-results LLM already evaluates,
+  // and the LLM frequently surfaced redundant suggestions (e.g., 'london'
+  // tag boost when hard.city='London' was already set).
 
   semantic_intent: z.string(),
 

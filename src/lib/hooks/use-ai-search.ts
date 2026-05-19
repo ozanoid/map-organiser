@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useMutation } from "@tanstack/react-query";
 import {
   useAiSearchStore,
@@ -50,11 +50,13 @@ function dropRestrictedHard(
  *   2. Apply the returned `hard` to the filter URL state. Soft matching
  *      (atmosphere/occasions/etc.) no longer lives in URL — it's carried
  *      by `semantic_intent` and consumed by rank-results.
- *   3. Save semantic_intent + requires_semantic_ranking + boosts into
- *      the AI search store.
+ *   3. Save semantic_intent + requires_semantic_ranking into the AI
+ *      search store.
  *
  * The rerank step is triggered by `useAiRerankOrchestrator()` once the
  * places list refetches with the new filters — see below.
+ *
+ * `boosts` was removed in v1.8.1 (see schema docstring).
  */
 export function useAiSearch() {
   const { setFilters } = useFilters();
@@ -100,11 +102,6 @@ export function useAiSearch() {
         requires_semantic_ranking: data.requires_semantic_ranking,
         needs_clarification: data.needs_clarification,
         query,
-        boosts: {
-          matching_tag_ids: data.boosts.matching_tag_ids ?? [],
-          matching_list_ids: data.boosts.matching_list_ids ?? [],
-          matching_subcategory_ids: data.boosts.matching_subcategory_ids ?? [],
-        },
       });
     },
     onError: () => {
@@ -135,7 +132,24 @@ export function useAiRerankOrchestrator(filters: PlaceFilters) {
   const resolveBroadenCheck = useAiSearchStore((s) => s.resolveBroadenCheck);
   const { setFilters } = useFilters();
 
-  const { data: places, isFetching } = usePlaces(filters);
+  const { data: places, isFetching, status } = usePlaces(filters);
+
+  // Lock to prevent concurrent runRerank invocations.
+  //
+  // Without this, the rerank effect can re-enter `runRerank` while a
+  // previous call is still in flight, because `rerankStatus` only flips
+  // to "ready" after the response lands. Re-entry triggers were observed:
+  //   - React Strict Mode dev double-mount of effects
+  //   - places refetch transition: cache-hit stale data → mid-fetch
+  //     (isFetching=true window) → fresh data, with each tick re-running
+  //     the effect because `places?.length` is in deps
+  //   - applyParse + setFilters race: orchestrator can see broadenStatus
+  //     "ready" before the new places fetch settles, fire on stale data,
+  //     then re-fire when the fresh data lands.
+  //
+  // The ref guards against all three. It is reset by runRerank's success
+  // and error callbacks below.
+  const rerankInFlightRef = useRef(false);
 
   // ─── Phase 6.5 Slice 5: adaptive broaden gate ───
   // Runs BEFORE rerank. After parse-query lands and the narrow set is
@@ -187,10 +201,19 @@ export function useAiRerankOrchestrator(filters: PlaceFilters) {
 
   // ─── Rerank (runs after broaden gate is resolved) ───
   useEffect(() => {
+    if (rerankStatus !== "pending") return;
+    // Lock-out: prevent concurrent fires while a previous runRerank is
+    // still in flight. See rerankInFlightRef comment above.
+    if (rerankInFlightRef.current) return;
     if (!needsRerank) return;
     if (!semanticIntent) return;
     if (broadenStatus !== "ready") return;
-    if (rerankStatus !== "pending") return;
+    // Freshness guard: only fire when usePlaces has settled on data for
+    // the CURRENT filters. `status === "success"` rules out the cache-miss
+    // window (data=undefined), and `!isFetching` rules out the cache-hit
+    // stale-while-revalidate window. Together they ensure `places` is
+    // the result of the current queryKey.
+    if (status !== "success") return;
     if (isFetching) return;
     if (!places) return;
 
@@ -199,11 +222,22 @@ export function useAiRerankOrchestrator(filters: PlaceFilters) {
       return;
     }
 
+    // Flip the lock BEFORE the await. Subsequent effect runs (Strict
+    // Mode second invocation, dependency-driven re-runs) see the lock
+    // and exit at the guard above.
+    rerankInFlightRef.current = true;
+
     void runRerank({
       semanticIntent,
       places,
-      onSuccess: applyRankings,
-      onError: failRerank,
+      onSuccess: (rows) => {
+        rerankInFlightRef.current = false;
+        applyRankings(rows);
+      },
+      onError: () => {
+        rerankInFlightRef.current = false;
+        failRerank();
+      },
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
@@ -211,6 +245,7 @@ export function useAiRerankOrchestrator(filters: PlaceFilters) {
     semanticIntent,
     broadenStatus,
     rerankStatus,
+    status,
     isFetching,
     places?.length,
   ]);
@@ -223,9 +258,9 @@ const TOP_N = 50;
  * The LLM judges holistically — features, theme_insights, tldr, pros,
  * cons all flow through.
  *
- * Boost post-process is gone (Phase 6.5). User curation surfaces via
- * the UI hint chips (parse-query.boosts → AiSearchInput), not via
- * hidden scoring.
+ * Boost post-process (and the hint-chip UI it fed) was removed entirely
+ * in v1.8.1. The rank-results LLM has all the context it needs to
+ * surface user-curated matches via its own scoring.
  */
 async function runRerank({
   semanticIntent,

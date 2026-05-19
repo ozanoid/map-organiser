@@ -6,6 +6,74 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 19.05.2026 — v1.8.1 — Rerank race fix + boost removal
+
+Two follow-up corrections on top of the v1.8.0 pivot, observed on the
+first live test of "restaurants for dating in london":
+
+### Bug — rerank fired twice (~$0.01 instead of ~$0.005/query)
+
+Logs from one parse-query showed two consecutive `[ai/rank-results]`
+calls with different candidate counts (50, 25). The first call ran on
+the previous filter's stale data; the second on the new filter set.
+Whichever response landed last won the race and wrote rankings —
+sometimes stale rankings for the user's current filter set.
+
+Root causes:
+- React Strict Mode dev double-mount of the rerank effect.
+- Dep-driven re-runs across the places refetch transition (cache hit
+  stale window → mid-fetch → fresh) — `places?.length` is in deps.
+- `useFilters.setFilters` debounced URL sync (300ms) with immediate
+  local state update: usePlaces sees new queryKey before URL settles,
+  and React Query's `isFetching` window doesn't catch every transition.
+
+Fix (`src/lib/hooks/use-ai-search.ts`):
+- `rerankInFlightRef` (useRef) flipped SYNCHRONOUSLY before the await;
+  blocks Strict-Mode re-mount + every dep-driven re-entry until the
+  current call settles. Reset in the success/error callbacks.
+- New guard: `status === 'success'` AND `!isFetching` — only fire rerank
+  when usePlaces has settled on data for the CURRENT filter set.
+
+### Boost / hint-chip removal
+
+The v1.8.0 pivot removed boost SCORING but kept boosts as parse-query
+output that drove an opt-in UI hint chip block in AISearchInput. The
+hint chips repeatedly surfaced redundant suggestions (e.g. 'london'
+tag boost when hard.city='London' was already set), and any signal
+they carried is already accessible to the rank-results LLM through
+the user-context block. Removed end-to-end:
+
+- `ParseQuerySchema.boosts` field removed (`src/lib/ai/schemas/parse-query.ts`).
+- Parse-query prompt: "Three output concerns" → "Two output concerns";
+  "Layer 2 — boosts" section deleted; processing order step 5 (BOOSTS)
+  removed; few-shots 1+2 stripped of boost lines; anti-pattern B
+  rewritten to demonstrate semantic_intent over hard tag_ids
+  (`src/lib/ai/prompts/parse-query.ts`).
+- Parse-query route: boost validation block in `sanitizeAgainstContext`
+  removed; fallback no longer emits `boosts: {}`; diagnostic log drops
+  the boosts field (`src/app/api/ai/parse-query/route.ts`).
+- Store: `BoostIds`, `boosts`, `EMPTY_BOOSTS` deleted; `applyParse`
+  signature loses `boosts` (`src/lib/stores/ai-search-store.ts`).
+- Hook: `useAiSearch.onSuccess` no longer maps boost IDs into the
+  applyParse call (`src/lib/hooks/use-ai-search.ts`).
+- UI: hint chip block + `applyHintAsFilter` removed; `useTags`,
+  `useLists`, `useSubcategories`, `useMemo`, `Filter` icon imports
+  dropped (`src/components/search/ai-search-input.tsx`).
+
+### Vault
+- `docs/05-flows/ai-search-flow.md` → v2.1.0. Architecture diagram
+  trimmed to 2 concerns, rerank lockout/freshness guard documented,
+  hint-chip references removed, v1.8.1 migration block added.
+
+### Cost
+~$0.00015 per parse-query (down from ~$0.0002 thanks to slimmer
+prompt). Rerank cost unchanged (~$0.005), but reliably fires exactly
+once per query instead of 2×.
+
+### No DB migration. No breaking URL changes.
+
+---
+
 ## 19.05.2026 — v1.8.0 — Phase 6.5: LLM-as-judge pivot
 
 Architectural pivot of the NL search system. The v1.7.x rule-based soft

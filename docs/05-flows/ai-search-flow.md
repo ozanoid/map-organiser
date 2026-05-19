@@ -2,7 +2,7 @@
 title: AI Search Flow (LLM-as-judge, Phase 6.5)
 type: flow
 domain: places
-version: 2.0.0
+version: 2.1.0
 last_updated: 19.05.2026
 status: stable
 sources:
@@ -36,13 +36,12 @@ app turns it into a ranked answer set. Phase 6.5 rewrote the architecture
 around **LLM-as-judge**: rule-based soft filtering is gone, the LLM does
 holistic semantic matching against each candidate's full place_profile.
 
-## Architecture (3 concerns)
+## Architecture (2 concerns)
 
 ```
 parse-query (Gemini #1)
   ├─ hard filter (10 structural axes — SQL exclusion)
   ├─ semantic_intent (single rich natural-language string)
-  ├─ boosts.matching_*_ids (UI hint chips only — NO scoring impact)
   └─ requires_semantic_ranking (token consumption check)
 
 /api/places
@@ -59,6 +58,8 @@ Rerank (Gemini #2)
   ├─ Full per-candidate payload:
   │   { id, name, searchable_summary, features (9 axis),
   │     theme_insights, tldr, pros, cons }
+  ├─ Concurrent-call lockout + freshness guard
+  │   (rerankInFlightRef + status==='success' && !isFetching)
   ├─ 6-tier scoring rubric with HIDE POWER (< 0.20 → hidden)
   └─ "Answer engine" framing — LLM is active curator
 
@@ -69,8 +70,12 @@ UI (mode-conditional)
       - Sort dropdown disabled, "AI Ranked" badge
       - Why line replaces address on cards
       - Broaden banner (when applicable)
-      - Hint chips (opt-in narrowing)
 ```
+
+> Boost / hint-chip layer was present in v1.8.0 but removed in v1.8.1.
+> The rank-results LLM has the curated taxonomy in scope and surfaces
+> matches via its own scoring; the UI hint chips were producing redundant
+> suggestions (e.g. 'london' tag boost when hard.city='London' was set).
 
 The full design rationale lives in `docs/_plans/phase-6-llm-as-judge-pivot.md`.
 
@@ -88,7 +93,7 @@ is missing.
        │
        ▼
 2. POST /api/ai/parse-query (Gemini #1)
-       │  System prompt: 3-concern model, hard/boosts/semantic_intent,
+       │  System prompt: 2-concern model, hard/semantic_intent,
        │  token consumption rule, answer engine framing, 7 few-shots
        │  + 5 anti-patterns + user context (Cities by country mapping)
        │
@@ -98,8 +103,6 @@ is missing.
        │        semantic_intent: 'London restaurants suitable for a
        │          romantic date: intimate, candlelit atmosphere; date
        │          night occasion; avoid loud sports-bar.',
-       │        boosts: { matching_tag_ids: [london_tag, date_spot],
-       │                 matching_list_ids: [london_trip] },
        │        requires_semantic_ranking: true,
        │        needs_clarification: null }
        │
@@ -128,8 +131,16 @@ is missing.
        │
        ▼
 6. Rerank trigger (orchestrator's rerank effect)
-       │  Pre-conditions: needsRerank ∧ broadenStatus='ready' ∧
-       │    rerankStatus='pending' ∧ places ready
+       │  Pre-conditions:
+       │    needsRerank ∧ broadenStatus='ready' ∧ rerankStatus='pending'
+       │    ∧ usePlaces.status==='success' ∧ !isFetching
+       │    ∧ rerankInFlightRef.current === false
+       │
+       │  The inFlightRef lock + freshness guard prevent re-entry: React
+       │  Strict Mode dev double-mount, dep-driven re-runs during the
+       │  places refetch transition, and the applyParse/setFilters race
+       │  all collapse to a single rerank call on fresh data. See
+       │  rerankInFlightRef comment in use-ai-search.ts.
        │
        │  POST /api/ai/rank-results
        │    body: {
@@ -144,7 +155,7 @@ is missing.
        │    • LLM reads FULL profile + intent, scores 0..1 + why
        │    • 6-tier rubric: < 0.20 = HIDE
        │    • "Answer engine" framing: LLM actively filters trash
-       │    • No boost post-process — score is the score
+       │    • No post-process — LLM score is final
        │
        │  ◄── { ranked: [{ id, score, why }] }
        │
@@ -165,7 +176,6 @@ is missing.
        │  AISearchInput:
        │    • Subtitle: "AI search: <query> · ranked"
        │    • Broaden banner (if applicable): narrow/broader toggle
-       │    • Hint chips (from boosts): opt-in narrowing
        │    • Clarification chip (if LLM set needs_clarification)
 ```
 
@@ -182,7 +192,7 @@ AI active mode (rankings populated):
               sort badge "AI Ranked"
   /places   → cards sorted by score, <0.20 hidden, sort badge "AI Ranked",
               why line replaces address
-  Both     → broaden banner (if triggered), hint chips, clarification (if needed)
+  Both     → broaden banner (if triggered), clarification (if needed)
 ```
 
 Mode flag: `useAiSearchStore.rankings !== null`. All AI features
@@ -294,4 +304,19 @@ User with 20 semantic queries/day → ~$3/month at current pricing.
   `cons` per candidate
 - `LESS_RELEVANT_SCORE = 0.15` (fade) → `HIDE_BELOW_SCORE = 0.20` (hide)
 
-No DB migration. Boosts kept in parse-query schema for UI hint chips only.
+No DB migration.
+
+## v1.8.1 follow-up — boost / hint-chip removal + rerank race fix
+
+- `ParseQuerySchema.boosts` REMOVED. Parse-query route, prompt, fallback,
+  diagnostic log, and store no longer reference boost IDs.
+- `AISearchInput` hint-chip block REMOVED. `applyHintAsFilter` deleted.
+  `useTags`/`useLists`/`useSubcategories` imports dropped.
+- `ai-search-store.boosts`, `BoostIds`, `EMPTY_BOOSTS` deleted.
+- Rerank orchestrator gained a `rerankInFlightRef` lock + `status==='success'`
+  freshness guard. Symptom this fixes: rerank firing twice per query
+  (~$0.01 instead of ~$0.005), with the stale call sometimes winning the
+  race and writing rankings for a filter set the user no longer has.
+  Root causes addressed: React Strict Mode dev double-mount, dep-driven
+  re-runs during the places refetch transition, and the applyParse /
+  setFilters / usePlaces race.

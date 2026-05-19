@@ -8,23 +8,18 @@ import type { PlaceFilters } from "@/lib/types";
  *
  * Set by `useAiSearch` after a successful parse-query call; consumed by
  * `PlaceCard` (why line), MapContent (marker filter + sidebar sort),
- * /places page (card grid sort + hide), AISearchInput (banner, hint chips).
+ * /places page (card grid sort + hide), AISearchInput (banner).
  *
  * Lives outside React Query because it's a transient UX session, not
  * server state — it should clear on `clearFilters`, on a new NL query,
  * or on navigation away.
+ *
+ * Boost / hint-chip state was removed in v1.8.1: the LLM rank-results
+ * step already sees curated taxonomy context and judges holistically.
  */
 interface Ranking {
   score: number;
   why: string;
-}
-
-/** Boost IDs from parse-query. NOT a scoring signal in Phase 6.5 —
- *  drives only the opt-in UI hint chips in AISearchInput. */
-interface BoostIds {
-  matching_tag_ids: string[];
-  matching_list_ids: string[];
-  matching_subcategory_ids: string[];
 }
 
 /** Adaptive broaden state — Phase 6.5 Slice 5.
@@ -64,23 +59,18 @@ interface AiSearchState {
   clarification: string | null;
   /** The raw query the user typed, kept so chips can label it. */
   lastQuery: string | null;
-  /** Semantic associations with user's curated taxonomy. NOT applied as
-   *  hard filter — only used to render opt-in hint chips for the user
-   *  to convert into hard filters. */
-  boosts: BoostIds;
   /** Adaptive broaden state; null when no broaden was triggered. */
   broaden: BroadenState | null;
   /** "checking" → narrow set fetched but not yet evaluated for broaden;
    *  "ready" → either broaden was applied OR not needed, downstream can proceed. */
   broadenStatus: "idle" | "checking" | "ready";
 
-  /** Apply parse-query output: clear stale rankings, set new intent + boosts. */
+  /** Apply parse-query output: clear stale rankings, set new intent. */
   applyParse: (input: {
     semantic_intent: string;
     requires_semantic_ranking: boolean;
     needs_clarification: string | null;
     query: string;
-    boosts: BoostIds;
   }) => void;
   /** Mark "narrow fetched, deciding whether to broaden". */
   beginBroadenCheck: () => void;
@@ -97,12 +87,6 @@ interface AiSearchState {
   reset: () => void;
 }
 
-const EMPTY_BOOSTS: BoostIds = {
-  matching_tag_ids: [],
-  matching_list_ids: [],
-  matching_subcategory_ids: [],
-};
-
 export const useAiSearchStore = create<AiSearchState>((set) => ({
   semanticIntent: null,
   needsRerank: false,
@@ -110,7 +94,6 @@ export const useAiSearchStore = create<AiSearchState>((set) => ({
   rerankStatus: "idle",
   clarification: null,
   lastQuery: null,
-  boosts: EMPTY_BOOSTS,
   broaden: null,
   broadenStatus: "idle",
 
@@ -119,7 +102,6 @@ export const useAiSearchStore = create<AiSearchState>((set) => ({
     requires_semantic_ranking,
     needs_clarification,
     query,
-    boosts,
   }) =>
     set({
       semanticIntent: semantic_intent,
@@ -128,7 +110,6 @@ export const useAiSearchStore = create<AiSearchState>((set) => ({
       rerankStatus: requires_semantic_ranking ? "pending" : "idle",
       clarification: needs_clarification,
       lastQuery: query,
-      boosts,
       // Reset broaden state on every new query.
       broaden: null,
       broadenStatus: requires_semantic_ranking ? "checking" : "idle",
@@ -169,7 +150,6 @@ export const useAiSearchStore = create<AiSearchState>((set) => ({
       rerankStatus: "idle",
       clarification: null,
       lastQuery: null,
-      boosts: EMPTY_BOOSTS,
       broaden: null,
       broadenStatus: "idle",
     }),
