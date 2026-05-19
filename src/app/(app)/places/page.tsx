@@ -4,6 +4,7 @@ import { Suspense, useCallback, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { usePlaces } from "@/lib/hooks/use-places";
 import { useFilters } from "@/lib/hooks/use-filters";
+import { useAiRerankOrchestrator } from "@/lib/hooks/use-ai-search";
 import { AddPlaceDialog } from "@/components/places/add-place-dialog";
 import { BulkActionBar } from "@/components/places/bulk-action-bar";
 import { FilterSheet } from "@/components/filters/filter-sheet";
@@ -108,6 +109,14 @@ function PlacesContent() {
   const [addOpen, setAddOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  // Drive the AI rerank pipeline from this page too. AISearchInput lives
+  // in FilterPanel and is mounted on BOTH /map and /places — without the
+  // orchestrator mounted here, submitting a search on /places sets
+  // rerankStatus="pending" and then gets stuck because nothing fires
+  // the rank-results call. (Until v1.8.7 the orchestrator was only
+  // mounted in MapContent, so AI search on /places hung forever.)
+  useAiRerankOrchestrator(filters);
 
   // AI mode awareness: when rankings exist, the grid is sorted by score
   // (desc) and the sort dropdown is disabled. SelectablePlaceCard
