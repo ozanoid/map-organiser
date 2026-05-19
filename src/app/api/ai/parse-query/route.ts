@@ -111,14 +111,7 @@ export async function POST(request: NextRequest) {
   }
 
   // ─── Defense in depth: strip IDs that aren't in the user's context ───
-  let sanitized = sanitizeAgainstContext(parsed, userContext);
-
-  // ─── Phase 6 v1.7.2: expand duplicate same-name categories ───
-  // The user's data may have multiple categories with identical names
-  // (e.g. four "Restaurant" rows from re-fired signup triggers). The LLM
-  // picks ONE matching ID; we expand to ALL same-name IDs so filter
-  // doesn't silently miss 75% of the data.
-  sanitized = expandDuplicateCategories(sanitized, userContext);
+  const sanitized = sanitizeAgainstContext(parsed, userContext);
 
   // ─── Track usage (fire-and-forget) ───
   trackAiUsage(user.id, "ai_parse_query").catch(() => {});
@@ -135,42 +128,6 @@ export async function POST(request: NextRequest) {
   );
 
   return NextResponse.json(sanitized);
-}
-
-/**
- * If the user has multiple categories that share a name (a known data
- * bug from re-fired signup triggers), the LLM only picks one ID — but
- * the user's places are scattered across all of them. Expand the picked
- * IDs to include every same-name sibling so the filter is faithful.
- */
-function expandDuplicateCategories(
-  out: ParseQueryOutput,
-  ctx: Awaited<ReturnType<typeof buildUserContext>>
-): ParseQueryOutput {
-  if (!out.hard.category_ids?.length) return out;
-
-  const byId = new Map(ctx.categories.map((c) => [c.id, c.name]));
-  const namesPicked = new Set<string>();
-  for (const id of out.hard.category_ids) {
-    const name = byId.get(id);
-    if (name) namesPicked.add(name.toLowerCase());
-  }
-  if (namesPicked.size === 0) return out;
-
-  const expanded = ctx.categories
-    .filter((c) => namesPicked.has(c.name.toLowerCase()))
-    .map((c) => c.id);
-
-  if (expanded.length === out.hard.category_ids.length) return out;
-
-  console.log(
-    `[ai/parse-query] expanded category_ids ${out.hard.category_ids.length} → ${expanded.length} (duplicate-name siblings)`
-  );
-
-  return {
-    ...out,
-    hard: { ...out.hard, category_ids: expanded },
-  };
 }
 
 /**
