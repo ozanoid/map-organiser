@@ -89,9 +89,10 @@ export function useAiRerankOrchestrator(filters: PlaceFilters) {
   const semanticIntent = useAiSearchStore((s) => s.semanticIntent);
   const needsRerank = useAiSearchStore((s) => s.needsRerank);
   const rerankStatus = useAiSearchStore((s) => s.rerankStatus);
-  const boosts = useAiSearchStore((s) => s.boosts);
   const applyRankings = useAiSearchStore((s) => s.applyRankings);
   const failRerank = useAiSearchStore((s) => s.failRerank);
+  // boosts: read by AISearchInput for hint chips (Slice 4 UI). Not used
+  // here in the orchestrator — Phase 6.5 dropped the boost score bump.
 
   const { data: places, isFetching } = usePlaces(filters);
 
@@ -116,7 +117,6 @@ export function useAiRerankOrchestrator(filters: PlaceFilters) {
     void runRerank({
       semanticIntent,
       places,
-      boosts,
       onSuccess: applyRankings,
       onError: failRerank,
     });
@@ -129,45 +129,53 @@ export function useAiRerankOrchestrator(filters: PlaceFilters) {
 
 const TOP_N = 50;
 
+/**
+ * Send rerank request with the FULL place_profile payload (Phase 6.5).
+ * The LLM judges holistically — features, theme_insights, tldr, pros,
+ * cons all flow through.
+ *
+ * Boost post-process is gone (Phase 6.5). User curation surfaces via
+ * the UI hint chips (parse-query.boosts → AiSearchInput), not via
+ * hidden scoring.
+ */
 async function runRerank({
   semanticIntent,
   places,
-  boosts,
   onSuccess,
   onError,
 }: {
   semanticIntent: string;
   places: Place[];
-  boosts: {
-    matching_tag_ids: string[];
-    matching_list_ids: string[];
-    matching_subcategory_ids: string[];
-  };
   onSuccess: (rows: { id: string; score: number; why: string }[]) => void;
   onError: () => void;
 }) {
-  // Cap by recency. Newest first — Place doesn't always carry updated_at on
-  // the client, so fall back to created_at order from /api/places.
+  // Cap. Server-side /api/places is sorted by google_rating DESC when
+  // AI search is active, so the top TOP_N are the highest-quality
+  // candidates by Google's metric — best starting point for LLM judging.
   const capped = places.slice(0, TOP_N);
 
   const candidates = capped.map((p) => {
-    const profile = p.google_data?.place_profile as
-      | { searchable_summary?: string | null }
-      | undefined;
+    const profile = (p.google_data?.place_profile ?? null) as
+      | {
+          searchable_summary?: string | null;
+          features?: Record<string, unknown> | null;
+          theme_insights?: unknown[] | null;
+          tldr?: string | null;
+          pros?: string[] | null;
+          cons?: string[] | null;
+        }
+      | null;
     return {
       id: p.id,
       name: p.name,
       searchable_summary: profile?.searchable_summary ?? "",
-      // Sub-cat is on the place row directly; server uses this for the
-      // sub-cat boost without an extra Supabase query.
-      subcategory_id: p.subcategory_id ?? null,
+      features: profile?.features ?? {},
+      theme_insights: profile?.theme_insights ?? null,
+      tldr: profile?.tldr ?? null,
+      pros: profile?.pros ?? null,
+      cons: profile?.cons ?? null,
     };
   });
-
-  const hasBoosts =
-    boosts.matching_tag_ids.length > 0 ||
-    boosts.matching_list_ids.length > 0 ||
-    boosts.matching_subcategory_ids.length > 0;
 
   try {
     const res = await fetch("/api/ai/rank-results", {
@@ -176,13 +184,6 @@ async function runRerank({
       body: JSON.stringify({
         semantic_intent: semanticIntent,
         candidates,
-        ...(hasBoosts
-          ? {
-              boost_tag_ids: boosts.matching_tag_ids,
-              boost_list_ids: boosts.matching_list_ids,
-              boost_subcategory_ids: boosts.matching_subcategory_ids,
-            }
-          : {}),
       }),
     });
     if (!res.ok) throw new Error(`rank-results ${res.status}`);
