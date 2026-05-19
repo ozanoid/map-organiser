@@ -30,6 +30,17 @@ export interface UserContext {
   cities: string[];
   /** Distinct countries the user has places in. */
   countries: string[];
+  /**
+   * Map of city → list of countries it appears under in the user's data.
+   * Drives the "Cities by country" prompt block AND the server-side
+   * country-from-city safety net in /api/ai/parse-query/route.ts.
+   *
+   * Multi-country case: the same city name in two countries (e.g. "London"
+   * in UK and Ontario) produces an array of length 2. The LLM picks one;
+   * server-side fallback picks the most common (sorted by occurrence in
+   * places — see `countriesForCity` in this module).
+   */
+  cityToCountries: Map<string, string[]>;
 }
 
 /**
@@ -113,9 +124,31 @@ export async function buildUserContext(
 
   const citySet = new Set<string>();
   const countrySet = new Set<string>();
+  // City → country occurrence map. Used both to expose the city→country
+  // pair to the LLM context AND to backfill hard.country at sanitization
+  // time when the LLM sets city alone.
+  const cityCountryOccurrences = new Map<string, Map<string, number>>();
   for (const row of citiesRes.data ?? []) {
-    if (row.city) citySet.add(row.city as string);
-    if (row.country) countrySet.add(row.country as string);
+    const city = row.city as string | null;
+    const country = row.country as string | null;
+    if (city) citySet.add(city);
+    if (country) countrySet.add(country);
+    if (city && country) {
+      let inner = cityCountryOccurrences.get(city);
+      if (!inner) {
+        inner = new Map<string, number>();
+        cityCountryOccurrences.set(city, inner);
+      }
+      inner.set(country, (inner.get(country) ?? 0) + 1);
+    }
+  }
+  // Collapse to ordered arrays (most-frequent country first).
+  const cityToCountries = new Map<string, string[]>();
+  for (const [city, inner] of cityCountryOccurrences) {
+    const sorted = [...inner.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([country]) => country);
+    cityToCountries.set(city, sorted);
   }
 
   return {
@@ -125,7 +158,32 @@ export async function buildUserContext(
     lists,
     cities: [...citySet].sort(),
     countries: [...countrySet].sort(),
+    cityToCountries,
   };
+}
+
+/**
+ * Pick the canonical country for a city given the user's data. Returns
+ * the most-common country, or undefined if the city isn't in the user's
+ * collection. Used by the parse-query sanitizer to fill in hard.country
+ * when the LLM set hard.city alone.
+ */
+export function countriesForCity(
+  ctx: UserContext,
+  city: string
+): string | undefined {
+  // Try exact match first.
+  const arr = ctx.cityToCountries.get(city);
+  if (arr && arr.length > 0) return arr[0];
+  // Case-insensitive fallback. LLM may emit different casing than what's
+  // in the user's data (e.g. "london" vs stored "London").
+  const lower = city.toLowerCase();
+  for (const [stored, countries] of ctx.cityToCountries) {
+    if (stored.toLowerCase() === lower && countries.length > 0) {
+      return countries[0];
+    }
+  }
+  return undefined;
 }
 
 /**
@@ -148,12 +206,40 @@ export function serializeUserContext(ctx: UserContext): string {
     ? ctx.lists.map((l) => `[${l.id}] ${l.name}`).join(", ")
     : "(none)";
 
+  // Cities grouped by country, sorted alphabetically per country. Country
+  // → list of its cities. Inverted from ctx.cityToCountries which is
+  // city → countries (a Map, but we re-aggregate to country → cities for
+  // display since users think country-first).
+  const countryToCities = new Map<string, Set<string>>();
+  for (const [city, countries] of ctx.cityToCountries) {
+    for (const country of countries) {
+      let cities = countryToCities.get(country);
+      if (!cities) {
+        cities = new Set<string>();
+        countryToCities.set(country, cities);
+      }
+      cities.add(city);
+    }
+  }
+  const citiesByCountryStr =
+    countryToCities.size === 0
+      ? "(none)"
+      : [...countryToCities.entries()]
+          .sort((a, b) => a[0].localeCompare(b[0]))
+          .map(
+            ([country, cities]) =>
+              `  ${country}: ${[...cities].sort().join(", ")}`
+          )
+          .join("\n");
+
   return [
     `User's existing tags: ${tagsStr}`,
     `User's categories: ${categoriesStr}`,
     `User's subcategories: ${subcategoriesStr}`,
     `User's lists: ${listsStr}`,
-    `Cities user has places in: ${ctx.cities.join(", ") || "(none)"}`,
-    `Countries user has places in: ${ctx.countries.join(", ") || "(none)"}`,
+    `Cities by country (use this mapping when setting hard.city — country MUST be paired):`,
+    citiesByCountryStr,
+    `(Flat cities list for reference: ${ctx.cities.join(", ") || "(none)"})`,
+    `(Flat countries list for reference: ${ctx.countries.join(", ") || "(none)"})`,
   ].join("\n");
 }

@@ -2,7 +2,7 @@
 title: AI Search Flow (NL filtering, Phase 6)
 type: flow
 domain: places
-version: 1.1.0
+version: 1.2.0
 last_updated: 19.05.2026
 status: stable
 sources:
@@ -10,10 +10,13 @@ sources:
   - src/app/api/ai/rank-results/route.ts
   - src/app/api/places/route.ts
   - src/components/search/ai-search-input.tsx
+  - src/lib/ai/context-builder.ts
+  - src/lib/ai/prompts/parse-query.ts
   - src/lib/hooks/use-ai-search.ts
   - src/lib/stores/ai-search-store.ts
   - src/components/map/map-content.tsx
   - src/components/places/place-card.tsx
+  - src/components/filters/country-city-filter.tsx
 related:
   - "[[../02-backend/api-routes/ai]]"
   - "[[../03-frontend/components/search]]"
@@ -195,6 +198,50 @@ between EXPLICIT reference (→ hard) and SEMANTIC association (→ boost):
 Rule of thumb: if the user could be looking for **additional** places
 beyond the curated ones, it's a boost. If the user is asking to **list
 the curated ones**, it's a hard filter.
+
+## City + country are a pair (v1.2 — system fix)
+
+The filter UI is country-first cascading: `CountryCityFilter`'s city
+dropdown is scoped to "cities under the currently selected country".
+Setting `hard.city` without `hard.country` breaks the visual cascade —
+the URL has `?city=London`, the API filters correctly, but the UI
+shows "All countries" and no city chip. The user perceives "filter not
+applied" even though it is.
+
+Three independent guards keep the pair consistent:
+
+1. **Context format** — `serializeUserContext` (in `src/lib/ai/context-builder.ts`)
+   includes a `Cities by country:` block that maps each country to its
+   cities. The LLM sees `London → United Kingdom` inline, not as two
+   separate flat lists.
+
+2. **Prompt rule** — `parse-query.ts` step 1 (LOCATION) requires that
+   whenever the LLM sets `hard.city`, it also sets `hard.country` from
+   the mapping. Anti-pattern C in the prompt explicitly forbids city
+   without country.
+
+3. **Server-side backfill** — `pairCityWithCountry` in
+   `src/app/api/ai/parse-query/route.ts` runs after sanitization. If
+   the LLM still emitted `hard.city` without `hard.country`, it looks
+   up the country in `UserContext.cityToCountries` (computed from the
+   user's own data, multi-country safe, picks most-common). This is
+   NOT a static safety net — it's a data-driven inference, so it
+   works for every city in any user's collection.
+
+4. **UI fallback** — `CountryCityFilter` now shows the city dropdown
+   when EITHER `country` is set OR `city` is already set in URL state.
+   Defense-in-depth for the (rare) case the LLM picks a city that
+   isn't in the user's data (so the backfill can't infer country).
+
+`CityToCountries` map structure:
+```ts
+Map<string, string[]>  // city → countries (ordered, most-frequent first)
+```
+
+Multi-country case: same city name in two countries (e.g. "London" in
+UK + Ontario, Canada) produces `["United Kingdom", "Canada"]`. The
+server picks the first; the LLM should also pick consistently because
+the prompt's "Cities by country" block lists the city under both.
 
 ## Failure modes
 

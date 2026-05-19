@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { generateText, Output } from "ai";
 import { createClient } from "@/lib/supabase/server";
 import { getAiClient, FLASH_MODEL } from "@/lib/ai/client";
-import { buildUserContext } from "@/lib/ai/context-builder";
+import { buildUserContext, countriesForCity } from "@/lib/ai/context-builder";
 import {
   ParseQuerySchema,
   type ParseQueryOutput,
@@ -111,7 +111,15 @@ export async function POST(request: NextRequest) {
   }
 
   // ─── Defense in depth: strip IDs that aren't in the user's context ───
-  const sanitized = sanitizeAgainstContext(parsed, userContext);
+  let sanitized = sanitizeAgainstContext(parsed, userContext);
+
+  // ─── Defense in depth: pair-fix hard.city / hard.country ───
+  // If the LLM set city without country, look up the country from the
+  // user's own data (city → country mapping built in buildUserContext).
+  // This is NOT a static safety net — it's a data-driven inference from
+  // what the user already has. It keeps the UI cascade (which is
+  // country-first) consistent with the URL state.
+  sanitized = pairCityWithCountry(sanitized, userContext);
 
   // ─── Track usage (fire-and-forget) ───
   trackAiUsage(user.id, "ai_parse_query").catch(() => {});
@@ -188,4 +196,43 @@ function sanitizeAgainstContext(
   }
 
   return { ...out, hard, boosts };
+}
+
+/**
+ * If the LLM set `hard.city` but omitted `hard.country`, look up the
+ * canonical country for that city in the user's own data and fill it in.
+ *
+ * The pairing matters because the filter UI (`CountryCityFilter`) is
+ * country-first cascading — without a country, the city dropdown can't
+ * render the city even though the URL state has it. The Vercel-side
+ * filter ALSO works better with both set (less ambiguous when
+ * `address ILIKE '%City%'` could otherwise match places elsewhere).
+ *
+ * This is NOT a static safety net (which only works for hard-coded
+ * cities). It's a data-driven inference from what the user already has,
+ * so it works for any city/country combination in their collection.
+ *
+ * Multi-country case (e.g. "London" in UK and Ontario, Canada): picks
+ * the most common country by occurrence. See `countriesForCity`.
+ */
+function pairCityWithCountry(
+  out: ParseQueryOutput,
+  ctx: Awaited<ReturnType<typeof buildUserContext>>
+): ParseQueryOutput {
+  const city = out.hard.city?.trim();
+  if (!city) return out;
+  if (out.hard.country?.trim()) return out;
+
+  const inferred = countriesForCity(ctx, city);
+  if (!inferred) {
+    // City isn't in the user's data — leave country empty. UI will fall
+    // back to "All countries". This is rare (LLM picked a city the user
+    // doesn't have), and the city filter is loose enough to still work.
+    return out;
+  }
+
+  console.log(
+    `[ai/parse-query] paired city='${city}' with inferred country='${inferred}'`
+  );
+  return { ...out, hard: { ...out.hard, country: inferred } };
 }
