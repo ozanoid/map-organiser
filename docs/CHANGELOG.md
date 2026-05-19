@@ -6,6 +6,41 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 19.05.2026 — v1.8.3 — Rerank schema resilience
+
+Observed during live testing: an LLM response with one `why` string at
+124 chars (target was 120) triggered Zod `max(120)` validation failure,
+which AI SDK rethrows as `AI_NoObjectGeneratedError`. The route returned
+500, orchestrator hit `failRerank()`, UI showed "AI ranking unavailable"
+amber — for a 4-char overrun on a single entry out of 25.
+
+LLM output length is non-deterministic; strict char caps are fragile.
+
+### Fix — three layers of defense
+
+1. **Prompt** (`prompts/rank-results.ts`): target raised from "≤ 120
+   chars" to "≤ 200 chars, aim 120–180". Tells the LLM the actual cap.
+2. **Schema preprocess** (`schemas/rank-results.ts`):
+   - `why`: `z.preprocess(...)` truncates >200 chars → 197 chars + "…",
+     then validates against `max(240)` as final safety net.
+   - `score`: `z.preprocess(...)` clamps numbers outside [0, 1] back
+     into range (defense against LLM emitting 1.05 etc).
+3. **Salvage path** (`api/ai/rank-results/route.ts`): if AI SDK throws
+   `AI_NoObjectGeneratedError` despite the preprocess (edge case if the
+   SDK's validation layer bypasses preprocess), the catch block extracts
+   the raw text from the error, parses it manually, runs it through the
+   schema (preprocess fires), and uses the result. Logs a warning so we
+   know salvage was hit.
+
+### No behavior change for the happy path
+
+When the LLM stays under target, all three layers are transparent —
+same response, same rendering, same cost.
+
+### No DB migration. No breaking changes.
+
+---
+
 ## 19.05.2026 — v1.8.2 — Propagation race kill (the real fix)
 
 The v1.8.1 lock-out reduced the rerank double-fire from 2 to 1, but

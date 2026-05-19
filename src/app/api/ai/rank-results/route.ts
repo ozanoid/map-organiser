@@ -186,8 +186,39 @@ export async function POST(request: NextRequest) {
     });
     ranked = result.output;
   } catch (e) {
-    console.error("[ai/rank-results] LLM call failed:", e);
-    return NextResponse.json({ error: "Ranking failed." }, { status: 500 });
+    // Salvage path (v1.8.3). AI SDK throws AI_NoObjectGeneratedError when
+    // the LLM output fails strict schema validation — even when our zod
+    // preprocess could have fixed the issue (e.g. a `why` field that's
+    // 124 chars when the soft target is 120). The error carries the raw
+    // text; we re-parse and re-validate manually. The preprocess steps
+    // in RankResultsSchema (truncate >200-char `why`, clamp score to
+    // [0,1]) fix all observed schema-validation failures.
+    const errAny = e as { name?: string; text?: string };
+    if (
+      errAny?.name === "AI_NoObjectGeneratedError" &&
+      typeof errAny.text === "string"
+    ) {
+      try {
+        const rawParsed = JSON.parse(errAny.text);
+        ranked = RankResultsSchema.parse(rawParsed);
+        console.warn(
+          "[ai/rank-results] salvaged from validation failure via preprocess re-parse"
+        );
+      } catch (salvageErr) {
+        console.error("[ai/rank-results] LLM call failed:", e);
+        console.error("[ai/rank-results] salvage also failed:", salvageErr);
+        return NextResponse.json(
+          { error: "Ranking failed." },
+          { status: 500 }
+        );
+      }
+    } else {
+      console.error("[ai/rank-results] LLM call failed:", e);
+      return NextResponse.json(
+        { error: "Ranking failed." },
+        { status: 500 }
+      );
+    }
   }
 
   // ─── Defense: ensure every output ID was in input ───
