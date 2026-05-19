@@ -13,6 +13,25 @@ import type { ParseQueryOutput } from "@/lib/ai/schemas/parse-query";
 import type { RankResultsOutput } from "@/lib/ai/schemas/rank-results";
 
 /**
+ * Verbose orchestrator logging.
+ *
+ * Kept ON during the friends-and-family stabilization phase: every tick
+ * of the broaden gate and rerank gate logs its state and decision. Cheap
+ * (just console.log) and invaluable when triaging "why is X missing" or
+ * "why didn't it fire" reports.
+ *
+ * Production-gating: when usage scales beyond F&F, gate by NODE_ENV or
+ * a localStorage flag (e.g. `localStorage.setItem('ai-debug', '1')`).
+ */
+const ORCH_LOG = true;
+
+function orchLog(scope: string, event: string, payload: Record<string, unknown>) {
+  if (!ORCH_LOG) return;
+  // eslint-disable-next-line no-console
+  console.log(`[ai-search/${scope}] ${event}`, payload);
+}
+
+/**
  * Stable JSON fingerprint of a PlaceFilters object. Keys are sorted and
  * undefined values dropped so cosmetic differences don't cause false
  * mismatches in the orchestrator's targetFilters gate.
@@ -116,6 +135,12 @@ export function useAiSearch() {
       return (await res.json()) as ParseQueryOutput;
     },
     onSuccess: (data, query) => {
+      orchLog("parse", "received", {
+        query,
+        hard: data.hard,
+        intent_head: data.semantic_intent.slice(0, 80),
+        requires_rerank: data.requires_semantic_ranking,
+      });
       // Build the next PlaceFilters from parse output — hard only.
       // AI search OVERRIDES the user's sort preference to
       // google_rating_desc (quality-first). When the user clears the
@@ -141,6 +166,10 @@ export function useAiSearch() {
       // docstring in ai-search-store.
       const targetFilters = mergeFiltersForTarget(currentFilters, nextFilters);
 
+      orchLog("parse", "setFilters+applyParse", {
+        nextFilters,
+        targetFp: fpFilters(targetFilters),
+      });
       setFilters(nextFilters);
       applyParse({
         semantic_intent: data.semantic_intent,
@@ -203,16 +232,18 @@ export function useAiRerankOrchestrator(filters: PlaceFilters) {
   // fetched, we either: (a) apply broader filter and wait for refetch,
   // (b) decide no broaden is needed and let rerank proceed.
   useEffect(() => {
+    const fp = fpFilters(filters);
+    const targetFp = fpFilters(targetFilters);
     if (!needsRerank) return;
     if (broadenStatus !== "checking") return;
     // CRITICAL: targetFilters fingerprint gate. See targetFilters
     // docstring in ai-search-store and v1.8.2 CHANGELOG for the empirical
     // race this guard catches (applyParse zustand-sync lands before
     // setFilters React-useState propagates).
-    if (!targetFilters) return;
-    if (fpFilters(filters) !== fpFilters(targetFilters)) return;
-    if (isFetching) return;
-    if (!places) return;
+    if (!targetFilters) { orchLog("broaden", "skip: !targetFilters", { fp, targetFp }); return; }
+    if (fp !== targetFp) { orchLog("broaden", "skip: fp !== targetFp", { fp, targetFp }); return; }
+    if (isFetching) { orchLog("broaden", "skip: isFetching", { fp, placesLen: places?.length }); return; }
+    if (!places) { orchLog("broaden", "skip: !places", { fp }); return; }
 
     // If broaden state already exists (we're in the broader-fetch phase),
     // record the broader count and mark the gate as ready.
@@ -221,12 +252,18 @@ export function useAiRerankOrchestrator(filters: PlaceFilters) {
       if (broaden.broaderCount === 0 && broaden.activeMode === "broader") {
         applyBroaden({ ...broaden, broaderCount: places.length });
       }
+      orchLog("broaden", "resolve→ready (broader fetch done)", { placesLen: places.length });
       resolveBroadenCheck();
       return;
     }
 
     // Decide whether to broaden.
     if (!hasRestrictedHard(filters) || places.length >= BROADEN_THRESHOLD) {
+      orchLog("broaden", "resolve→ready (no broaden needed)", {
+        placesLen: places.length,
+        hasRestricted: hasRestrictedHard(filters),
+        threshold: BROADEN_THRESHOLD,
+      });
       resolveBroadenCheck();
       return;
     }
@@ -255,23 +292,26 @@ export function useAiRerankOrchestrator(filters: PlaceFilters) {
 
   // ─── Rerank (runs after broaden gate is resolved) ───
   useEffect(() => {
+    const fp = fpFilters(filters);
+    const targetFp = fpFilters(targetFilters);
     if (rerankStatus !== "pending") return;
     // Lock-out: prevent concurrent fires while a previous runRerank is
     // still in flight. See rerankInFlightRef comment above.
-    if (rerankInFlightRef.current) return;
+    if (rerankInFlightRef.current) { orchLog("rerank", "skip: inFlight", { fp }); return; }
     if (!needsRerank) return;
     if (!semanticIntent) return;
-    if (broadenStatus !== "ready") return;
+    if (broadenStatus !== "ready") { orchLog("rerank", `skip: broadenStatus=${broadenStatus}`, { fp }); return; }
     // CRITICAL: targetFilters fingerprint gate. See targetFilters
     // docstring in ai-search-store and v1.8.2 CHANGELOG for the empirical
     // race this guard catches.
-    if (!targetFilters) return;
-    if (fpFilters(filters) !== fpFilters(targetFilters)) return;
-    if (status !== "success") return;
-    if (isFetching) return;
-    if (!places) return;
+    if (!targetFilters) { orchLog("rerank", "skip: !targetFilters", { fp }); return; }
+    if (fp !== targetFp) { orchLog("rerank", "skip: fp !== targetFp", { fp, targetFp }); return; }
+    if (status !== "success") { orchLog("rerank", `skip: status=${status}`, { fp }); return; }
+    if (isFetching) { orchLog("rerank", "skip: isFetching", { fp }); return; }
+    if (!places) { orchLog("rerank", "skip: !places", { fp }); return; }
 
     if (places.length === 0) {
+      orchLog("rerank", "applyRankings([]) (zero places)", { fp });
       applyRankings([]);
       return;
     }
@@ -287,6 +327,12 @@ export function useAiRerankOrchestrator(filters: PlaceFilters) {
     // and exit at the guard above.
     rerankInFlightRef.current = true;
 
+    orchLog("rerank", "★ FIRE", {
+      fp,
+      placesLen: places.length,
+      first5_names: places.slice(0, 5).map((p) => p.name),
+    });
+
     void runRerank({
       semanticIntent,
       places,
@@ -294,13 +340,26 @@ export function useAiRerankOrchestrator(filters: PlaceFilters) {
         rerankInFlightRef.current = false;
         const currentTargetFp = fpFilters(useAiSearchStore.getState().targetFilters);
         if (currentTargetFp !== targetFpAtFire) {
-          // Stale — silently discard.
+          orchLog("rerank", "⚠ stale — discarded", { fp_at_fire: fp, currentTargetFp });
           return;
         }
+        // Sanity check: how many of `places` got back rankings?
+        const rankedIds = new Set(rows.map((r) => r.id));
+        const placeIds = places.map((p) => p.id);
+        const missingFromRankings = placeIds.filter((id) => !rankedIds.has(id));
+        orchLog("rerank", "✓ response landed", {
+          rankedCount: rows.length,
+          placesCount: places.length,
+          missingFromRankings: missingFromRankings.length,
+          missingNames: missingFromRankings
+            .map((id) => places.find((p) => p.id === id)?.name)
+            .filter(Boolean),
+        });
         applyRankings(rows);
       },
       onError: () => {
         rerankInFlightRef.current = false;
+        orchLog("rerank", "✗ error", { fp_at_fire: fp });
         failRerank();
       },
     });

@@ -212,3 +212,11 @@ export const HIDE_BELOW_SCORE = 0.2;
  * lets the user toggle between narrow and broader via a banner.
  */
 export const BROADEN_THRESHOLD = 10;
+
+// ─── Debug: expose the store to window for browser-console inspection ───
+// Usage: `window.__aiSearchStore.getState().rankings` etc.
+// Kept ON during F&F stabilization; gate by env or remove for true prod.
+if (typeof window !== "undefined") {
+  (window as unknown as { __aiSearchStore: typeof useAiSearchStore }).__aiSearchStore =
+    useAiSearchStore;
+}

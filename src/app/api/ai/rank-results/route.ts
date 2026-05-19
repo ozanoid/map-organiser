@@ -223,12 +223,45 @@ export async function POST(request: NextRequest) {
 
   // ─── Defense: ensure every output ID was in input ───
   const allowedIds = new Set(candidates.map((c) => c.id));
+  const responseIds = new Set(ranked.ranked.map((r) => r.id));
   const safeRanked = ranked.ranked.filter((r) => allowedIds.has(r.id));
+
+  // ─── Detect LLM laziness: candidates sent but not returned ───
+  // Without this fill, the client would render these places with no
+  // ranking entry → falls back to address display → appears at bottom
+  // of sorted list (score=-1 fallback). Confusing UX where a "missing"
+  // why text looks identical to a place card outside AI mode.
+  //
+  // Filling with score=0 + sentinel why pushes them under HIDE_BELOW_SCORE
+  // (0.20), so they're cleanly hidden by the same threshold that hides
+  // LLM-judged irrelevant matches.
+  const missingCandidates = candidates.filter((c) => !responseIds.has(c.id));
+  if (missingCandidates.length > 0) {
+    console.warn(
+      `[ai/rank-results] LLM skipped ${missingCandidates.length}/${candidates.length} candidate(s):`,
+      missingCandidates.map((c) => `${c.name} (${c.id})`).join(", ")
+    );
+    for (const c of missingCandidates) {
+      safeRanked.push({
+        id: c.id,
+        score: 0,
+        why: "Not evaluated by AI in this run.",
+      });
+    }
+  }
+
+  // ─── Detect LLM hallucinations: ids in output not in input ───
+  const hallucinated = ranked.ranked.filter((r) => !allowedIds.has(r.id));
+  if (hallucinated.length > 0) {
+    console.warn(
+      `[ai/rank-results] LLM hallucinated ${hallucinated.length} id(s) — filtered out:`,
+      hallucinated.map((r) => r.id).join(", ")
+    );
+  }
 
   trackAiUsage(user.id, "ai_rank_results").catch(() => {});
 
   // ─── Diagnostic logging ───
-  // No boost annotations now — LLM is the sole scorer.
   const top5 = safeRanked
     .slice()
     .sort((a, b) => b.score - a.score)
@@ -244,9 +277,24 @@ export async function POST(request: NextRequest) {
   const hiddenCount = safeRanked.filter((r) => r.score < 0.2).length;
   console.log(
     `[ai/rank-results] intent="${semanticIntent.slice(0, 60)}…" ` +
-      `candidates=${candidates.length} with_profile=${withProfile} ` +
+      `candidates=${candidates.length} llm_returned=${ranked.ranked.length} ` +
+      `safe=${safeRanked.length} skipped=${missingCandidates.length} ` +
+      `hallucinated=${hallucinated.length} with_profile=${withProfile} ` +
       `hidden_below_0.20=${hiddenCount} ` +
       `top5=[${top5}]`
+  );
+
+  // Full ranked dump (id + name + score + why) for one-shot debugging.
+  // Verbose but invaluable when triaging "why is X missing/low".
+  console.log(
+    `[ai/rank-results] full ranked:`,
+    safeRanked
+      .slice()
+      .sort((a, b) => b.score - a.score)
+      .map((r) => {
+        const name = candidates.find((c) => c.id === r.id)?.name ?? "?";
+        return `${r.score.toFixed(2)} ${name}: ${r.why}`;
+      })
   );
 
   return NextResponse.json({
