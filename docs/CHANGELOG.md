@@ -67,6 +67,36 @@ than incremental. Four guards, three layers, no static safety net.
   lack `place_profile.searchable_summary`. Truly mismatched (~0.0)
   still fades; borderline now displays at full opacity.
 
+### 6. Soft-feature vocabulary canonicalization
+After the user backfilled profiles, soft-filter for "date_night" still
+returned 0 even though many places had `occasions: ["Date night", ...]`.
+Root cause: the parse-query LLM and place-profile LLM were never
+aligned on feature format.
+
+- `place_profile.features.*` stores Title Case with spaces:
+  `["Cozy","Intimate","Romantic"]`, `["Date night","Casual Dinner"]`.
+- `parse-query.soft_features.*` emits snake_case lowercase:
+  `["romantic","intimate"]`, `["date_night"]`.
+
+`String.includes("date_night")` against `["Date night"]` is FALSE —
+literal mismatch. Single-word axes (atmosphere "Cozy" → "cozy") worked
+by accident; multi-word axes (occasions "Date night" vs "date_night")
+silently failed.
+
+Fix in `src/app/api/places/route.ts` soft filter: new `canonFeature`
+helper lowercases AND collapses whitespace/dashes to single underscore
+on BOTH sides before comparison. No data migration; no prompt
+realignment needed; future-proof against either LLM drifting format.
+
+```ts
+const canonFeature = (v: string): string =>
+  v.toLowerCase().replace(/[-\s]+/g, "_").replace(/_+/g, "_");
+```
+
+Effect: "Date night" → "date_night", "Casual Dinner" → "casual_dinner",
+"Bar Seat" → "bar_seat" — all match the parse-query LLM's canonical
+form. Atmosphere etc. still works (single words pass through).
+
 ### Vault
 - `docs/05-flows/ai-search-flow.md` — new "City + country are a pair"
   section documenting the four guards.
