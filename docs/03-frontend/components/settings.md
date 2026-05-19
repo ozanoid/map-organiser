@@ -2,14 +2,15 @@
 title: Settings components
 type: component
 domain: frontend
-version: 1.1.0
-last_updated: 18.05.2026
+version: 1.2.0
+last_updated: 19.05.2026
 status: stable
 sources:
   - src/components/settings/api-keys-manager.tsx
   - src/components/settings/cost-tracker.tsx
   - src/components/settings/ai-settings.tsx
   - src/components/settings/ai-suggestions-queue.tsx
+  - src/components/settings/backfill-profiles-panel.tsx
 related:
   - "[[_README]]"
   - "[[../../02-backend/api-routes/user]]"
@@ -18,11 +19,12 @@ related:
   - "[[../../06-ops/encryption]]"
   - "[[../../05-flows/full-profile-flow]]"
   - "[[../hooks/use-ai-suggestions]]"
+  - "[[../../06-ops/runbooks/profile-backfill]]"
 ---
 
 # Settings components
 
-Four components powering the Settings page tabs. All `"use client"`.
+Five components powering the Settings page tabs. All `"use client"`.
 
 ## `ApiKeysManager`
 
@@ -87,6 +89,25 @@ Four components powering the Settings page tabs. All `"use client"`.
   - Toast feedback on success/failure (sonner).
 - **Aggregation key:** matches `GET /api/user/ai-suggestions` server-side aggregation — same `(type, lower(value), parent_category_id, target_category_name)` collapses into one entry.
 - **Used by:** `AiSettings` (and rendered inside the AI tab below the master toggle).
+
+## `BackfillProfilesPanel`
+
+- **File:** `src/components/settings/backfill-profiles-panel.tsx` (Phase 6 follow-up, v1.7.x)
+- **Props:** none.
+- **Hooks:** [[../hooks/use-backfill-profiles|`useBackfillEligibility`/`useStartBackfill`]].
+- **Why it exists:** Pre-Phase-4 places have no `place_profile` (the AI summary + features payload). Phase 6 NL search soft-features filter and rerank both lean on profile content, so collections with low coverage feel weaker. This panel lets the user opt into bulk generation for their existing places.
+- **Renders:** an emerald-tinted card that summarizes coverage and a `Generate (N)` button. Three counts:
+  - `has_reviews_no_profile` — Gemini Flash only (~\$0.001 each).
+  - `has_cid_no_reviews` — DataForSEO `step=reviews` then chained `step=profile` (~\$0.002 each).
+  - `no_cid_no_profile` — cannot be enriched (no Google Place ID). Shown as muted "skipped" line.
+  - Cost estimate footer with the total in USD.
+- **Behavior:**
+  - Click `Generate` → `POST /api/user/backfill-profiles` (limit 25 per call). The route fires `step=profile` or `step=reviews` for each, fire-and-forget. UI receives `{ queued, has_more, remaining_after }`.
+  - When `has_more = true`, the panel enters **auto-iterate mode**: it re-POSTs every 12 s until the eligible count hits zero, while polling eligibility every 5 s. Safety ceiling: 50 iterations (covers up to 1250 places).
+  - Stop button cancels the auto-iterate loop. Already-queued background jobs continue.
+  - Hides automatically when `ai_features_enabled = false` or when there's nothing left to enrich.
+- **Used by:** `AiSettings` (rendered between the master toggle and the moderation queue).
+- **Companion runbook:** [[../../06-ops/runbooks/profile-backfill]] for ops / re-runs / cost notes.
 
 ## Notes
 

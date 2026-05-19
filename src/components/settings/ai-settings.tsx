@@ -5,6 +5,7 @@ import { Sparkles, Loader2, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Separator } from "@/components/ui/separator";
 import { AiSuggestionsQueue } from "@/components/settings/ai-suggestions-queue";
+import { BackfillProfilesPanel } from "@/components/settings/backfill-profiles-panel";
 
 interface AiSettingsState {
   enabled: boolean;
@@ -127,11 +128,12 @@ export function AiSettings() {
         </div>
       )}
 
-      {/* Phase 5: moderation queue. Hidden when AI is disabled — no new
-          proposals can land while off, and stale ones from prior usage are
-          better surfaced after re-enabling than silently active. */}
+      {/* Phase 5: moderation queue + Phase 6 follow-up: profile backfill.
+          Both gated on master AI toggle + provider availability. */}
       {state.enabled && state.available && (
         <>
+          <Separator />
+          <BackfillProfilesPanel />
           <Separator />
           <AiSuggestionsQueue />
         </>

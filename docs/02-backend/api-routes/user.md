@@ -2,8 +2,8 @@
 title: User routes
 type: route-group
 domain: backend
-version: 1.1.0
-last_updated: 14.05.2026
+version: 1.2.0
+last_updated: 19.05.2026
 status: stable
 sources:
   - src/app/api/user/api-keys/route.ts
@@ -12,6 +12,7 @@ sources:
   - src/app/api/user/ai-suggestions/route.ts
   - src/app/api/user/ai-suggestions/[id]/accept/route.ts
   - src/app/api/user/ai-suggestions/[id]/reject/route.ts
+  - src/app/api/user/backfill-profiles/route.ts
 related:
   - "[[_README]]"
   - "[[../schema/profiles]]"
@@ -38,6 +39,8 @@ Two endpoints under `/api/user/*` — both about the **caller's own** profile.
 | `GET` | `/api/user/ai-suggestions` | List pending AI proposals (Phase 5 moderation queue), pre-grouped by `(type, slug, parent)`. |
 | `POST` | `/api/user/ai-suggestions/[id]/accept` | Create the proposed tag / sub-category and apply it to every queued place. |
 | `POST` | `/api/user/ai-suggestions/[id]/reject` | Mark proposal (and siblings) as `rejected`. Vocabulary untouched. |
+| `GET` | `/api/user/backfill-profiles` | Eligibility report: how many places need an AI profile + estimated cost. |
+| `POST` | `/api/user/backfill-profiles` | Dispatch up to 25 fire-and-forget enrich calls for profile-less places. Client iterates until done. |
 
 All require auth.
 
