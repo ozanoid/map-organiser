@@ -43,6 +43,10 @@ export function useAiSearch() {
     },
     onSuccess: (data, query) => {
       // Build the next PlaceFilters from parse output — hard only.
+      // AI search OVERRIDES the user's sort preference to
+      // google_rating_desc (quality-first). When the user clears the
+      // AI search (X button → handleClear), AISearchInput resets sort
+      // to undefined so the FilterPanel dropdown returns to user control.
       const nextFilters: Partial<PlaceFilters> = {
         category_ids: data.hard.category_ids,
         subcategory_ids: data.hard.subcategory_ids,
@@ -54,6 +58,7 @@ export function useAiSearch() {
         rating_min: data.hard.rating_min,
         google_rating_min: data.hard.google_rating_min,
         search: data.hard.search,
+        sort: "google_rating_desc",
       };
 
       setFilters(nextFilters);

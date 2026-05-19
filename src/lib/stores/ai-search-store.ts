@@ -114,15 +114,24 @@ export const useAiSearchStore = create<AiSearchState>((set) => ({
 }));
 
 /**
- * Threshold below which a card visually fades (opacity 60%) to indicate
- * "Less relevant" — it still renders, never hides.
+ * Hide threshold (Phase 6.5 LLM-as-judge pivot).
  *
- * Lowered from 0.3 to 0.15 after live testing: in queries that combine
- * a soft-features filter with rerank against profile-less places, the
- * rerank scores cluster low (0.10–0.25) across the entire candidate set
- * because there's no `searchable_summary` to read. At 0.3, the whole
- * list faded and looked like "no matches" even though valid candidates
- * were rendered. 0.15 keeps borderline candidates at full opacity; only
- * the truly mismatched (~0.0) still fade.
+ * Candidates whose rank-results score is < HIDE_BELOW_SCORE are HIDDEN
+ * from the user entirely — no card rendered, no marker on the map.
+ *
+ * The rank-results prompt is explicitly aware of this threshold and is
+ * instructed to use its "hide power" deliberately: score irrelevant
+ * matches below 0.20 to keep the answer engine clean. McDonald's for
+ * "best date restaurants" → score 0.05 → HIDE.
+ *
+ * Replaces the v1.7.x fade-at-0.15 behavior. Hiding is more aligned with
+ * the "answer engine, not firehose" UX direction the user asked for.
+ *
+ * If tuning empirically: lower for more permissive display (more cards),
+ * raise for stricter filtering (fewer, more confident matches only).
  */
-export const LESS_RELEVANT_SCORE = 0.15;
+export const HIDE_BELOW_SCORE = 0.2;
+
+/** @deprecated use HIDE_BELOW_SCORE. Kept as alias during slice rollout
+ *  to avoid breaking PlaceCard / MapContent imports before Slice 4. */
+export const LESS_RELEVANT_SCORE = HIDE_BELOW_SCORE;

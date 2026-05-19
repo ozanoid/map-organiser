@@ -119,6 +119,9 @@ export function AiSearchInput() {
   function handleClear() {
     setDraft("");
     reset();
+    // Clear the AI-imposed sort override so the FilterPanel dropdown
+    // returns to user control.
+    setFilters({ sort: undefined });
   }
 
   const isParsing = search.isPending;
