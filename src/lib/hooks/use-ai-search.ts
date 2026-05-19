@@ -2,12 +2,45 @@
 
 import { useEffect } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { useAiSearchStore } from "@/lib/stores/ai-search-store";
+import {
+  useAiSearchStore,
+  BROADEN_THRESHOLD,
+} from "@/lib/stores/ai-search-store";
 import { useFilters } from "@/lib/hooks/use-filters";
 import { usePlaces } from "@/lib/hooks/use-places";
 import type { Place, PlaceFilters } from "@/lib/types";
 import type { ParseQueryOutput } from "@/lib/ai/schemas/parse-query";
 import type { RankResultsOutput } from "@/lib/ai/schemas/rank-results";
+
+/**
+ * Restricted hard filter axes. These are dropped when adaptive broaden
+ * triggers (narrow result count < BROADEN_THRESHOLD). All other hard
+ * fields (category, city, country, visit_status, rating thresholds,
+ * created_after) are preserved.
+ */
+function hasRestrictedHard(filters: PlaceFilters): boolean {
+  return (
+    (filters.subcategory_ids?.length ?? 0) > 0 ||
+    (filters.tag_ids?.length ?? 0) > 0 ||
+    filters.list_id !== undefined
+  );
+}
+
+function dropRestrictedHard(
+  filters: PlaceFilters
+): { broader: Partial<PlaceFilters>; droppedLabels: string[] } {
+  const broader: Partial<PlaceFilters> = {
+    ...filters,
+    subcategory_ids: undefined,
+    tag_ids: undefined,
+    list_id: undefined,
+  };
+  const labels: string[] = [];
+  if ((filters.subcategory_ids?.length ?? 0) > 0) labels.push("sub-category");
+  if ((filters.tag_ids?.length ?? 0) > 0) labels.push("tag");
+  if (filters.list_id) labels.push("list");
+  return { broader, droppedLabels: labels };
+}
 
 /**
  * Submit a natural-language query.
@@ -94,27 +127,74 @@ export function useAiRerankOrchestrator(filters: PlaceFilters) {
   const semanticIntent = useAiSearchStore((s) => s.semanticIntent);
   const needsRerank = useAiSearchStore((s) => s.needsRerank);
   const rerankStatus = useAiSearchStore((s) => s.rerankStatus);
+  const broadenStatus = useAiSearchStore((s) => s.broadenStatus);
+  const broaden = useAiSearchStore((s) => s.broaden);
   const applyRankings = useAiSearchStore((s) => s.applyRankings);
   const failRerank = useAiSearchStore((s) => s.failRerank);
-  // boosts: read by AISearchInput for hint chips (Slice 4 UI). Not used
-  // here in the orchestrator — Phase 6.5 dropped the boost score bump.
+  const applyBroaden = useAiSearchStore((s) => s.applyBroaden);
+  const resolveBroadenCheck = useAiSearchStore((s) => s.resolveBroadenCheck);
+  const { setFilters } = useFilters();
 
   const { data: places, isFetching } = usePlaces(filters);
 
+  // ─── Phase 6.5 Slice 5: adaptive broaden gate ───
+  // Runs BEFORE rerank. After parse-query lands and the narrow set is
+  // fetched, we either: (a) apply broader filter and wait for refetch,
+  // (b) decide no broaden is needed and let rerank proceed.
   useEffect(() => {
-    // Trigger conditions:
-    //  - parse-query set needsRerank
-    //  - we have a places list (post-filter)
-    //  - we're not already done or already fetching from places query
-    //  - rerankStatus is "pending" (initial state set by applyParse)
+    if (!needsRerank) return;
+    if (broadenStatus !== "checking") return;
+    if (isFetching) return;
+    if (!places) return;
+
+    // If broaden state already exists (we're in the broader-fetch phase),
+    // record the broader count and mark the gate as ready.
+    if (broaden !== null) {
+      // First fetch after we applied broader filter — capture broader count.
+      if (broaden.broaderCount === 0 && broaden.activeMode === "broader") {
+        applyBroaden({ ...broaden, broaderCount: places.length });
+      }
+      resolveBroadenCheck();
+      return;
+    }
+
+    // Decide whether to broaden.
+    if (!hasRestrictedHard(filters) || places.length >= BROADEN_THRESHOLD) {
+      resolveBroadenCheck();
+      return;
+    }
+
+    // Trigger broaden: stash both filter sets and apply the broader one.
+    const { broader, droppedLabels } = dropRestrictedHard(filters);
+    applyBroaden({
+      narrowFilters: { ...filters },
+      broaderFilters: broader,
+      narrowCount: places.length,
+      broaderCount: 0, // populated when the broader fetch lands
+      droppedLabels,
+      activeMode: "broader",
+    });
+    setFilters(broader);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    needsRerank,
+    broadenStatus,
+    isFetching,
+    places?.length,
+    broaden,
+    filters,
+  ]);
+
+  // ─── Rerank (runs after broaden gate is resolved) ───
+  useEffect(() => {
     if (!needsRerank) return;
     if (!semanticIntent) return;
+    if (broadenStatus !== "ready") return;
     if (rerankStatus !== "pending") return;
     if (isFetching) return;
     if (!places) return;
 
     if (places.length === 0) {
-      // Nothing to rerank; bail to "ready" so UI doesn't spin forever.
       applyRankings([]);
       return;
     }
@@ -125,11 +205,15 @@ export function useAiRerankOrchestrator(filters: PlaceFilters) {
       onSuccess: applyRankings,
       onError: failRerank,
     });
-    // We intentionally depend on `places.length` rather than `places` to
-    // avoid re-firing on every refetch with identical IDs. A new NL query
-    // resets rerankStatus to "pending" so we'll fire again then.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [needsRerank, semanticIntent, rerankStatus, isFetching, places?.length]);
+  }, [
+    needsRerank,
+    semanticIntent,
+    broadenStatus,
+    rerankStatus,
+    isFetching,
+    places?.length,
+  ]);
 }
 
 const TOP_N = 50;

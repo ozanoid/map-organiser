@@ -36,6 +36,11 @@ export function AiSearchInput() {
   const clarification = useAiSearchStore((s) => s.clarification);
   const lastQuery = useAiSearchStore((s) => s.lastQuery);
   const boosts = useAiSearchStore((s) => s.boosts);
+  const broaden = useAiSearchStore((s) => s.broaden);
+  const setBroadenActiveMode = useAiSearchStore(
+    (s) => s.setBroadenActiveMode
+  );
+  const beginRerank = useAiSearchStore((s) => s.beginRerank);
   const reset = useAiSearchStore((s) => s.reset);
   const { setFilters } = useFilters();
   const { data: tags = [] } = useTags();
@@ -74,6 +79,19 @@ export function AiSearchInput() {
     } else {
       setFilters({ subcategory_ids: [chip.id] });
     }
+  }
+
+  /** User clicked one of the broaden banner toggle buttons. Switch the
+   *  active filter set and trigger a re-rerank on the new candidates. */
+  function applyBroadenToggle(mode: "narrow" | "broader") {
+    if (!broaden) return;
+    if (broaden.activeMode === mode) return;
+    setBroadenActiveMode(mode);
+    setFilters(
+      mode === "narrow" ? broaden.narrowFilters : broaden.broaderFilters
+    );
+    // The places list will refetch; reset rerank to re-fire on the new set.
+    beginRerank();
   }
 
   // Lazy fetch the AI toggle status once. We don't subscribe to changes —
@@ -176,6 +194,46 @@ export function AiSearchInput() {
         <div className="flex items-start gap-2 text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 p-2 rounded-md">
           <HelpCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
           <span>{clarification}</span>
+        </div>
+      )}
+
+      {/* Adaptive broaden banner — appears when the narrow hard filter
+          returned fewer than BROADEN_THRESHOLD candidates and the
+          orchestrator auto-broadened. User can toggle between the two
+          views. */}
+      {broaden && !isParsing && (
+        <div className="text-[11px] rounded-md border border-sky-200 dark:border-sky-900/50 bg-sky-50/50 dark:bg-sky-950/30 px-2 py-2 space-y-1.5">
+          <div className="text-sky-700 dark:text-sky-400">
+            Found{" "}
+            <span className="font-medium">{broaden.narrowCount}</span>{" "}
+            matching {broaden.droppedLabels.join(" + ")}. Showing{" "}
+            <span className="font-medium">{broaden.broaderCount}</span>{" "}
+            broader matches.
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            <button
+              type="button"
+              onClick={() => applyBroadenToggle("narrow")}
+              className={`text-[11px] px-2 py-0.5 rounded-full border cursor-pointer transition-colors ${
+                broaden.activeMode === "narrow"
+                  ? "border-sky-500 bg-sky-100 dark:bg-sky-900/50 text-sky-900 dark:text-sky-200 font-medium"
+                  : "border-sky-200 dark:border-sky-900/50 text-sky-700 dark:text-sky-400 hover:bg-sky-100/60 dark:hover:bg-sky-900/40"
+              }`}
+            >
+              Show only narrow ({broaden.narrowCount})
+            </button>
+            <button
+              type="button"
+              onClick={() => applyBroadenToggle("broader")}
+              className={`text-[11px] px-2 py-0.5 rounded-full border cursor-pointer transition-colors ${
+                broaden.activeMode === "broader"
+                  ? "border-sky-500 bg-sky-100 dark:bg-sky-900/50 text-sky-900 dark:text-sky-200 font-medium"
+                  : "border-sky-200 dark:border-sky-900/50 text-sky-700 dark:text-sky-400 hover:bg-sky-100/60 dark:hover:bg-sky-900/40"
+              }`}
+            >
+              Keep broader ({broaden.broaderCount})
+            </button>
+          </div>
         </div>
       )}
 

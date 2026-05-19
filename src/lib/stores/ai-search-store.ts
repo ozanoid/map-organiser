@@ -1,13 +1,14 @@
 "use client";
 
 import { create } from "zustand";
+import type { PlaceFilters } from "@/lib/types";
 
 /**
  * Per-session AI search state.
  *
  * Set by `useAiSearch` after a successful parse-query call; consumed by
- * `PlaceCard` (to show the `why`) and the list ordering logic (to sort by
- * score and collapse low-confidence rows under "Less relevant").
+ * `PlaceCard` (why line), MapContent (marker filter + sidebar sort),
+ * /places page (card grid sort + hide), AISearchInput (banner, hint chips).
  *
  * Lives outside React Query because it's a transient UX session, not
  * server state — it should clear on `clearFilters`, on a new NL query,
@@ -18,11 +19,36 @@ interface Ranking {
   why: string;
 }
 
-/** Boost IDs sent to rank-results for upweighting; also surfaced as UI hints. */
+/** Boost IDs from parse-query. NOT a scoring signal in Phase 6.5 —
+ *  drives only the opt-in UI hint chips in AISearchInput. */
 interface BoostIds {
   matching_tag_ids: string[];
   matching_list_ids: string[];
   matching_subcategory_ids: string[];
+}
+
+/** Adaptive broaden state — Phase 6.5 Slice 5.
+ *
+ * When the initial hard filter returns < BROADEN_THRESHOLD candidates AND
+ * the hard contains restricted explicit references (subcategory_ids,
+ * tag_ids, list_id), the orchestrator drops those restricted filters and
+ * re-fetches the broader candidate set. The banner lets the user toggle
+ * between the two views.
+ */
+interface BroadenState {
+  /** Hard filter from parse-query AS-IS (narrow set). */
+  narrowFilters: Partial<PlaceFilters>;
+  /** Hard filter with restricted axes dropped (broader set). */
+  broaderFilters: Partial<PlaceFilters>;
+  /** Number of candidates the narrow filter produced. */
+  narrowCount: number;
+  /** Number of candidates the broader filter produced. */
+  broaderCount: number;
+  /** Which axes were dropped to go from narrow → broader. Human-readable
+   *  labels for the banner (e.g. ["fine-dining"]). */
+  droppedLabels: string[];
+  /** Which view is currently applied to the filter URL state. */
+  activeMode: "narrow" | "broader";
 }
 
 interface AiSearchState {
@@ -39,9 +65,14 @@ interface AiSearchState {
   /** The raw query the user typed, kept so chips can label it. */
   lastQuery: string | null;
   /** Semantic associations with user's curated taxonomy. NOT applied as
-   *  hard filter — only used to (a) boost rank-results scores, (b) render
-   *  opt-in hint chips for the user to convert into hard filters. */
+   *  hard filter — only used to render opt-in hint chips for the user
+   *  to convert into hard filters. */
   boosts: BoostIds;
+  /** Adaptive broaden state; null when no broaden was triggered. */
+  broaden: BroadenState | null;
+  /** "checking" → narrow set fetched but not yet evaluated for broaden;
+   *  "ready" → either broaden was applied OR not needed, downstream can proceed. */
+  broadenStatus: "idle" | "checking" | "ready";
 
   /** Apply parse-query output: clear stale rankings, set new intent + boosts. */
   applyParse: (input: {
@@ -51,6 +82,15 @@ interface AiSearchState {
     query: string;
     boosts: BoostIds;
   }) => void;
+  /** Mark "narrow fetched, deciding whether to broaden". */
+  beginBroadenCheck: () => void;
+  /** Set the full broaden state after the broader fetch completes. */
+  applyBroaden: (state: BroadenState) => void;
+  /** Mark "broaden check finished, no broaden needed (or applied)" so the
+   *  rerank step can proceed. */
+  resolveBroadenCheck: () => void;
+  /** User clicked a banner toggle. Switch active mode. */
+  setBroadenActiveMode: (mode: "narrow" | "broader") => void;
   beginRerank: () => void;
   applyRankings: (rankings: { id: string; score: number; why: string }[]) => void;
   failRerank: () => void;
@@ -71,6 +111,8 @@ export const useAiSearchStore = create<AiSearchState>((set) => ({
   clarification: null,
   lastQuery: null,
   boosts: EMPTY_BOOSTS,
+  broaden: null,
+  broadenStatus: "idle",
 
   applyParse: ({
     semantic_intent,
@@ -87,7 +129,25 @@ export const useAiSearchStore = create<AiSearchState>((set) => ({
       clarification: needs_clarification,
       lastQuery: query,
       boosts,
+      // Reset broaden state on every new query.
+      broaden: null,
+      broadenStatus: requires_semantic_ranking ? "checking" : "idle",
     }),
+
+  beginBroadenCheck: () => set({ broadenStatus: "checking" }),
+
+  applyBroaden: (state) =>
+    set({
+      broaden: state,
+      broadenStatus: "ready",
+    }),
+
+  resolveBroadenCheck: () => set({ broadenStatus: "ready" }),
+
+  setBroadenActiveMode: (mode) =>
+    set((s) =>
+      s.broaden ? { broaden: { ...s.broaden, activeMode: mode } } : {}
+    ),
 
   beginRerank: () => set({ rerankStatus: "pending" }),
 
@@ -110,6 +170,8 @@ export const useAiSearchStore = create<AiSearchState>((set) => ({
       clarification: null,
       lastQuery: null,
       boosts: EMPTY_BOOSTS,
+      broaden: null,
+      broadenStatus: "idle",
     }),
 }));
 
@@ -121,13 +183,16 @@ export const useAiSearchStore = create<AiSearchState>((set) => ({
  *
  * The rank-results prompt is explicitly aware of this threshold and is
  * instructed to use its "hide power" deliberately: score irrelevant
- * matches below 0.20 to keep the answer engine clean. McDonald's for
- * "best date restaurants" → score 0.05 → HIDE.
- *
- * Replaces the v1.7.x fade-at-0.15 behavior. Hiding is more aligned with
- * the "answer engine, not firehose" UX direction the user asked for.
- *
- * If tuning empirically: lower for more permissive display (more cards),
- * raise for stricter filtering (fewer, more confident matches only).
+ * matches below 0.20 to keep the answer engine clean.
  */
 export const HIDE_BELOW_SCORE = 0.2;
+
+/**
+ * Adaptive broaden trigger threshold (Phase 6.5 Slice 5).
+ *
+ * If the initial hard filter (with explicit subcategory_ids / tag_ids /
+ * list_id) returns fewer than this many candidates, the system also
+ * computes a broader filter set (dropping those restricted axes) and
+ * lets the user toggle between narrow and broader via a banner.
+ */
+export const BROADEN_THRESHOLD = 10;
