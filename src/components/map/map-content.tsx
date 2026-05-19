@@ -23,6 +23,7 @@ import {
   useAiSearchStore,
   HIDE_BELOW_SCORE,
 } from "@/lib/stores/ai-search-store";
+import { useFilterPersistStore } from "@/lib/stores/filter-persist-store";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   SlidersHorizontal,
@@ -82,6 +83,17 @@ export function MapContent({ mapboxToken }: { mapboxToken: string }) {
       router.replace("/map");
     }
   }, [searchParams, router]);
+
+  // Mirror current URL query string into the cross-page filter-persist
+  // store so nav links from non-filter-context pages (/lists, /stats,
+  // /settings, /places/[id], …) can restore it on return. See store
+  // docstring for the round-trip scenario this prevents (v1.8.8).
+  const setLastMapPlacesQuery = useFilterPersistStore(
+    (s) => s.setLastMapPlacesQuery
+  );
+  useEffect(() => {
+    setLastMapPlacesQuery(searchParams.toString());
+  }, [searchParams, setLastMapPlacesQuery]);
   const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
   const [detailData, setDetailData] = useState<Place | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);

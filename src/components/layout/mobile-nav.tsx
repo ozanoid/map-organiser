@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { Map, MapPin, List, MoreHorizontal, Upload, Settings, X, BarChart3 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useFilterPersistStore } from "@/lib/stores/filter-persist-store";
 
 /**
  * `preserveSearch=true` carries the current URL query string across nav.
@@ -28,7 +29,14 @@ export function MobileNav() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [moreOpen, setMoreOpen] = useState(false);
-  const qs = searchParams.toString();
+  const currentQs = searchParams.toString();
+  const lastMapPlacesQuery = useFilterPersistStore(
+    (s) => s.lastMapPlacesQuery
+  );
+  // See AppSidebar for the same logic: current URL on filter-context
+  // pages, persist-store fallback otherwise.
+  const onFilterContextPage = pathname === "/map" || pathname === "/places";
+  const qsForMapPlaces = onFilterContextPage ? currentQs : lastMapPlacesQuery;
 
   const isMoreActive =
     pathname.startsWith("/import") || pathname.startsWith("/settings");
@@ -70,7 +78,9 @@ export function MobileNav() {
             const isActive =
               pathname === tab.href || pathname.startsWith(tab.href + "/");
             const href =
-              tab.preserveSearch && qs ? `${tab.href}?${qs}` : tab.href;
+              tab.preserveSearch && qsForMapPlaces
+                ? `${tab.href}?${qsForMapPlaces}`
+                : tab.href;
             return (
               <Link
                 key={tab.href}

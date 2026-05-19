@@ -15,6 +15,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
+import { useFilterPersistStore } from "@/lib/stores/filter-persist-store";
 
 /**
  * Sidebar nav items.
@@ -40,11 +41,22 @@ export function AppSidebar() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [collapsed, setCollapsed] = useState(false);
-  const qs = searchParams.toString();
+  const currentQs = searchParams.toString();
+  const lastMapPlacesQuery = useFilterPersistStore(
+    (s) => s.lastMapPlacesQuery
+  );
 
-  // Top-of-sidebar logo also goes to /map; preserve search params for
-  // consistency with the Map nav item.
-  const logoHref = qs ? `/map?${qs}` : "/map";
+  // When the user is currently on /map or /places, the URL's query string
+  // IS the filter state — use it directly. Otherwise (they're on /lists,
+  // /stats, /settings, /places/[id], etc.) the URL has no filter context,
+  // so restore from the persist store. This keeps the round-trip
+  // /map → /lists → /map round-trip clean: filters survive even though
+  // the intermediate page wiped them from the URL.
+  const onFilterContextPage = pathname === "/map" || pathname === "/places";
+  const qsForMapPlaces = onFilterContextPage ? currentQs : lastMapPlacesQuery;
+
+  // Top-of-sidebar logo also goes to /map; same logic as the Map nav item.
+  const logoHref = qsForMapPlaces ? `/map?${qsForMapPlaces}` : "/map";
 
   return (
     <aside
@@ -79,7 +91,9 @@ export function AppSidebar() {
           const isActive =
             pathname === item.href || pathname.startsWith(item.href + "/");
           const href =
-            item.preserveSearch && qs ? `${item.href}?${qs}` : item.href;
+            item.preserveSearch && qsForMapPlaces
+              ? `${item.href}?${qsForMapPlaces}`
+              : item.href;
           return (
             <Link
               key={item.href}

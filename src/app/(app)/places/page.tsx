@@ -1,10 +1,12 @@
 "use client";
 
-import { Suspense, useCallback, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { usePlaces } from "@/lib/hooks/use-places";
 import { useFilters } from "@/lib/hooks/use-filters";
 import { useAiRerankOrchestrator } from "@/lib/hooks/use-ai-search";
+import { useFilterPersistStore } from "@/lib/stores/filter-persist-store";
 import { AddPlaceDialog } from "@/components/places/add-place-dialog";
 import { BulkActionBar } from "@/components/places/bulk-action-bar";
 import { FilterSheet } from "@/components/filters/filter-sheet";
@@ -117,6 +119,18 @@ function PlacesContent() {
   // the rank-results call. (Until v1.8.7 the orchestrator was only
   // mounted in MapContent, so AI search on /places hung forever.)
   useAiRerankOrchestrator(filters);
+
+  // Mirror current URL query string into the cross-page filter-persist
+  // store so nav links from non-filter-context pages can restore it on
+  // return. See filter-persist-store docstring for the round-trip
+  // scenario this prevents (v1.8.8).
+  const searchParams = useSearchParams();
+  const setLastMapPlacesQuery = useFilterPersistStore(
+    (s) => s.setLastMapPlacesQuery
+  );
+  useEffect(() => {
+    setLastMapPlacesQuery(searchParams.toString());
+  }, [searchParams, setLastMapPlacesQuery]);
 
   // AI mode awareness: when rankings exist, the grid is sorted by score
   // (desc) and the sort dropdown is disabled. SelectablePlaceCard
