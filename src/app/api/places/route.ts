@@ -30,27 +30,11 @@ export async function GET(request: NextRequest) {
   const search = searchParams.get("q");
   const sort = searchParams.get("sort");
 
-  // ─── Phase 6: soft-feature filters (matched against place_profile.features.*) ───
-  const SOFT_AXES = [
-    "atmosphere",
-    "dietary",
-    "occasions",
-    "seating",
-    "cuisine_types",
-  ] as const;
-  type SoftAxis = (typeof SOFT_AXES)[number];
-  const softFeatures: Partial<Record<SoftAxis, string[]>> = {};
-  for (const axis of SOFT_AXES) {
-    const raw = searchParams.get(`f_${axis}`);
-    if (raw) {
-      const values = raw
-        .split(",")
-        .map((v) => v.trim().toLowerCase())
-        .filter(Boolean);
-      if (values.length) softFeatures[axis] = values;
-    }
-  }
-  const hasSoftFilter = Object.keys(softFeatures).length > 0;
+  // Phase 6.5 LLM-as-judge pivot: `?f_*` params (atmosphere, occasions,
+  // dietary, seating, cuisine_types) used to drive a server-side JSONB
+  // intersect against place_profile.features.*. The soft filter is
+  // removed entirely; soft matching now happens inside rank-results.
+  // Old bookmark URLs still containing f_* params are silently ignored.
 
   // Determine sort field and direction
   const sortConfig: Record<string, { column: string; ascending: boolean }> = {
@@ -133,70 +117,19 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // ─── Phase 6: soft-feature filter (place_profile.features.*) ───
-  // Applied after the SQL query because the data lives in JSONB.
-  // Place is kept iff:
-  //   - it has NO place_profile (let it through — we have no signal either
-  //     way; rerank will score it low on summary match), OR
-  //   - it has a profile AND for EVERY requested axis at least one of its
-  //     profile features matches one of the requested values.
+  // Phase 6.5 LLM-as-judge pivot: the soft-feature post-filter that
+  // ran here in v1.7.x was REMOVED. Soft matching (atmosphere, occasions,
+  // dietary, seating, cuisine_types, music, crowd, distinctive, price,
+  // theme_insights) now happens entirely inside the rank-results LLM,
+  // which reads the full place_profile and decides holistically.
   //
-  // The "let no-profile places through" rule (v1.7.2) replaces an earlier
-  // "exclude entirely" rule that was too aggressive given Phase 4 profile
-  // coverage gaps — in some user collections only ~1% of places have been
-  // profiled, and excluding the rest collapsed result sets to zero.
+  // The vocabulary-mismatch and synonym-blindness bugs that plagued the
+  // old JSONB intersect (e.g. "date_night" vs "Date night" canonicalization,
+  // "Romantic" vs "Intimate" synonyms) are dissolved because the new
+  // path is natural-language semantic matching by the LLM.
   //
-  // Vocabulary canonicalization (v1.7.4): the parse-query LLM and the
-  // place_profile generator LLM were never aligned on multi-word feature
-  // format. Stored values are Title Case with spaces ("Date night",
-  // "Casual Dinner", "Bar Seat"); parse-query emits snake_case lowercase
-  // ("date_night", "casual_dinner", "bar_seat"). String compare misses
-  // these. `canonFeature` normalizes both sides to the same shape:
-  // lowercase + collapse whitespace/dashes to single underscore. Matching
-  // becomes "date_night" === "date_night" regardless of which side
-  // produced which form.
-  const canonFeature = (v: string): string =>
-    v
-      .toLowerCase()
-      .replace(/[-\s]+/g, "_")
-      .replace(/_+/g, "_");
-
-  let softFilterStats = { kept_no_profile: 0, kept_match: 0, dropped: 0 };
-  if (hasSoftFilter) {
-    filteredPlaces = filteredPlaces.filter((p: any) => {
-      const profile = p.google_data?.place_profile as
-        | { features?: Record<string, unknown> }
-        | undefined;
-      const features = profile?.features as
-        | Record<string, unknown>
-        | undefined;
-      if (!features) {
-        softFilterStats.kept_no_profile += 1;
-        return true;
-      }
-
-      for (const [axis, wanted] of Object.entries(softFeatures)) {
-        const have = features[axis];
-        if (!Array.isArray(have)) {
-          softFilterStats.dropped += 1;
-          return false;
-        }
-        const haveCanon = (have as unknown[])
-          .filter((v): v is string => typeof v === "string")
-          .map(canonFeature);
-        const wantedCanon = (wanted as string[]).map(canonFeature);
-        const matched = wantedCanon.some((w) =>
-          haveCanon.includes(w)
-        );
-        if (!matched) {
-          softFilterStats.dropped += 1;
-          return false;
-        }
-      }
-      softFilterStats.kept_match += 1;
-      return true;
-    });
-  }
+  // canonFeature helper, SOFT_AXES enum, and all the surrounding plumbing
+  // were removed wholesale. See docs/_plans/phase-6-llm-as-judge-pivot.md.
 
   // Post-query sort for google_rating (stored in JSONB, can't sort at query level)
   if (sort === "google_rating_desc") {
@@ -215,11 +148,13 @@ export async function GET(request: NextRequest) {
       : { lat: 0, lng: 0 },
   }));
 
-  // ─── Phase 6 diagnostic logging ───
-  // Only log when AI-search params are present, to avoid spamming the
-  // normal browsing path. The flag is the presence of any soft feature
-  // OR a city filter (which is the most AI-search-y of the hard filters).
-  if (hasSoftFilter || city) {
+  // ─── Phase 6.5 diagnostic logging ───
+  // Only log when AI-search-relevant params are present, to avoid
+  // spamming the normal browsing path. The presence of `city` is the
+  // best proxy for "this is an AI search call" — manual filter UI
+  // typically picks country+city via the cascade, while AI search
+  // sets city directly.
+  if (city) {
     console.log(
       `[api/places] filters: country=${country ?? "-"} city=${
         city ?? "-"
@@ -229,9 +164,7 @@ export async function GET(request: NextRequest) {
         `rating=${ratingMin ?? "-"} g_rating=${
           googleRatingMin ?? "-"
         } search="${search ?? ""}" sort=${sort ?? "newest"} ` +
-        `soft=${JSON.stringify(softFeatures)} ` +
-        `sql_rows=${places?.length ?? 0} after_soft=${transformed.length} ` +
-        `soft_stats=${JSON.stringify(softFilterStats)}`
+        `sql_rows=${places?.length ?? 0} returned=${transformed.length}`
     );
   }
 

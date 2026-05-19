@@ -12,13 +12,16 @@ import type { RankResultsOutput } from "@/lib/ai/schemas/rank-results";
 /**
  * Submit a natural-language query.
  *
- * Flow:
+ * Flow (Phase 6.5 LLM-as-judge):
  *   1. POST /api/ai/parse-query with the raw query.
- *   2. Apply the returned `hard` + `soft_features` to the filter URL state.
- *   3. Save semantic_intent + needsRerank into the AI search store.
+ *   2. Apply the returned `hard` to the filter URL state. Soft matching
+ *      (atmosphere/occasions/etc.) no longer lives in URL — it's carried
+ *      by `semantic_intent` and consumed by rank-results.
+ *   3. Save semantic_intent + requires_semantic_ranking + boosts into
+ *      the AI search store.
  *
- * The actual rerank step is triggered by `useAiRerankOrchestrator()` once
- * the places list refetches with the new filters — see below.
+ * The rerank step is triggered by `useAiRerankOrchestrator()` once the
+ * places list refetches with the new filters — see below.
  */
 export function useAiSearch() {
   const { setFilters } = useFilters();
@@ -39,9 +42,8 @@ export function useAiSearch() {
       return (await res.json()) as ParseQueryOutput;
     },
     onSuccess: (data, query) => {
-      // Build the next PlaceFilters from parse output.
+      // Build the next PlaceFilters from parse output — hard only.
       const nextFilters: Partial<PlaceFilters> = {
-        // Always clear existing slots first (so a new NL search starts clean).
         category_ids: data.hard.category_ids,
         subcategory_ids: data.hard.subcategory_ids,
         tag_ids: data.hard.tag_ids,
@@ -52,29 +54,7 @@ export function useAiSearch() {
         rating_min: data.hard.rating_min,
         google_rating_min: data.hard.google_rating_min,
         search: data.hard.search,
-        soft_features: {
-          atmosphere: data.soft_features.atmosphere,
-          dietary: data.soft_features.dietary,
-          occasions: data.soft_features.occasions,
-          seating: data.soft_features.seating,
-          cuisine_types: data.soft_features.cuisine_types,
-        },
       };
-
-      // Drop empty arrays; setFilters treats them as clear signals.
-      if (nextFilters.soft_features) {
-        for (const k of Object.keys(nextFilters.soft_features) as Array<
-          keyof NonNullable<PlaceFilters["soft_features"]>
-        >) {
-          const v = nextFilters.soft_features[k];
-          if (!Array.isArray(v) || v.length === 0) {
-            delete nextFilters.soft_features[k];
-          }
-        }
-        if (Object.keys(nextFilters.soft_features).length === 0) {
-          nextFilters.soft_features = undefined;
-        }
-      }
 
       setFilters(nextFilters);
       applyParse({

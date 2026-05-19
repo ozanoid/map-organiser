@@ -102,7 +102,6 @@ export async function POST(request: NextRequest) {
     trackAiUsage(user.id, "ai_parse_query").catch(() => {});
     return NextResponse.json({
       hard: { search: query },
-      soft_features: {},
       boosts: {},
       semantic_intent: "",
       requires_semantic_ranking: false,
@@ -128,7 +127,6 @@ export async function POST(request: NextRequest) {
   console.log(
     `[ai/parse-query] query="${query}" → ` +
       `hard=${JSON.stringify(sanitized.hard)} ` +
-      `soft=${JSON.stringify(sanitized.soft_features)} ` +
       `boosts=${JSON.stringify(sanitized.boosts)} ` +
       `rerank=${sanitized.requires_semantic_ranking} ` +
       `intent="${sanitized.semantic_intent}" ` +
