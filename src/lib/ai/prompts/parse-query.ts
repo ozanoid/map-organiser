@@ -168,11 +168,20 @@ export function buildParseQueryPrompt(query: string, context: UserContext) {
     ctxBlock,
     "",
     "## Output rules",
-    "- Return the schema exactly. Use empty arrays/null instead of omitting.",
+    "- Return the schema exactly.",
+    "- For optional fields you don't want to set: OMIT the key entirely.",
+    "  NEVER emit empty strings ('') or empty arrays for optional fields.",
+    "  This is critical — empty string breaks UUID validation.",
     "- IDs MUST come from the user's context above. NEVER invent UUIDs.",
     "- When undecided, prefer boosts over hard for tags/lists/sub-cats.",
     "- When the query has 'best' / 'good' / 'recommend' / 'find',",
     "  `requires_semantic_ranking` MUST be true.",
+    "- `created_after`: ONLY when query EXPLICITLY mentions a date phrase",
+    "  ('last week', 'this month', 'since Monday'). Plain 'best' is NOT a",
+    "  date trigger — omit the field.",
+    "- `rating_min` / `google_rating_min`: ONLY when query EXPLICITLY",
+    "  mentions a star rating ('4+ stars', '5-star', 'highly rated'). The",
+    "  word 'best' alone is a RERANK trigger, NOT a rating filter — omit.",
   ].join("\n");
 
   const userPrompt = `Query: ${query}`;

@@ -83,6 +83,11 @@ export async function POST(request: NextRequest) {
   );
 
   // ─── Call Gemini Flash ───
+  // Schema parse failures fall back to a "treat as plain text search"
+  // shape so the user still gets results, even if rerank/soft features
+  // are unavailable for this query. The preprocess wrappers on
+  // ParseQuerySchema catch the most common drift (empty-string optional
+  // UUIDs), but unknown LLM weirdness still gets a graceful degrade.
   let parsed: ParseQueryOutput;
   try {
     const result = await generateText({
@@ -94,10 +99,15 @@ export async function POST(request: NextRequest) {
     parsed = result.output;
   } catch (e) {
     console.error("[ai/parse-query] LLM call failed:", e);
-    return NextResponse.json(
-      { error: "Query parsing failed. Try simpler keywords." },
-      { status: 500 }
-    );
+    trackAiUsage(user.id, "ai_parse_query").catch(() => {});
+    return NextResponse.json({
+      hard: { search: query },
+      soft_features: {},
+      boosts: {},
+      semantic_intent: "",
+      requires_semantic_ranking: false,
+      needs_clarification: null,
+    } satisfies ParseQueryOutput);
   }
 
   // ─── Defense in depth: strip IDs that aren't in the user's context ───

@@ -1,6 +1,36 @@
 import { z } from "zod";
 
 /**
+ * LLMs sometimes emit `""` for an unwanted optional UUID field instead of
+ * omitting it. Strict UUID validation then fails the whole response. These
+ * preprocess wrappers clean common bad shapes BEFORE validation:
+ *   - empty / whitespace-only strings → undefined
+ *   - empty arrays of empties → undefined
+ *
+ * The JSON schema sent to Gemini stays strict (uuid), but the parser
+ * tolerates the small drift we observe in practice.
+ */
+const llmOptionalUuid = z.preprocess(
+  (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+  z.string().uuid().optional()
+);
+
+const llmOptionalUuidArray = z.preprocess(
+  (v) =>
+    Array.isArray(v)
+      ? (v as unknown[]).filter(
+          (x) => typeof x === "string" && (x as string).trim() !== ""
+        )
+      : v,
+  z.array(z.string().uuid()).optional()
+);
+
+const llmOptionalString = z.preprocess(
+  (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+  z.string().optional()
+);
+
+/**
  * Output of POST /api/ai/parse-query.
  *
  * Three-layer matching model — IMPORTANT to keep these distinct:
@@ -31,19 +61,23 @@ import { z } from "zod";
  */
 export const ParseQuerySchema = z.object({
   hard: z.object({
-    city: z.string().optional(),
-    country: z.string().optional(),
-    category_ids: z.array(z.string().uuid()).optional(),
-    subcategory_ids: z.array(z.string().uuid()).optional(),
-    tag_ids: z.array(z.string().uuid()).optional(),
-    list_id: z.string().uuid().optional(),
+    city: llmOptionalString,
+    country: llmOptionalString,
+    category_ids: llmOptionalUuidArray,
+    subcategory_ids: llmOptionalUuidArray,
+    tag_ids: llmOptionalUuidArray,
+    list_id: llmOptionalUuid,
     rating_min: z.number().min(1).max(5).optional(),
     google_rating_min: z.number().min(1).max(5).optional(),
     visit_status: z
       .enum(["want_to_go", "booked", "visited", "favorite"])
       .optional(),
-    created_after: z.string().datetime().optional(),
-    search: z.string().optional(),
+    created_after: z
+      .preprocess(
+        (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+        z.string().datetime().optional()
+      ),
+    search: llmOptionalString,
   }),
 
   soft_features: z.object({
@@ -60,9 +94,9 @@ export const ParseQuerySchema = z.object({
    * IDs MUST come from the user's context (validated server-side).
    */
   boosts: z.object({
-    matching_tag_ids: z.array(z.string().uuid()).optional(),
-    matching_list_ids: z.array(z.string().uuid()).optional(),
-    matching_subcategory_ids: z.array(z.string().uuid()).optional(),
+    matching_tag_ids: llmOptionalUuidArray,
+    matching_list_ids: llmOptionalUuidArray,
+    matching_subcategory_ids: llmOptionalUuidArray,
   }),
 
   semantic_intent: z.string(),
