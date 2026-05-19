@@ -59,27 +59,70 @@ function extractReviews(reviews: any[] | undefined): GoogleReview[] {
   }));
 }
 
+/**
+ * Country codes (ISO 3166-1 alpha-2) where Google returns the city name
+ * in `administrative_area_level_1` because the entire country IS the city.
+ * For these, we promote admin_area_level_1 to the canonical city slot.
+ */
+const CITY_STATE_CODES = new Set(["SG", "MC", "VA", "HK", "MO"]);
+
+/**
+ * Type tiers for the city, most-specific-city-name first.
+ * Walks tiers in order; first hit wins. `administrative_area_level_1`
+ * is intentionally NOT in this list — it's an administrative region in
+ * most countries (e.g. "England" for UK addresses) and using it as city
+ * was the v1 bug that put 174 of one user's 234 UK places under
+ * `city='England'`. The fallback at the end handles missing-everything
+ * edge cases.
+ */
+const CITY_TIERS = [
+  "locality",                   // canonical city in most countries
+  "postal_town",                // UK convention — Royal Mail's "town"
+  "sublocality_level_1",        // some regions / cities-of-cities
+  "administrative_area_level_2", // county / district fallback
+];
+
 function extractCountryAndCity(components: AddressComponent[]): {
   country: string;
   city: string;
 } {
+  const byType = new Map<string, string>();
   let country = "";
-  let city = "";
+  let countryCode = "";
 
   for (const comp of components) {
     const types = comp.types || [];
+    const value = (comp.longText || "").trim();
+    if (!value) continue;
     if (types.includes("country")) {
-      country = comp.longText || "";
+      country = value;
+      countryCode = (comp.shortText || "").trim().toUpperCase();
+      continue;
     }
-    if (
-      types.includes("locality") ||
-      types.includes("administrative_area_level_1")
-    ) {
-      if (!city) city = comp.longText || "";
+    // First-write-wins per type (Google typically lists most-specific first).
+    for (const t of types) {
+      if (!byType.has(t)) byType.set(t, value);
     }
   }
 
-  return { country, city };
+  // Walk preferred tiers.
+  for (const t of CITY_TIERS) {
+    const v = byType.get(t);
+    if (v) return { country, city: v };
+  }
+
+  // City-states (Singapore, Monaco, Vatican, HK, Macau): admin_area_1 IS the city.
+  if (CITY_STATE_CODES.has(countryCode)) {
+    const v = byType.get("administrative_area_level_1");
+    if (v) return { country, city: v };
+  }
+
+  // Last-resort fallback. Some Google responses (rural / unusual addresses)
+  // have only admin_area_1. Better to have *something* in the city slot
+  // than empty — the Phase 6 NL search OR-matches city against address
+  // so this fallback doesn't break later filtering.
+  const fallback = byType.get("administrative_area_level_1") || "";
+  return { country, city: fallback };
 }
 
 function parsePriceLevel(level: string | number): number | null {
