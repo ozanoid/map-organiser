@@ -238,6 +238,28 @@ export async function POST(request: NextRequest) {
 
   trackAiUsage(user.id, "ai_rank_results").catch(() => {});
 
+  // ─── Diagnostic logging ───
+  const top5 = boostedRanked
+    .slice()
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 5)
+    .map((r) => {
+      const name = candidates.find((c) => c.id === r.id)?.name ?? "?";
+      const boosted = boostedIds.has(r.id) ? "★" : " ";
+      return `${boosted} ${r.score.toFixed(2)} ${name}: ${r.why}`;
+    })
+    .join(" | ");
+  const withProfile = candidates.filter(
+    (c) => c.searchable_summary && c.searchable_summary.length > 0
+  ).length;
+  console.log(
+    `[ai/rank-results] intent="${semanticIntent.slice(0, 60)}…" ` +
+      `candidates=${candidates.length} with_profile=${withProfile} ` +
+      `boosts={tags:${boostTagIds.length},lists:${boostListIds.length},subs:${boostSubcategoryIds.length}} ` +
+      `boosted_count=${boostedIds.size} ` +
+      `top5=[${top5}]`
+  );
+
   return NextResponse.json({
     ranked: boostedRanked,
   } satisfies RankResultsOutput);
