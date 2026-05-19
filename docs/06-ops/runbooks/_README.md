@@ -2,8 +2,8 @@
 title: Runbooks
 type: overview
 domain: ops
-version: 1.0.0
-last_updated: 12.05.2026
+version: 1.1.0
+last_updated: 19.05.2026
 status: stable
 related:
   - "[[../_README]]"
@@ -22,7 +22,7 @@ Step-by-step procedures for repeatable ops tasks. Each runbook has:
 
 | Runbook | When to run |
 |---|---|
-| _(none yet)_ | — |
+| [[dedupe-categories]] | A user has ≥ 2 categories with the same name (e.g. trigger regression seeded defaults twice) |
 
 ## Candidates (worth writing when needed)
 
