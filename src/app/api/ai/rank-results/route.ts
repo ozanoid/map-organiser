@@ -3,7 +3,8 @@ import { generateText, Output } from "ai";
 import { createClient } from "@/lib/supabase/server";
 import { getAiClient, FLASH_MODEL } from "@/lib/ai/client";
 import {
-  RankResultsSchema,
+  LlmRankSchema,
+  type LlmRankOutput,
   type RankResultsOutput,
 } from "@/lib/ai/schemas/rank-results";
 import {
@@ -176,23 +177,21 @@ export async function POST(request: NextRequest) {
     candidates
   );
 
-  let ranked: RankResultsOutput;
+  let llmRanked: LlmRankOutput;
   try {
     const result = await generateText({
       model: aiClient(FLASH_MODEL),
-      output: Output.object({ schema: RankResultsSchema }),
+      output: Output.object({ schema: LlmRankSchema }),
       system: systemPrompt,
       prompt: userPrompt,
     });
-    ranked = result.output;
+    llmRanked = result.output;
   } catch (e) {
-    // Salvage path (v1.8.3). AI SDK throws AI_NoObjectGeneratedError when
-    // the LLM output fails strict schema validation — even when our zod
-    // preprocess could have fixed the issue (e.g. a `why` field that's
-    // 124 chars when the soft target is 120). The error carries the raw
-    // text; we re-parse and re-validate manually. The preprocess steps
-    // in RankResultsSchema (truncate >200-char `why`, clamp score to
-    // [0,1]) fix all observed schema-validation failures.
+    // Salvage path (v1.8.3, kept). AI SDK throws AI_NoObjectGeneratedError
+    // when the LLM output fails strict schema validation. The schema's
+    // preprocess (truncate >200-char `why`, clamp score, coerce idx string
+    // to number) fixes all observed cases; we re-parse manually so the
+    // preprocess can fire.
     const errAny = e as { name?: string; text?: string };
     if (
       errAny?.name === "AI_NoObjectGeneratedError" &&
@@ -200,7 +199,7 @@ export async function POST(request: NextRequest) {
     ) {
       try {
         const rawParsed = JSON.parse(errAny.text);
-        ranked = RankResultsSchema.parse(rawParsed);
+        llmRanked = LlmRankSchema.parse(rawParsed);
         console.warn(
           "[ai/rank-results] salvaged from validation failure via preprocess re-parse"
         );
@@ -221,25 +220,55 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // ─── Defense: ensure every output ID was in input ───
-  const allowedIds = new Set(candidates.map((c) => c.id));
-  const responseIds = new Set(ranked.ranked.map((r) => r.id));
-  const safeRanked = ranked.ranked.filter((r) => allowedIds.has(r.id));
+  // ─── Map idx → id, detect out-of-range and duplicates ───
+  // v1.8.5: LLM references candidates by local idx (0..N-1) instead of
+  // UUID, eliminating the 36-char copy errors that caused skipped/
+  // hallucinated entries in earlier versions. The mapping below is the
+  // only place we ever look up by idx.
+  const N = candidates.length;
+  const seenIdx = new Set<number>();
+  let outOfRangeCount = 0;
+  let duplicateCount = 0;
+  const safeRanked: RankResultsOutput["ranked"] = [];
+
+  for (const r of llmRanked.ranked) {
+    if (r.idx < 0 || r.idx >= N) {
+      outOfRangeCount++;
+      continue;
+    }
+    if (seenIdx.has(r.idx)) {
+      duplicateCount++;
+      continue;
+    }
+    seenIdx.add(r.idx);
+    safeRanked.push({
+      id: candidates[r.idx].id,
+      score: r.score,
+      why: r.why,
+    });
+  }
+
+  if (outOfRangeCount > 0) {
+    console.warn(
+      `[ai/rank-results] LLM emitted ${outOfRangeCount} out-of-range idx(es) (N=${N}) — dropped.`
+    );
+  }
+  if (duplicateCount > 0) {
+    console.warn(
+      `[ai/rank-results] LLM emitted ${duplicateCount} duplicate idx(es) — first kept, rest dropped.`
+    );
+  }
 
   // ─── Detect LLM laziness: candidates sent but not returned ───
-  // Without this fill, the client would render these places with no
-  // ranking entry → falls back to address display → appears at bottom
-  // of sorted list (score=-1 fallback). Confusing UX where a "missing"
-  // why text looks identical to a place card outside AI mode.
-  //
-  // Filling with score=0 + sentinel why pushes them under HIDE_BELOW_SCORE
-  // (0.20), so they're cleanly hidden by the same threshold that hides
-  // LLM-judged irrelevant matches.
-  const missingCandidates = candidates.filter((c) => !responseIds.has(c.id));
+  // Fill missing with score=0 + sentinel why so place cards don't render
+  // with a confusing mixed state (some ranked, some not). Score=0 falls
+  // under HIDE_BELOW_SCORE (0.20) so they're cleanly hidden by the same
+  // threshold that hides LLM-judged irrelevant matches.
+  const missingCandidates = candidates.filter((_, idx) => !seenIdx.has(idx));
   if (missingCandidates.length > 0) {
     console.warn(
-      `[ai/rank-results] LLM skipped ${missingCandidates.length}/${candidates.length} candidate(s):`,
-      missingCandidates.map((c) => `${c.name} (${c.id})`).join(", ")
+      `[ai/rank-results] LLM skipped ${missingCandidates.length}/${N} candidate(s):`,
+      missingCandidates.map((c) => `${c.name} (idx=${candidates.indexOf(c)})`).join(", ")
     );
     for (const c of missingCandidates) {
       safeRanked.push({
@@ -248,15 +277,6 @@ export async function POST(request: NextRequest) {
         why: "Not evaluated by AI in this run.",
       });
     }
-  }
-
-  // ─── Detect LLM hallucinations: ids in output not in input ───
-  const hallucinated = ranked.ranked.filter((r) => !allowedIds.has(r.id));
-  if (hallucinated.length > 0) {
-    console.warn(
-      `[ai/rank-results] LLM hallucinated ${hallucinated.length} id(s) — filtered out:`,
-      hallucinated.map((r) => r.id).join(", ")
-    );
   }
 
   trackAiUsage(user.id, "ai_rank_results").catch(() => {});
@@ -277,10 +297,10 @@ export async function POST(request: NextRequest) {
   const hiddenCount = safeRanked.filter((r) => r.score < 0.2).length;
   console.log(
     `[ai/rank-results] intent="${semanticIntent.slice(0, 60)}…" ` +
-      `candidates=${candidates.length} llm_returned=${ranked.ranked.length} ` +
+      `candidates=${N} llm_returned=${llmRanked.ranked.length} ` +
       `safe=${safeRanked.length} skipped=${missingCandidates.length} ` +
-      `hallucinated=${hallucinated.length} with_profile=${withProfile} ` +
-      `hidden_below_0.20=${hiddenCount} ` +
+      `out_of_range=${outOfRangeCount} duplicates=${duplicateCount} ` +
+      `with_profile=${withProfile} hidden_below_0.20=${hiddenCount} ` +
       `top5=[${top5}]`
   );
 

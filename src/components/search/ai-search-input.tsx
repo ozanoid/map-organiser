@@ -76,6 +76,22 @@ export function AiSearchInput() {
     };
   }, []);
 
+  // Sync draft (local input state) with lastQuery (store).
+  //
+  // Two cases this handles:
+  //   1. Component mount/remount with an active AI search (e.g. user
+  //      navigates /map → /places — store survives via zustand, but the
+  //      local draft state resets). Without this sync, the input field
+  //      would appear empty even though the AI search is live above.
+  //   2. AI search reset (X button, FilterPanel "Clear", or new query) —
+  //      lastQuery becomes null/new, draft follows.
+  //
+  // User typing doesn't trigger this (lastQuery is unchanged) so typing
+  // is never overwritten.
+  useEffect(() => {
+    setDraft(lastQuery ?? "");
+  }, [lastQuery]);
+
   // Hide entirely until we know the user has AI on AND it's available.
   if (!aiSettings) return null;
   if (!aiSettings.enabled || !aiSettings.available) return null;

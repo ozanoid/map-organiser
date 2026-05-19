@@ -125,9 +125,13 @@ export function buildRankResultsPrompt(
     "",
     "## Output",
     "",
-    "Return EVERY input candidate (same id), in any order. The frontend sorts.",
-    "Do not skip candidates. Score irrelevant ones below 0.20 — they will be hidden,",
-    "not silently dropped here.",
+    "For EACH candidate, return `{ idx, score, why }` where `idx` is the",
+    "ZERO-BASED index of the candidate as listed below (idx=0 is the first",
+    "candidate, idx=1 is the second, …). DO NOT invent or modify these",
+    "indexes. The frontend sorts by score; you can output in any order.",
+    "",
+    "Return EVERY candidate. Do not skip any. Score irrelevant ones below",
+    "0.20 — they will be hidden, not silently dropped here.",
   ].join("\n");
 
   const candidatesBlock = candidates
@@ -139,8 +143,13 @@ export function buildRankResultsPrompt(
       const tldrStr = c.tldr || "(none)";
       const prosStr = c.pros?.length ? c.pros.join("; ") : "(none)";
       const consStr = c.cons?.length ? c.cons.join("; ") : "(none)";
+      // NOTE: candidate UUIDs are deliberately NOT included in the prompt.
+      // The LLM references each candidate by its local index `idx`. Server-
+      // side maps idx → id before returning to the client. This prevents
+      // the LLM from typo'ing 36-char UUIDs (observed pre-v1.8.5: skipped
+      // and hallucinated entries due to single-char UUID copy errors).
       return [
-        `[${i + 1}] id=${c.id}`,
+        `idx=${i}`,
         `name: ${c.name}`,
         `tldr: ${tldrStr}`,
         `summary: ${c.searchable_summary || "(none)"}`,
@@ -155,7 +164,7 @@ export function buildRankResultsPrompt(
   const userPrompt = [
     `Semantic intent: ${semanticIntent}`,
     "",
-    `Candidates (${candidates.length}):`,
+    `Candidates (${candidates.length}, indexed 0..${candidates.length - 1}):`,
     candidatesBlock,
   ].join("\n");
 

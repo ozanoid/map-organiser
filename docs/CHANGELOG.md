@@ -6,6 +6,89 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 19.05.2026 — v1.8.5 — Cross-page state + LLM idx references
+
+Three UX/correctness fixes observed during /places page testing:
+
+### #1 + #2 — Cross-page state persistence (UX)
+
+Going /map → /places via the sidebar dropped the URL query string, so
+filters (`?city=London&...`) disappeared. AI store survived (zustand
+singleton) but useFilters now returned an empty filter set:
+- FilterPanel "Clear" button hidden (`hasActiveFilters=false`)
+- `/api/places` returned ALL user places (no filter)
+- AI-ranked places appeared at top, then every other unranked place
+  below — chaotic mixed list
+
+Separately: AISearchInput's input field is local `useState`, so the
+search text appeared empty on /places even with `lastQuery` set in the
+store. Confusing — the chip below said "AI search: '<query>' · ranked"
+but the input was blank.
+
+**Fix:**
+- `src/components/layout/app-sidebar.tsx` — Map + Places sidebar items
+  now preserve `useSearchParams().toString()` on navigation. Logo link
+  (→ /map) preserves too. Lists / Stats / Import / Settings unchanged
+  (no filter context). Mobile already needed this for place-detail
+  drill-down → back-to-map round-trip.
+- `src/components/search/ai-search-input.tsx` — new `useEffect` syncs
+  `draft` (local input state) with `lastQuery` (store). Mount/remount
+  picks up the live AI search; `reset()` clears both (so FilterPanel's
+  "Clear" button now also empties the input box, not just the URL).
+
+### #3 — LLM idx references (UUID copy errors → structurally impossible)
+
+Observed v1.8.4 server log on a fresh rerank:
+```
+LLM skipped 1/25 candidate(s): Bistro Freddie (c73423aa-c740-...)
+LLM hallucinated 1 id(s): 16b91296-dff2-...
+```
+
+The "hallucinated" UUID was one hex character off from a real candidate
+UUID — strong evidence the LLM was mistyping rather than truly making
+something up. 36-char UUIDs × 25 candidates = 900 chars to copy per
+request; typo rate scales linearly.
+
+**Fix — server-side LLM contract change. Client unchanged.**
+
+- `src/lib/ai/schemas/rank-results.ts`:
+  - New `LlmRankSchema` (internal): `{ idx: number, score, why }`.
+    Idx is preprocess-coerced from string→int for resilience.
+  - `RankResultsSchema` (public): unchanged, still `{ id: uuid, ... }`.
+- `src/lib/ai/prompts/rank-results.ts`:
+  - Candidate block emits `idx=0`, `idx=1`, … instead of `id=<uuid>`.
+  - Output rule asks for `{ idx, score, why }`. UUID never appears
+    in the prompt.
+- `src/app/api/ai/rank-results/route.ts`:
+  - Validates against `LlmRankSchema`.
+  - Maps `idx → candidates[idx].id` server-side.
+  - Detects out-of-range idx (≥N) and duplicate idx; logs WARN, drops.
+  - Same skipped-candidate fill (score=0) as v1.8.4.
+  - Salvage path updated to use the new schema.
+  - Diagnostic log now: `candidates llm_returned safe skipped
+    out_of_range duplicates with_profile hidden_below_0.20 top5`.
+
+**Token impact:** ~37 tokens/candidate saved on input (UUID label) +
+~37 on output (UUID label) ≈ ~1850 tokens saved per 25-candidate call.
+~10% cost reduction per rerank.
+
+**Reliability impact:** UUID-typo hallucinations are now structurally
+impossible — an out-of-range integer is trivially detected and
+rejected, vs. a 1-char-off UUID that looks valid until cross-checked
+against the candidates set.
+
+### Files touched
+
+- `src/components/layout/app-sidebar.tsx`
+- `src/components/search/ai-search-input.tsx`
+- `src/lib/ai/schemas/rank-results.ts` (added LlmRankSchema)
+- `src/lib/ai/prompts/rank-results.ts` (idx-based candidate block)
+- `src/app/api/ai/rank-results/route.ts` (idx → id mapping)
+
+### No DB migration. No client contract change. No breaking URLs.
+
+---
+
 ## 19.05.2026 — v1.8.3 — Rerank schema resilience
 
 Observed during live testing: an LLM response with one `why` string at
