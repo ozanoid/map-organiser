@@ -2,7 +2,7 @@
 title: Hooks
 type: overview
 domain: frontend
-version: 1.2.0
+version: 1.3.0
 last_updated: 18.05.2026
 status: stable
 sources:
@@ -34,6 +34,7 @@ Every custom hook lives in `src/lib/hooks/`. Convention: file `use-x.ts` exports
 | `useTags` + 4 mutations | react-query + mutations | `["tags"]`, `["place-tags", placeId]` | [[use-tags]] |
 | `useTrips` + 9 mutations | react-query + mutations | `["trips"]`, `["trip", id]` | [[use-trips]] |
 | `useAiSuggestions` + 2 mutations | react-query + mutations | `["ai-suggestions"]` (staleTime 30 s) | [[use-ai-suggestions]] |
+| `useAiSearch` + `useAiRerankOrchestrator` (Phase 6) | mutation + side-effect | no query key — writes to `useAiSearchStore` (Zustand) | [[use-ai-search]] |
 
 ## Conventions
 

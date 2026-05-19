@@ -30,6 +30,28 @@ export async function GET(request: NextRequest) {
   const search = searchParams.get("q");
   const sort = searchParams.get("sort");
 
+  // ─── Phase 6: soft-feature filters (matched against place_profile.features.*) ───
+  const SOFT_AXES = [
+    "atmosphere",
+    "dietary",
+    "occasions",
+    "seating",
+    "cuisine_types",
+  ] as const;
+  type SoftAxis = (typeof SOFT_AXES)[number];
+  const softFeatures: Partial<Record<SoftAxis, string[]>> = {};
+  for (const axis of SOFT_AXES) {
+    const raw = searchParams.get(`f_${axis}`);
+    if (raw) {
+      const values = raw
+        .split(",")
+        .map((v) => v.trim().toLowerCase())
+        .filter(Boolean);
+      if (values.length) softFeatures[axis] = values;
+    }
+  }
+  const hasSoftFilter = Object.keys(softFeatures).length > 0;
+
   // Determine sort field and direction
   const sortConfig: Record<string, { column: string; ascending: boolean }> = {
     newest: { column: "created_at", ascending: false },
@@ -48,7 +70,16 @@ export async function GET(request: NextRequest) {
     .order(sortColumn, { ascending: sortAscending });
 
   if (country) query = query.eq("country", country);
-  if (city) query = query.eq("city", city);
+  if (city) {
+    // OR-match against `city` AND `address` ilike. Workaround for the
+    // import bug that stores some addresses with city=administrative
+    // region ("England") while the actual locality ("London") only
+    // appears in the address. See docs/_plans/data-bugs.md.
+    const escaped = city.replace(/%/g, "\\%").replace(/,/g, "\\,");
+    query = query.or(
+      `city.ilike.%${escaped}%,address.ilike.%${escaped}%`
+    );
+  }
   if (categoryIds?.length) query = query.in("category_id", categoryIds);
   if (subcategoryIds?.length)
     query = query.in("subcategory_id", subcategoryIds);
@@ -102,6 +133,54 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  // ─── Phase 6: soft-feature filter (place_profile.features.*) ───
+  // Applied after the SQL query because the data lives in JSONB.
+  // Place is kept iff:
+  //   - it has NO place_profile (let it through — we have no signal either
+  //     way; rerank will score it low on summary match), OR
+  //   - it has a profile AND for EVERY requested axis at least one of its
+  //     profile features matches one of the requested values.
+  //
+  // The "let no-profile places through" rule (v1.7.2) replaces an earlier
+  // "exclude entirely" rule that was too aggressive given Phase 4 profile
+  // coverage gaps — in some user collections only ~1% of places have been
+  // profiled, and excluding the rest collapsed result sets to zero.
+  let softFilterStats = { kept_no_profile: 0, kept_match: 0, dropped: 0 };
+  if (hasSoftFilter) {
+    filteredPlaces = filteredPlaces.filter((p: any) => {
+      const profile = p.google_data?.place_profile as
+        | { features?: Record<string, unknown> }
+        | undefined;
+      const features = profile?.features as
+        | Record<string, unknown>
+        | undefined;
+      if (!features) {
+        softFilterStats.kept_no_profile += 1;
+        return true;
+      }
+
+      for (const [axis, wanted] of Object.entries(softFeatures)) {
+        const have = features[axis];
+        if (!Array.isArray(have)) {
+          softFilterStats.dropped += 1;
+          return false;
+        }
+        const haveLower = (have as unknown[])
+          .filter((v): v is string => typeof v === "string")
+          .map((v) => v.toLowerCase());
+        const matched = (wanted as string[]).some((w) =>
+          haveLower.includes(w)
+        );
+        if (!matched) {
+          softFilterStats.dropped += 1;
+          return false;
+        }
+      }
+      softFilterStats.kept_match += 1;
+      return true;
+    });
+  }
+
   // Post-query sort for google_rating (stored in JSONB, can't sort at query level)
   if (sort === "google_rating_desc") {
     filteredPlaces.sort((a: any, b: any) => {
@@ -118,6 +197,26 @@ export async function GET(request: NextRequest) {
       ? parsePostgisPoint(place.location)
       : { lat: 0, lng: 0 },
   }));
+
+  // ─── Phase 6 diagnostic logging ───
+  // Only log when AI-search params are present, to avoid spamming the
+  // normal browsing path. The flag is the presence of any soft feature
+  // OR a city filter (which is the most AI-search-y of the hard filters).
+  if (hasSoftFilter || city) {
+    console.log(
+      `[api/places] filters: country=${country ?? "-"} city=${
+        city ?? "-"
+      } categories=${categoryIds?.length ?? 0} subcategories=${
+        subcategoryIds?.length ?? 0
+      } tags=${tagIds?.length ?? 0} status=${visitStatus ?? "-"} ` +
+        `rating=${ratingMin ?? "-"} g_rating=${
+          googleRatingMin ?? "-"
+        } search="${search ?? ""}" sort=${sort ?? "newest"} ` +
+        `soft=${JSON.stringify(softFeatures)} ` +
+        `sql_rows=${places?.length ?? 0} after_soft=${transformed.length} ` +
+        `soft_stats=${JSON.stringify(softFilterStats)}`
+    );
+  }
 
   return NextResponse.json(transformed);
 }

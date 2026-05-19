@@ -2,7 +2,7 @@
 title: State Management
 type: overview
 domain: frontend
-version: 1.1.0
+version: 1.2.0
 last_updated: 18.05.2026
 status: stable
 sources:
@@ -65,6 +65,7 @@ const [queryClient] = useState(
 | Stats | `["stats"]` | `useStats()` (staleTime override 5 min) |
 | Shared link | `["shared-link", resourceType, resourceId]` | `useSharedLink(...)` (disabled by default) |
 | AI suggestions | `["ai-suggestions"]` | `useAiSuggestions()` (Phase 5; pre-aggregated server-side; staleTime 30 s) |
+| AI search (Phase 6) | n/a — Zustand `useAiSearchStore`, not React Query | session-scoped; cleared on filter Clear or new NL query |
 
 **Pattern:** array starting with a stable string identifier (the entity name), then optional sub-arguments (filters, IDs).
 
@@ -78,6 +79,10 @@ const [queryClient] = useState(
 - AI suggestion accept → `["ai-suggestions"]` + `["tags"]` + `["subcategories"]` + `["places"]` (entity is created and joined onto places). Reject → only `["ai-suggestions"]`.
 
 `PlaceFilters` carries `subcategory_ids?: string[]` alongside `category_ids` since Phase 2; URL-state mirror is `?subcategory=<id,id>` and the cascade filter UI (CategoryFilter) drives it.
+
+**Phase 6 — `soft_features` filter slot.** `PlaceFilters` also carries an optional `soft_features` object (atmosphere, dietary, occasions, seating, cuisine_types — all `string[]?`). It fans out to URL params one per axis (`?f_atmosphere=cozy&f_occasions=working`) and is matched server-side against `places.google_data.place_profile.features.*`. Set by the AI search input via `useAiSearch`; can also be edited by the user removing chips (future) or hand-editing the URL.
+
+**`useAiSearchStore`** (Zustand, `src/lib/stores/ai-search-store.ts`) holds the transient session for an active NL search: the last query string, the semantic intent passed to rerank, the in-flight rerank status, and the resulting `Map<placeId, { score, why }>`. PlaceCard and MapContent subscribe to this map; the FilterPanel's `Clear` button resets it alongside `clearFilters()`.
 
 ## Server-state rules
 

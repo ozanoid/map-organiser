@@ -2,7 +2,7 @@
 title: Google Gemini (LLM)
 type: integration
 domain: integrations
-version: 1.0.0
+version: 1.1.0
 last_updated: 18.05.2026
 status: stable
 sources:
@@ -98,8 +98,10 @@ The output is Zod-validated at the SDK boundary, so route code can treat it as a
 | Caller | Purpose | Frequency | Avg latency | SKU |
 |---|---|---|---|---|
 | `POST /api/places/[id]/enrich?step=profile` | Full place_profile generation. Triggered by the `step=reviews` fire-and-forget chain (Phase 4) or the manual refresh/generate button in `AiSummaryCard`. | Once per place, plus opt-in refresh | ~4–6 s | `ai_place_profile` |
+| `POST /api/ai/parse-query` (Phase 6) | Parse NL search query into structured filters + semantic intent. | Per user-submitted query | ~700 ms – 1.5 s | `ai_parse_query` |
+| `POST /api/ai/rank-results` (Phase 6) | LLM-as-judge rerank against `place_profile.searchable_summary` when `requires_semantic_ranking` is set. | Conditional — only when the query has fuzzy intent | ~1–2 s | `ai_rank_results` |
 
-That's currently the only LLM call. Phase 6 will add `/api/ai/parse-query` (NL filter); when it lands, document the new SKU here.
+Phase 6 splits AI calls into two groups by behaviour: **background** (`enrich?step=profile` — fire-and-forget, latency-tolerant) and **interactive** (`/api/ai/*` — user is waiting). Both share `getAiClient()` / `FLASH_MODEL` / Output.object pattern; they differ only in error handling and observability expectations.
 
 ## Cost & limits
 

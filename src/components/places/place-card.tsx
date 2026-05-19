@@ -4,8 +4,12 @@ import type { Place } from "@/lib/types";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { VisitStatusBadge } from "@/components/places/visit-status-toggle";
-import { Star, ExternalLink } from "lucide-react";
+import { Star, ExternalLink, Sparkles } from "lucide-react";
 import Link from "next/link";
+import {
+  useAiSearchStore,
+  LESS_RELEVANT_SCORE,
+} from "@/lib/stores/ai-search-store";
 
 export function PlaceCard({ place }: { place: Place }) {
   const googlePhoto = place.google_data?.photo_storage_url || place.google_data?.photos?.[0];
@@ -14,9 +18,18 @@ export function PlaceCard({ place }: { place: Place }) {
   const visibleTags = tags.slice(0, 2);
   const extraTagCount = tags.length - 2;
 
+  // Phase 6 — AI rank annotation. Null when no active NL search.
+  const aiRanking = useAiSearchStore((s) => s.rankings?.get(place.id));
+  const lessRelevant =
+    aiRanking !== undefined && aiRanking.score < LESS_RELEVANT_SCORE;
+
   return (
     <Link href={`/places/${place.id}`} prefetch={false}>
-      <Card className="overflow-hidden hover:shadow-md transition-shadow cursor-pointer">
+      <Card
+        className={`overflow-hidden hover:shadow-md transition-shadow cursor-pointer ${
+          lessRelevant ? "opacity-60" : ""
+        }`}
+      >
         {/* Photo area with visit status badge */}
         {googlePhoto && (
           <div className="relative h-32 bg-gray-100">
@@ -43,11 +56,16 @@ export function PlaceCard({ place }: { place: Place }) {
         <div className="p-3 space-y-1.5">
           <h3 className="font-medium text-sm line-clamp-1">{place.name}</h3>
 
-          {place.address && (
+          {aiRanking ? (
+            <p className="text-[11px] italic text-emerald-700 dark:text-emerald-400 line-clamp-2 flex items-start gap-1">
+              <Sparkles className="h-3 w-3 shrink-0 mt-0.5" />
+              <span>{aiRanking.why}</span>
+            </p>
+          ) : place.address ? (
             <p className="text-xs text-muted-foreground line-clamp-1">
               {place.address}
             </p>
-          )}
+          ) : null}
 
           {/* Tags */}
           {visibleTags.length > 0 && (

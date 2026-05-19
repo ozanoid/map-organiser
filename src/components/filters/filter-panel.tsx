@@ -7,7 +7,9 @@ import { VisitStatusFilter } from "./visit-status-filter";
 import { TagFilter } from "./tag-filter";
 import { ListFilter } from "./list-filter";
 import { DebouncedSearchInput } from "./debounced-search-input";
+import { AiSearchInput } from "@/components/search/ai-search-input";
 import { useFilters } from "@/lib/hooks/use-filters";
+import { useAiSearchStore } from "@/lib/stores/ai-search-store";
 import { X } from "lucide-react";
 
 const SORT_OPTIONS = [
@@ -21,6 +23,12 @@ const SORT_OPTIONS = [
 
 export function FilterPanel() {
   const { filters, setFilters, clearFilters, hasActiveFilters } = useFilters();
+  const resetAiSearch = useAiSearchStore((s) => s.reset);
+
+  function handleClearAll() {
+    clearFilters();
+    resetAiSearch();
+  }
 
   return (
     <div className="space-y-5">
@@ -30,7 +38,7 @@ export function FilterPanel() {
           <Button
             variant="ghost"
             size="sm"
-            onClick={clearFilters}
+            onClick={handleClearAll}
             className="cursor-pointer text-xs h-7 px-2"
           >
             <X className="h-3 w-3 mr-1" />
@@ -38,6 +46,9 @@ export function FilterPanel() {
           </Button>
         )}
       </div>
+
+      {/* AI natural-language search (hidden when ai_features_enabled = false) */}
+      <AiSearchInput />
 
       {/* Sort */}
       <div>

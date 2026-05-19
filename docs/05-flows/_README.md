@@ -2,7 +2,7 @@
 title: Flows
 type: overview
 domain: overview
-version: 1.2.0
+version: 1.3.0
 last_updated: 18.05.2026
 status: stable
 related:
@@ -13,6 +13,7 @@ related:
   - "[[place-search-flow]]"
   - "[[lite-profile-flow]]"
   - "[[full-profile-flow]]"
+  - "[[ai-search-flow]]"
   - "[[trip-planning-flow]]"
   - "[[share-flow]]"
   - "[[share-target-flow]]"
@@ -34,6 +35,7 @@ End-to-end user / data flows that span multiple subsystems. Each doc traces the 
 | [[place-search-flow]] | User searches on the map overlay | `/api/search/suggest` → `/api/search/retrieve/[id]` → `/api/places` |
 | [[lite-profile-flow]] | Rule-based AI suggestions inline in parse-link (Phase 3) | `parse-link` → `buildLiteProfile` → AddPlaceDialog AI chips |
 | [[full-profile-flow]] | Background Gemini full place_profile generation (Phase 4 + 5.5) | `step=reviews` chain → `step=profile` → Gemini Flash → 4-band auto-apply + moderation queue |
+| [[ai-search-flow]] | User submits a NL query in the AI search input (Phase 6) | `/api/ai/parse-query` → `/api/places` (hard + soft features) → optional `/api/ai/rank-results` |
 | [[trip-planning-flow]] | User creates a trip from a list | `/api/trips` → optional `/api/trips/[id]/auto-plan` → day-place mutations |
 | [[share-flow]] | User clicks "Share" on a list or trip | `/api/shared` (POST) → public `/shared/<slug>` → optional save |
 | [[share-target-flow]] | User shares a URL into the PWA from mobile share sheet | `/api/share-target` → `/map?add=…` → manual-place-create-flow |
