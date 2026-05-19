@@ -59,27 +59,46 @@ interface AiSearchState {
   clarification: string | null;
   /** The raw query the user typed, kept so chips can label it. */
   lastQuery: string | null;
+  /**
+   * The filter set the active AI search is supposed to rerank against.
+   * Set by `applyParse` (initial narrow), updated by `applyBroaden` /
+   * `setBroadenActiveMode` when the broaden mode flips. NULL when no
+   * AI search is active.
+   *
+   * The orchestrator gates on `fpFilters(filters) === fpFilters(targetFilters)`
+   * to ensure rerank fires only after `setFilters` has propagated to
+   * useFilters' state. Without this gate, the orchestrator races against
+   * the React/zustand update ordering: applyParse (zustand sync) lands
+   * before setFilters (React useState), so an intermediate render runs
+   * the effect with new store state but STALE filters — firing rerank
+   * on pre-AI-search data. See v1.8.2 Slice 1 diagnostic logs (tick 3-4)
+   * for the empirical proof of this race.
+   */
+  targetFilters: PlaceFilters | null;
   /** Adaptive broaden state; null when no broaden was triggered. */
   broaden: BroadenState | null;
   /** "checking" → narrow set fetched but not yet evaluated for broaden;
    *  "ready" → either broaden was applied OR not needed, downstream can proceed. */
   broadenStatus: "idle" | "checking" | "ready";
 
-  /** Apply parse-query output: clear stale rankings, set new intent. */
+  /** Apply parse-query output: clear stale rankings, set new intent + target filter set. */
   applyParse: (input: {
     semantic_intent: string;
     requires_semantic_ranking: boolean;
     needs_clarification: string | null;
     query: string;
+    targetFilters: PlaceFilters;
   }) => void;
   /** Mark "narrow fetched, deciding whether to broaden". */
   beginBroadenCheck: () => void;
-  /** Set the full broaden state after the broader fetch completes. */
+  /** Set the full broaden state after the broader fetch completes.
+   *  Also updates targetFilters to match the active mode's filter set
+   *  so the orchestrator can fire on the broader data. */
   applyBroaden: (state: BroadenState) => void;
   /** Mark "broaden check finished, no broaden needed (or applied)" so the
    *  rerank step can proceed. */
   resolveBroadenCheck: () => void;
-  /** User clicked a banner toggle. Switch active mode. */
+  /** User clicked a banner toggle. Switch active mode AND targetFilters. */
   setBroadenActiveMode: (mode: "narrow" | "broader") => void;
   beginRerank: () => void;
   applyRankings: (rankings: { id: string; score: number; why: string }[]) => void;
@@ -94,6 +113,7 @@ export const useAiSearchStore = create<AiSearchState>((set) => ({
   rerankStatus: "idle",
   clarification: null,
   lastQuery: null,
+  targetFilters: null,
   broaden: null,
   broadenStatus: "idle",
 
@@ -102,6 +122,7 @@ export const useAiSearchStore = create<AiSearchState>((set) => ({
     requires_semantic_ranking,
     needs_clarification,
     query,
+    targetFilters,
   }) =>
     set({
       semanticIntent: semantic_intent,
@@ -110,6 +131,7 @@ export const useAiSearchStore = create<AiSearchState>((set) => ({
       rerankStatus: requires_semantic_ranking ? "pending" : "idle",
       clarification: needs_clarification,
       lastQuery: query,
+      targetFilters,
       // Reset broaden state on every new query.
       broaden: null,
       broadenStatus: requires_semantic_ranking ? "checking" : "idle",
@@ -121,14 +143,27 @@ export const useAiSearchStore = create<AiSearchState>((set) => ({
     set({
       broaden: state,
       broadenStatus: "ready",
+      // Sync targetFilters with the active mode's filter set so the
+      // orchestrator's filter-fingerprint gate matches.
+      targetFilters:
+        (state.activeMode === "broader"
+          ? (state.broaderFilters as PlaceFilters)
+          : (state.narrowFilters as PlaceFilters)),
     }),
 
   resolveBroadenCheck: () => set({ broadenStatus: "ready" }),
 
   setBroadenActiveMode: (mode) =>
-    set((s) =>
-      s.broaden ? { broaden: { ...s.broaden, activeMode: mode } } : {}
-    ),
+    set((s) => {
+      if (!s.broaden) return {};
+      return {
+        broaden: { ...s.broaden, activeMode: mode },
+        targetFilters:
+          (mode === "broader"
+            ? (s.broaden.broaderFilters as PlaceFilters)
+            : (s.broaden.narrowFilters as PlaceFilters)),
+      };
+    }),
 
   beginRerank: () => set({ rerankStatus: "pending" }),
 
@@ -150,6 +185,7 @@ export const useAiSearchStore = create<AiSearchState>((set) => ({
       rerankStatus: "idle",
       clarification: null,
       lastQuery: null,
+      targetFilters: null,
       broaden: null,
       broadenStatus: "idle",
     }),

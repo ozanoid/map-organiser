@@ -38,7 +38,8 @@ function orchLog(scope: string, event: string, payload: Record<string, unknown>)
   console.log(`[ai-search/${scope}] ${event}`, payload);
 }
 
-function fpFilters(filters: PlaceFilters): string {
+function fpFilters(filters: PlaceFilters | null): string {
+  if (!filters) return "<null>";
   // Stable fingerprint — sort keys so cosmetic key-order doesn't trip us.
   const obj: Record<string, unknown> = {};
   for (const k of Object.keys(filters).sort()) {
@@ -46,6 +47,30 @@ function fpFilters(filters: PlaceFilters): string {
     if (v !== undefined) obj[k] = v;
   }
   return JSON.stringify(obj);
+}
+
+/**
+ * Mirror of useFilters.setFilters merge logic — used to compute the
+ * EXACT post-merge filter set ahead of the actual state update, so we
+ * can stash it as the AI search's `targetFilters`. The orchestrator
+ * fingerprint-gate compares against this to wait out the race between
+ * applyParse (zustand sync) and setFilters (React useState async).
+ */
+function mergeFiltersForTarget(
+  prev: PlaceFilters,
+  patch: Partial<PlaceFilters>
+): PlaceFilters {
+  const next: Record<string, unknown> = { ...prev };
+  for (const [key, value] of Object.entries(patch)) {
+    if (value === undefined || value === null || value === "") {
+      delete next[key];
+    } else if (Array.isArray(value) && value.length === 0) {
+      delete next[key];
+    } else {
+      next[key] = value;
+    }
+  }
+  return next as PlaceFilters;
 }
 
 /**
@@ -95,7 +120,7 @@ function dropRestrictedHard(
  * `boosts` was removed in v1.8.1 (see schema docstring).
  */
 export function useAiSearch() {
-  const { setFilters } = useFilters();
+  const { setFilters, filters: currentFilters } = useFilters();
   const applyParse = useAiSearchStore((s) => s.applyParse);
   const reset = useAiSearchStore((s) => s.reset);
 
@@ -138,7 +163,17 @@ export function useAiSearch() {
         sort: "google_rating_desc",
       };
 
-      orchLog("parse", "setFilters→", { nextFilters });
+      // Compute the EXACT post-merge filter set so the orchestrator's
+      // fingerprint gate has a deterministic target to wait for. Mirrors
+      // the merge logic in useFilters.setFilters. See targetFilters
+      // docstring in ai-search-store.
+      const targetFilters = mergeFiltersForTarget(currentFilters, nextFilters);
+
+      orchLog("parse", "setFilters→", {
+        nextFilters,
+        targetFilters,
+        targetFp: fpFilters(targetFilters),
+      });
       setFilters(nextFilters);
       orchLog("parse", "applyParse→", {
         intent_len: data.semantic_intent.length,
@@ -149,6 +184,7 @@ export function useAiSearch() {
         requires_semantic_ranking: data.requires_semantic_ranking,
         needs_clarification: data.needs_clarification,
         query,
+        targetFilters,
       });
     },
     onError: () => {
@@ -173,6 +209,7 @@ export function useAiRerankOrchestrator(filters: PlaceFilters) {
   const rerankStatus = useAiSearchStore((s) => s.rerankStatus);
   const broadenStatus = useAiSearchStore((s) => s.broadenStatus);
   const broaden = useAiSearchStore((s) => s.broaden);
+  const targetFilters = useAiSearchStore((s) => s.targetFilters);
   const applyRankings = useAiSearchStore((s) => s.applyRankings);
   const failRerank = useAiSearchStore((s) => s.failRerank);
   const applyBroaden = useAiSearchStore((s) => s.applyBroaden);
@@ -211,6 +248,7 @@ export function useAiRerankOrchestrator(filters: PlaceFilters) {
     broadenTickRef.current += 1;
     const tick = broadenTickRef.current;
     const fp = fpFilters(filters);
+    const targetFp = fpFilters(targetFilters);
     const cacheState = queryClient.getQueryState(["places", filters]);
     const baseLog = {
       tick,
@@ -221,6 +259,7 @@ export function useAiRerankOrchestrator(filters: PlaceFilters) {
       status,
       dataUpdatedAt,
       fp,
+      targetFp,
       broaden: broaden ? `mode=${broaden.activeMode} narrow=${broaden.narrowCount} broader=${broaden.broaderCount}` : null,
       cache_status: cacheState?.status,
       cache_fetchStatus: cacheState?.fetchStatus,
@@ -230,6 +269,13 @@ export function useAiRerankOrchestrator(filters: PlaceFilters) {
 
     if (!needsRerank) { orchLog("orch/broaden", "skip: !needsRerank", baseLog); return; }
     if (broadenStatus !== "checking") { orchLog("orch/broaden", `skip: broadenStatus=${broadenStatus}`, baseLog); return; }
+    // CRITICAL: targetFilters fingerprint gate.
+    // applyParse (zustand sync) lands before setFilters (React useState).
+    // Without this gate, we'd evaluate broaden on a render where filters
+    // is still STALE — see v1.8.2 Slice 1 logs (tick 3, fp='{}'). The
+    // gate holds the broaden decision until setFilters has propagated.
+    if (!targetFilters) { orchLog("orch/broaden", "skip: !targetFilters", baseLog); return; }
+    if (fp !== targetFp) { orchLog("orch/broaden", "skip: fp !== targetFp (filters not propagated yet)", baseLog); return; }
     if (isFetching) { orchLog("orch/broaden", "skip: isFetching", baseLog); return; }
     if (!places) { orchLog("orch/broaden", "skip: !places", baseLog); return; }
 
@@ -279,6 +325,8 @@ export function useAiRerankOrchestrator(filters: PlaceFilters) {
     places?.length,
     broaden,
     filters,
+    targetFilters,
+    status,
   ]);
 
   // ─── Rerank (runs after broaden gate is resolved) ───
@@ -286,6 +334,7 @@ export function useAiRerankOrchestrator(filters: PlaceFilters) {
     rerankTickRef.current += 1;
     const tick = rerankTickRef.current;
     const fp = fpFilters(filters);
+    const targetFp = fpFilters(targetFilters);
     const cacheState = queryClient.getQueryState(["places", filters]);
     const baseLog = {
       tick,
@@ -298,6 +347,7 @@ export function useAiRerankOrchestrator(filters: PlaceFilters) {
       placesLen: places?.length,
       dataUpdatedAt,
       fp,
+      targetFp,
       inFlight: rerankInFlightRef.current,
       cache_status: cacheState?.status,
       cache_fetchStatus: cacheState?.fetchStatus,
@@ -310,6 +360,10 @@ export function useAiRerankOrchestrator(filters: PlaceFilters) {
     if (!needsRerank) { orchLog("orch/rerank", "skip: !needsRerank", baseLog); return; }
     if (!semanticIntent) { orchLog("orch/rerank", "skip: !semanticIntent", baseLog); return; }
     if (broadenStatus !== "ready") { orchLog("orch/rerank", `skip: broadenStatus=${broadenStatus}`, baseLog); return; }
+    // CRITICAL: targetFilters fingerprint gate.
+    // See broaden gate's identical guard for rationale.
+    if (!targetFilters) { orchLog("orch/rerank", "skip: !targetFilters", baseLog); return; }
+    if (fp !== targetFp) { orchLog("orch/rerank", "skip: fp !== targetFp (filters not propagated yet)", baseLog); return; }
     if (status !== "success") { orchLog("orch/rerank", `skip: status=${status}`, baseLog); return; }
     if (isFetching) { orchLog("orch/rerank", "skip: isFetching", baseLog); return; }
     if (!places) { orchLog("orch/rerank", "skip: !places", baseLog); return; }
@@ -336,15 +390,24 @@ export function useAiRerankOrchestrator(filters: PlaceFilters) {
       onSuccess: (rows) => {
         rerankInFlightRef.current = false;
         const postState = queryClient.getQueryState(["places", filters]);
-        orchLog("orch/rerank", "✓ response landed", {
+        // Snapshot the targetFilters fingerprint at fire-time and
+        // re-check on landing. If the user (or broaden toggle) changed
+        // the active target while the rerank was in flight, the response
+        // is stale — discard rather than write incorrect rankings.
+        const currentTargetFp = fpFilters(useAiSearchStore.getState().targetFilters);
+        const stale = currentTargetFp !== targetFp;
+        orchLog("orch/rerank", stale ? "⚠︎ stale response — discarded" : "✓ response landed", {
           rankedCount: rows.length,
-          stillFp: fpFilters(filters),
           post_cache_dataUpdatedAt: postState?.dataUpdatedAt,
           post_cache_dataLen: Array.isArray(postState?.data) ? (postState.data as Place[]).length : null,
           fp_at_fire: fp,
+          targetFp_at_fire: targetFp,
+          currentTargetFp,
           dataUpdatedAt_at_fire: dataUpdatedAt,
         });
-        applyRankings(rows);
+        if (!stale) {
+          applyRankings(rows);
+        }
       },
       onError: () => {
         rerankInFlightRef.current = false;
@@ -361,6 +424,8 @@ export function useAiRerankOrchestrator(filters: PlaceFilters) {
     status,
     isFetching,
     places?.length,
+    filters,
+    targetFilters,
   ]);
 }
 
