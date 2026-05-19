@@ -15,18 +15,29 @@ import type { RankResultsOutput } from "@/lib/ai/schemas/rank-results";
 /**
  * Verbose orchestrator logging.
  *
- * Kept ON during the friends-and-family stabilization phase: every tick
- * of the broaden gate and rerank gate logs its state and decision. Cheap
- * (just console.log) and invaluable when triaging "why is X missing" or
- * "why didn't it fire" reports.
+ * Gated:
+ *   - ON in development (`NODE_ENV !== "production"`)
+ *   - ON in any environment if `localStorage["ai-debug"] === "1"`
+ *   - OFF otherwise (Vercel preview + production deployments)
  *
- * Production-gating: when usage scales beyond F&F, gate by NODE_ENV or
- * a localStorage flag (e.g. `localStorage.setItem('ai-debug', '1')`).
+ * To flip on in a Vercel preview/prod build for debugging:
+ *   localStorage.setItem("ai-debug", "1"); location.reload();
+ *
+ * Server logs (`[ai/rank-results]` etc.) are unaffected by this flag —
+ * those are emitted from the route and visible in Vercel logs regardless.
  */
-const ORCH_LOG = true;
+function isOrchLogEnabled(): boolean {
+  if (process.env.NODE_ENV !== "production") return true;
+  if (typeof window === "undefined") return false;
+  try {
+    return window.localStorage?.getItem("ai-debug") === "1";
+  } catch {
+    return false;
+  }
+}
 
 function orchLog(scope: string, event: string, payload: Record<string, unknown>) {
-  if (!ORCH_LOG) return;
+  if (!isOrchLogEnabled()) return;
   // eslint-disable-next-line no-console
   console.log(`[ai-search/${scope}] ${event}`, payload);
 }

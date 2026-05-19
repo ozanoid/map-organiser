@@ -6,6 +6,55 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 19.05.2026 — v1.8.9 — Cleanup: log gating + vault catch-up
+
+Post-merge cleanup of the Phase 6.5 LLM-as-judge pivot (v1.8.0 → v1.8.8).
+
+### Log gating
+
+Verbose client-side orchestrator logs (`[ai-search/parse]`,
+`[ai-search/broaden]`, `[ai-search/rerank]`) and window store exposures
+(`window.__aiSearchStore`, `window.__filterPersistStore`) are now gated:
+
+- ON in development (`NODE_ENV !== "production"`)
+- ON in any environment if `localStorage["ai-debug"] === "1"`
+- OFF in production / Vercel preview by default
+
+To debug a deployed build:
+```js
+localStorage.setItem("ai-debug", "1");
+location.reload();
+```
+
+Server-side logs (`[ai/rank-results]`, `[ai/parse-query]`, `[api/places]`)
+are unaffected — always on, visible in Vercel logs.
+
+### Vault catch-up
+
+`docs/05-flows/ai-search-flow.md` → v2.3.0:
+- Added sections for v1.8.3 (schema resilience), v1.8.4 (skipped /
+  hallucinated handling), v1.8.5 (cross-page state + LLM idx refs),
+  v1.8.6 (Suspense boundary), v1.8.7 (orchestrator on /places),
+  v1.8.8 (filter-persist store).
+- New **Mount contract** table: documents the coupled relationship
+  between `<FilterPanel>` (which contains `<AISearchInput>`) and
+  `useAiRerankOrchestrator(filters)`. Both must be present on the
+  same page; missing one creates a stuck-pending UI. (This was the
+  v1.8.7 bug — orphan AISearchInput on /places.)
+- New **Diagnostic logging** section: documents the `localStorage`
+  toggle.
+
+### Files touched
+
+- `src/lib/hooks/use-ai-search.ts` — `isOrchLogEnabled()` helper
+- `src/lib/stores/ai-search-store.ts` — gated window expose
+- `src/lib/stores/filter-persist-store.ts` — gated window expose
+- `docs/05-flows/ai-search-flow.md` → v2.3.0
+
+### No behavior change for end users
+
+---
+
 ## 19.05.2026 — v1.8.5 — Cross-page state + LLM idx references
 
 Three UX/correctness fixes observed during /places page testing:

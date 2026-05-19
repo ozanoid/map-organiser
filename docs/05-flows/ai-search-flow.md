@@ -2,7 +2,7 @@
 title: AI Search Flow (LLM-as-judge, Phase 6.5)
 type: flow
 domain: places
-version: 2.2.0
+version: 2.3.0
 last_updated: 19.05.2026
 status: stable
 sources:
@@ -375,3 +375,162 @@ tick 6  fp=NEW                  → ★ FIRE on 25 places (correct)
 Diagnostic instrumentation (v1.8.2 Slice 1) was removed after
 verification; only the structural `fpFilters` helper and the
 `mergeFiltersForTarget` merge mirror remain in the production path.
+
+## v1.8.3 — Rerank schema resilience
+
+LLM ocasionally exceeded the `why.max(120)` cap by a few chars (observed
+124 chars), failing strict Zod validation and dropping the entire
+response → "AI ranking unavailable" amber. Strict char caps on
+non-deterministic LLM output are fragile.
+
+Three layers of defense:
+1. **Prompt** asks for ≤200 chars (target 120-180), warns that strings
+   over 200 will be auto-truncated server-side.
+2. **Schema preprocess** (`schemas/rank-results.ts`): `why` runs through
+   `z.preprocess((v) => v.length > 200 ? v.slice(0,197)+"…" : v, z.string().max(240))`.
+   `score` clamped to `[0,1]` in case the LLM emits 1.05 etc.
+3. **Salvage path** (route catch): if AI SDK throws
+   `AI_NoObjectGeneratedError`, extract the raw text from the error,
+   `JSON.parse` it, run through `RankResultsSchema.parse()` (preprocess
+   fires this time), use the result. Logs a warn.
+
+## v1.8.4 — Skipped / hallucinated candidate handling
+
+LLM sometimes returns fewer candidates than were sent ("skipped") or
+emits ids not in the input ("hallucinated"). Both cases break the
+client UI: places with no ranking entry fall back to the address
+display, creating a confused mixed list (some with green why, some
+with gray address).
+
+Defense:
+- Server detects both cases by set-diff between input candidate ids
+  and response ids.
+- Skipped candidates filled with `{score: 0, why: "Not evaluated by AI in this run."}`
+  — score=0 hides them via the same HIDE_BELOW_SCORE threshold that
+  hides LLM-judged irrelevant matches, so UX is consistent.
+- Hallucinated ids dropped (existing `safeRanked` filter). Logged for
+  visibility.
+- New diagnostic line: `candidates llm_returned safe skipped
+  out_of_range duplicates with_profile hidden_below_0.20 top5`.
+
+## v1.8.5 — Cross-page state + LLM idx references
+
+**Cross-page state** (Map ↔ Places): sidebar/mobile-nav links to Map
+and Places now preserve the current URL's query string. Without this,
+clicking "Places" from `/map?city=London&...` landed on `/places`
+(params dropped), useFilters returned an empty filter set, and the AI
+store still had rankings → confused UI with all places + AI mode
+overlay.
+
+**AISearchInput draft ↔ lastQuery sync**: input field's local `draft`
+state now mirrors the store's `lastQuery` via a `useEffect`. Solves
+two reports:
+- FilterPanel "Clear" left the input box populated.
+- Navigating /map → /places left the input empty even with the AI
+  search still live in the store.
+
+**LLM uses local idx instead of UUID**: prompt embeds candidates as
+`idx=0`, `idx=1`, …; output schema is `{idx, score, why}`; server maps
+`idx → candidates[idx].id` before responding. Empirical motivation
+(v1.8.4 server log):
+
+```
+LLM skipped 1/25 candidate(s): Bistro Freddie (c73423aa-c740-…)
+LLM hallucinated 1 id(s): 16b91296-dff2-…   ← one hex char off
+```
+
+The 36-char UUID copy was the dominant source of "hallucinated" entries.
+Switching to integer idx makes UUID-typo hallucination structurally
+impossible (out-of-range idx → trivially detected and rejected). Also
+saves ~37 tokens/candidate input + ~37 output ≈ ~10% cost reduction on
+a 25-candidate rerank.
+
+Two schemas now live in `schemas/rank-results.ts`:
+- `LlmRankSchema` (internal, `{idx, score, why}`) — what we ask the LLM.
+- `RankResultsSchema` (public, `{id, score, why}`) — unchanged from
+  earlier; client contract preserved.
+
+## v1.8.6 — Suspense boundary fix (Vercel build)
+
+`AppSidebar` and `MobileNav` use `useSearchParams()`. Next.js 16 App
+Router requires any such client component to be wrapped in a
+`<Suspense>` boundary, otherwise prerender of any (app) page (notably
+`/import`, which has no dynamic data of its own) fails.
+
+Fix: wrap both in `<Suspense>` in `(app)/layout.tsx` with sized
+fallbacks (no CLS during hydration). Mobile nav also gained the same
+`preserveSearch` flag — primary use case the user named was mobile
+place-detail drill-down → back-to-map round-trip.
+
+## v1.8.7 — Orchestrator mounted on /places
+
+The orchestrator (`useAiRerankOrchestrator`) drives the broaden +
+rerank state machine. Until v1.8.7, it was mounted only in
+`MapContent`. But `AISearchInput` lives in `FilterPanel` which renders
+on BOTH `/map` AND `/places`. Submitting a search on /places set
+`rerankStatus="pending"` and then got stuck because nothing fired the
+rank-results call — UI loading spinner forever.
+
+Fix: mount `useAiRerankOrchestrator(filters)` at the top of
+`PlacesContent` too. Same filters source as the existing
+`usePlaces(filters)` call so they share the React Query cache (deduped).
+
+This was a v1.8.0 oversight that survived every subsequent fix because
+all stabilization testing happened on /map.
+
+## v1.8.8 — Cross-route filter-persist store
+
+`/map?city=London` → click Lists → /lists (URL params dropped because
+Lists has no filter context) → click Map back → URL becomes `/map`
+(bare), AI store survives (zustand singleton). UI showed AI active
+mode with all places + green why texts only on the ranked subset.
+
+Fix: new `filter-persist-store` (zustand singleton, session-only)
+mirrors the last URL query string seen on /map or /places. Sidebar +
+MobileNav read this store when navigating TO Map or Places from a
+non-filter-context page; current URL otherwise.
+
+Mirror is wired in MapContent + PlacesContent via:
+```ts
+useEffect(() => { setLastMapPlacesQuery(searchParams.toString()); },
+         [searchParams, setLastMapPlacesQuery]);
+```
+
+FilterPanel "Clear" → URL clears → store auto-clears via the mirror.
+No separate teardown needed.
+
+## Mount contract (debug reference)
+
+Three coupled pieces must always be co-mounted; missing one causes
+hard-to-debug stuck states:
+
+| Page | `<FilterPanel>` (contains AISearchInput) | `useAiRerankOrchestrator(filters)` | Notes |
+|---|---|---|---|
+| `/map` (MapContent) | ✓ | ✓ | Original Phase 6 mount site |
+| `/places` (PlacesContent) | ✓ | ✓ (since v1.8.7) | Added after orphan-orchestrator bug |
+| `/lists/[id]` | ✗ | ✗ | AI search deliberately excluded |
+| `/stats`, `/import`, `/settings` | ✗ | ✗ | No filter context |
+
+**Rule of thumb:** if you add `<FilterPanel>` (or `<AiSearchInput>`
+directly) to a new route, also add `useAiRerankOrchestrator(filters)`
+in the same page component. Without the orchestrator, any AI search
+submitted from that page hangs in `rerankStatus="pending"`.
+
+## Diagnostic logging
+
+Client-side `[ai-search/parse]` / `[ai-search/broaden]` / `[ai-search/rerank]`
+events are gated:
+- ON in development (`NODE_ENV !== "production"`)
+- ON in any environment if `localStorage["ai-debug"] === "1"`
+- OFF otherwise
+
+To debug on a Vercel preview/prod build:
+```js
+localStorage.setItem("ai-debug", "1"); location.reload();
+```
+
+Same gating applies to `window.__aiSearchStore` and
+`window.__filterPersistStore` exposures.
+
+Server-side `[ai/rank-results]` and `[ai/parse-query]` logs are
+always on (visible in Vercel logs).
