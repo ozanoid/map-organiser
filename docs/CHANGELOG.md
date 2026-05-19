@@ -6,6 +6,81 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 20.05.2026 — v1.9.0 — Axiom observability (OTel + structured logs)
+
+Single-tool observability stack via Vercel-Axiom marketplace integration.
+Two pipes, one destination (Axiom dataset `vercel`):
+
+### Pipe 1 — Vercel Log Drain (logs)
+
+Set up by the Axiom marketplace integration. Every `console.log` ships
+to Axiom. We replaced ad-hoc string logs with structured JSON via a new
+`log` helper so each field becomes queryable in Axiom (no regex
+parsing).
+
+### Pipe 2 — OTel traces (incl. AI SDK GenAI semconv)
+
+`instrumentation.ts` boots `@vercel/otel`. AI SDK's
+`experimental_telemetry: { isEnabled: true, functionId, metadata }`
+on `generateText` calls emits OTel spans with `gen_ai.*` semantic
+conventions: model, prompt, completion, input/output tokens, latency.
+
+### What's new
+
+- `instrumentation.ts` (root) — OTel SDK registration.
+- `src/lib/telemetry/logger.ts` — `log.{debug,info,warn,error}` JSON
+  logger. Auto-attaches `traceId` / `spanId` from the active OTel
+  context so every log line correlates with its parent span and
+  sibling logs in the same request.
+- `src/app/api/ai/parse-query/route.ts` — `experimental_telemetry`
+  enabled (functionId=`ai.parse-query`); diagnostic + error logs
+  switched to structured `log.*`.
+- `src/app/api/ai/rank-results/route.ts` — same pattern plus
+  structured warn events: `out_of_range_idx`, `duplicate_idx`,
+  `skipped_candidates`, `salvaged`. `top5` and `full_ranked` emitted
+  as arrays of objects, not stringified.
+- `src/app/api/places/route.ts` — diagnostic log switched to structured
+  `api.places` event with nested `filters` object.
+
+### Trace correlation
+
+Every log + span in a request shares one `traceId`. In Axiom:
+
+```
+['vercel']
+| where ['traceId'] == "abc123..."
+| sort by ['_time']
+```
+
+returns the full timeline: HTTP span → gen_ai span (parse-query) →
+`event=ai.parse-query` log → places fetch span → `event=api.places`
+log → rerank LLM span → `event=ai.rank-results` log.
+
+### Cost expectation (F&F scale)
+
+- Log drain: ~1-3 GB/month, ~$1-2/month at `$0.50/GB`
+- Axiom ingest: well within free tier (500 GB/month)
+
+### Files touched
+
+- `instrumentation.ts` (new)
+- `src/lib/telemetry/logger.ts` (new)
+- `src/app/api/ai/parse-query/route.ts`
+- `src/app/api/ai/rank-results/route.ts`
+- `src/app/api/places/route.ts`
+- `docs/05-flows/observability-flow.md` (new, v1.0.0)
+- `package.json` — added `@vercel/otel`, `@opentelemetry/api`
+
+### Future
+
+Other API routes (`parse-link`, `enrich`, `import-batch`, etc.) still
+use ad-hoc `console.log` — they ship to Axiom but unstructured. Migrate
+opportunistically when touching those files. Frontend instrumentation
+(button click → span propagated via traceparent header) also a future
+add.
+
+---
+
 ## 19.05.2026 — v1.8.9 — Cleanup: log gating + vault catch-up
 
 Post-merge cleanup of the Phase 6.5 LLM-as-judge pivot (v1.8.0 → v1.8.8).

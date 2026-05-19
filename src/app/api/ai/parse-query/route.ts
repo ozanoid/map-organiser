@@ -9,6 +9,7 @@ import {
 } from "@/lib/ai/schemas/parse-query";
 import { buildParseQueryPrompt } from "@/lib/ai/prompts/parse-query";
 import { trackAiUsage } from "@/lib/ai/track-usage";
+import { log } from "@/lib/telemetry/logger";
 
 /**
  * POST /api/ai/parse-query
@@ -95,10 +96,19 @@ export async function POST(request: NextRequest) {
       output: Output.object({ schema: ParseQuerySchema }),
       system: systemPrompt,
       prompt: userPrompt,
+      // OTel: produces gen_ai.* spans (system, model, prompt, completion,
+      // input_tokens, output_tokens, latency). Picked up by @vercel/otel
+      // and forwarded to Axiom via Vercel's platform pipe. functionId
+      // becomes the span name. metadata becomes span attributes.
+      experimental_telemetry: {
+        isEnabled: true,
+        functionId: "ai.parse-query",
+        metadata: { userId: user.id, queryLen: query.length },
+      },
     });
     parsed = result.output;
   } catch (e) {
-    console.error("[ai/parse-query] LLM call failed:", e);
+    log.error("ai.parse-query.llm_failed", e, { userId: user.id, query });
     trackAiUsage(user.id, "ai_parse_query").catch(() => {});
     return NextResponse.json({
       hard: { search: query },
@@ -123,13 +133,18 @@ export async function POST(request: NextRequest) {
   trackAiUsage(user.id, "ai_parse_query").catch(() => {});
 
   // ─── Diagnostic logging ───
-  console.log(
-    `[ai/parse-query] query="${query}" → ` +
-      `hard=${JSON.stringify(sanitized.hard)} ` +
-      `rerank=${sanitized.requires_semantic_ranking} ` +
-      `intent="${sanitized.semantic_intent}" ` +
-      `clarify=${sanitized.needs_clarification ?? "-"}`
-  );
+  // Structured so Axiom can filter by event / userId / hard.* fields
+  // without regex parsing. The traceId attached by getTraceContext()
+  // links this log to the parent gen_ai.* spans from generateText.
+  log.info("ai.parse-query", {
+    userId: user.id,
+    query,
+    hard: sanitized.hard,
+    requires_rerank: sanitized.requires_semantic_ranking,
+    intent: sanitized.semantic_intent,
+    intent_len: sanitized.semantic_intent.length,
+    needs_clarification: sanitized.needs_clarification,
+  });
 
   return NextResponse.json(sanitized);
 }
