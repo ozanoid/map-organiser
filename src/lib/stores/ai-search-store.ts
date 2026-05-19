@@ -131,7 +131,3 @@ export const useAiSearchStore = create<AiSearchState>((set) => ({
  * raise for stricter filtering (fewer, more confident matches only).
  */
 export const HIDE_BELOW_SCORE = 0.2;
-
-/** @deprecated use HIDE_BELOW_SCORE. Kept as alias during slice rollout
- *  to avoid breaking PlaceCard / MapContent imports before Slice 4. */
-export const LESS_RELEVANT_SCORE = HIDE_BELOW_SCORE;

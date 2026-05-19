@@ -8,26 +8,52 @@ import { Star, ExternalLink, Sparkles } from "lucide-react";
 import Link from "next/link";
 import {
   useAiSearchStore,
-  LESS_RELEVANT_SCORE,
+  HIDE_BELOW_SCORE,
 } from "@/lib/stores/ai-search-store";
 
-export function PlaceCard({ place }: { place: Place }) {
-  const googlePhoto = place.google_data?.photo_storage_url || place.google_data?.photos?.[0];
+/**
+ * PlaceCard — the canonical visual representation of a saved place.
+ *
+ * AI search mode (Phase 6.5):
+ *   - When `useAiSearchStore.rankings` contains this place's id:
+ *     * If score < HIDE_BELOW_SCORE → the card returns null (hidden,
+ *       the user shouldn't see clearly-mismatched results).
+ *     * Otherwise → renders normally with `why` line replacing
+ *       address (italic emerald).
+ *   - When `rankings` is null (normal browsing mode):
+ *     * Address line shown, no fading, no hiding.
+ *
+ * `className` is forwarded to the inner Card so wrapper components
+ * (e.g. SelectablePlaceCard) can apply selection rings without
+ * duplicating PlaceCard's body.
+ */
+export function PlaceCard({
+  place,
+  className,
+}: {
+  place: Place;
+  className?: string;
+}) {
+  const googlePhoto =
+    place.google_data?.photo_storage_url || place.google_data?.photos?.[0];
   const googleRating = place.google_data?.rating;
   const tags = place.tags ?? [];
   const visibleTags = tags.slice(0, 2);
   const extraTagCount = tags.length - 2;
 
-  // Phase 6 — AI rank annotation. Null when no active NL search.
+  // AI mode: when rankings exist and this place scored below the hide
+  // threshold, the LLM has signaled "this should not surface to the
+  // user" — honor that.
   const aiRanking = useAiSearchStore((s) => s.rankings?.get(place.id));
-  const lessRelevant =
-    aiRanking !== undefined && aiRanking.score < LESS_RELEVANT_SCORE;
+  if (aiRanking !== undefined && aiRanking.score < HIDE_BELOW_SCORE) {
+    return null;
+  }
 
   return (
     <Link href={`/places/${place.id}`} prefetch={false}>
       <Card
         className={`overflow-hidden hover:shadow-md transition-shadow cursor-pointer ${
-          lessRelevant ? "opacity-60" : ""
+          className ?? ""
         }`}
       >
         {/* Photo area with visit status badge */}
