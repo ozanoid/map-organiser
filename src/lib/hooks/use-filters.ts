@@ -22,31 +22,17 @@ function paramKeyFor(key: string): string {
   return PARAM_MAP[key] || key;
 }
 
-const SOFT_AXES = [
-  "atmosphere",
-  "dietary",
-  "occasions",
-  "seating",
-  "cuisine_types",
-] as const;
-type SoftAxis = (typeof SOFT_AXES)[number];
-
 function parseUrlToFilters(searchParams: URLSearchParams): PlaceFilters {
   const category = searchParams.get("category");
   const subcategory = searchParams.get("subcategory");
   const tagIds = searchParams.get("tags");
   const status = searchParams.get("status");
 
-  // Phase 6 — soft feature filters
-  const softFeatures: PlaceFilters["soft_features"] = {};
-  for (const axis of SOFT_AXES) {
-    const raw = searchParams.get(`f_${axis}`);
-    if (raw) {
-      const vals = raw.split(",").map((v) => v.trim()).filter(Boolean);
-      if (vals.length) softFeatures[axis] = vals;
-    }
-  }
-  const hasSoft = Object.keys(softFeatures).length > 0;
+  // Phase 6.5 LLM-as-judge pivot: `?f_*` params (atmosphere, occasions,
+  // dietary, seating, cuisine_types) used to drive the soft-feature
+  // filter. The soft filter is removed in the pivot. Old bookmark URLs
+  // still containing f_* params are silently ignored here — only
+  // structural filters parse. See docs/_plans/phase-6-llm-as-judge-pivot.md.
 
   return {
     country: searchParams.get("country") || undefined,
@@ -64,7 +50,6 @@ function parseUrlToFilters(searchParams: URLSearchParams): PlaceFilters {
     visit_status: (status as PlaceFilters["visit_status"]) || undefined,
     search: searchParams.get("q") || undefined,
     sort: searchParams.get("sort") || undefined,
-    soft_features: hasSoft ? softFeatures : undefined,
   };
 }
 
@@ -72,20 +57,6 @@ function filtersToQueryString(filters: PlaceFilters): string {
   const params = new URLSearchParams();
   Object.entries(filters).forEach(([key, value]) => {
     if (value === undefined || value === null || value === "") return;
-
-    // Phase 6 — soft features fan out to one URL param per axis.
-    if (key === "soft_features") {
-      const sf = value as PlaceFilters["soft_features"];
-      if (sf) {
-        for (const [axis, vals] of Object.entries(sf)) {
-          if (Array.isArray(vals) && vals.length > 0) {
-            params.set(`f_${axis}`, vals.join(","));
-          }
-        }
-      }
-      return;
-    }
-
     const paramKey = paramKeyFor(key);
     if (Array.isArray(value)) {
       if (value.length > 0) params.set(paramKey, value.join(","));

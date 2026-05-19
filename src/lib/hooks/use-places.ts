@@ -17,13 +17,8 @@ async function fetchPlaces(filters: PlaceFilters): Promise<Place[]> {
   if (filters.sort) params.set("sort", filters.sort);
   if (filters.subcategory_ids?.length)
     params.set("subcategory", filters.subcategory_ids.join(","));
-  if (filters.soft_features) {
-    for (const [axis, vals] of Object.entries(filters.soft_features)) {
-      if (Array.isArray(vals) && vals.length > 0) {
-        params.set(`f_${axis}`, vals.join(","));
-      }
-    }
-  }
+  // Phase 6.5 LLM-as-judge pivot: `soft_features` removed. Soft matching
+  // now happens inside rank-results — no URL params for it.
 
   const res = await fetch(`/api/places?${params}`);
   if (!res.ok) throw new Error("Failed to fetch places");

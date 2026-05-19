@@ -21,8 +21,9 @@ import { useMapStyle } from "@/lib/hooks/use-map-style";
 import { useAiRerankOrchestrator } from "@/lib/hooks/use-ai-search";
 import {
   useAiSearchStore,
-  LESS_RELEVANT_SCORE,
+  HIDE_BELOW_SCORE,
 } from "@/lib/stores/ai-search-store";
+import { useFilterPersistStore } from "@/lib/stores/filter-persist-store";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   SlidersHorizontal,
@@ -48,6 +49,16 @@ export function MapContent({ mapboxToken }: { mapboxToken: string }) {
   // result set has settled.
   useAiRerankOrchestrator(filters);
   const aiRankings = useAiSearchStore((s) => s.rankings);
+
+  // AI mode marker filter: when rankings exist, hide markers whose
+  // score is below the threshold. The LLM has decided these shouldn't
+  // surface to the user; the map respects that decision.
+  const placesForMap = aiRankings
+    ? places.filter((p) => {
+        const ranking = aiRankings.get(p.id);
+        return ranking === undefined || ranking.score >= HIDE_BELOW_SCORE;
+      })
+    : places;
   const { data: categories = [] } = useCategories();
   const { mapStyleUrl, markerStyle } = useMapStyle();
   const [addOpen, setAddOpen] = useState(false);
@@ -72,6 +83,17 @@ export function MapContent({ mapboxToken }: { mapboxToken: string }) {
       router.replace("/map");
     }
   }, [searchParams, router]);
+
+  // Mirror current URL query string into the cross-page filter-persist
+  // store so nav links from non-filter-context pages (/lists, /stats,
+  // /settings, /places/[id], …) can restore it on return. See store
+  // docstring for the round-trip scenario this prevents (v1.8.8).
+  const setLastMapPlacesQuery = useFilterPersistStore(
+    (s) => s.setLastMapPlacesQuery
+  );
+  useEffect(() => {
+    setLastMapPlacesQuery(searchParams.toString());
+  }, [searchParams, setLastMapPlacesQuery]);
   const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
   const [detailData, setDetailData] = useState<Place | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -170,7 +192,7 @@ export function MapContent({ mapboxToken }: { mapboxToken: string }) {
       <div className="relative flex-1">
         <MapView
           ref={mapRef}
-          places={places}
+          places={placesForMap}
           categories={categories}
           onPlaceClick={handlePlaceClick}
           onVisiblePlacesChange={setVisiblePlaceIds}
@@ -219,35 +241,49 @@ export function MapContent({ mapboxToken }: { mapboxToken: string }) {
         )}
 
         {/* Visible place count + list */}
-        {!isLoading && places.length > 0 && !selectedPlace && !searchResult && (
+        {!isLoading && places.length > 0 && !selectedPlace && !searchResult && (() => {
+          // AI active: badge count reflects the post-threshold visible
+          // set, matching what's actually on the map and in the list.
+          const visibleCount = aiRankings
+            ? visiblePlaceIds.filter((id) => {
+                const score = aiRankings.get(id)?.score;
+                return score === undefined || score >= HIDE_BELOW_SCORE;
+              }).length
+            : visiblePlaceIds.length;
+          if (visibleCount === 0 && aiRankings) return null;
+          return (
           <div className="absolute top-4 right-16 z-10 lg:right-4">
             <button
               type="button"
               onClick={() => setPlaceListOpen((prev) => !prev)}
               className="bg-white/90 dark:bg-gray-900/90 backdrop-blur-sm rounded-full px-3 py-1.5 shadow-md text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer flex items-center gap-1.5 transition-colors duration-200 hover:bg-white dark:hover:bg-gray-900"
             >
-              {visiblePlaceIds.length} place{visiblePlaceIds.length !== 1 ? "s" : ""}
+              {visibleCount} place{visibleCount !== 1 ? "s" : ""}
               {placeListOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
             </button>
 
             {placeListOpen && visiblePlaceIds.length > 0 && (
               <div className="mt-2 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm rounded-xl shadow-xl border max-h-[50dvh] overflow-y-auto w-64">
                 {(() => {
-                  // Phase 6: when AI rankings are present, sort by score
-                  // descending; ties keep the original (map-derived) order.
+                  // AI active mode: hide entries below threshold AND sort
+                  // remaining by score descending. Normal mode: original
+                  // (map-derived) order.
                   const ordered = aiRankings
-                    ? [...visiblePlaceIds].sort((a, b) => {
-                        const sa = aiRankings.get(a)?.score ?? -1;
-                        const sb = aiRankings.get(b)?.score ?? -1;
-                        return sb - sa;
-                      })
+                    ? [...visiblePlaceIds]
+                        .filter((id) => {
+                          const score = aiRankings.get(id)?.score;
+                          return score === undefined || score >= HIDE_BELOW_SCORE;
+                        })
+                        .sort((a, b) => {
+                          const sa = aiRankings.get(a)?.score ?? -1;
+                          const sb = aiRankings.get(b)?.score ?? -1;
+                          return sb - sa;
+                        })
                     : visiblePlaceIds;
                   return ordered.map((id) => {
                     const place = places.find((p) => p.id === id);
                     if (!place) return null;
                     const ranking = aiRankings?.get(id);
-                    const lessRelevant =
-                      ranking !== undefined && ranking.score < LESS_RELEVANT_SCORE;
                     return (
                       <button
                         key={id}
@@ -256,9 +292,7 @@ export function MapContent({ mapboxToken }: { mapboxToken: string }) {
                           setPlaceListOpen(false);
                           mapRef.current?.flyToPlace(id);
                         }}
-                        className={`w-full text-left px-3 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition-colors flex items-center gap-2.5 border-b last:border-b-0 border-gray-100 dark:border-gray-800 ${
-                          lessRelevant ? "opacity-60" : ""
-                        }`}
+                        className="w-full text-left px-3 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition-colors flex items-center gap-2.5 border-b last:border-b-0 border-gray-100 dark:border-gray-800"
                       >
                         <span
                           className="h-5 w-5 rounded-full shrink-0"
@@ -281,7 +315,8 @@ export function MapContent({ mapboxToken }: { mapboxToken: string }) {
               </div>
             )}
           </div>
-        )}
+          );
+        })()}
 
         {/* Empty state CTA */}
         {!isLoading && places.length === 0 && !selectedPlace && !searchResult && (

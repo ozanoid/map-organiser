@@ -102,8 +102,6 @@ export async function POST(request: NextRequest) {
     trackAiUsage(user.id, "ai_parse_query").catch(() => {});
     return NextResponse.json({
       hard: { search: query },
-      soft_features: {},
-      boosts: {},
       semantic_intent: "",
       requires_semantic_ranking: false,
       needs_clarification: null,
@@ -128,8 +126,6 @@ export async function POST(request: NextRequest) {
   console.log(
     `[ai/parse-query] query="${query}" → ` +
       `hard=${JSON.stringify(sanitized.hard)} ` +
-      `soft=${JSON.stringify(sanitized.soft_features)} ` +
-      `boosts=${JSON.stringify(sanitized.boosts)} ` +
       `rerank=${sanitized.requires_semantic_ranking} ` +
       `intent="${sanitized.semantic_intent}" ` +
       `clarify=${sanitized.needs_clarification ?? "-"}`
@@ -140,8 +136,7 @@ export async function POST(request: NextRequest) {
 
 /**
  * Strip any UUIDs from the LLM output that don't appear in the user's context.
- * Catches hallucinated IDs even though the prompt forbids them. Applies to
- * BOTH `hard` and `boosts` layers.
+ * Catches hallucinated IDs even though the prompt forbids them.
  *
  * Returns the same shape with arrays filtered. Non-ID fields pass through.
  */
@@ -173,29 +168,7 @@ function sanitizeAgainstContext(
     delete hard.list_id;
   }
 
-  const boosts = { ...out.boosts };
-  if (boosts.matching_tag_ids) {
-    boosts.matching_tag_ids = boosts.matching_tag_ids.filter((id) =>
-      tagIds.has(id)
-    );
-    if (boosts.matching_tag_ids.length === 0) delete boosts.matching_tag_ids;
-  }
-  if (boosts.matching_list_ids) {
-    boosts.matching_list_ids = boosts.matching_list_ids.filter((id) =>
-      listIds.has(id)
-    );
-    if (boosts.matching_list_ids.length === 0) delete boosts.matching_list_ids;
-  }
-  if (boosts.matching_subcategory_ids) {
-    boosts.matching_subcategory_ids = boosts.matching_subcategory_ids.filter(
-      (id) => subcategoryIds.has(id)
-    );
-    if (boosts.matching_subcategory_ids.length === 0) {
-      delete boosts.matching_subcategory_ids;
-    }
-  }
-
-  return { ...out, hard, boosts };
+  return { ...out, hard };
 }
 
 /**

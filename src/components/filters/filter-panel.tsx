@@ -24,6 +24,9 @@ const SORT_OPTIONS = [
 export function FilterPanel() {
   const { filters, setFilters, clearFilters, hasActiveFilters } = useFilters();
   const resetAiSearch = useAiSearchStore((s) => s.reset);
+  // AI search active mode = rankings populated. When active, sort
+  // dropdown is replaced with a static "AI Ranked" badge.
+  const aiSearchActive = useAiSearchStore((s) => s.rankings !== null);
 
   function handleClearAll() {
     clearFilters();
@@ -50,12 +53,22 @@ export function FilterPanel() {
       {/* AI natural-language search (hidden when ai_features_enabled = false) */}
       <AiSearchInput />
 
-      {/* Sort */}
+      {/* Sort — disabled during AI search (sort dictated by rerank score). */}
       <div>
         <label className="text-xs font-medium mb-1.5 block text-muted-foreground">
           Sort by
         </label>
         <div className="relative">
+          {aiSearchActive ? (
+            <div
+              className="w-full h-9 px-3 text-sm border border-input rounded-md bg-muted/40 inline-flex items-center text-muted-foreground cursor-not-allowed select-none"
+              title="Sorting is controlled by AI ranking while AI search is active"
+              aria-label="Sort: AI ranked (disabled)"
+            >
+              AI Ranked
+            </div>
+          ) : (
+            <>
           <select
             value={filters.sort || "newest"}
             onChange={(e) =>
@@ -78,6 +91,8 @@ export function FilterPanel() {
           >
             <path d="m6 9 6 6 6-6" />
           </svg>
+            </>
+          )}
         </div>
       </div>
 

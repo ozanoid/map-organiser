@@ -6,6 +6,345 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 19.05.2026 — v1.8.5 — Cross-page state + LLM idx references
+
+Three UX/correctness fixes observed during /places page testing:
+
+### #1 + #2 — Cross-page state persistence (UX)
+
+Going /map → /places via the sidebar dropped the URL query string, so
+filters (`?city=London&...`) disappeared. AI store survived (zustand
+singleton) but useFilters now returned an empty filter set:
+- FilterPanel "Clear" button hidden (`hasActiveFilters=false`)
+- `/api/places` returned ALL user places (no filter)
+- AI-ranked places appeared at top, then every other unranked place
+  below — chaotic mixed list
+
+Separately: AISearchInput's input field is local `useState`, so the
+search text appeared empty on /places even with `lastQuery` set in the
+store. Confusing — the chip below said "AI search: '<query>' · ranked"
+but the input was blank.
+
+**Fix:**
+- `src/components/layout/app-sidebar.tsx` — Map + Places sidebar items
+  now preserve `useSearchParams().toString()` on navigation. Logo link
+  (→ /map) preserves too. Lists / Stats / Import / Settings unchanged
+  (no filter context). Mobile already needed this for place-detail
+  drill-down → back-to-map round-trip.
+- `src/components/search/ai-search-input.tsx` — new `useEffect` syncs
+  `draft` (local input state) with `lastQuery` (store). Mount/remount
+  picks up the live AI search; `reset()` clears both (so FilterPanel's
+  "Clear" button now also empties the input box, not just the URL).
+
+### #3 — LLM idx references (UUID copy errors → structurally impossible)
+
+Observed v1.8.4 server log on a fresh rerank:
+```
+LLM skipped 1/25 candidate(s): Bistro Freddie (c73423aa-c740-...)
+LLM hallucinated 1 id(s): 16b91296-dff2-...
+```
+
+The "hallucinated" UUID was one hex character off from a real candidate
+UUID — strong evidence the LLM was mistyping rather than truly making
+something up. 36-char UUIDs × 25 candidates = 900 chars to copy per
+request; typo rate scales linearly.
+
+**Fix — server-side LLM contract change. Client unchanged.**
+
+- `src/lib/ai/schemas/rank-results.ts`:
+  - New `LlmRankSchema` (internal): `{ idx: number, score, why }`.
+    Idx is preprocess-coerced from string→int for resilience.
+  - `RankResultsSchema` (public): unchanged, still `{ id: uuid, ... }`.
+- `src/lib/ai/prompts/rank-results.ts`:
+  - Candidate block emits `idx=0`, `idx=1`, … instead of `id=<uuid>`.
+  - Output rule asks for `{ idx, score, why }`. UUID never appears
+    in the prompt.
+- `src/app/api/ai/rank-results/route.ts`:
+  - Validates against `LlmRankSchema`.
+  - Maps `idx → candidates[idx].id` server-side.
+  - Detects out-of-range idx (≥N) and duplicate idx; logs WARN, drops.
+  - Same skipped-candidate fill (score=0) as v1.8.4.
+  - Salvage path updated to use the new schema.
+  - Diagnostic log now: `candidates llm_returned safe skipped
+    out_of_range duplicates with_profile hidden_below_0.20 top5`.
+
+**Token impact:** ~37 tokens/candidate saved on input (UUID label) +
+~37 on output (UUID label) ≈ ~1850 tokens saved per 25-candidate call.
+~10% cost reduction per rerank.
+
+**Reliability impact:** UUID-typo hallucinations are now structurally
+impossible — an out-of-range integer is trivially detected and
+rejected, vs. a 1-char-off UUID that looks valid until cross-checked
+against the candidates set.
+
+### Files touched
+
+- `src/components/layout/app-sidebar.tsx`
+- `src/components/search/ai-search-input.tsx`
+- `src/lib/ai/schemas/rank-results.ts` (added LlmRankSchema)
+- `src/lib/ai/prompts/rank-results.ts` (idx-based candidate block)
+- `src/app/api/ai/rank-results/route.ts` (idx → id mapping)
+
+### No DB migration. No client contract change. No breaking URLs.
+
+---
+
+## 19.05.2026 — v1.8.3 — Rerank schema resilience
+
+Observed during live testing: an LLM response with one `why` string at
+124 chars (target was 120) triggered Zod `max(120)` validation failure,
+which AI SDK rethrows as `AI_NoObjectGeneratedError`. The route returned
+500, orchestrator hit `failRerank()`, UI showed "AI ranking unavailable"
+amber — for a 4-char overrun on a single entry out of 25.
+
+LLM output length is non-deterministic; strict char caps are fragile.
+
+### Fix — three layers of defense
+
+1. **Prompt** (`prompts/rank-results.ts`): target raised from "≤ 120
+   chars" to "≤ 200 chars, aim 120–180". Tells the LLM the actual cap.
+2. **Schema preprocess** (`schemas/rank-results.ts`):
+   - `why`: `z.preprocess(...)` truncates >200 chars → 197 chars + "…",
+     then validates against `max(240)` as final safety net.
+   - `score`: `z.preprocess(...)` clamps numbers outside [0, 1] back
+     into range (defense against LLM emitting 1.05 etc).
+3. **Salvage path** (`api/ai/rank-results/route.ts`): if AI SDK throws
+   `AI_NoObjectGeneratedError` despite the preprocess (edge case if the
+   SDK's validation layer bypasses preprocess), the catch block extracts
+   the raw text from the error, parses it manually, runs it through the
+   schema (preprocess fires), and uses the result. Logs a warning so we
+   know salvage was hit.
+
+### No behavior change for the happy path
+
+When the LLM stays under target, all three layers are transparent —
+same response, same rendering, same cost.
+
+### No DB migration. No breaking changes.
+
+---
+
+## 19.05.2026 — v1.8.2 — Propagation race kill (the real fix)
+
+The v1.8.1 lock-out reduced the rerank double-fire from 2 to 1, but
+the *wrong* fire survived. Live test on `"restaurants for dating in
+london"` (user has 25 London restaurants) showed:
+
+- v1.8.0: two fires (50 stale, 25 fresh) — second won by luck
+- v1.8.1: one fire (50 stale) — lock blocked the correct follow-up
+- v1.8.2: one fire (25 fresh) ✓
+
+### Root cause (proven with diagnostic logs)
+
+`applyParse` is a zustand store update — propagates **synchronously**
+through `useSyncExternalStore` notification.
+
+`setFilters` (useFilters internal) is a React `useState` setter —
+propagates on the **next** render commit.
+
+Same event handler, both called sequentially, but they land in
+*different* renders. The intermediate render has:
+- new store state: `broadenStatus='checking'`, `rerankStatus='pending'`,
+  `needsRerank=true`, `semanticIntent` set
+- stale `filters`: still `{}` (pre-AI), `usePlaces({})` returns the
+  cached 123-place all-places result
+
+The broaden gate evaluates on this stale 123-place set, resolves to
+"ready" (because no restricted hard filter), and triggers the rerank
+gate which fires on stale data.
+
+### Fix — `targetFilters` atomic gate
+
+New store field captures the AI search's intended filter set ahead
+of the React state update. Orchestrator gates wait until
+`fpFilters(filters) === fpFilters(targetFilters)` — i.e., until
+setFilters has propagated.
+
+**Backend / store:**
+- `ai-search-store`:
+  - `targetFilters: PlaceFilters | null` — null when no AI search
+    active. Set by `applyParse`, updated by `applyBroaden` and
+    `setBroadenActiveMode`, cleared by `reset`.
+  - `applyParse({..., targetFilters})` signature extended.
+
+**Hook:**
+- `useAiSearch.onSuccess` pre-computes the post-merge filter set
+  via `mergeFiltersForTarget` (mirrors useFilters.setFilters logic
+  for a deterministic snapshot) and passes it to `applyParse`.
+- `useAiRerankOrchestrator` both effects (broaden + rerank) now
+  check `!targetFilters` and fingerprint match before evaluating.
+- Rerank `onSuccess` re-checks targetFilters at landing; if it
+  changed mid-flight (broaden toggle, new query), discards the
+  stale response.
+
+**Diagnostic instrumentation (Slice 1):** verbose tick-by-tick
+logging was added to confirm the race empirically, then removed in
+Slice 3 after the fix was verified.
+
+### Files touched
+
+- `src/lib/stores/ai-search-store.ts` — targetFilters field + actions
+- `src/lib/hooks/use-ai-search.ts` — fpFilters + mergeFiltersForTarget
+  helpers, targetFilters gate in both orchestrator effects, stale-
+  response discard
+- `docs/05-flows/ai-search-flow.md` → v2.2.0 (race documented in
+  rerank trigger section + v1.8.2 migration block)
+
+### Cost
+
+Same as v1.8.1 (~$0.005 per rerank), now reliably on the *correct*
+candidate set. No more wasted spend on stale-data reranks.
+
+### No DB migration. No breaking URL changes.
+
+---
+
+## 19.05.2026 — v1.8.1 — Rerank race fix + boost removal
+
+Two follow-up corrections on top of the v1.8.0 pivot, observed on the
+first live test of "restaurants for dating in london":
+
+### Bug — rerank fired twice (~$0.01 instead of ~$0.005/query)
+
+Logs from one parse-query showed two consecutive `[ai/rank-results]`
+calls with different candidate counts (50, 25). The first call ran on
+the previous filter's stale data; the second on the new filter set.
+Whichever response landed last won the race and wrote rankings —
+sometimes stale rankings for the user's current filter set.
+
+Root causes:
+- React Strict Mode dev double-mount of the rerank effect.
+- Dep-driven re-runs across the places refetch transition (cache hit
+  stale window → mid-fetch → fresh) — `places?.length` is in deps.
+- `useFilters.setFilters` debounced URL sync (300ms) with immediate
+  local state update: usePlaces sees new queryKey before URL settles,
+  and React Query's `isFetching` window doesn't catch every transition.
+
+Fix (`src/lib/hooks/use-ai-search.ts`):
+- `rerankInFlightRef` (useRef) flipped SYNCHRONOUSLY before the await;
+  blocks Strict-Mode re-mount + every dep-driven re-entry until the
+  current call settles. Reset in the success/error callbacks.
+- New guard: `status === 'success'` AND `!isFetching` — only fire rerank
+  when usePlaces has settled on data for the CURRENT filter set.
+
+### Boost / hint-chip removal
+
+The v1.8.0 pivot removed boost SCORING but kept boosts as parse-query
+output that drove an opt-in UI hint chip block in AISearchInput. The
+hint chips repeatedly surfaced redundant suggestions (e.g. 'london'
+tag boost when hard.city='London' was already set), and any signal
+they carried is already accessible to the rank-results LLM through
+the user-context block. Removed end-to-end:
+
+- `ParseQuerySchema.boosts` field removed (`src/lib/ai/schemas/parse-query.ts`).
+- Parse-query prompt: "Three output concerns" → "Two output concerns";
+  "Layer 2 — boosts" section deleted; processing order step 5 (BOOSTS)
+  removed; few-shots 1+2 stripped of boost lines; anti-pattern B
+  rewritten to demonstrate semantic_intent over hard tag_ids
+  (`src/lib/ai/prompts/parse-query.ts`).
+- Parse-query route: boost validation block in `sanitizeAgainstContext`
+  removed; fallback no longer emits `boosts: {}`; diagnostic log drops
+  the boosts field (`src/app/api/ai/parse-query/route.ts`).
+- Store: `BoostIds`, `boosts`, `EMPTY_BOOSTS` deleted; `applyParse`
+  signature loses `boosts` (`src/lib/stores/ai-search-store.ts`).
+- Hook: `useAiSearch.onSuccess` no longer maps boost IDs into the
+  applyParse call (`src/lib/hooks/use-ai-search.ts`).
+- UI: hint chip block + `applyHintAsFilter` removed; `useTags`,
+  `useLists`, `useSubcategories`, `useMemo`, `Filter` icon imports
+  dropped (`src/components/search/ai-search-input.tsx`).
+
+### Vault
+- `docs/05-flows/ai-search-flow.md` → v2.1.0. Architecture diagram
+  trimmed to 2 concerns, rerank lockout/freshness guard documented,
+  hint-chip references removed, v1.8.1 migration block added.
+
+### Cost
+~$0.00015 per parse-query (down from ~$0.0002 thanks to slimmer
+prompt). Rerank cost unchanged (~$0.005), but reliably fires exactly
+once per query instead of 2×.
+
+### No DB migration. No breaking URL changes.
+
+---
+
+## 19.05.2026 — v1.8.0 — Phase 6.5: LLM-as-judge pivot
+
+Architectural pivot of the NL search system. The v1.7.x rule-based soft
+filter + boost mechanism is replaced by full LLM-as-judge. The rank-results
+LLM receives each candidate's complete `place_profile` (features.* +
+theme_insights + tldr + pros + cons + searchable_summary) and judges
+holistically against a rich natural-language `semantic_intent`. The
+vocabulary-mismatch and synonym-blindness bugs of v1.7.x (parse-query
+emitted "date_night" snake_case while Phase 4 emitted "Date night" Title
+Case + space) dissolve because string matching is gone — both sides
+operate in natural language now.
+
+### Design doc
+Full rationale, decision log, and acceptance criteria in
+`docs/_plans/phase-6-llm-as-judge-pivot.md`. 7 decisions cover hard-filter
+scope, `semantic_intent` shape, adaptive cap + sort override + bol
+payload, threshold + 6-tier rubric + LLM hide power, adaptive broaden
+with banner, boost removal (hint chips kept), big bang migration.
+
+### Schema changes
+- `ParseQuerySchema.soft_features` REMOVED.
+- `PlaceFilters.soft_features` REMOVED.
+- `RankCandidate` extended with `features`, `theme_insights`, `tldr`,
+  `pros`, `cons`.
+- Rerank request body no longer accepts `boost_*_ids`.
+
+### Backend
+- `src/lib/ai/prompts/parse-query.ts` — full rewrite for 3-concern
+  output (hard / boosts / semantic_intent). Token consumption rule
+  for `requires_semantic_ranking`. Answer engine framing. 7 few-shots,
+  5 anti-patterns.
+- `src/lib/ai/prompts/rank-results.ts` — full rewrite. 6-tier rubric
+  with explicit DISPLAY THRESHOLD = 0.20. LLM has "hide power".
+  Candidate input includes the full profile.
+- `src/app/api/ai/rank-results/route.ts` — boost post-process REMOVED.
+  Diagnostic log surfaces `hidden_below_0.20` count.
+- `src/app/api/places/route.ts` — entire soft-feature filter block +
+  SOFT_AXES enum + canonFeature helper REMOVED.
+
+### Frontend
+- `src/lib/types/index.ts` — `PlaceFilters.soft_features` dropped.
+- `src/lib/hooks/use-filters.ts` + `use-places.ts` — soft_features
+  paths removed. Old `?f_*` bookmark URLs silently ignored.
+- `src/lib/hooks/use-ai-search.ts` — broaden orchestration added
+  (two-stage useEffect: broaden gate then rerank). Rerank body extended
+  with full payload.
+- `src/lib/stores/ai-search-store.ts` — new `broaden` state +
+  `broadenStatus` machine. `setBroadenActiveMode` action.
+  `LESS_RELEVANT_SCORE` (0.15) → `HIDE_BELOW_SCORE` (0.20). New
+  `BROADEN_THRESHOLD = 10`.
+- `src/components/places/place-card.tsx` — fade replaced with HIDE
+  (returns null < 0.20). New `className` prop for wrapper composition.
+- `src/app/(app)/places/page.tsx` — SelectablePlaceCard refactored to
+  ~35-line composition over PlaceCard (was ~165 LOC duplicate). Sort
+  dropdown swapped for "AI Ranked" badge when active. Grid sorted by
+  rerank score.
+- `src/components/map/map-content.tsx` — markers filtered by score
+  ≥ 0.20. Sidebar dropdown sorted + filtered. Badge count post-threshold.
+- `src/components/filters/filter-panel.tsx` — sort dropdown swapped
+  for "AI Ranked" badge when active.
+- `src/components/search/ai-search-input.tsx` — broaden banner with
+  narrow/broader toggle.
+
+### Vault
+- `docs/_plans/phase-6-llm-as-judge-pivot.md` (NEW) — design doc.
+- `docs/05-flows/ai-search-flow.md` — major rewrite to v2.0.0.
+
+### Cost
+- `ai_parse_query` — ~\$0.0002/call.
+- `ai_rank_results` — ~\$0.005/call at 50 candidates with full payload
+  (was ~\$0.002 summary-only).
+
+### Migration / breaking
+- Big bang deploy. Old `?f_*` bookmark URLs silently ignored — only
+  structural filters apply. No DB migration.
+
+---
+
 ## 19.05.2026 — v1.7.4 — system fix: city + country are a pair
 
 Live test of "restaurants for dating in london" returned different

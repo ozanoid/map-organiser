@@ -2,14 +2,21 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { Map, MapPin, List, MoreHorizontal, Upload, Settings, X, BarChart3 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useFilterPersistStore } from "@/lib/stores/filter-persist-store";
 
+/**
+ * `preserveSearch=true` carries the current URL query string across nav.
+ * Mobile users often navigate /map → place detail → back → /places, and
+ * the filter context (and active AI search) must survive the round-trip.
+ * Same rule as AppSidebar: only Map and Places share filter context.
+ */
 const tabs = [
-  { href: "/map", label: "Map", icon: Map },
-  { href: "/places", label: "Places", icon: MapPin },
-  { href: "/lists", label: "Lists", icon: List },
+  { href: "/map", label: "Map", icon: Map, preserveSearch: true },
+  { href: "/places", label: "Places", icon: MapPin, preserveSearch: true },
+  { href: "/lists", label: "Lists", icon: List, preserveSearch: false },
 ];
 
 const moreItems = [
@@ -20,7 +27,16 @@ const moreItems = [
 
 export function MobileNav() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [moreOpen, setMoreOpen] = useState(false);
+  const currentQs = searchParams.toString();
+  const lastMapPlacesQuery = useFilterPersistStore(
+    (s) => s.lastMapPlacesQuery
+  );
+  // See AppSidebar for the same logic: current URL on filter-context
+  // pages, persist-store fallback otherwise.
+  const onFilterContextPage = pathname === "/map" || pathname === "/places";
+  const qsForMapPlaces = onFilterContextPage ? currentQs : lastMapPlacesQuery;
 
   const isMoreActive =
     pathname.startsWith("/import") || pathname.startsWith("/settings");
@@ -61,10 +77,14 @@ export function MobileNav() {
           {tabs.map((tab) => {
             const isActive =
               pathname === tab.href || pathname.startsWith(tab.href + "/");
+            const href =
+              tab.preserveSearch && qsForMapPlaces
+                ? `${tab.href}?${qsForMapPlaces}`
+                : tab.href;
             return (
               <Link
                 key={tab.href}
-                href={tab.href}
+                href={href}
                 prefetch={false}
                 className={cn(
                   "flex flex-col items-center gap-0.5 px-4 py-1.5 cursor-pointer transition-colors",

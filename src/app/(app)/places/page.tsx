@@ -1,9 +1,12 @@
 "use client";
 
-import { Suspense, useCallback, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { usePlaces } from "@/lib/hooks/use-places";
 import { useFilters } from "@/lib/hooks/use-filters";
+import { useAiRerankOrchestrator } from "@/lib/hooks/use-ai-search";
+import { useFilterPersistStore } from "@/lib/stores/filter-persist-store";
 import { AddPlaceDialog } from "@/components/places/add-place-dialog";
 import { BulkActionBar } from "@/components/places/bulk-action-bar";
 import { FilterSheet } from "@/components/filters/filter-sheet";
@@ -11,14 +14,31 @@ import { FilterPanel } from "@/components/filters/filter-panel";
 import { Button } from "@/components/ui/button";
 import { DebouncedSearchInput } from "@/components/filters/debounced-search-input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { MapPin, Plus, SlidersHorizontal, CheckSquare, Square, RefreshCw, ArrowUpDown } from "lucide-react";
-import Link from "next/link";
-import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { VisitStatusBadge } from "@/components/places/visit-status-toggle";
-import { Star, ExternalLink } from "lucide-react";
+import {
+  MapPin,
+  Plus,
+  SlidersHorizontal,
+  CheckSquare,
+  Square,
+  RefreshCw,
+  ArrowUpDown,
+} from "lucide-react";
+import { PlaceCard } from "@/components/places/place-card";
+import {
+  useAiSearchStore,
+  HIDE_BELOW_SCORE,
+} from "@/lib/stores/ai-search-store";
 import type { Place } from "@/lib/types";
 
+/**
+ * Wrapper that overlays a selection checkbox + ring on the canonical
+ * PlaceCard. The visual representation of a place stays in PlaceCard;
+ * selection state is layered on top.
+ *
+ * AI mode hide: PlaceCard returns null when its score is below the
+ * hide threshold. We mirror that here so the wrapper div doesn't
+ * remain as an empty slot in the grid.
+ */
 function SelectablePlaceCard({
   place,
   isSelected,
@@ -28,15 +48,14 @@ function SelectablePlaceCard({
   isSelected: boolean;
   onToggle: () => void;
 }) {
-  const googlePhoto = place.google_data?.photo_storage_url || place.google_data?.photos?.[0];
-  const googleRating = place.google_data?.rating;
-  const tags = place.tags ?? [];
-  const visibleTags = tags.slice(0, 2);
-  const extraTagCount = tags.length - 2;
+  const aiRanking = useAiSearchStore((s) => s.rankings?.get(place.id));
+  if (aiRanking !== undefined && aiRanking.score < HIDE_BELOW_SCORE) {
+    return null;
+  }
 
   return (
     <div className="relative">
-      {/* Selection checkbox */}
+      {/* Selection checkbox — absolute overlay, click stops bubbling to Link */}
       <label
         className="absolute top-2 left-2 z-10 cursor-pointer"
         onClick={(e) => e.stopPropagation()}
@@ -68,119 +87,10 @@ function SelectablePlaceCard({
         </div>
       </label>
 
-      <Link href={`/places/${place.id}`} prefetch={false}>
-        <Card
-          className={`overflow-hidden hover:shadow-md transition-shadow cursor-pointer ${
-            isSelected ? "ring-2 ring-emerald-500" : ""
-          }`}
-        >
-          {googlePhoto && (
-            <div className="relative h-32 bg-gray-100 dark:bg-gray-800">
-              <img
-                src={googlePhoto}
-                alt={place.name}
-                className="w-full h-full object-cover"
-              />
-              {place.visit_status && (
-                <div className="absolute top-2 right-2">
-                  <VisitStatusBadge status={place.visit_status} />
-                </div>
-              )}
-            </div>
-          )}
-
-          {!googlePhoto && place.visit_status && (
-            <div className="flex justify-end px-3 pt-2">
-              <VisitStatusBadge status={place.visit_status} />
-            </div>
-          )}
-
-          <div className="p-3 space-y-1.5">
-            <h3 className="font-medium text-sm line-clamp-1">{place.name}</h3>
-
-            {place.address && (
-              <p className="text-xs text-muted-foreground line-clamp-1">
-                {place.address}
-              </p>
-            )}
-
-            {visibleTags.length > 0 && (
-              <div className="flex items-center gap-1 flex-wrap">
-                {visibleTags.map((tag) => (
-                  <Badge
-                    key={tag.id}
-                    variant="secondary"
-                    className="text-[10px] px-1.5 py-0"
-                  >
-                    {tag.name}
-                  </Badge>
-                ))}
-                {extraTagCount > 0 && (
-                  <span className="text-[10px] text-muted-foreground">
-                    +{extraTagCount}
-                  </span>
-                )}
-              </div>
-            )}
-
-            <div className="flex items-center gap-2 flex-wrap">
-              {place.category && (
-                <Badge
-                  variant="secondary"
-                  className="text-[10px] gap-1 px-1.5 py-0"
-                >
-                  <span
-                    className="w-1.5 h-1.5 rounded-full"
-                    style={{ backgroundColor: place.category.color }}
-                  />
-                  {place.category.name}
-                </Badge>
-              )}
-
-              {place.rating && (
-                <span className="flex items-center gap-0.5 text-xs text-orange-500">
-                  <Star className="h-3 w-3 fill-current" />
-                  {place.rating}
-                </span>
-              )}
-
-              {googleRating && !place.rating && (
-                <span className="flex items-center gap-0.5 text-xs text-muted-foreground">
-                  <Star className="h-3 w-3 fill-gray-300 text-gray-300 dark:fill-gray-600 dark:text-gray-600" />
-                  {googleRating}
-                </span>
-              )}
-
-              {googleRating && place.rating && (
-                <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
-                  G: {googleRating}
-                </span>
-              )}
-
-              {place.country && (
-                <span className="text-[10px] text-muted-foreground">
-                  {place.city
-                    ? `${place.city}, ${place.country}`
-                    : place.country}
-                </span>
-              )}
-
-              {place.google_data?.url && (
-                <a
-                  href={place.google_data.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={(e) => e.stopPropagation()}
-                  className="inline-flex items-center gap-0.5 text-[10px] text-emerald-600 hover:underline ml-auto"
-                >
-                  <ExternalLink className="h-2.5 w-2.5" />
-                  Maps
-                </a>
-              )}
-            </div>
-          </div>
-        </Card>
-      </Link>
+      <PlaceCard
+        place={place}
+        className={isSelected ? "ring-2 ring-emerald-500" : ""}
+      />
     </div>
   );
 }
@@ -201,6 +111,39 @@ function PlacesContent() {
   const [addOpen, setAddOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  // Drive the AI rerank pipeline from this page too. AISearchInput lives
+  // in FilterPanel and is mounted on BOTH /map and /places — without the
+  // orchestrator mounted here, submitting a search on /places sets
+  // rerankStatus="pending" and then gets stuck because nothing fires
+  // the rank-results call. (Until v1.8.7 the orchestrator was only
+  // mounted in MapContent, so AI search on /places hung forever.)
+  useAiRerankOrchestrator(filters);
+
+  // Mirror current URL query string into the cross-page filter-persist
+  // store so nav links from non-filter-context pages can restore it on
+  // return. See filter-persist-store docstring for the round-trip
+  // scenario this prevents (v1.8.8).
+  const searchParams = useSearchParams();
+  const setLastMapPlacesQuery = useFilterPersistStore(
+    (s) => s.setLastMapPlacesQuery
+  );
+  useEffect(() => {
+    setLastMapPlacesQuery(searchParams.toString());
+  }, [searchParams, setLastMapPlacesQuery]);
+
+  // AI mode awareness: when rankings exist, the grid is sorted by score
+  // (desc) and the sort dropdown is disabled. SelectablePlaceCard
+  // already hides individual cards below the threshold.
+  const aiRankings = useAiSearchStore((s) => s.rankings);
+  const aiActive = aiRankings !== null;
+  const sortedPlaces = aiActive
+    ? [...places].sort((a, b) => {
+        const sa = aiRankings.get(a.id)?.score ?? -1;
+        const sb = aiRankings.get(b.id)?.score ?? -1;
+        return sb - sa;
+      })
+    : places;
 
   const toggleSelect = useCallback((id: string) => {
     setSelectedIds((prev) => {
@@ -299,29 +242,49 @@ function PlacesContent() {
         </div>
         <div className="relative shrink-0">
           <ArrowUpDown className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-          <select
-            value={filters.sort || "newest"}
-            onChange={(e) =>
-              setFilters({ sort: e.target.value === "newest" ? undefined : e.target.value })
-            }
-            className="h-9 pl-8 pr-7 text-sm border border-input rounded-md bg-background cursor-pointer appearance-none focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1 transition-colors duration-200"
-            aria-label="Sort places"
-          >
-            {SORT_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
-          <svg
-            className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={2}
-          >
-            <path d="m6 9 6 6 6-6" />
-          </svg>
+          {aiActive ? (
+            // AI search active: sort is dictated by rerank score. The
+            // dropdown is replaced with a static badge so the user
+            // sees why their sort choice is suspended.
+            <div
+              className="h-9 pl-8 pr-3 text-sm border border-input rounded-md bg-muted/40 inline-flex items-center text-muted-foreground cursor-not-allowed select-none"
+              title="Sorting is controlled by AI ranking while AI search is active"
+              aria-label="Sort: AI ranked (disabled)"
+            >
+              AI Ranked
+            </div>
+          ) : (
+            <>
+              <select
+                value={filters.sort || "newest"}
+                onChange={(e) =>
+                  setFilters({
+                    sort:
+                      e.target.value === "newest"
+                        ? undefined
+                        : e.target.value,
+                  })
+                }
+                className="h-9 pl-8 pr-7 text-sm border border-input rounded-md bg-background cursor-pointer appearance-none focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1 transition-colors duration-200"
+                aria-label="Sort places"
+              >
+                {SORT_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+              <svg
+                className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path d="m6 9 6 6 6-6" />
+              </svg>
+            </>
+          )}
         </div>
       </div>
 
@@ -343,7 +306,7 @@ function PlacesContent() {
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {places.map((place) => (
+          {sortedPlaces.map((place) => (
             <SelectablePlaceCard
               key={place.id}
               place={place}

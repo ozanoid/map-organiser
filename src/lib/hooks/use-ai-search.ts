@@ -1,8 +1,11 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { useAiSearchStore } from "@/lib/stores/ai-search-store";
+import {
+  useAiSearchStore,
+  BROADEN_THRESHOLD,
+} from "@/lib/stores/ai-search-store";
 import { useFilters } from "@/lib/hooks/use-filters";
 import { usePlaces } from "@/lib/hooks/use-places";
 import type { Place, PlaceFilters } from "@/lib/types";
@@ -10,18 +13,111 @@ import type { ParseQueryOutput } from "@/lib/ai/schemas/parse-query";
 import type { RankResultsOutput } from "@/lib/ai/schemas/rank-results";
 
 /**
+ * Verbose orchestrator logging.
+ *
+ * Kept ON during the friends-and-family stabilization phase: every tick
+ * of the broaden gate and rerank gate logs its state and decision. Cheap
+ * (just console.log) and invaluable when triaging "why is X missing" or
+ * "why didn't it fire" reports.
+ *
+ * Production-gating: when usage scales beyond F&F, gate by NODE_ENV or
+ * a localStorage flag (e.g. `localStorage.setItem('ai-debug', '1')`).
+ */
+const ORCH_LOG = true;
+
+function orchLog(scope: string, event: string, payload: Record<string, unknown>) {
+  if (!ORCH_LOG) return;
+  // eslint-disable-next-line no-console
+  console.log(`[ai-search/${scope}] ${event}`, payload);
+}
+
+/**
+ * Stable JSON fingerprint of a PlaceFilters object. Keys are sorted and
+ * undefined values dropped so cosmetic differences don't cause false
+ * mismatches in the orchestrator's targetFilters gate.
+ */
+function fpFilters(filters: PlaceFilters | null): string {
+  if (!filters) return "<null>";
+  const obj: Record<string, unknown> = {};
+  for (const k of Object.keys(filters).sort()) {
+    const v = (filters as Record<string, unknown>)[k];
+    if (v !== undefined) obj[k] = v;
+  }
+  return JSON.stringify(obj);
+}
+
+/**
+ * Mirror of useFilters.setFilters merge logic — used to compute the
+ * EXACT post-merge filter set ahead of the actual state update, so we
+ * can stash it as the AI search's `targetFilters`. The orchestrator
+ * fingerprint-gate compares against this to wait out the race between
+ * applyParse (zustand sync) and setFilters (React useState async).
+ */
+function mergeFiltersForTarget(
+  prev: PlaceFilters,
+  patch: Partial<PlaceFilters>
+): PlaceFilters {
+  const next: Record<string, unknown> = { ...prev };
+  for (const [key, value] of Object.entries(patch)) {
+    if (value === undefined || value === null || value === "") {
+      delete next[key];
+    } else if (Array.isArray(value) && value.length === 0) {
+      delete next[key];
+    } else {
+      next[key] = value;
+    }
+  }
+  return next as PlaceFilters;
+}
+
+/**
+ * Restricted hard filter axes. These are dropped when adaptive broaden
+ * triggers (narrow result count < BROADEN_THRESHOLD). All other hard
+ * fields (category, city, country, visit_status, rating thresholds,
+ * created_after) are preserved.
+ */
+function hasRestrictedHard(filters: PlaceFilters): boolean {
+  return (
+    (filters.subcategory_ids?.length ?? 0) > 0 ||
+    (filters.tag_ids?.length ?? 0) > 0 ||
+    filters.list_id !== undefined
+  );
+}
+
+function dropRestrictedHard(
+  filters: PlaceFilters
+): { broader: Partial<PlaceFilters>; droppedLabels: string[] } {
+  const broader: Partial<PlaceFilters> = {
+    ...filters,
+    subcategory_ids: undefined,
+    tag_ids: undefined,
+    list_id: undefined,
+  };
+  const labels: string[] = [];
+  if ((filters.subcategory_ids?.length ?? 0) > 0) labels.push("sub-category");
+  if ((filters.tag_ids?.length ?? 0) > 0) labels.push("tag");
+  if (filters.list_id) labels.push("list");
+  return { broader, droppedLabels: labels };
+}
+
+/**
  * Submit a natural-language query.
  *
- * Flow:
+ * Flow (Phase 6.5 LLM-as-judge):
  *   1. POST /api/ai/parse-query with the raw query.
- *   2. Apply the returned `hard` + `soft_features` to the filter URL state.
- *   3. Save semantic_intent + needsRerank into the AI search store.
+ *   2. Apply the returned `hard` to the filter URL state. Soft matching
+ *      (atmosphere/occasions/etc.) no longer lives in URL — it's carried
+ *      by `semantic_intent` and consumed by rank-results.
+ *   3. Save semantic_intent + requires_semantic_ranking into the AI
+ *      search store.
  *
- * The actual rerank step is triggered by `useAiRerankOrchestrator()` once
- * the places list refetches with the new filters — see below.
+ * The rerank step is triggered by `useAiRerankOrchestrator()` once the
+ * places list refetches with the new filters — see below.
+ *
+ * `boosts` was removed in v1.8.1 (see schema docstring).
  */
 export function useAiSearch() {
-  const { setFilters } = useFilters();
+  const { setFilters, filters: currentFilters } = useFilters();
   const applyParse = useAiSearchStore((s) => s.applyParse);
   const reset = useAiSearchStore((s) => s.reset);
 
@@ -39,9 +135,18 @@ export function useAiSearch() {
       return (await res.json()) as ParseQueryOutput;
     },
     onSuccess: (data, query) => {
-      // Build the next PlaceFilters from parse output.
+      orchLog("parse", "received", {
+        query,
+        hard: data.hard,
+        intent_head: data.semantic_intent.slice(0, 80),
+        requires_rerank: data.requires_semantic_ranking,
+      });
+      // Build the next PlaceFilters from parse output — hard only.
+      // AI search OVERRIDES the user's sort preference to
+      // google_rating_desc (quality-first). When the user clears the
+      // AI search (X button → handleClear), AISearchInput resets sort
+      // to undefined so the FilterPanel dropdown returns to user control.
       const nextFilters: Partial<PlaceFilters> = {
-        // Always clear existing slots first (so a new NL search starts clean).
         category_ids: data.hard.category_ids,
         subcategory_ids: data.hard.subcategory_ids,
         tag_ids: data.hard.tag_ids,
@@ -52,41 +157,26 @@ export function useAiSearch() {
         rating_min: data.hard.rating_min,
         google_rating_min: data.hard.google_rating_min,
         search: data.hard.search,
-        soft_features: {
-          atmosphere: data.soft_features.atmosphere,
-          dietary: data.soft_features.dietary,
-          occasions: data.soft_features.occasions,
-          seating: data.soft_features.seating,
-          cuisine_types: data.soft_features.cuisine_types,
-        },
+        sort: "google_rating_desc",
       };
 
-      // Drop empty arrays; setFilters treats them as clear signals.
-      if (nextFilters.soft_features) {
-        for (const k of Object.keys(nextFilters.soft_features) as Array<
-          keyof NonNullable<PlaceFilters["soft_features"]>
-        >) {
-          const v = nextFilters.soft_features[k];
-          if (!Array.isArray(v) || v.length === 0) {
-            delete nextFilters.soft_features[k];
-          }
-        }
-        if (Object.keys(nextFilters.soft_features).length === 0) {
-          nextFilters.soft_features = undefined;
-        }
-      }
+      // Compute the EXACT post-merge filter set so the orchestrator's
+      // fingerprint gate has a deterministic target to wait for. Mirrors
+      // the merge logic in useFilters.setFilters. See targetFilters
+      // docstring in ai-search-store.
+      const targetFilters = mergeFiltersForTarget(currentFilters, nextFilters);
 
+      orchLog("parse", "setFilters+applyParse", {
+        nextFilters,
+        targetFp: fpFilters(targetFilters),
+      });
       setFilters(nextFilters);
       applyParse({
         semantic_intent: data.semantic_intent,
         requires_semantic_ranking: data.requires_semantic_ranking,
         needs_clarification: data.needs_clarification,
         query,
-        boosts: {
-          matching_tag_ids: data.boosts.matching_tag_ids ?? [],
-          matching_list_ids: data.boosts.matching_list_ids ?? [],
-          matching_subcategory_ids: data.boosts.matching_subcategory_ids ?? [],
-        },
+        targetFilters,
       });
     },
     onError: () => {
@@ -109,85 +199,233 @@ export function useAiRerankOrchestrator(filters: PlaceFilters) {
   const semanticIntent = useAiSearchStore((s) => s.semanticIntent);
   const needsRerank = useAiSearchStore((s) => s.needsRerank);
   const rerankStatus = useAiSearchStore((s) => s.rerankStatus);
-  const boosts = useAiSearchStore((s) => s.boosts);
+  const broadenStatus = useAiSearchStore((s) => s.broadenStatus);
+  const broaden = useAiSearchStore((s) => s.broaden);
+  const targetFilters = useAiSearchStore((s) => s.targetFilters);
   const applyRankings = useAiSearchStore((s) => s.applyRankings);
   const failRerank = useAiSearchStore((s) => s.failRerank);
+  const applyBroaden = useAiSearchStore((s) => s.applyBroaden);
+  const resolveBroadenCheck = useAiSearchStore((s) => s.resolveBroadenCheck);
+  const { setFilters } = useFilters();
 
-  const { data: places, isFetching } = usePlaces(filters);
+  const { data: places, isFetching, status } = usePlaces(filters);
 
+  // Lock to prevent concurrent runRerank invocations.
+  //
+  // Without this, the rerank effect can re-enter `runRerank` while a
+  // previous call is still in flight, because `rerankStatus` only flips
+  // to "ready" after the response lands. Re-entry triggers were observed:
+  //   - React Strict Mode dev double-mount of effects
+  //   - places refetch transition: cache-hit stale data → mid-fetch
+  //     (isFetching=true window) → fresh data, with each tick re-running
+  //     the effect because `places?.length` is in deps
+  //   - applyParse + setFilters race: orchestrator can see broadenStatus
+  //     "ready" before the new places fetch settles, fire on stale data,
+  //     then re-fire when the fresh data lands.
+  //
+  // The ref guards against all three. It is reset by runRerank's success
+  // and error callbacks below.
+  const rerankInFlightRef = useRef(false);
+
+  // ─── Phase 6.5 Slice 5: adaptive broaden gate ───
+  // Runs BEFORE rerank. After parse-query lands and the narrow set is
+  // fetched, we either: (a) apply broader filter and wait for refetch,
+  // (b) decide no broaden is needed and let rerank proceed.
   useEffect(() => {
-    // Trigger conditions:
-    //  - parse-query set needsRerank
-    //  - we have a places list (post-filter)
-    //  - we're not already done or already fetching from places query
-    //  - rerankStatus is "pending" (initial state set by applyParse)
+    const fp = fpFilters(filters);
+    const targetFp = fpFilters(targetFilters);
+    if (!needsRerank) return;
+    if (broadenStatus !== "checking") return;
+    // CRITICAL: targetFilters fingerprint gate. See targetFilters
+    // docstring in ai-search-store and v1.8.2 CHANGELOG for the empirical
+    // race this guard catches (applyParse zustand-sync lands before
+    // setFilters React-useState propagates).
+    if (!targetFilters) { orchLog("broaden", "skip: !targetFilters", { fp, targetFp }); return; }
+    if (fp !== targetFp) { orchLog("broaden", "skip: fp !== targetFp", { fp, targetFp }); return; }
+    if (isFetching) { orchLog("broaden", "skip: isFetching", { fp, placesLen: places?.length }); return; }
+    if (!places) { orchLog("broaden", "skip: !places", { fp }); return; }
+
+    // If broaden state already exists (we're in the broader-fetch phase),
+    // record the broader count and mark the gate as ready.
+    if (broaden !== null) {
+      // First fetch after we applied broader filter — capture broader count.
+      if (broaden.broaderCount === 0 && broaden.activeMode === "broader") {
+        applyBroaden({ ...broaden, broaderCount: places.length });
+      }
+      orchLog("broaden", "resolve→ready (broader fetch done)", { placesLen: places.length });
+      resolveBroadenCheck();
+      return;
+    }
+
+    // Decide whether to broaden.
+    if (!hasRestrictedHard(filters) || places.length >= BROADEN_THRESHOLD) {
+      orchLog("broaden", "resolve→ready (no broaden needed)", {
+        placesLen: places.length,
+        hasRestricted: hasRestrictedHard(filters),
+        threshold: BROADEN_THRESHOLD,
+      });
+      resolveBroadenCheck();
+      return;
+    }
+
+    // Trigger broaden: stash both filter sets and apply the broader one.
+    const { broader, droppedLabels } = dropRestrictedHard(filters);
+    applyBroaden({
+      narrowFilters: { ...filters },
+      broaderFilters: broader,
+      narrowCount: places.length,
+      broaderCount: 0, // populated when the broader fetch lands
+      droppedLabels,
+      activeMode: "broader",
+    });
+    setFilters(broader);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    needsRerank,
+    broadenStatus,
+    isFetching,
+    places?.length,
+    broaden,
+    filters,
+    targetFilters,
+  ]);
+
+  // ─── Rerank (runs after broaden gate is resolved) ───
+  useEffect(() => {
+    const fp = fpFilters(filters);
+    const targetFp = fpFilters(targetFilters);
+    if (rerankStatus !== "pending") return;
+    // Lock-out: prevent concurrent fires while a previous runRerank is
+    // still in flight. See rerankInFlightRef comment above.
+    if (rerankInFlightRef.current) { orchLog("rerank", "skip: inFlight", { fp }); return; }
     if (!needsRerank) return;
     if (!semanticIntent) return;
-    if (rerankStatus !== "pending") return;
-    if (isFetching) return;
-    if (!places) return;
+    if (broadenStatus !== "ready") { orchLog("rerank", `skip: broadenStatus=${broadenStatus}`, { fp }); return; }
+    // CRITICAL: targetFilters fingerprint gate. See targetFilters
+    // docstring in ai-search-store and v1.8.2 CHANGELOG for the empirical
+    // race this guard catches.
+    if (!targetFilters) { orchLog("rerank", "skip: !targetFilters", { fp }); return; }
+    if (fp !== targetFp) { orchLog("rerank", "skip: fp !== targetFp", { fp, targetFp }); return; }
+    if (status !== "success") { orchLog("rerank", `skip: status=${status}`, { fp }); return; }
+    if (isFetching) { orchLog("rerank", "skip: isFetching", { fp }); return; }
+    if (!places) { orchLog("rerank", "skip: !places", { fp }); return; }
 
     if (places.length === 0) {
-      // Nothing to rerank; bail to "ready" so UI doesn't spin forever.
+      orchLog("rerank", "applyRankings([]) (zero places)", { fp });
       applyRankings([]);
       return;
     }
 
+    // Snapshot the targetFilters fingerprint at fire-time so we can
+    // discard the response if the active target changed mid-flight
+    // (new query, broaden toggle) — prevents stale rankings from
+    // winning the race against a follow-up rerank.
+    const targetFpAtFire = fpFilters(targetFilters);
+
+    // Flip the lock BEFORE the await. Subsequent effect runs (Strict
+    // Mode second invocation, dependency-driven re-runs) see the lock
+    // and exit at the guard above.
+    rerankInFlightRef.current = true;
+
+    orchLog("rerank", "★ FIRE", {
+      fp,
+      placesLen: places.length,
+      first5_names: places.slice(0, 5).map((p) => p.name),
+    });
+
     void runRerank({
       semanticIntent,
       places,
-      boosts,
-      onSuccess: applyRankings,
-      onError: failRerank,
+      onSuccess: (rows) => {
+        rerankInFlightRef.current = false;
+        const currentTargetFp = fpFilters(useAiSearchStore.getState().targetFilters);
+        if (currentTargetFp !== targetFpAtFire) {
+          orchLog("rerank", "⚠ stale — discarded", { fp_at_fire: fp, currentTargetFp });
+          return;
+        }
+        // Sanity check: how many of `places` got back rankings?
+        const rankedIds = new Set(rows.map((r) => r.id));
+        const placeIds = places.map((p) => p.id);
+        const missingFromRankings = placeIds.filter((id) => !rankedIds.has(id));
+        orchLog("rerank", "✓ response landed", {
+          rankedCount: rows.length,
+          placesCount: places.length,
+          missingFromRankings: missingFromRankings.length,
+          missingNames: missingFromRankings
+            .map((id) => places.find((p) => p.id === id)?.name)
+            .filter(Boolean),
+        });
+        applyRankings(rows);
+      },
+      onError: () => {
+        rerankInFlightRef.current = false;
+        orchLog("rerank", "✗ error", { fp_at_fire: fp });
+        failRerank();
+      },
     });
-    // We intentionally depend on `places.length` rather than `places` to
-    // avoid re-firing on every refetch with identical IDs. A new NL query
-    // resets rerankStatus to "pending" so we'll fire again then.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [needsRerank, semanticIntent, rerankStatus, isFetching, places?.length]);
+  }, [
+    needsRerank,
+    semanticIntent,
+    broadenStatus,
+    rerankStatus,
+    status,
+    isFetching,
+    places?.length,
+    filters,
+    targetFilters,
+  ]);
 }
 
 const TOP_N = 50;
 
+/**
+ * Send rerank request with the FULL place_profile payload (Phase 6.5).
+ * The LLM judges holistically — features, theme_insights, tldr, pros,
+ * cons all flow through.
+ *
+ * Boost post-process (and the hint-chip UI it fed) was removed entirely
+ * in v1.8.1. The rank-results LLM has all the context it needs to
+ * surface user-curated matches via its own scoring.
+ */
 async function runRerank({
   semanticIntent,
   places,
-  boosts,
   onSuccess,
   onError,
 }: {
   semanticIntent: string;
   places: Place[];
-  boosts: {
-    matching_tag_ids: string[];
-    matching_list_ids: string[];
-    matching_subcategory_ids: string[];
-  };
   onSuccess: (rows: { id: string; score: number; why: string }[]) => void;
   onError: () => void;
 }) {
-  // Cap by recency. Newest first — Place doesn't always carry updated_at on
-  // the client, so fall back to created_at order from /api/places.
+  // Cap. Server-side /api/places is sorted by google_rating DESC when
+  // AI search is active, so the top TOP_N are the highest-quality
+  // candidates by Google's metric — best starting point for LLM judging.
   const capped = places.slice(0, TOP_N);
 
   const candidates = capped.map((p) => {
-    const profile = p.google_data?.place_profile as
-      | { searchable_summary?: string | null }
-      | undefined;
+    const profile = (p.google_data?.place_profile ?? null) as
+      | {
+          searchable_summary?: string | null;
+          features?: Record<string, unknown> | null;
+          theme_insights?: unknown[] | null;
+          tldr?: string | null;
+          pros?: string[] | null;
+          cons?: string[] | null;
+        }
+      | null;
     return {
       id: p.id,
       name: p.name,
       searchable_summary: profile?.searchable_summary ?? "",
-      // Sub-cat is on the place row directly; server uses this for the
-      // sub-cat boost without an extra Supabase query.
-      subcategory_id: p.subcategory_id ?? null,
+      features: profile?.features ?? {},
+      theme_insights: profile?.theme_insights ?? null,
+      tldr: profile?.tldr ?? null,
+      pros: profile?.pros ?? null,
+      cons: profile?.cons ?? null,
     };
   });
-
-  const hasBoosts =
-    boosts.matching_tag_ids.length > 0 ||
-    boosts.matching_list_ids.length > 0 ||
-    boosts.matching_subcategory_ids.length > 0;
 
   try {
     const res = await fetch("/api/ai/rank-results", {
@@ -196,13 +434,6 @@ async function runRerank({
       body: JSON.stringify({
         semantic_intent: semanticIntent,
         candidates,
-        ...(hasBoosts
-          ? {
-              boost_tag_ids: boosts.matching_tag_ids,
-              boost_list_ids: boosts.matching_list_ids,
-              boost_subcategory_ids: boosts.matching_subcategory_ids,
-            }
-          : {}),
       }),
     });
     if (!res.ok) throw new Error(`rank-results ${res.status}`);
