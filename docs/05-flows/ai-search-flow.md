@@ -2,7 +2,7 @@
 title: AI Search Flow (LLM-as-judge, Phase 6.5)
 type: flow
 domain: places
-version: 2.1.0
+version: 2.2.0
 last_updated: 19.05.2026
 status: stable
 sources:
@@ -58,8 +58,12 @@ Rerank (Gemini #2)
   ├─ Full per-candidate payload:
   │   { id, name, searchable_summary, features (9 axis),
   │     theme_insights, tldr, pros, cons }
-  ├─ Concurrent-call lockout + freshness guard
-  │   (rerankInFlightRef + status==='success' && !isFetching)
+  ├─ Concurrent-call lockout (rerankInFlightRef)
+  ├─ targetFilters fingerprint gate — waits out the applyParse
+  │   vs setFilters propagation race (zustand sync lands a render
+  │   before React useState; intermediate render has stale `filters`)
+  ├─ Freshness guard (status==='success' && !isFetching)
+  ├─ Stale-response discard (re-check targetFilters at landing)
   ├─ 6-tier scoring rubric with HIDE POWER (< 0.20 → hidden)
   └─ "Answer engine" framing — LLM is active curator
 
@@ -131,16 +135,22 @@ is missing.
        │
        ▼
 6. Rerank trigger (orchestrator's rerank effect)
-       │  Pre-conditions:
-       │    needsRerank ∧ broadenStatus='ready' ∧ rerankStatus='pending'
-       │    ∧ usePlaces.status==='success' ∧ !isFetching
-       │    ∧ rerankInFlightRef.current === false
+       │  Pre-conditions (ALL must hold simultaneously):
+       │    - needsRerank
+       │    - broadenStatus === 'ready'
+       │    - rerankStatus === 'pending'
+       │    - rerankInFlightRef.current === false
+       │    - targetFilters !== null
+       │    - fpFilters(filters) === fpFilters(targetFilters)   ← v1.8.2
+       │    - usePlaces.status === 'success'
+       │    - !isFetching
        │
-       │  The inFlightRef lock + freshness guard prevent re-entry: React
-       │  Strict Mode dev double-mount, dep-driven re-runs during the
-       │  places refetch transition, and the applyParse/setFilters race
-       │  all collapse to a single rerank call on fresh data. See
-       │  rerankInFlightRef comment in use-ai-search.ts.
+       │  The targetFilters fingerprint gate is the critical one. It
+       │  catches the applyParse-vs-setFilters propagation race: zustand
+       │  state lands one render before React useState, so an intermediate
+       │  render has new store state but stale `filters`. Without the
+       │  fingerprint check the orchestrator fires on the wrong (stale)
+       │  data. See v1.8.2 section at end of doc for empirical trace.
        │
        │  POST /api/ai/rank-results
        │    body: {
@@ -314,9 +324,54 @@ No DB migration.
   `useTags`/`useLists`/`useSubcategories` imports dropped.
 - `ai-search-store.boosts`, `BoostIds`, `EMPTY_BOOSTS` deleted.
 - Rerank orchestrator gained a `rerankInFlightRef` lock + `status==='success'`
-  freshness guard. Symptom this fixes: rerank firing twice per query
-  (~$0.01 instead of ~$0.005), with the stale call sometimes winning the
-  race and writing rankings for a filter set the user no longer has.
-  Root causes addressed: React Strict Mode dev double-mount, dep-driven
-  re-runs during the places refetch transition, and the applyParse /
-  setFilters / usePlaces race.
+  freshness guard. Reduced double-fire but DID NOT eliminate the stale fire
+  — see v1.8.2 for the actual root cause.
+
+## v1.8.2 follow-up — propagation race fix (the real bug)
+
+Slice 1 diagnostic logs revealed the v1.8.1 freshness guard was
+inadequate. With 25 London restaurants, the trace showed:
+
+```
+tick 3  fp='{}'  placesLen=123  broadenStatus=checking → resolve
+tick 4  fp='{}'  placesLen=123  broadenStatus=ready    → ★ FIRE (wrong!)
+tick 5  fp=NEW  placesLen=undefined  isFetching=true   (fresh fetch starts)
+tick 6  fp=NEW  placesLen=25  isFetching=false  → inFlight (blocked, correct fire suppressed)
+```
+
+**Root cause:** `applyParse` (zustand sync) and `setFilters` (React useState
+async) don't propagate in the same render. Between the two, a render
+exists where:
+- store state is NEW (broadenStatus="checking" → "ready" resolves)
+- useFilters' `filters` is STALE (still `{}` pre-AI)
+- usePlaces returns the cached 123-place pre-AI result
+
+The broaden gate evaluates on stale data and resolves; the rerank gate
+fires on stale data. The v1.8.1 inFlightRef lock then blocks the
+follow-up fire on fresh (correct) data.
+
+**Fix — targetFilters atomic gate:**
+
+- New store field: `targetFilters: PlaceFilters | null`.
+- `applyParse({..., targetFilters})` snapshots the post-merge filter set
+  ahead of the React state update (`mergeFiltersForTarget` mirrors
+  useFilters' merge logic for a deterministic target).
+- `applyBroaden` and `setBroadenActiveMode` keep targetFilters in sync
+  with the active broaden mode's filter set.
+- Orchestrator both gates check `fpFilters(filters) === fpFilters(targetFilters)`
+  before doing anything. They wait out the propagation race.
+- Rerank `onSuccess` re-checks targetFilters at landing; discards stale
+  responses if the target changed mid-flight.
+
+Expected post-fix trace (verified empirically):
+
+```
+tick 3  fp='{}'  targetFp=NEW   → skip: fp !== targetFp
+tick 4  fp=NEW  isFetching=true → skip: isFetching
+tick 5  fp=NEW  placesLen=25    → broaden resolve→ready
+tick 6  fp=NEW                  → ★ FIRE on 25 places (correct)
+```
+
+Diagnostic instrumentation (v1.8.2 Slice 1) was removed after
+verification; only the structural `fpFilters` helper and the
+`mergeFiltersForTarget` merge mirror remain in the production path.

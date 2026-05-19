@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import {
   useAiSearchStore,
   BROADEN_THRESHOLD,
@@ -13,34 +13,12 @@ import type { ParseQueryOutput } from "@/lib/ai/schemas/parse-query";
 import type { RankResultsOutput } from "@/lib/ai/schemas/rank-results";
 
 /**
- * ═══════════════════════════════════════════════════════════════════
- * DIAGNOSTIC INSTRUMENTATION (v1.8.2 Slice 1 — TEMPORARY)
- *
- * Logs the exact state at every orchestrator tick to diagnose why the
- * rerank fires on stale (pre-filter) data despite the v1.8.1 freshness
- * guard. We need to see:
- *   1. When parse-query.onSuccess runs (setFilters + applyParse timing)
- *   2. Each broaden gate tick: state values + decision
- *   3. Each rerank gate tick: state values + skip reason OR fire snapshot
- *   4. queryClient.getQueryState vs usePlaces return — do they match?
- *
- * Once the root cause is verified, this will be removed and replaced
- * with a structural fix (targetFilters fingerprint + cache double-check).
- *
- * To disable temporarily, flip ORCH_LOG to false.
- * ═══════════════════════════════════════════════════════════════════
+ * Stable JSON fingerprint of a PlaceFilters object. Keys are sorted and
+ * undefined values dropped so cosmetic differences don't cause false
+ * mismatches in the orchestrator's targetFilters gate.
  */
-const ORCH_LOG = true;
-
-function orchLog(scope: string, event: string, payload: Record<string, unknown>) {
-  if (!ORCH_LOG) return;
-  // eslint-disable-next-line no-console
-  console.log(`[ai-search/${scope}] ${event}`, payload);
-}
-
 function fpFilters(filters: PlaceFilters | null): string {
   if (!filters) return "<null>";
-  // Stable fingerprint — sort keys so cosmetic key-order doesn't trip us.
   const obj: Record<string, unknown> = {};
   for (const k of Object.keys(filters).sort()) {
     const v = (filters as Record<string, unknown>)[k];
@@ -138,12 +116,6 @@ export function useAiSearch() {
       return (await res.json()) as ParseQueryOutput;
     },
     onSuccess: (data, query) => {
-      orchLog("parse", "received", {
-        query,
-        hard: data.hard,
-        intent_head: data.semantic_intent.slice(0, 80),
-        requires_rerank: data.requires_semantic_ranking,
-      });
       // Build the next PlaceFilters from parse output — hard only.
       // AI search OVERRIDES the user's sort preference to
       // google_rating_desc (quality-first). When the user clears the
@@ -169,16 +141,7 @@ export function useAiSearch() {
       // docstring in ai-search-store.
       const targetFilters = mergeFiltersForTarget(currentFilters, nextFilters);
 
-      orchLog("parse", "setFilters→", {
-        nextFilters,
-        targetFilters,
-        targetFp: fpFilters(targetFilters),
-      });
       setFilters(nextFilters);
-      orchLog("parse", "applyParse→", {
-        intent_len: data.semantic_intent.length,
-        needs_clarification: data.needs_clarification,
-      });
       applyParse({
         semantic_intent: data.semantic_intent,
         requires_semantic_ranking: data.requires_semantic_ranking,
@@ -215,13 +178,8 @@ export function useAiRerankOrchestrator(filters: PlaceFilters) {
   const applyBroaden = useAiSearchStore((s) => s.applyBroaden);
   const resolveBroadenCheck = useAiSearchStore((s) => s.resolveBroadenCheck);
   const { setFilters } = useFilters();
-  const queryClient = useQueryClient();
 
-  const { data: places, isFetching, status, dataUpdatedAt } = usePlaces(filters);
-
-  // Tick counter for diagnostics — increments on every render of either effect.
-  const broadenTickRef = useRef(0);
-  const rerankTickRef = useRef(0);
+  const { data: places, isFetching, status } = usePlaces(filters);
 
   // Lock to prevent concurrent runRerank invocations.
   //
@@ -245,69 +203,36 @@ export function useAiRerankOrchestrator(filters: PlaceFilters) {
   // fetched, we either: (a) apply broader filter and wait for refetch,
   // (b) decide no broaden is needed and let rerank proceed.
   useEffect(() => {
-    broadenTickRef.current += 1;
-    const tick = broadenTickRef.current;
-    const fp = fpFilters(filters);
-    const targetFp = fpFilters(targetFilters);
-    const cacheState = queryClient.getQueryState(["places", filters]);
-    const baseLog = {
-      tick,
-      needsRerank,
-      broadenStatus,
-      isFetching,
-      placesLen: places?.length,
-      status,
-      dataUpdatedAt,
-      fp,
-      targetFp,
-      broaden: broaden ? `mode=${broaden.activeMode} narrow=${broaden.narrowCount} broader=${broaden.broaderCount}` : null,
-      cache_status: cacheState?.status,
-      cache_fetchStatus: cacheState?.fetchStatus,
-      cache_dataUpdatedAt: cacheState?.dataUpdatedAt,
-      cache_dataLen: Array.isArray(cacheState?.data) ? (cacheState.data as Place[]).length : null,
-    };
-
-    if (!needsRerank) { orchLog("orch/broaden", "skip: !needsRerank", baseLog); return; }
-    if (broadenStatus !== "checking") { orchLog("orch/broaden", `skip: broadenStatus=${broadenStatus}`, baseLog); return; }
-    // CRITICAL: targetFilters fingerprint gate.
-    // applyParse (zustand sync) lands before setFilters (React useState).
-    // Without this gate, we'd evaluate broaden on a render where filters
-    // is still STALE — see v1.8.2 Slice 1 logs (tick 3, fp='{}'). The
-    // gate holds the broaden decision until setFilters has propagated.
-    if (!targetFilters) { orchLog("orch/broaden", "skip: !targetFilters", baseLog); return; }
-    if (fp !== targetFp) { orchLog("orch/broaden", "skip: fp !== targetFp (filters not propagated yet)", baseLog); return; }
-    if (isFetching) { orchLog("orch/broaden", "skip: isFetching", baseLog); return; }
-    if (!places) { orchLog("orch/broaden", "skip: !places", baseLog); return; }
-
-    orchLog("orch/broaden", "evaluating", baseLog);
+    if (!needsRerank) return;
+    if (broadenStatus !== "checking") return;
+    // CRITICAL: targetFilters fingerprint gate. See targetFilters
+    // docstring in ai-search-store and v1.8.2 CHANGELOG for the empirical
+    // race this guard catches (applyParse zustand-sync lands before
+    // setFilters React-useState propagates).
+    if (!targetFilters) return;
+    if (fpFilters(filters) !== fpFilters(targetFilters)) return;
+    if (isFetching) return;
+    if (!places) return;
 
     // If broaden state already exists (we're in the broader-fetch phase),
     // record the broader count and mark the gate as ready.
     if (broaden !== null) {
       // First fetch after we applied broader filter — capture broader count.
       if (broaden.broaderCount === 0 && broaden.activeMode === "broader") {
-        orchLog("orch/broaden", "capture broaderCount", { count: places.length });
         applyBroaden({ ...broaden, broaderCount: places.length });
       }
-      orchLog("orch/broaden", "resolve→ready (broader fetch done)", {});
       resolveBroadenCheck();
       return;
     }
 
     // Decide whether to broaden.
     if (!hasRestrictedHard(filters) || places.length >= BROADEN_THRESHOLD) {
-      orchLog("orch/broaden", "resolve→ready (no broaden needed)", {
-        hasRestricted: hasRestrictedHard(filters),
-        placesLen: places.length,
-        threshold: BROADEN_THRESHOLD,
-      });
       resolveBroadenCheck();
       return;
     }
 
     // Trigger broaden: stash both filter sets and apply the broader one.
     const { broader, droppedLabels } = dropRestrictedHard(filters);
-    orchLog("orch/broaden", "triggering broaden", { droppedLabels, narrowCount: places.length });
     applyBroaden({
       narrowFilters: { ...filters },
       broaderFilters: broader,
@@ -326,92 +251,56 @@ export function useAiRerankOrchestrator(filters: PlaceFilters) {
     broaden,
     filters,
     targetFilters,
-    status,
   ]);
 
   // ─── Rerank (runs after broaden gate is resolved) ───
   useEffect(() => {
-    rerankTickRef.current += 1;
-    const tick = rerankTickRef.current;
-    const fp = fpFilters(filters);
-    const targetFp = fpFilters(targetFilters);
-    const cacheState = queryClient.getQueryState(["places", filters]);
-    const baseLog = {
-      tick,
-      rerankStatus,
-      broadenStatus,
-      needsRerank,
-      hasIntent: !!semanticIntent,
-      status,
-      isFetching,
-      placesLen: places?.length,
-      dataUpdatedAt,
-      fp,
-      targetFp,
-      inFlight: rerankInFlightRef.current,
-      cache_status: cacheState?.status,
-      cache_fetchStatus: cacheState?.fetchStatus,
-      cache_dataUpdatedAt: cacheState?.dataUpdatedAt,
-      cache_dataLen: Array.isArray(cacheState?.data) ? (cacheState.data as Place[]).length : null,
-    };
-
-    if (rerankStatus !== "pending") { orchLog("orch/rerank", `skip: rerankStatus=${rerankStatus}`, baseLog); return; }
-    if (rerankInFlightRef.current) { orchLog("orch/rerank", "skip: inFlight", baseLog); return; }
-    if (!needsRerank) { orchLog("orch/rerank", "skip: !needsRerank", baseLog); return; }
-    if (!semanticIntent) { orchLog("orch/rerank", "skip: !semanticIntent", baseLog); return; }
-    if (broadenStatus !== "ready") { orchLog("orch/rerank", `skip: broadenStatus=${broadenStatus}`, baseLog); return; }
-    // CRITICAL: targetFilters fingerprint gate.
-    // See broaden gate's identical guard for rationale.
-    if (!targetFilters) { orchLog("orch/rerank", "skip: !targetFilters", baseLog); return; }
-    if (fp !== targetFp) { orchLog("orch/rerank", "skip: fp !== targetFp (filters not propagated yet)", baseLog); return; }
-    if (status !== "success") { orchLog("orch/rerank", `skip: status=${status}`, baseLog); return; }
-    if (isFetching) { orchLog("orch/rerank", "skip: isFetching", baseLog); return; }
-    if (!places) { orchLog("orch/rerank", "skip: !places", baseLog); return; }
+    if (rerankStatus !== "pending") return;
+    // Lock-out: prevent concurrent fires while a previous runRerank is
+    // still in flight. See rerankInFlightRef comment above.
+    if (rerankInFlightRef.current) return;
+    if (!needsRerank) return;
+    if (!semanticIntent) return;
+    if (broadenStatus !== "ready") return;
+    // CRITICAL: targetFilters fingerprint gate. See targetFilters
+    // docstring in ai-search-store and v1.8.2 CHANGELOG for the empirical
+    // race this guard catches.
+    if (!targetFilters) return;
+    if (fpFilters(filters) !== fpFilters(targetFilters)) return;
+    if (status !== "success") return;
+    if (isFetching) return;
+    if (!places) return;
 
     if (places.length === 0) {
-      orchLog("orch/rerank", "applyRankings([]) (zero places)", baseLog);
       applyRankings([]);
       return;
     }
+
+    // Snapshot the targetFilters fingerprint at fire-time so we can
+    // discard the response if the active target changed mid-flight
+    // (new query, broaden toggle) — prevents stale rankings from
+    // winning the race against a follow-up rerank.
+    const targetFpAtFire = fpFilters(targetFilters);
 
     // Flip the lock BEFORE the await. Subsequent effect runs (Strict
     // Mode second invocation, dependency-driven re-runs) see the lock
     // and exit at the guard above.
     rerankInFlightRef.current = true;
 
-    orchLog("orch/rerank", "★ FIRE", {
-      ...baseLog,
-      first5_place_names: places.slice(0, 5).map((p) => p.name),
-    });
-
     void runRerank({
       semanticIntent,
       places,
       onSuccess: (rows) => {
         rerankInFlightRef.current = false;
-        const postState = queryClient.getQueryState(["places", filters]);
-        // Snapshot the targetFilters fingerprint at fire-time and
-        // re-check on landing. If the user (or broaden toggle) changed
-        // the active target while the rerank was in flight, the response
-        // is stale — discard rather than write incorrect rankings.
         const currentTargetFp = fpFilters(useAiSearchStore.getState().targetFilters);
-        const stale = currentTargetFp !== targetFp;
-        orchLog("orch/rerank", stale ? "⚠︎ stale response — discarded" : "✓ response landed", {
-          rankedCount: rows.length,
-          post_cache_dataUpdatedAt: postState?.dataUpdatedAt,
-          post_cache_dataLen: Array.isArray(postState?.data) ? (postState.data as Place[]).length : null,
-          fp_at_fire: fp,
-          targetFp_at_fire: targetFp,
-          currentTargetFp,
-          dataUpdatedAt_at_fire: dataUpdatedAt,
-        });
-        if (!stale) {
-          applyRankings(rows);
+        if (currentTargetFp !== targetFpAtFire) {
+          // Stale — silently discard.
+          return;
         }
+        applyRankings(rows);
       },
       onError: () => {
         rerankInFlightRef.current = false;
-        orchLog("orch/rerank", "✗ error", { fp_at_fire: fp });
         failRerank();
       },
     });

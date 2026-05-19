@@ -6,6 +6,81 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 19.05.2026 — v1.8.2 — Propagation race kill (the real fix)
+
+The v1.8.1 lock-out reduced the rerank double-fire from 2 to 1, but
+the *wrong* fire survived. Live test on `"restaurants for dating in
+london"` (user has 25 London restaurants) showed:
+
+- v1.8.0: two fires (50 stale, 25 fresh) — second won by luck
+- v1.8.1: one fire (50 stale) — lock blocked the correct follow-up
+- v1.8.2: one fire (25 fresh) ✓
+
+### Root cause (proven with diagnostic logs)
+
+`applyParse` is a zustand store update — propagates **synchronously**
+through `useSyncExternalStore` notification.
+
+`setFilters` (useFilters internal) is a React `useState` setter —
+propagates on the **next** render commit.
+
+Same event handler, both called sequentially, but they land in
+*different* renders. The intermediate render has:
+- new store state: `broadenStatus='checking'`, `rerankStatus='pending'`,
+  `needsRerank=true`, `semanticIntent` set
+- stale `filters`: still `{}` (pre-AI), `usePlaces({})` returns the
+  cached 123-place all-places result
+
+The broaden gate evaluates on this stale 123-place set, resolves to
+"ready" (because no restricted hard filter), and triggers the rerank
+gate which fires on stale data.
+
+### Fix — `targetFilters` atomic gate
+
+New store field captures the AI search's intended filter set ahead
+of the React state update. Orchestrator gates wait until
+`fpFilters(filters) === fpFilters(targetFilters)` — i.e., until
+setFilters has propagated.
+
+**Backend / store:**
+- `ai-search-store`:
+  - `targetFilters: PlaceFilters | null` — null when no AI search
+    active. Set by `applyParse`, updated by `applyBroaden` and
+    `setBroadenActiveMode`, cleared by `reset`.
+  - `applyParse({..., targetFilters})` signature extended.
+
+**Hook:**
+- `useAiSearch.onSuccess` pre-computes the post-merge filter set
+  via `mergeFiltersForTarget` (mirrors useFilters.setFilters logic
+  for a deterministic snapshot) and passes it to `applyParse`.
+- `useAiRerankOrchestrator` both effects (broaden + rerank) now
+  check `!targetFilters` and fingerprint match before evaluating.
+- Rerank `onSuccess` re-checks targetFilters at landing; if it
+  changed mid-flight (broaden toggle, new query), discards the
+  stale response.
+
+**Diagnostic instrumentation (Slice 1):** verbose tick-by-tick
+logging was added to confirm the race empirically, then removed in
+Slice 3 after the fix was verified.
+
+### Files touched
+
+- `src/lib/stores/ai-search-store.ts` — targetFilters field + actions
+- `src/lib/hooks/use-ai-search.ts` — fpFilters + mergeFiltersForTarget
+  helpers, targetFilters gate in both orchestrator effects, stale-
+  response discard
+- `docs/05-flows/ai-search-flow.md` → v2.2.0 (race documented in
+  rerank trigger section + v1.8.2 migration block)
+
+### Cost
+
+Same as v1.8.1 (~$0.005 per rerank), now reliably on the *correct*
+candidate set. No more wasted spend on stale-data reranks.
+
+### No DB migration. No breaking URL changes.
+
+---
+
 ## 19.05.2026 — v1.8.1 — Rerank race fix + boost removal
 
 Two follow-up corrections on top of the v1.8.0 pivot, observed on the
