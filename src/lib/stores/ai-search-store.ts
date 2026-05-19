@@ -113,5 +113,16 @@ export const useAiSearchStore = create<AiSearchState>((set) => ({
     }),
 }));
 
-/** Default threshold below which a card collapses under "Less relevant". */
-export const LESS_RELEVANT_SCORE = 0.3;
+/**
+ * Threshold below which a card visually fades (opacity 60%) to indicate
+ * "Less relevant" — it still renders, never hides.
+ *
+ * Lowered from 0.3 to 0.15 after live testing: in queries that combine
+ * a soft-features filter with rerank against profile-less places, the
+ * rerank scores cluster low (0.10–0.25) across the entire candidate set
+ * because there's no `searchable_summary` to read. At 0.3, the whole
+ * list faded and looked like "no matches" even though valid candidates
+ * were rendered. 0.15 keeps borderline candidates at full opacity; only
+ * the truly mismatched (~0.0) still fade.
+ */
+export const LESS_RELEVANT_SCORE = 0.15;

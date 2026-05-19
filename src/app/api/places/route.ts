@@ -145,6 +145,22 @@ export async function GET(request: NextRequest) {
   // "exclude entirely" rule that was too aggressive given Phase 4 profile
   // coverage gaps — in some user collections only ~1% of places have been
   // profiled, and excluding the rest collapsed result sets to zero.
+  //
+  // Vocabulary canonicalization (v1.7.4): the parse-query LLM and the
+  // place_profile generator LLM were never aligned on multi-word feature
+  // format. Stored values are Title Case with spaces ("Date night",
+  // "Casual Dinner", "Bar Seat"); parse-query emits snake_case lowercase
+  // ("date_night", "casual_dinner", "bar_seat"). String compare misses
+  // these. `canonFeature` normalizes both sides to the same shape:
+  // lowercase + collapse whitespace/dashes to single underscore. Matching
+  // becomes "date_night" === "date_night" regardless of which side
+  // produced which form.
+  const canonFeature = (v: string): string =>
+    v
+      .toLowerCase()
+      .replace(/[-\s]+/g, "_")
+      .replace(/_+/g, "_");
+
   let softFilterStats = { kept_no_profile: 0, kept_match: 0, dropped: 0 };
   if (hasSoftFilter) {
     filteredPlaces = filteredPlaces.filter((p: any) => {
@@ -165,11 +181,12 @@ export async function GET(request: NextRequest) {
           softFilterStats.dropped += 1;
           return false;
         }
-        const haveLower = (have as unknown[])
+        const haveCanon = (have as unknown[])
           .filter((v): v is string => typeof v === "string")
-          .map((v) => v.toLowerCase());
-        const matched = (wanted as string[]).some((w) =>
-          haveLower.includes(w)
+          .map(canonFeature);
+        const wantedCanon = (wanted as string[]).map(canonFeature);
+        const matched = wantedCanon.some((w) =>
+          haveCanon.includes(w)
         );
         if (!matched) {
           softFilterStats.dropped += 1;
