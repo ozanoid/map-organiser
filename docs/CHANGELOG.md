@@ -6,6 +6,84 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 19.05.2026 — v1.8.0 — Phase 6.5: LLM-as-judge pivot
+
+Architectural pivot of the NL search system. The v1.7.x rule-based soft
+filter + boost mechanism is replaced by full LLM-as-judge. The rank-results
+LLM receives each candidate's complete `place_profile` (features.* +
+theme_insights + tldr + pros + cons + searchable_summary) and judges
+holistically against a rich natural-language `semantic_intent`. The
+vocabulary-mismatch and synonym-blindness bugs of v1.7.x (parse-query
+emitted "date_night" snake_case while Phase 4 emitted "Date night" Title
+Case + space) dissolve because string matching is gone — both sides
+operate in natural language now.
+
+### Design doc
+Full rationale, decision log, and acceptance criteria in
+`docs/_plans/phase-6-llm-as-judge-pivot.md`. 7 decisions cover hard-filter
+scope, `semantic_intent` shape, adaptive cap + sort override + bol
+payload, threshold + 6-tier rubric + LLM hide power, adaptive broaden
+with banner, boost removal (hint chips kept), big bang migration.
+
+### Schema changes
+- `ParseQuerySchema.soft_features` REMOVED.
+- `PlaceFilters.soft_features` REMOVED.
+- `RankCandidate` extended with `features`, `theme_insights`, `tldr`,
+  `pros`, `cons`.
+- Rerank request body no longer accepts `boost_*_ids`.
+
+### Backend
+- `src/lib/ai/prompts/parse-query.ts` — full rewrite for 3-concern
+  output (hard / boosts / semantic_intent). Token consumption rule
+  for `requires_semantic_ranking`. Answer engine framing. 7 few-shots,
+  5 anti-patterns.
+- `src/lib/ai/prompts/rank-results.ts` — full rewrite. 6-tier rubric
+  with explicit DISPLAY THRESHOLD = 0.20. LLM has "hide power".
+  Candidate input includes the full profile.
+- `src/app/api/ai/rank-results/route.ts` — boost post-process REMOVED.
+  Diagnostic log surfaces `hidden_below_0.20` count.
+- `src/app/api/places/route.ts` — entire soft-feature filter block +
+  SOFT_AXES enum + canonFeature helper REMOVED.
+
+### Frontend
+- `src/lib/types/index.ts` — `PlaceFilters.soft_features` dropped.
+- `src/lib/hooks/use-filters.ts` + `use-places.ts` — soft_features
+  paths removed. Old `?f_*` bookmark URLs silently ignored.
+- `src/lib/hooks/use-ai-search.ts` — broaden orchestration added
+  (two-stage useEffect: broaden gate then rerank). Rerank body extended
+  with full payload.
+- `src/lib/stores/ai-search-store.ts` — new `broaden` state +
+  `broadenStatus` machine. `setBroadenActiveMode` action.
+  `LESS_RELEVANT_SCORE` (0.15) → `HIDE_BELOW_SCORE` (0.20). New
+  `BROADEN_THRESHOLD = 10`.
+- `src/components/places/place-card.tsx` — fade replaced with HIDE
+  (returns null < 0.20). New `className` prop for wrapper composition.
+- `src/app/(app)/places/page.tsx` — SelectablePlaceCard refactored to
+  ~35-line composition over PlaceCard (was ~165 LOC duplicate). Sort
+  dropdown swapped for "AI Ranked" badge when active. Grid sorted by
+  rerank score.
+- `src/components/map/map-content.tsx` — markers filtered by score
+  ≥ 0.20. Sidebar dropdown sorted + filtered. Badge count post-threshold.
+- `src/components/filters/filter-panel.tsx` — sort dropdown swapped
+  for "AI Ranked" badge when active.
+- `src/components/search/ai-search-input.tsx` — broaden banner with
+  narrow/broader toggle.
+
+### Vault
+- `docs/_plans/phase-6-llm-as-judge-pivot.md` (NEW) — design doc.
+- `docs/05-flows/ai-search-flow.md` — major rewrite to v2.0.0.
+
+### Cost
+- `ai_parse_query` — ~\$0.0002/call.
+- `ai_rank_results` — ~\$0.005/call at 50 candidates with full payload
+  (was ~\$0.002 summary-only).
+
+### Migration / breaking
+- Big bang deploy. Old `?f_*` bookmark URLs silently ignored — only
+  structural filters apply. No DB migration.
+
+---
+
 ## 19.05.2026 — v1.7.4 — system fix: city + country are a pair
 
 Live test of "restaurants for dating in london" returned different

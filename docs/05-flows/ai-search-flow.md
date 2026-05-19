@@ -1,8 +1,8 @@
 ---
-title: AI Search Flow (NL filtering, Phase 6)
+title: AI Search Flow (LLM-as-judge, Phase 6.5)
 type: flow
 domain: places
-version: 1.2.0
+version: 2.0.0
 last_updated: 19.05.2026
 status: stable
 sources:
@@ -12,12 +12,15 @@ sources:
   - src/components/search/ai-search-input.tsx
   - src/lib/ai/context-builder.ts
   - src/lib/ai/prompts/parse-query.ts
+  - src/lib/ai/prompts/rank-results.ts
   - src/lib/hooks/use-ai-search.ts
   - src/lib/stores/ai-search-store.ts
   - src/components/map/map-content.tsx
   - src/components/places/place-card.tsx
-  - src/components/filters/country-city-filter.tsx
+  - src/components/filters/filter-panel.tsx
+  - src/app/(app)/places/page.tsx
 related:
+  - "[[../_plans/phase-6-llm-as-judge-pivot]]"
   - "[[../02-backend/api-routes/ai]]"
   - "[[../03-frontend/components/search]]"
   - "[[../04-integrations/gemini]]"
@@ -25,252 +28,270 @@ related:
   - "[[../01-domain/places]]"
 ---
 
-# AI Search Flow (NL filtering, Phase 6)
+# AI Search Flow (LLM-as-judge, Phase 6.5)
 
-User types something like `"cozy cafes in Shoreditch for remote work"`
-and the app:
+User types a natural-language query — `"restaurants for dating in london"`,
+`"cozy cafes for remote work"`, `"all my vegan restaurants"` — and the
+app turns it into a ranked answer set. Phase 6.5 rewrote the architecture
+around **LLM-as-judge**: rule-based soft filtering is gone, the LLM does
+holistic semantic matching against each candidate's full place_profile.
 
-1. Parses the query into a **three-layer match spec**: hard exclusion
-   filters, soft feature axes, and semantic boosts.
-2. Applies the hard + soft layers through the existing places pipeline.
-3. If the query has fuzzy intent beyond filters, ranks the result list
-   with a second LLM call against each place's `searchable_summary`,
-   applying a score bump to boost-matched candidates.
+## Architecture (3 concerns)
 
-This is the first AI feature where the model is on the **interactive path**
-(versus background enrichment). The full round-trip target is ~2-3s.
+```
+parse-query (Gemini #1)
+  ├─ hard filter (10 structural axes — SQL exclusion)
+  ├─ semantic_intent (single rich natural-language string)
+  ├─ boosts.matching_*_ids (UI hint chips only — NO scoring impact)
+  └─ requires_semantic_ranking (token consumption check)
 
-## Three-layer match model
+/api/places
+  ├─ HARD filter SQL only
+  ├─ AI search aktif → sort = google_rating_desc (override)
+  └─ Soft filter REMOVED (moved to rank-results)
 
-| Layer | What | Where applied | Excludes? |
-|---|---|---|---|
-| **Hard** | Categories, cities, visit_status, explicit sub-cat/tag/list refs | SQL filter in `/api/places` | **Yes** |
-| **Soft features** | atmosphere, dietary, occasions, seating, cuisine_types | JSONB intersect server-side | Yes (when set) |
-| **Boosts** | Semantic associations with curated tags/lists/sub-cats | Score bump in rank-results + opt-in UI hint chips | **No** |
+Adaptive broaden gate (orchestrator)
+  ├─ narrow_count < 10 + restricted hard → drop sub-cat/tag/list
+  ├─ Refetch with broader hard
+  └─ User toggles narrow ↔ broader via banner
 
-**Why three layers and not two.** A previous design tried to put
-everything into `hard` filters when the LLM saw a curated taxonomy match.
-That broke discovery: query `"best date restaurants in london"` would
-auto-filter by the user's "Date Spot" tag and "London Trip" list,
-returning only places the user had ALREADY manually marked — which is
-the opposite of what AI search should do. Boosts let the model say
-"this curated item is thematically related" without excluding
-non-matching candidates.
+Rerank (Gemini #2)
+  ├─ Full per-candidate payload:
+  │   { id, name, searchable_summary, features (9 axis),
+  │     theme_insights, tldr, pros, cons }
+  ├─ 6-tier scoring rubric with HIDE POWER (< 0.20 → hidden)
+  └─ "Answer engine" framing — LLM is active curator
+
+UI (mode-conditional)
+  ├─ rankings === null → normal browsing UX unchanged
+  └─ rankings !== null → AI active mode:
+      - Cards/markers below threshold HIDDEN
+      - Sort dropdown disabled, "AI Ranked" badge
+      - Why line replaces address on cards
+      - Broaden banner (when applicable)
+      - Hint chips (opt-in narrowing)
+```
+
+The full design rationale lives in `docs/_plans/phase-6-llm-as-judge-pivot.md`.
 
 ## Trigger
 
 User types into [[../03-frontend/components/search#aisearchinput|AiSearchInput]]
-in the FilterPanel and submits.
-
-The input is gated — it doesn't render at all when `profiles.ai_features_enabled`
-is false or `GOOGLE_GENERATIVE_AI_API_KEY` is missing.
+in the FilterPanel and submits. The input is gated — hidden when
+`profiles.ai_features_enabled = false` or `GOOGLE_GENERATIVE_AI_API_KEY`
+is missing.
 
 ## Steps
 
 ```
-1. User types: "cozy cafes in Shoreditch for remote work"
+1. User types: "restaurants for dating in london"
        │
        ▼
-2. AiSearchInput → useAiSearch.mutate(query)
-       │  POST /api/ai/parse-query  { query }
-       │
-       │  Server gates: auth → ai_features_enabled → env key
-       │
-       │  buildUserContext(user) →
-       │    { categories, subcategories, tags, lists, cities, countries }
-       │
-       │  buildParseQueryPrompt(query, ctx) →
-       │    { systemPrompt: "You parse natural-language search…",
-       │      userPrompt: "Query: …" }
-       │
-       │  generateText({
-       │    model: gemini-flash-latest,
-       │    output: Output.object({ schema: ParseQuerySchema }),
-       │    system, prompt
-       │  })
-       │
-       │  Sanitize: strip any LLM-emitted UUIDs not in ctx.
-       │  Track usage: ai_parse_query SKU
+2. POST /api/ai/parse-query (Gemini #1)
+       │  System prompt: 3-concern model, hard/boosts/semantic_intent,
+       │  token consumption rule, answer engine framing, 7 few-shots
+       │  + 5 anti-patterns + user context (Cities by country mapping)
        │
        │  ◄── ParseQueryOutput
-       │      { hard: { category_ids: [cafeId] },
-       │        soft_features: { atmosphere: ["cozy"], occasions: ["working"] },
-       │        boosts: { matching_tag_ids: [], matching_list_ids: [],
-       │                  matching_subcategory_ids: [] },
-       │        semantic_intent: "cafes in Shoreditch good for remote work",
+       │      { hard: { category_ids, city: 'London',
+       │                country: 'United Kingdom' },
+       │        semantic_intent: 'London restaurants suitable for a
+       │          romantic date: intimate, candlelit atmosphere; date
+       │          night occasion; avoid loud sports-bar.',
+       │        boosts: { matching_tag_ids: [london_tag, date_spot],
+       │                 matching_list_ids: [london_trip] },
        │        requires_semantic_ranking: true,
        │        needs_clarification: null }
        │
        ▼
-3. Client onSuccess:
-       │  • useFilters.setFilters({ ...hard, soft_features })
+3. useAiSearch.onSuccess:
+       │  • setFilters({ ...hard, sort: 'google_rating_desc' })
        │     → URL params update → /api/places refetches
-       │  • useAiSearchStore.applyParse({ semantic_intent,
-       │       requires_semantic_ranking, needs_clarification, query })
-       │     → rerankStatus = "pending"
+       │  • applyParse(...) → store.broadenStatus = 'checking',
+       │     store.rerankStatus = 'pending'
        │
        ▼
-4. /api/places GET (with new params)
-       │  • SQL filter (Layer 1): category, sub-cat, status, etc.
-       │  • Post-filter (Layer 2): for each soft_features axis, intersect
-       │    requested terms against google_data.place_profile.features.<axis>.
-       │    Places without place_profile are excluded when soft filters
-       │    are set.
-       │  ◄── filtered places[]
+4. /api/places GET (narrow hard filter)
+       │  SQL: WHERE category + city + country (no soft filter)
+       │  Returns narrow candidate set
        │
        ▼
-5. useAiRerankOrchestrator(filters) (mounted in MapContent)
-       │  Watches: needsRerank && places.length > 0 && !isFetching
-       │  → POST /api/ai/rank-results  {
-       │       semantic_intent,
-       │       candidates: top-50 by recency, each with
-       │                  { id, name, searchable_summary, subcategory_id },
-       │       boost_tag_ids?, boost_list_ids?, boost_subcategory_ids?
-       │     }
+5. Broaden gate (orchestrator, useAiSearch.useAiRerankOrchestrator)
+       │  if narrow_count < 10 AND has restricted (subcat/tag/list):
+       │    • applyBroaden(narrowFilters, broaderFilters, …,
+       │                   activeMode='broader')
+       │    • setFilters(broader) → /api/places refetches with broader
+       │    • Re-enters effect; broaden state non-null →
+       │      capture broaderCount, transition broadenStatus='ready'
+       │  else:
+       │    • resolveBroadenCheck() → broadenStatus='ready'
        │
-       │  Server:
+       ▼
+6. Rerank trigger (orchestrator's rerank effect)
+       │  Pre-conditions: needsRerank ∧ broadenStatus='ready' ∧
+       │    rerankStatus='pending' ∧ places ready
+       │
+       │  POST /api/ai/rank-results
+       │    body: {
+       │      semantic_intent,
+       │      candidates: top-TOP_N (50) by google_rating, each with:
+       │        { id, name, searchable_summary, features (9 axis),
+       │          theme_insights, tldr, pros, cons }
+       │    }
+       │
+       │  Server (Gemini #2):
        │    • cost guard: candidates.length ≤ 200
-       │    • buildRankResultsPrompt(intent, candidates)
-       │    • generateText({ model, output: RankResultsSchema, … })
-       │    • Strip IDs not in input
-       │    • Boost post-process:
-       │       - sub-cat boost: in-memory check vs candidates[i].subcategory_id
-       │       - tag boost: SELECT place_id FROM place_tags WHERE tag_id IN
-       │         (boost_tag_ids) AND place_id IN (candidates)
-       │       - list boost: same against list_places
-       │       - boosted scores: score = min(1, score + 0.15)
-       │    • Track usage: ai_rank_results SKU
+       │    • LLM reads FULL profile + intent, scores 0..1 + why
+       │    • 6-tier rubric: < 0.20 = HIDE
+       │    • "Answer engine" framing: LLM actively filters trash
+       │    • No boost post-process — score is the score
        │
-       │  ◄── { ranked: [{ id, score: 0-1, why: "…" }, ...] }
+       │  ◄── { ranked: [{ id, score, why }] }
        │
        ▼
-6. useAiSearchStore.applyRankings(ranked)
-       │  rerankStatus = "ready"
+7. UI re-renders (mode-conditional)
+       │  /map:
+       │    • placesForMap = places filtered to score >= 0.20
+       │    • Markers hidden if < 0.20
+       │    • Sidebar dropdown: sorted by score desc, why line
+       │    • "N places" badge shows post-threshold count
        │
-       ▼
-7. UI re-renders:
-       │  • MapContent place dropdown sorts visiblePlaceIds by score desc
-       │  • Each card swaps address line for italic emerald `why`
-       │  • Cards < LESS_RELEVANT_SCORE (0.3) fade to 60% opacity
-       │  • Subtitle under input: "AI search: <query> · ranked"
+       │  /places:
+       │    • sortedPlaces = places sorted by score desc
+       │    • SelectablePlaceCard renders null if < 0.20 (via PlaceCard
+       │      composition)
+       │    • Sort dropdown replaced with "AI Ranked" disabled badge
+       │
+       │  AISearchInput:
+       │    • Subtitle: "AI search: <query> · ranked"
+       │    • Broaden banner (if applicable): narrow/broader toggle
+       │    • Hint chips (from boosts): opt-in narrowing
+       │    • Clarification chip (if LLM set needs_clarification)
 ```
 
-## Inputs / outputs
+## Mode-based UI behavior
 
-| Step | Input | Output |
-|---|---|---|
-| 2 | `{ query: string ≤ 200 }` | `ParseQueryOutput` (no DB writes) |
-| 4 | URL params (hard + soft) | `Place[]` filtered |
-| 5 | `{ semantic_intent, candidates ≤ 200 }` | `RankResultsOutput` (no DB writes) |
+```
+Normal mode (rankings === null):
+  /map      → all markers, sidebar with name+address, sort dropdown active
+  /places   → cards with address, sort dropdown active
+  /lists/[id] → unchanged (AI search not surfaced here)
 
-## When does rerank run?
+AI active mode (rankings populated):
+  /map      → markers filtered to score≥0.20, sidebar sorted+why,
+              sort badge "AI Ranked"
+  /places   → cards sorted by score, <0.20 hidden, sort badge "AI Ranked",
+              why line replaces address
+  Both     → broaden banner (if triggered), hint chips, clarification (if needed)
+```
 
-The LLM in step 2 sets `requires_semantic_ranking` based on the query's
-content — **not** on result count.
+Mode flag: `useAiSearchStore.rankings !== null`. All AI features
+conditionally render on this flag.
 
-| Query | requires_semantic_ranking |
+## Hard filter scope (10 axes)
+
+| Axis | Notes |
 |---|---|
-| `"all my cafes"` | `false` — purely structural |
-| `"cafes I haven't been to"` | `false` — visit_status covers it |
-| `"cozy cafes for remote work"` | `true` — subjective fit |
-| `"date night spots with great views"` | `true` |
-| `"romantic dinner places"` | `true` |
-| `"best X" / "good X" / "recommend X" / "find me X"` | `true` (hard rule in prompt) |
+| category_ids | Always hard when explicit |
+| city + country | Pair — never one without the other |
+| visit_status | want_to_go / visited / booked / favorite |
+| rating_min, google_rating_min | Numerical thresholds |
+| created_after | ISO date from natural phrases |
+| subcategory_ids | ONLY when EXPLICITLY named ("sushi", "fine dining") |
+| tag_ids | ONLY when "my X-tagged" / "places I marked as X" |
+| list_id | ONLY when "in my X list" / "from my X" |
 
-Driving the decision from query content means small result sets (e.g. 5
-cafes total) still get reranked when the query has semantic intent,
-instead of being silently returned in default order.
+Everything else (atmosphere, occasions, dietary, cuisine_types, seating,
+music, crowd, price_range, distinctive, theme_insights, tldr, pros,
+cons) → **LLM-judge in rank-results**, NOT hard, NOT soft filter.
 
-## When does a tag/list/sub-cat go to `hard` vs `boosts`?
+## Token consumption rule
 
-This is the most consequential prompt rule. The LLM must distinguish
-between EXPLICIT reference (→ hard) and SEMANTIC association (→ boost):
+`requires_semantic_ranking` is computed by the parse-query LLM:
+1. List distinguishing tokens in the query (filler words excluded).
+2. For each, check if it's captured by `hard.*`.
+3. ALL covered → `false`. ANY uncovered → `true`.
 
-| Query | Goes to `hard.*` | Goes to `boosts.*` |
-|---|---|---|
-| `"show me my date spot places"` | `tag_ids=[date_spot_id]` | — |
-| `"places in my london trip list"` | `list_id=london_trip_id` | — |
-| `"sushi restaurants"` | `subcategory_ids=[sushi_id]` | — |
-| `"best date restaurants in london"` | `category_ids=[restaurant_id], city='London'` | `matching_tag_ids=[date_spot_id], matching_subcategory_ids=[fine_dining_id]` |
-| `"good cafes for working"` | `category_ids=[cafe_id]` | possibly `matching_tag_ids=[work_friendly_id]` if such a tag exists |
-| `"romantic dinner spots"` | `category_ids=[restaurant_id]` | `matching_tag_ids=[romantic_id]`, `matching_subcategory_ids=[fine_dining_id]` |
+Examples:
+- `"all my cafes"` → cafes consumed → **false**
+- `"fine dining in london"` → all covered → **false**
+- `"best date restaurants in london"` → best+date uncovered → **true**
+- `"all my vegan restaurants"` → vegan uncovered → **true**
 
-Rule of thumb: if the user could be looking for **additional** places
-beyond the curated ones, it's a boost. If the user is asking to **list
-the curated ones**, it's a hard filter.
+## Adaptive broaden
 
-## City + country are a pair (v1.2 — system fix)
+When narrow hard filter returns `< BROADEN_THRESHOLD = 10` candidates AND
+has restricted axes (subcategory_ids, tag_ids, list_id):
 
-The filter UI is country-first cascading: `CountryCityFilter`'s city
-dropdown is scoped to "cities under the currently selected country".
-Setting `hard.city` without `hard.country` breaks the visual cascade —
-the URL has `?city=London`, the API filters correctly, but the UI
-shows "All countries" and no city chip. The user perceives "filter not
-applied" even though it is.
+1. Compute broader filter (drop restricted)
+2. Refetch with broader
+3. Store both filter sets + counts; default activeMode = "broader"
+4. Banner shows: `"Found N matching <axis>. Showing M broader matches."`
+5. Toggle buttons let user switch narrow ↔ broader; switching triggers
+   re-rerank on the new candidate set.
 
-Three independent guards keep the pair consistent:
+## Hide power (rank-results LLM)
 
-1. **Context format** — `serializeUserContext` (in `src/lib/ai/context-builder.ts`)
-   includes a `Cities by country:` block that maps each country to its
-   cities. The LLM sees `London → United Kingdom` inline, not as two
-   separate flat lists.
+The rank-results prompt explicitly tells the LLM:
 
-2. **Prompt rule** — `parse-query.ts` step 1 (LOCATION) requires that
-   whenever the LLM sets `hard.city`, it also sets `hard.country` from
-   the mapping. Anti-pattern C in the prompt explicitly forbids city
-   without country.
+> DISPLAY THRESHOLD = 0.20. Anything you score below 0.20 will be HIDDEN
+> from the user. Use this power deliberately to filter out clearly
+> irrelevant matches.
 
-3. **Server-side backfill** — `pairCityWithCountry` in
-   `src/app/api/ai/parse-query/route.ts` runs after sanitization. If
-   the LLM still emitted `hard.city` without `hard.country`, it looks
-   up the country in `UserContext.cityToCountries` (computed from the
-   user's own data, multi-country safe, picks most-common). This is
-   NOT a static safety net — it's a data-driven inference, so it
-   works for every city in any user's collection.
+6-tier rubric:
+- 0.85-1.00 EXCELLENT — top result
+- 0.65-0.85 GOOD — show with confidence
+- 0.45-0.65 DECENT — show, mid-tier
+- 0.25-0.45 MARGINAL — show at bottom
+- 0.10-0.25 WEAK — borderline, may be hidden
+- 0.00-0.10 IRRELEVANT — HIDE
 
-4. **UI fallback** — `CountryCityFilter` now shows the city dropdown
-   when EITHER `country` is set OR `city` is already set in URL state.
-   Defense-in-depth for the (rare) case the LLM picks a city that
-   isn't in the user's data (so the backfill can't infer country).
-
-`CityToCountries` map structure:
-```ts
-Map<string, string[]>  // city → countries (ordered, most-frequent first)
-```
-
-Multi-country case: same city name in two countries (e.g. "London" in
-UK + Ontario, Canada) produces `["United Kingdom", "Canada"]`. The
-server picks the first; the LLM should also pick consistently because
-the prompt's "Cities by country" block lists the city under both.
+Worked examples in the prompt cover date-restaurant scoring (McDonald's
+→ 0.05, Bambi → 0.90, etc.).
 
 ## Failure modes
 
-- **`parse-query` 5xx / timeout:** toast `"Couldn't understand that query."` UI doesn't change. User can retry.
-- **`parse-query` returns clarification:** amber chip with the LLM's follow-up question under the input. Filters are NOT applied. User refines.
-- **`/api/places` returns zero rows:** UI shows the existing empty state ("No places match your filters"). `rerankStatus` set to `"ready"` with empty rankings — orchestrator bails so the spinner doesn't hang.
-- **`rank-results` 5xx / timeout:** `rerankStatus = "failed"`. Cards render in default order with no `why` line. Subtitle shows `· AI ranking unavailable`.
-- **Cost guard (> 200 candidates):** rank-results returns 400. Client orchestrator catches as "failed". Indicates a pre-filter bug — should never happen with `TOP_N = 50` client-side cap.
-- **`ai_features_enabled = false` set mid-session:** the AiSearchInput won't update until full page reload, but server routes will start returning 403 immediately, so attempts surface as toasts. Acceptable for now.
+| Symptom | Cause | Recovery |
+|---|---|---|
+| All POSTs 403 | `ai_features_enabled = false` | Toggle in Settings → AI |
+| All POSTs 503 | `GOOGLE_GENERATIVE_AI_API_KEY` missing | Set env, redeploy |
+| Empty card grid in AI mode | LLM scored every candidate < 0.20 | Query may be too restrictive; toggle banner to broader |
+| Broaden banner doesn't appear | narrow ≥ 10 OR no restricted hard | By design — no broaden needed |
+| `[ai/parse-query] paired city` log fires | LLM emitted city without country | Server safety net (PR #44) kicks in |
+
+## Cost
+
+- `ai_parse_query` — ~$0.0002/call (slightly larger prompt for the new
+  framing).
+- `ai_rank_results` — ~$0.005/call at 50 candidates with full payload
+  (was ~$0.002 in v1.7.x summary-only). Worth it for cross-axis reasoning.
+
+User with 20 semantic queries/day → ~$3/month at current pricing.
 
 ## Related code
 
-- `src/app/api/ai/parse-query/route.ts`
-- `src/app/api/ai/rank-results/route.ts`
+- `src/app/api/ai/parse-query/route.ts` + `src/lib/ai/prompts/parse-query.ts`
+- `src/app/api/ai/rank-results/route.ts` + `src/lib/ai/prompts/rank-results.ts`
 - `src/lib/ai/schemas/parse-query.ts`
-- `src/lib/ai/schemas/rank-results.ts`
-- `src/lib/ai/prompts/parse-query.ts`
-- `src/lib/ai/prompts/rank-results.ts`
 - `src/lib/ai/context-builder.ts`
-- `src/app/api/places/route.ts` (soft_features filter)
-- `src/components/search/ai-search-input.tsx`
-- `src/lib/hooks/use-ai-search.ts` (mutation + orchestrator)
-- `src/lib/stores/ai-search-store.ts` (session state)
-- `src/components/map/map-content.tsx` (orchestrator mount + sorted dropdown)
-- `src/components/places/place-card.tsx` (why line + fade)
+- `src/app/api/places/route.ts` (hard filter only, no soft)
+- `src/components/search/ai-search-input.tsx` (banner + chips)
+- `src/lib/hooks/use-ai-search.ts` (orchestrator + broaden + rerank)
+- `src/lib/stores/ai-search-store.ts` (session state + thresholds)
+- `src/components/map/map-content.tsx` (marker filter + sidebar sort)
+- `src/components/places/place-card.tsx` (hide-below-threshold + why)
+- `src/app/(app)/places/page.tsx` (SelectablePlaceCard composition,
+  sort dropdown, grid sort)
+- `src/components/filters/filter-panel.tsx` (sort dropdown disabled badge)
 
-## Open questions
+## Migration from v1.7.x (Phase 6.5 pivot)
 
-- **Location resolution for neighborhoods.** `"Shoreditch"` doesn't match `places.city = "London"` via hard. Currently the LLM is instructed to leave `hard.city` empty for neighborhood terms and let `semantic_intent` carry the hint into rerank. A future PR could add Mapbox geocode → bbox / lat-lng filter for stricter matching.
-- **Score threshold (0.3) for "less relevant" fade.** Empirical. May need tuning with real query traffic.
-- **TOP_N = 50.** Power users with thousands of saved places might miss good matches sitting deeper. Consider a per-user override in Settings → AI later, or a `"load more, rerank again"` button.
-- **Cache parse-query.** Same query within a 5-min window shouldn't re-call. React Query handles this naturally via `queryKey: ["ai", "parse-query", query]` — TODO if costs prove a concern.
+- `ParseQuerySchema.soft_features` REMOVED
+- `PlaceFilters.soft_features` REMOVED
+- `/api/places` `?f_*` params SILENTLY IGNORED (graceful URL degradation)
+- Rank-results body no longer accepts `boost_*_ids`
+- Rerank payload includes `features`, `theme_insights`, `tldr`, `pros`,
+  `cons` per candidate
+- `LESS_RELEVANT_SCORE = 0.15` (fade) → `HIDE_BELOW_SCORE = 0.20` (hide)
+
+No DB migration. Boosts kept in parse-query schema for UI hint chips only.
