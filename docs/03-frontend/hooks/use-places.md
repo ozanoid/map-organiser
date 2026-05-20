@@ -2,8 +2,8 @@
 title: usePlaces
 type: hook
 domain: frontend
-version: 1.0.0
-last_updated: 12.05.2026
+version: 1.1.0
+last_updated: 20.05.2026
 status: stable
 sources:
   - src/lib/hooks/use-places.ts
@@ -85,3 +85,4 @@ type CreatePlaceInput = {
 - **No optimistic updates.** Visit-status toggles wait for the round-trip. The map detail panel and place cards re-render after the cache invalidation.
 - **No pagination.** All matching places come back in one response. With ~500 places per user this is fine; will hurt at 10K+.
 - **Mutations don't update the cache directly** — they invalidate and let React Query refetch. Simpler, but a brief loading state shows up.
+- **AI search trace context.** While an AI search is mid-flight, `fetchPlaces` attaches the search's W3C `traceparent` request header (read from `ai-search-store`) so the `/api/places` call joins the pipeline's single Honeycomb trace. Normal browsing fetches send no such header. See [[../../05-flows/observability-flow]].

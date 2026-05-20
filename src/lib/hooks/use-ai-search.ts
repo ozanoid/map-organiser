@@ -8,6 +8,7 @@ import {
 } from "@/lib/stores/ai-search-store";
 import { useFilters } from "@/lib/hooks/use-filters";
 import { usePlaces } from "@/lib/hooks/use-places";
+import { newTraceparent } from "@/lib/telemetry/trace-context";
 import type { Place, PlaceFilters } from "@/lib/types";
 import type { ParseQueryOutput } from "@/lib/ai/schemas/parse-query";
 import type { RankResultsOutput } from "@/lib/ai/schemas/rank-results";
@@ -130,13 +131,19 @@ function dropRestrictedHard(
 export function useAiSearch() {
   const { setFilters, filters: currentFilters } = useFilters();
   const applyParse = useAiSearchStore((s) => s.applyParse);
+  const setTraceparent = useAiSearchStore((s) => s.setTraceparent);
   const reset = useAiSearchStore((s) => s.reset);
 
   return useMutation({
     mutationFn: async (query: string): Promise<ParseQueryOutput> => {
+      // Mint one trace context for the whole AI search pipeline so
+      // parse-query, /api/places and rank-results land in a single
+      // Honeycomb trace. See docs/05-flows/observability-flow.md.
+      const traceparent = newTraceparent();
+      setTraceparent(traceparent);
       const res = await fetch("/api/ai/parse-query", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", traceparent },
         body: JSON.stringify({ query }),
       });
       if (!res.ok) {
@@ -439,9 +446,15 @@ async function runRerank({
   });
 
   try {
+    // Same trace context as parse-query so rank-results stays in the
+    // AI search's single Honeycomb trace.
+    const traceparent = useAiSearchStore.getState().traceparent;
     const res = await fetch("/api/ai/rank-results", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(traceparent ? { traceparent } : {}),
+      },
       body: JSON.stringify({
         semantic_intent: semanticIntent,
         candidates,

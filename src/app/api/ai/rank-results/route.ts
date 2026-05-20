@@ -12,6 +12,7 @@ import {
   type RankCandidate,
 } from "@/lib/ai/prompts/rank-results";
 import { trackAiUsage } from "@/lib/ai/track-usage";
+import { log } from "@/lib/telemetry/logger";
 
 /** Cost guard: refuse to rerank more than this many candidates in one call. */
 const MAX_CANDIDATES = 200;
@@ -184,6 +185,17 @@ export async function POST(request: NextRequest) {
       output: Output.object({ schema: LlmRankSchema }),
       system: systemPrompt,
       prompt: userPrompt,
+      // OTel: GenAI semantic-convention spans flow to Axiom via @vercel/otel.
+      // candidateCount as metadata so cost-per-call queries can stratify
+      // by payload size.
+      experimental_telemetry: {
+        isEnabled: true,
+        functionId: "ai.rank-results",
+        metadata: {
+          userId: user.id,
+          candidateCount: candidates.length,
+        },
+      },
     });
     llmRanked = result.output;
   } catch (e) {
@@ -200,19 +212,28 @@ export async function POST(request: NextRequest) {
       try {
         const rawParsed = JSON.parse(errAny.text);
         llmRanked = LlmRankSchema.parse(rawParsed);
-        console.warn(
-          "[ai/rank-results] salvaged from validation failure via preprocess re-parse"
-        );
+        log.warn("ai.rank-results.salvaged", {
+          userId: user.id,
+          reason: "preprocess_reparse",
+        });
       } catch (salvageErr) {
-        console.error("[ai/rank-results] LLM call failed:", e);
-        console.error("[ai/rank-results] salvage also failed:", salvageErr);
+        log.error("ai.rank-results.llm_failed", e, {
+          userId: user.id,
+          phase: "initial",
+        });
+        log.error("ai.rank-results.salvage_failed", salvageErr, {
+          userId: user.id,
+        });
         return NextResponse.json(
           { error: "Ranking failed." },
           { status: 500 }
         );
       }
     } else {
-      console.error("[ai/rank-results] LLM call failed:", e);
+      log.error("ai.rank-results.llm_failed", e, {
+        userId: user.id,
+        phase: "initial",
+      });
       return NextResponse.json(
         { error: "Ranking failed." },
         { status: 500 }
@@ -249,14 +270,17 @@ export async function POST(request: NextRequest) {
   }
 
   if (outOfRangeCount > 0) {
-    console.warn(
-      `[ai/rank-results] LLM emitted ${outOfRangeCount} out-of-range idx(es) (N=${N}) — dropped.`
-    );
+    log.warn("ai.rank-results.out_of_range_idx", {
+      userId: user.id,
+      count: outOfRangeCount,
+      N,
+    });
   }
   if (duplicateCount > 0) {
-    console.warn(
-      `[ai/rank-results] LLM emitted ${duplicateCount} duplicate idx(es) — first kept, rest dropped.`
-    );
+    log.warn("ai.rank-results.duplicate_idx", {
+      userId: user.id,
+      count: duplicateCount,
+    });
   }
 
   // ─── Detect LLM laziness: candidates sent but not returned ───
@@ -266,10 +290,16 @@ export async function POST(request: NextRequest) {
   // threshold that hides LLM-judged irrelevant matches.
   const missingCandidates = candidates.filter((_, idx) => !seenIdx.has(idx));
   if (missingCandidates.length > 0) {
-    console.warn(
-      `[ai/rank-results] LLM skipped ${missingCandidates.length}/${N} candidate(s):`,
-      missingCandidates.map((c) => `${c.name} (idx=${candidates.indexOf(c)})`).join(", ")
-    );
+    log.warn("ai.rank-results.skipped_candidates", {
+      userId: user.id,
+      count: missingCandidates.length,
+      total: N,
+      missing: missingCandidates.map((c) => ({
+        idx: candidates.indexOf(c),
+        name: c.name,
+        id: c.id,
+      })),
+    });
     for (const c of missingCandidates) {
       safeRanked.push({
         id: c.id,
@@ -282,40 +312,44 @@ export async function POST(request: NextRequest) {
   trackAiUsage(user.id, "ai_rank_results").catch(() => {});
 
   // ─── Diagnostic logging ───
-  const top5 = safeRanked
+  // Structured so Axiom can chart skipped-rate / hidden-rate / candidate-
+  // count over time per user. `top5` and `full_ranked` are arrays of
+  // {score, name, why} objects so they're queryable rather than parsed
+  // out of a string.
+  const sortedRanked = safeRanked
     .slice()
     .sort((a, b) => b.score - a.score)
-    .slice(0, 5)
     .map((r) => {
       const name = candidates.find((c) => c.id === r.id)?.name ?? "?";
-      return `${r.score.toFixed(2)} ${name}: ${r.why}`;
-    })
-    .join(" | ");
+      return { score: r.score, name, why: r.why };
+    });
   const withProfile = candidates.filter(
     (c) => c.searchable_summary && c.searchable_summary.length > 0
   ).length;
   const hiddenCount = safeRanked.filter((r) => r.score < 0.2).length;
-  console.log(
-    `[ai/rank-results] intent="${semanticIntent.slice(0, 60)}…" ` +
-      `candidates=${N} llm_returned=${llmRanked.ranked.length} ` +
-      `safe=${safeRanked.length} skipped=${missingCandidates.length} ` +
-      `out_of_range=${outOfRangeCount} duplicates=${duplicateCount} ` +
-      `with_profile=${withProfile} hidden_below_0.20=${hiddenCount} ` +
-      `top5=[${top5}]`
-  );
 
-  // Full ranked dump (id + name + score + why) for one-shot debugging.
-  // Verbose but invaluable when triaging "why is X missing/low".
-  console.log(
-    `[ai/rank-results] full ranked:`,
-    safeRanked
-      .slice()
-      .sort((a, b) => b.score - a.score)
-      .map((r) => {
-        const name = candidates.find((c) => c.id === r.id)?.name ?? "?";
-        return `${r.score.toFixed(2)} ${name}: ${r.why}`;
-      })
-  );
+  log.info("ai.rank-results", {
+    userId: user.id,
+    intent: semanticIntent,
+    intent_len: semanticIntent.length,
+    candidates: N,
+    llm_returned: llmRanked.ranked.length,
+    safe: safeRanked.length,
+    skipped: missingCandidates.length,
+    out_of_range: outOfRangeCount,
+    duplicates: duplicateCount,
+    with_profile: withProfile,
+    hidden_below_0_20: hiddenCount,
+    top5: sortedRanked.slice(0, 5),
+  });
+
+  // Separate full-ranked log: useful for "why is X missing/low" but
+  // larger payload. Kept at debug so it can be sampled-out later if
+  // log drain costs climb.
+  log.debug("ai.rank-results.full_ranked", {
+    userId: user.id,
+    full_ranked: sortedRanked,
+  });
 
   return NextResponse.json({
     ranked: safeRanked,
