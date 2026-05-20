@@ -89,7 +89,9 @@ it is the structured-log search surface. Disabling it is optional.
 
 ### Files
 
-- `instrumentation.ts`, `instrumentation-node.ts` (new)
+- `src/instrumentation.ts`, `src/instrumentation-node.ts` (new — MUST
+  be in `src/` since the project uses a src directory; a root-level
+  instrumentation.ts is silently ignored by Next.js)
 - `src/lib/telemetry/logger.ts` (new)
 - `src/app/api/ai/{parse-query,rank-results}/route.ts`
 - `src/app/api/places/route.ts`

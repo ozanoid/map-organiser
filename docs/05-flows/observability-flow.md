@@ -6,8 +6,8 @@ version: 3.0.0
 last_updated: 20.05.2026
 status: stable
 sources:
-  - instrumentation.ts
-  - instrumentation-node.ts
+  - src/instrumentation.ts
+  - src/instrumentation-node.ts
   - src/lib/telemetry/logger.ts
   - src/app/api/ai/parse-query/route.ts
   - src/app/api/ai/rank-results/route.ts
@@ -103,10 +103,16 @@ never propagates into the request handler.
   GenAI semantic conventions: model, prompt, completion, input/output
   tokens, latency, finish_reason.
 
+> **File location:** the project uses a `src/` directory, so Next.js
+> looks for `src/instrumentation.ts` — NOT a root-level one. A root
+> `instrumentation.ts` is silently ignored (build still passes, but
+> `register()` never runs → OTel never initializes → zero telemetry).
+> Both `instrumentation.ts` and `instrumentation-node.ts` live in `src/`.
+>
 > **Runtime gating:** `instrumentation.ts` is loaded by Next.js for
 > EVERY runtime including Edge (middleware). The OTel log packages
 > (`@opentelemetry/sdk-logs`, `exporter-logs-otlp-http`) are Node-only —
-> importing them in Edge crashed middleware with
+> importing them in Edge crashes middleware with
 > `MIDDLEWARE_INVOCATION_FAILED`. `instrumentation.ts` therefore only
 > `await import("./instrumentation-node")` when
 > `NEXT_RUNTIME === "nodejs"`. Middleware (Edge) runs un-instrumented.
