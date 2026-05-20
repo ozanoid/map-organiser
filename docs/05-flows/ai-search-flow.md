@@ -2,7 +2,7 @@
 title: AI Search Flow (LLM-as-judge, Phase 6.5)
 type: flow
 domain: places
-version: 2.4.0
+version: 2.5.0
 last_updated: 20.05.2026
 status: stable
 sources:
@@ -276,6 +276,7 @@ Worked examples in the prompt cover date-restaurant scoring (McDonald's
 |---|---|---|
 | All POSTs 403 | `ai_features_enabled = false` | Toggle in Settings → AI |
 | All POSTs 503 | `GOOGLE_GENERATIVE_AI_API_KEY` missing | Set env, redeploy |
+| All POSTs 429 | Daily AI cost cap hit (`AI_DAILY_CALL_CAP`, 3000/user/day) | Wait — the cap resets at UTC midnight. Surfaces as a toast on the search input. |
 | Empty card grid in AI mode | LLM scored every candidate < 0.20 | Query may be too restrictive; toggle banner to broader |
 | Broaden banner doesn't appear | narrow ≥ 10 OR no restricted hard | By design — no broaden needed |
 | `[ai/parse-query] paired city` log fires | LLM emitted city without country | Server safety net (PR #44) kicks in |

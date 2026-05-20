@@ -2,8 +2,8 @@
 title: Manual Place Create Flow
 type: flow
 domain: places
-version: 1.1.0
-last_updated: 18.05.2026
+version: 1.1.1
+last_updated: 20.05.2026
 status: stable
 sources:
   - src/components/places/add-place-dialog.tsx

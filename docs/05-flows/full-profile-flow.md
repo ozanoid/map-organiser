@@ -2,8 +2,8 @@
 title: Full Profile Flow (AI Phase 4)
 type: flow
 domain: places
-version: 1.0.0
-last_updated: 14.05.2026
+version: 1.1.0
+last_updated: 20.05.2026
 status: stable
 sources:
   - src/app/api/places/[id]/enrich/route.ts
@@ -59,6 +59,7 @@ polling.
 5. step=profile handler:
        │  a. Re-check ai_features_enabled (defense in depth)
        │  b. getAiClient() — null if GOOGLE_GENERATIVE_AI_API_KEY missing → 503
+       │     · then checkAiDailyCap() — over AI_DAILY_CALL_CAP → 429 (fails open)
        │  c. Bail if no reviews (defensive — chain only fires when reviews exist,
        │     but a manual call from the AI Summary refresh button might not)
        │  d. SELECT place full row + buildUserContext(user.id)
@@ -178,6 +179,7 @@ match is found, the route reuses that entity — no duplicate row.
 
 - **AI features disabled** → step=profile returns 403; UI never renders the card (skeleton hidden because `reviewsAvailable` check is independent of the toggle, but the chain from reviews skips, so no card materializes).
 - **`GOOGLE_GENERATIVE_AI_API_KEY` missing** → 503 from step=profile. AiSummaryCard skeleton lingers until polling cap (2 min) then stops; user sees the placeholder. Acceptable in dev environments.
+- **Daily cost cap exceeded** → step=profile returns 429 before the Gemini call. A backfill dispatch swallows it (fire-and-forget); a manual refresh surfaces it. Resets at UTC midnight. See [[ai-enrichment-flow#cost-cap]].
 - **LLM throws or returns invalid JSON** → caught; 500 returned. `places.google_data.place_profile` stays `lite` (or null). Polling caps at 2 min. User can hit the Refresh button on the (lite or absent) card to retry.
 - **No reviews on the place** → 400 `no_reviews`. Card stays in pending-with-message state.
 - **Apply-suggestions throws mid-flight** → profile is already persisted (step 5h finished). Some suggestions may apply, some may not. Re-running step=profile is safe; junction rows are deduped by check-then-insert.
@@ -216,8 +218,6 @@ foreground (~5s spinner) and re-renders on completion.
 
 ## Open questions
 
-- **Backfill** for the 458 existing places — not part of this PR. Phase 7 will ship a script (`scripts/backfill-place-profiles.ts`) that throttles ~2 req/sec through the same `/api/places/[id]/enrich?step=profile` route.
 - **Model upgrades**: when Gemini Flash changes name (e.g. `gemini-flash-2.7`), profiles tagged with the old `model_version` won't auto-refresh. A future cron + selective re-run by `model_version != current` would handle this.
-- **Cost guardrails**: no per-user daily cap yet. At current pricing and usage, not urgent. Add in Phase 7 if the AI usage dashboard warrants it.
 - **Multilingual reviews**: the system prompt instructs the LLM to translate to English. Quality of translation isn't measured. A future eval set could catch regressions.
 - **Realtime vs polling**: documented above. Switch only if multi-tab consistency becomes important.
