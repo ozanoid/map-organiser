@@ -7,6 +7,7 @@ last_updated: 20.05.2026
 status: stable
 sources:
   - instrumentation.ts
+  - instrumentation-node.ts
   - src/lib/telemetry/logger.ts
   - src/app/api/ai/parse-query/route.ts
   - src/app/api/ai/rank-results/route.ts
@@ -58,8 +59,16 @@ span and log from a single request.
 
 ### Traces
 
-`instrumentation.ts` registers `@vercel/otel` with an
+`instrumentation-node.ts` registers `@vercel/otel` with an
 `OTLPHttpJsonTraceExporter` → `https://api.honeycomb.io/v1/traces`.
+
+> **Runtime gating:** `instrumentation.ts` is loaded by Next.js for
+> EVERY runtime, including Edge (middleware). The OTel log packages
+> (`@opentelemetry/sdk-logs`, `exporter-logs-otlp-http`) are Node-only —
+> importing them in Edge crashes middleware with
+> `MIDDLEWARE_INVOCATION_FAILED`. So `instrumentation.ts` only
+> dynamic-imports `instrumentation-node.ts` when
+> `NEXT_RUNTIME === "nodejs"`. Middleware (Edge) runs un-instrumented.
 
 Span sources:
 - **HTTP request spans** — auto, every route handler invocation. Method,
