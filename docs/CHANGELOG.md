@@ -6,91 +6,102 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
-## 20.05.2026 — v1.9.0 — Observability: Honeycomb (OTel-native)
+## 20.05.2026 — v1.9.0 — Observability: dual-write (Honeycomb + Vercel/Axiom)
 
-Single-tool observability. Traces, LLM spans, and structured logs all
-flow to **Honeycomb** through one OTLP pipe.
+OpenTelemetry observability with a **dual-write** log pipeline. Traces
+go to Honeycomb; logs go to BOTH stdout (Vercel dashboard + Axiom drain)
+AND Honeycomb. Two log pipes with independent failure modes — a
+misconfigured backend can never black out monitoring.
 
-### Why Honeycomb (not Axiom)
+### Why Honeycomb for traces
 
-This PR initially targeted Axiom via its Vercel marketplace log drain.
-That part worked for logs, but Axiom's free tier caps datasets at 2 and
-one slot is consumed by the system `axiom-audit` dataset — leaving no
-room for a `Kind: Traces` dataset, which OTLP traces require. OTLP
-traces sent to the Events-kind `vercel` dataset were silently dropped.
+Initially targeted Axiom. Axiom's free tier caps datasets at 2, one slot
+taken by the system `axiom-audit` dataset — no room for a `Kind: Traces`
+dataset, which OTLP traces require. OTLP traces to the Events-kind
+`vercel` dataset were silently dropped. Honeycomb: OTel-native, no
+dataset limit (20M events/mo, 60-day retention).
 
-Pivoted to Honeycomb: OTel-native, free tier has no dataset limit
-(20M events/month, 60-day retention). Vercel Log Drain is no longer
-used, eliminating the `$0.50/GB` drain cost.
+### Why dual-write for logs (post-mortem)
 
-### Architecture — one OTLP pipe
+An intermediate cut rewrote the logger to emit ONLY OTel log records and
+gated `console.log` to dev. The OTel Logs API never touches stdout — so
+that deploy instantly killed the Vercel dashboard Logs view AND the
+Axiom drain, while Honeycomb wasn't receiving anything either (env-var
+timing). Total blackout from a hard cutover to an unverified pipe.
 
-`instrumentation.ts` registers `@vercel/otel` with BOTH:
+Fixed per the otel-migration skill's explicit rule (Phase 5: logs to
+BOTH stderr AND OTel). `logger.ts` now writes every call twice:
+- `console.log`/`console.warn` JSON line → stdout → Vercel dashboard +
+  Axiom Log Drain (`vercel_parsed` view's `parse_json` surfaces fields)
+- `logs.getLogger().emit()` → OTel pipe → Honeycomb `/v1/logs`
+
+The console pipe needs no env vars and is captured synchronously by
+Vercel — the always-on safety net. The OTel pipe is best-effort on top.
+
+### Architecture
+
+`instrumentation.ts` → gated by `NEXT_RUNTIME === "nodejs"` (the OTel
+log packages are Node-only; importing them in the Edge runtime crashed
+middleware — see the MIDDLEWARE_INVOCATION_FAILED hotfix). It
+dynamic-imports `instrumentation-node.ts`, which registers `@vercel/otel`
+with:
 - `OTLPHttpJsonTraceExporter` → Honeycomb `/v1/traces`
 - `BatchLogRecordProcessor(OTLPLogExporter)` → Honeycomb `/v1/logs`
 
-Signals into Honeycomb:
-- HTTP request spans — auto (`@vercel/otel`)
-- fetch spans — auto (Supabase, Gemini HTTP)
-- `gen_ai.*` LLM spans — AI SDK `experimental_telemetry` on
-  `generateText` (model, prompt, completion, input/output tokens,
-  latency, finish_reason)
-- structured log records — `log.*` via the OTel Logs API
-
-One `traceId` correlates every span + log from a request — full
-timeline in Honeycomb's trace waterfall, no grep.
+Trace sources: HTTP spans + fetch spans (auto) + `gen_ai.*` LLM spans
+from AI SDK `experimental_telemetry` on `generateText` (model, prompt,
+completion, tokens, latency, finish_reason).
 
 ### What's new
 
-- `instrumentation.ts` (root) — registerOTel with trace + log exporters
-  pointed at Honeycomb. No-op (in-memory only) when `HONEYCOMB_API_KEY`
-  absent, e.g. local `next dev`.
-- `src/lib/telemetry/logger.ts` — `log.{debug,info,warn,error}`. Emits
-  OTel log records (not `console.log`). Trace context auto-attached by
-  the SDK. Nested attrs flattened to dot-notation (OTel attribute
-  constraint); arrays of objects JSON-stringified.
+- `instrumentation.ts` (root) — runtime-gated dynamic import.
+- `instrumentation-node.ts` (root) — Node-only OTel registration +
+  boot diagnostic.
+- `src/lib/telemetry/logger.ts` — `log.{debug,info,warn,error}`,
+  dual-write. `write()` fully `try/catch`-guarded so telemetry can
+  never throw into a request.
 - `src/app/api/ai/parse-query/route.ts` — `experimental_telemetry`
-  enabled (functionId `ai.parse-query`); diagnostic + error → `log.*`.
+  enabled; diagnostic + error → `log.*`.
 - `src/app/api/ai/rank-results/route.ts` — same, plus structured warn
   events (`out_of_range_idx`, `duplicate_idx`, `skipped_candidates`,
   `salvaged`).
 - `src/app/api/places/route.ts` — `api.places` structured event.
 
-### Required env vars (Vercel)
+### Required env vars (Vercel — Production + Preview)
 
 | Env var | Default |
 |---|---|
-| `HONEYCOMB_API_KEY` | (required) |
+| `HONEYCOMB_API_KEY` | (required for the OTel pipe) |
 | `HONEYCOMB_DATASET` | `map-organiser` |
-| `HONEYCOMB_API_URL` | `https://api.honeycomb.io` (US); `https://api.eu1.honeycomb.io` for EU |
+| `HONEYCOMB_API_URL` | `https://api.honeycomb.io` (US); `…eu1…` for EU |
 
-Vercel Log Drain to Axiom should be DISABLED in project settings.
-`AXIOM_*` env vars can be removed.
+When the key is absent the console pipe still works fully — only the
+Honeycomb pipe is dark. Vercel applies env vars only to deployments
+built AFTER they were added — a fresh deploy/Redeploy is required.
+
+The Axiom Vercel Log Drain may stay enabled (~$1–2/mo at F&F volume) —
+it is the structured-log search surface. Disabling it is optional.
 
 ### Packages
 
 - `@vercel/otel`, `@opentelemetry/api`
 - `@opentelemetry/sdk-logs`, `@opentelemetry/exporter-logs-otlp-http`
 
-### Cost (F&F scale)
-
-Well within Honeycomb free tier. Vercel Log Drain disabled → $0 drain.
-
 ### Files
 
-- `instrumentation.ts` (new)
+- `instrumentation.ts`, `instrumentation-node.ts` (new)
 - `src/lib/telemetry/logger.ts` (new)
 - `src/app/api/ai/{parse-query,rank-results}/route.ts`
 - `src/app/api/places/route.ts`
-- `docs/05-flows/observability-flow.md` (new, v2.0.0)
+- `docs/05-flows/observability-flow.md` (new, v3.0.0)
 
-### Future
+### Known follow-up
 
-Other API routes (`parse-link`, `enrich`, `import-batch`) still use
-ad-hoc `console.log` — with the drain disabled these only land in
-Vercel's 1h-retention view. Migrate to `log.*` opportunistically.
-Frontend span instrumentation (browser → traceparent header → server)
-is also a future add.
+OTel log pipe uses `BatchLogRecordProcessor`; verify post-deploy that
+`@vercel/otel` flushes it on Vercel's freeze-after-response — if
+Honeycomb log counts lag the console/Axiom counts, switch to
+`SimpleLogRecordProcessor`. Dual-write means this can't black out
+monitoring regardless.
 
 ---
 

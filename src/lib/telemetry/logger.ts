@@ -1,39 +1,44 @@
 import { logs, SeverityNumber } from "@opentelemetry/api-logs";
+import { trace } from "@opentelemetry/api";
 
 /**
- * Structured server-side logger — OTel-native (Honeycomb single-tool).
+ * Structured server-side logger — DUAL-WRITE.
  *
- * Emits OpenTelemetry log records via the OTel Logs API. The
- * LoggerProvider + OTLP log exporter are configured in
- * `instrumentation.ts`; records ship to Honeycomb's /v1/logs endpoint.
+ * Every `log.*` call writes to TWO independent destinations:
  *
- * Why OTel log records instead of `console.log`:
- *   - The OTel SDK auto-attaches the active span's trace context
- *     (traceId, spanId) to every record. One AI search's parse-query
- *     log + rerank log + gen_ai spans + DB spans all correlate under
- *     one traceId in Honeycomb — no manual plumbing.
- *   - Severity is first-class (severityNumber/severityText), queryable.
- *   - No Vercel Log Drain needed → no $0.50/GB drain cost.
+ *   1. stdout / stderr — a single-line JSON string via console.log /
+ *      console.warn.
+ *        → visible in the Vercel dashboard "Logs" view (Vercel only
+ *          surfaces stdout/stderr there)
+ *        → shipped to Axiom by the Vercel Log Drain (when enabled);
+ *          the Axiom `vercel_parsed` view runs `parse_json(message)`
+ *          to surface every field as a queryable column.
  *
- * Usage (unchanged from the previous console.log-based logger):
+ *   2. OTel log record — via the OTel Logs API (`logs.getLogger().emit`).
+ *        → routed by instrumentation-node.ts's LoggerProvider to
+ *          Honeycomb's /v1/logs endpoint, trace-correlated.
+ *
+ * WHY DUAL-WRITE (the v1.9.0 post-mortem):
+ *   The first Honeycomb cut rewrote this logger to emit ONLY OTel log
+ *   records and gated console.log to dev. The OTel Logs API never
+ *   touches stdout — so the moment that shipped, the Vercel dashboard
+ *   Logs view AND the Axiom drain both went dark, while Honeycomb
+ *   wasn't receiving anything either (env-var timing). Total monitoring
+ *   blackout from a hard cutover to an unverified pipe.
+ *   The otel-migration skill (Phase 5) is explicit: "you almost
+ *   certainly want logs going to BOTH stderr AND OTel." This logger now
+ *   does exactly that. The console path needs no env vars and is
+ *   captured synchronously by Vercel — it is the always-on safety net.
+ *   The OTel path is best-effort on top.
+ *
+ * Usage (unchanged across every revision of this file):
  *   log.info("ai.parse-query", { userId, query, hard });
  *   log.warn("ai.rank-results.skipped_candidates", { count: 2 });
  *   log.error("ai.rank-results.llm_failed", err, { userId });
  *
- * `event` → log record body (the primary searchable name in Honeycomb).
- * `attrs` → log record attributes (flattened, see below).
- *
- * Attribute flattening: OTel log attributes must be primitives or arrays
- * of primitives — nested objects aren't allowed. `flatten()` converts
- * nested plain objects to dot-notation keys (`hard.city`) and JSON-
- * stringifies arrays of objects (`top5`). Honeycomb's data model is
- * flat anyway, so this is the natural shape.
- *
- * Server-only. Client-side logs use the `orchLog` helper in
+ * Server-only. Client-side logs use `orchLog` in
  * `lib/hooks/use-ai-search.ts`.
  */
-
-const otelLogger = logs.getLogger("map-organiser");
 
 type LogLevel = "debug" | "info" | "warn" | "error";
 
@@ -52,12 +57,27 @@ type Primitive = string | number | boolean;
 type OtelAttrValue = Primitive | Primitive[];
 
 /**
- * Flatten a nested attrs object into OTel-compatible attributes:
- *   - nested plain object  → dot-notation keys ({a:{b:1}} → {"a.b":1})
- *   - array of primitives  → kept as-is (OTel allows string[]/number[])
- *   - array of objects     → JSON-stringified (Honeycomb queries the
- *                            string; nesting isn't first-class anyway)
- *   - null / undefined     → dropped
+ * Active OTel trace context. Stamped onto the console JSON line so
+ * Axiom-side records correlate by traceId. The OTel emit path does NOT
+ * need this — the SDK auto-attaches trace context to the LogRecord.
+ */
+function traceContext(): { traceId?: string; spanId?: string } {
+  const ctx = trace.getActiveSpan()?.spanContext();
+  if (!ctx) return {};
+  // The "invalid" trace ID is all zeros — drop it to avoid noise.
+  if (/^0+$/.test(ctx.traceId)) return {};
+  return { traceId: ctx.traceId, spanId: ctx.spanId };
+}
+
+/**
+ * Flatten nested attrs into OTel-compatible attributes (primitives or
+ * arrays of primitives only):
+ *   - nested plain object → dot-notation keys ({a:{b:1}} → {"a.b":1})
+ *   - array of primitives → kept as-is
+ *   - array of objects    → JSON-stringified
+ *   - null / undefined    → dropped
+ * Used for the OTel path only; the console path keeps nested objects
+ * (Axiom's parse_json handles nesting natively).
  */
 function flatten(
   input: LogAttrs,
@@ -71,11 +91,9 @@ function flatten(
       const allPrimitive = v.every(
         (x) => x === null || typeof x !== "object"
       );
-      if (allPrimitive) {
-        out[key] = v.filter((x) => x != null) as Primitive[];
-      } else {
-        out[key] = JSON.stringify(v);
-      }
+      out[key] = allPrimitive
+        ? (v.filter((x) => x != null) as Primitive[])
+        : JSON.stringify(v);
     } else if (typeof v === "object") {
       Object.assign(out, flatten(v as LogAttrs, key));
     } else {
@@ -86,18 +104,49 @@ function flatten(
 }
 
 function write(level: LogLevel, event: string, attrs?: LogAttrs) {
-  otelLogger.emit({
-    severityNumber: SEVERITY[level],
-    severityText: level.toUpperCase(),
-    body: event,
-    attributes: flatten(attrs ?? {}),
-  });
-  // Dev fallback: in local `next dev` there's no OTLP exporter, so the
-  // emit() above goes nowhere visible. Mirror to stdout for DX. In
-  // production this is skipped — Honeycomb is the single sink.
-  if (process.env.NODE_ENV !== "production") {
-    // eslint-disable-next-line no-console
-    console.log(`[${level}] ${event}`, attrs ?? "");
+  // Telemetry must NEVER throw into a request handler. The whole body is
+  // guarded; a logging failure is swallowed (with a last-ditch raw log).
+  try {
+    const ctx = traceContext();
+    const a = attrs ?? {};
+
+    // ── Destination 1: stdout/stderr JSON line ──
+    // Nested objects preserved — Axiom's parse_json handles nesting.
+    // warn/error → stderr (console.warn) so Vercel/Axiom can split them.
+    const line = JSON.stringify({
+      level,
+      event,
+      timestamp: new Date().toISOString(),
+      ...ctx,
+      ...a,
+    });
+    if (level === "warn" || level === "error") {
+      // eslint-disable-next-line no-console
+      console.warn(line);
+    } else {
+      // eslint-disable-next-line no-console
+      console.log(line);
+    }
+
+    // ── Destination 2: OTel log record → Honeycomb ──
+    // getLogger() is called PER WRITE (not cached at module load) so it
+    // always resolves to the LoggerProvider registered by
+    // instrumentation-node.ts, regardless of module import ordering.
+    // Trace context (traceId/spanId) is auto-attached by the SDK from
+    // the active span — no need to pass it in attributes.
+    logs.getLogger("map-organiser").emit({
+      severityNumber: SEVERITY[level],
+      severityText: level.toUpperCase(),
+      body: event,
+      attributes: flatten(a),
+    });
+  } catch (e) {
+    try {
+      // eslint-disable-next-line no-console
+      console.error(`[logger] write failed for event "${event}":`, e);
+    } catch {
+      /* nothing left to do */
+    }
   }
 }
 
