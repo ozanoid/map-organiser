@@ -1,26 +1,44 @@
 /**
  * Next.js OpenTelemetry instrumentation entry point.
  *
- * `register()` runs once per server process boot. We configure `@vercel/otel`
- * which:
- *   - Auto-detects Vercel's OTel platform integration (since the Vercel-
- *     Axiom marketplace integration is installed, traces forward to Axiom
- *     via Vercel's transparent pipe).
- *   - Wires AI SDK's `experimental_telemetry: { isEnabled: true, ... }`
- *     to the same trace pipeline. Each `generateText` call emits OTel
- *     spans with GenAI semantic conventions (gen_ai.system,
- *     gen_ai.prompt, gen_ai.completion, gen_ai.usage.* etc.).
- *   - Captures fetch / DB / route spans automatically.
+ * `register()` runs once per server process boot. Two roles:
  *
- * Service name = service.name attribute on every span. Used as a filter
- * in Axiom Stream / Dashboard.
+ *   1. Activate OTel context for the request lifecycle — without this,
+ *      `trace.getActiveSpan()` returns undefined inside route handlers
+ *      and our logger can't attach traceId/spanId to logs.
+ *
+ *   2. Export OTel spans to Axiom via OTLP/HTTP. Spans include:
+ *        - HTTP request spans (auto-instrumented by @vercel/otel)
+ *        - fetch spans (e.g., calls to Supabase, Gemini)
+ *        - gen_ai.* spans from AI SDK `experimental_telemetry: true`
+ *          (prompt, completion, input/output tokens, model, latency)
+ *
+ * Required env vars (set on Vercel via marketplace integration + manual):
+ *   - AXIOM_TOKEN   — Axiom ingest API token (xat-...)
+ *   - AXIOM_DATASET — Axiom dataset name (default: "vercel")
+ *
+ * When AXIOM_TOKEN is absent (e.g., local `next dev` without
+ * env), exporter is omitted — OTel still produces spans in memory
+ * (so logger trace context still works) but doesn't ship them.
  *
  * See docs/05-flows/observability-flow.md for the full architecture.
  */
-import { registerOTel } from "@vercel/otel";
+import { registerOTel, OTLPHttpJsonTraceExporter } from "@vercel/otel";
 
 export function register() {
+  const token = process.env.AXIOM_TOKEN;
+  const dataset = process.env.AXIOM_DATASET ?? "vercel";
+
   registerOTel({
     serviceName: "map-organiser",
+    traceExporter: token
+      ? new OTLPHttpJsonTraceExporter({
+          url: "https://api.axiom.co/v1/traces",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "X-Axiom-Dataset": dataset,
+          },
+        })
+      : undefined,
   });
 }

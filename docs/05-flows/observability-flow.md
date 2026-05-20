@@ -71,9 +71,19 @@ Each line becomes a queryable record in Axiom with these fields:
 
 ### Pipe 2 — OTel spans (traces)
 
-`instrumentation.ts` registers `@vercel/otel` at process boot.
-`@vercel/otel` auto-detects Vercel's platform OTel pipe (set up by the
-Axiom integration) and forwards spans to Axiom.
+`instrumentation.ts` registers `@vercel/otel` at process boot with an
+explicit `OTLPHttpJsonTraceExporter` pointing at Axiom's OTLP endpoint
+(`https://api.axiom.co/v1/traces`). Requires two env vars set on Vercel:
+
+| Env var | Purpose |
+|---|---|
+| `AXIOM_TOKEN` | Ingest API token from Axiom dashboard (Settings → API tokens, ingest permission) |
+| `AXIOM_DATASET` | Target dataset (`vercel` to share with logs, or a separate `traces` dataset) |
+
+When the token is absent (local `next dev` without env vars), the
+exporter is omitted — OTel still creates spans in-memory so the
+logger's `trace.getActiveSpan()` still returns a valid context (logs
+get traceId/spanId), but spans aren't shipped anywhere.
 
 AI SDK's `generateText({ ..., experimental_telemetry: { isEnabled: true,
 functionId, metadata } })` produces spans with **GenAI semantic
