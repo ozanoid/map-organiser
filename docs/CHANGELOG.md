@@ -6,6 +6,34 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 20.05.2026 — v1.10.2 — Import done screen surfaces the AI profile backfill
+
+The bulk-import "done" screen now renders the shared `BackfillProfilesPanel`
+(from Settings → AI) once background review enrichment settles. Imported
+places have reviews + CID by then, so one click runs the cheap `step=profile`
+backfill for them — closing the gap where bulk-imported places never received
+an AI `place_profile`.
+
+- `src/app/(app)/import/page.tsx` — renders `<BackfillProfilesPanel />` as a
+  sibling of the done card, gated on `phase === "done" && !reviewsEnriching`.
+- No new component / hook / route — reuses PR #42's panel end-to-end.
+- `05-flows/place-import-flow.md` v1.1.0 — step 9 + explanatory note.
+
+## 20.05.2026 — v1.10.1 — Docs: deferred backfill re-enrichment plan
+
+Captured a known limitation of the AI `place_profile` backfill and a deferred
+fix plan, after diagnosing thin profiles on a grandfather account.
+
+- New `_plans/backfill-grandfather-reenrich.md` — accounts predating the full
+  DataForSEO migration hold places with ≤5 reviews + no CID; the backfill
+  profiles them thinly (5-review summaries, empty `theme_insights`). Verified
+  DB diagnosis + a 3-change fix plan. Status draft / **deferred** — new
+  DataForSEO-era data is unaffected; only ~1-2 legacy accounts carry this.
+- `06-ops/runbooks/profile-backfill.md` v1.1.0 — new "Known limitation —
+  grandfather accounts" section linking to the plan.
+
+No code change.
+
 ## 20.05.2026 — v1.10.0 — AI search pipeline trace propagation
 
 The AI search pipeline's three browser-initiated calls — `parse-query`

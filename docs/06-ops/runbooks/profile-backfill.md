@@ -2,14 +2,15 @@
 title: AI place_profile backfill (per user)
 type: runbook
 domain: ops
-version: 1.0.0
-last_updated: 19.05.2026
+version: 1.1.0
+last_updated: 20.05.2026
 status: stable
 related:
   - "[[_README]]"
   - "[[../../03-frontend/components/settings#backfillprofilespanel]]"
   - "[[../../05-flows/full-profile-flow]]"
   - "[[../../04-integrations/gemini]]"
+  - "[[../../_plans/backfill-grandfather-reenrich]]"
 ---
 
 # AI place_profile backfill (per user)
@@ -117,6 +118,20 @@ FROM gd;
 | Count plateaus mid-way | Gemini quota exceeded OR DataForSEO concurrency cap | Wait, retry; quotas reset daily |
 | `cannot_enrich` is large | Places saved without Google CID (manual entries, old import) | Out of scope. Defer or surface a UI to fetch CID by name lookup. |
 | Some places re-fire even though they have profile | Race — UI eligibility query stale | Idempotent. The POST checks `has_profile` server-side before queuing. |
+
+## Known limitation — grandfather accounts (thin profiles)
+
+Accounts created before the full DataForSEO migration carry places with only
+**≤ 5 reviews and no CID** — Google Places API era data (that API caps reviews
+at 5 and returns no CID). The backfill *does* profile these places, but from
+those 5 stale reviews, so the result is a **thin profile** (weak TLDR / pros /
+cons, often empty `theme_insights`). Once profiled they count as `has_profile`,
+so the backfill never revisits them.
+
+This is **not fixed — deferred on purpose**: DataForSEO-era data (every new
+place) is unaffected, and only ~1–2 legacy accounts are involved. Full
+diagnosis (verified DB data) and a 3-change fix plan are captured in
+[[../../_plans/backfill-grandfather-reenrich]].
 
 ## Rollback
 
