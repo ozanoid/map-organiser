@@ -80,6 +80,14 @@ interface AiSearchState {
   /** "checking" → narrow set fetched but not yet evaluated for broaden;
    *  "ready" → either broaden was applied OR not needed, downstream can proceed. */
   broadenStatus: "idle" | "checking" | "ready";
+  /**
+   * W3C `traceparent` for the active AI search. Minted by `useAiSearch`
+   * and attached to all three pipeline fetches (parse-query,
+   * /api/places, rank-results) so they form ONE Honeycomb trace.
+   * Null when no search is mid-flight.
+   * See docs/05-flows/observability-flow.md.
+   */
+  traceparent: string | null;
 
   /** Apply parse-query output: clear stale rankings, set new intent + target filter set. */
   applyParse: (input: {
@@ -103,6 +111,8 @@ interface AiSearchState {
   beginRerank: () => void;
   applyRankings: (rankings: { id: string; score: number; why: string }[]) => void;
   failRerank: () => void;
+  /** Set (or clear) the W3C traceparent for the active AI search pipeline. */
+  setTraceparent: (traceparent: string | null) => void;
   reset: () => void;
 }
 
@@ -116,6 +126,7 @@ export const useAiSearchStore = create<AiSearchState>((set) => ({
   targetFilters: null,
   broaden: null,
   broadenStatus: "idle",
+  traceparent: null,
 
   applyParse: ({
     semantic_intent,
@@ -124,7 +135,7 @@ export const useAiSearchStore = create<AiSearchState>((set) => ({
     query,
     targetFilters,
   }) =>
-    set({
+    set((s) => ({
       semanticIntent: semantic_intent,
       needsRerank: requires_semantic_ranking,
       rankings: null,
@@ -135,7 +146,11 @@ export const useAiSearchStore = create<AiSearchState>((set) => ({
       // Reset broaden state on every new query.
       broaden: null,
       broadenStatus: requires_semantic_ranking ? "checking" : "idle",
-    }),
+      // Keep the trace context alive for the rerank pipeline; if no
+      // rerank is needed the search ends here, so drop it rather than
+      // leak it onto later unrelated /api/places fetches.
+      traceparent: requires_semantic_ranking ? s.traceparent : null,
+    })),
 
   beginBroadenCheck: () => set({ broadenStatus: "checking" }),
 
@@ -173,9 +188,13 @@ export const useAiSearchStore = create<AiSearchState>((set) => ({
         rows.map((r) => [r.id, { score: r.score, why: r.why }])
       ),
       rerankStatus: "ready",
+      // Pipeline complete — drop the trace context.
+      traceparent: null,
     }),
 
-  failRerank: () => set({ rerankStatus: "failed" }),
+  failRerank: () => set({ rerankStatus: "failed", traceparent: null }),
+
+  setTraceparent: (traceparent) => set({ traceparent }),
 
   reset: () =>
     set({
@@ -188,6 +207,7 @@ export const useAiSearchStore = create<AiSearchState>((set) => ({
       targetFilters: null,
       broaden: null,
       broadenStatus: "idle",
+      traceparent: null,
     }),
 }));
 

@@ -2,8 +2,8 @@
 title: AI Search Flow (LLM-as-judge, Phase 6.5)
 type: flow
 domain: places
-version: 2.3.0
-last_updated: 19.05.2026
+version: 2.4.0
+last_updated: 20.05.2026
 status: stable
 sources:
   - src/app/api/ai/parse-query/route.ts
@@ -15,6 +15,7 @@ sources:
   - src/lib/ai/prompts/rank-results.ts
   - src/lib/hooks/use-ai-search.ts
   - src/lib/stores/ai-search-store.ts
+  - src/lib/telemetry/trace-context.ts
   - src/components/map/map-content.tsx
   - src/components/places/place-card.tsx
   - src/components/filters/filter-panel.tsx
@@ -498,6 +499,27 @@ useEffect(() => { setLastMapPlacesQuery(searchParams.toString()); },
 
 FilterPanel "Clear" → URL clears → store auto-clears via the mirror.
 No separate teardown needed.
+
+## v1.10.0 — Pipeline trace propagation (Honeycomb waterfall)
+
+The three pipeline calls (`parse-query` → `/api/places` →
+`rank-results`) are separate browser-initiated requests, so in
+Honeycomb they landed as three disconnected traces.
+
+`useAiSearch` now mints one W3C `traceparent` per search
+(`src/lib/telemetry/trace-context.ts` `newTraceparent()`), stores it on
+`ai-search-store.traceparent`, and attaches it as a request header to
+all three fetches — parse-query + rank-results in `use-ai-search.ts`,
+`/api/places` in `use-places.ts`. `@vercel/otel`'s default W3C Trace
+Context propagator continues the trace server-side, so the whole
+pipeline forms ONE Honeycomb trace / waterfall.
+
+Scope: the traceparent is dropped on `applyRankings` / `failRerank` /
+`reset`, and on a no-rerank parse (`requires_semantic_ranking=false`),
+so it never leaks onto later unrelated `/api/places` fetches.
+
+Telemetry-only — no behaviour change to search, filters, or ranking.
+See `docs/05-flows/observability-flow.md` for the pipeline-wide picture.
 
 ## Mount contract (debug reference)
 

@@ -2,13 +2,14 @@
 title: Observability Flow (dual-write — Honeycomb + Vercel/Axiom)
 type: flow
 domain: infra
-version: 3.0.0
+version: 3.1.0
 last_updated: 20.05.2026
 status: stable
 sources:
   - src/instrumentation.ts
   - src/instrumentation-node.ts
   - src/lib/telemetry/logger.ts
+  - src/lib/telemetry/trace-context.ts
   - src/app/api/ai/parse-query/route.ts
   - src/app/api/ai/rank-results/route.ts
   - src/app/api/places/route.ts
@@ -117,6 +118,35 @@ never propagates into the request handler.
 > `await import("./instrumentation-node")` when
 > `NEXT_RUNTIME === "nodejs"`. Middleware (Edge) runs un-instrumented.
 
+## Trace propagation — AI search pipeline
+
+AI search fires three sequential server calls from the browser —
+`parse-query` → `/api/places` → `rank-results`. Each is a separate
+Vercel function invocation, so without a shared trace context each
+opens its own trace: three disconnected waterfalls.
+
+`src/lib/telemetry/trace-context.ts` `newTraceparent()` mints one W3C
+`traceparent` (`00-<trace-id>-<span-id>-01`) per AI search.
+`useAiSearch` stores it on `ai-search-store` and sends it as a request
+header on all three fetches (`use-ai-search.ts` → parse-query +
+rank-results; `use-places.ts` → `/api/places`).
+
+`@vercel/otel` extracts the header via its default W3C Trace Context
+propagator, so the three request spans — and their children
+(`ai.generateText`, Supabase + Gemini `fetch` spans) — stitch into ONE
+trace. The whole pipeline becomes a single waterfall.
+
+The parent span the `traceparent` points at is **synthetic** — the
+browser never exports a span for it, so Honeycomb renders the three
+server spans under a generated root. A real, named browser-side root
+span would need a full browser OpenTelemetry SDK + exporter (future
+add).
+
+The context is scoped to one search: minted at search start, dropped on
+completion (`applyRankings` / `failRerank`), on `reset`, and for
+no-rerank queries (parse-query only) — so it never leaks onto later
+unrelated `/api/places` fetches.
+
 ## Required env vars (Vercel — Production + Preview scopes)
 
 | Env var | Purpose | Default |
@@ -183,8 +213,11 @@ body) → stable queries on both backends:
   ad-hoc `console.log` — they reach the Vercel dashboard + Axiom but
   unstructured, and never reach Honeycomb. Migrate to `log.*`
   opportunistically.
-- Frontend span instrumentation (browser → traceparent → server) is a
-  future add.
+- Browser-side root span: AI search now propagates a `traceparent`
+  across its three calls so the pipeline forms one trace (see "Trace
+  propagation — AI search pipeline"), but that root is synthetic. A
+  real exported browser span needs a full browser OpenTelemetry SDK —
+  still a future add.
 
 ## Diagnostic toggles
 

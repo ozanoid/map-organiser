@@ -6,6 +6,32 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 20.05.2026 — v1.10.0 — AI search pipeline trace propagation
+
+The AI search pipeline's three browser-initiated calls — `parse-query`
+→ `/api/places` → `rank-results` — now share one W3C trace context, so
+Honeycomb shows the whole flow as a single trace / waterfall instead of
+three disconnected ones.
+
+- New `src/lib/telemetry/trace-context.ts` — `newTraceparent()` mints a
+  W3C `traceparent` (`00-<trace-id>-<span-id>-01`) per AI search.
+- `ai-search-store.ts` — new `traceparent` field + `setTraceparent`
+  action; cleared on `applyRankings` / `failRerank` / `reset` and on
+  no-rerank parses so it never leaks onto unrelated fetches.
+- `use-ai-search.ts` — mints the traceparent at search start and sends
+  it on the parse-query and rank-results fetches.
+- `use-places.ts` — `fetchPlaces` attaches the active search's
+  traceparent so `/api/places` joins the same trace.
+- No server change: `@vercel/otel` continues the trace from the
+  incoming header via its default W3C Trace Context propagator.
+
+Telemetry-only — no behaviour change to search, filters, or ranking.
+The browser-side root span is synthetic; a real exported browser span
+remains a future add.
+
+Docs: `observability-flow.md` v3.1.0, `ai-search-flow.md` v2.4.0,
+`use-places.md` v1.1.0.
+
 ## 20.05.2026 — v1.9.0 — Observability: dual-write (Honeycomb + Vercel/Axiom)
 
 OpenTelemetry observability with a **dual-write** log pipeline. Traces
