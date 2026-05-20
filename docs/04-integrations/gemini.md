@@ -2,8 +2,8 @@
 title: Google Gemini (LLM)
 type: integration
 domain: integrations
-version: 1.1.0
-last_updated: 18.05.2026
+version: 1.2.0
+last_updated: 20.05.2026
 status: stable
 sources:
   - src/lib/ai/client.ts
@@ -118,6 +118,8 @@ Per `step=profile` call:
 
 Free tier: 15 RPM / 1M TPM (verify in AI Studio). Beyond that, paid quota. At our usage scale (a few hundred profiles + occasional regenerations), the monthly cost stays under \$2.
 
+**Per-user daily cap.** `checkAiDailyCap` (`src/lib/ai/track-usage.ts`) caps each user at `AI_DAILY_CALL_CAP` (3000) AI calls/day across all AI SKUs — `enrich?step=profile`, `parse-query`, `rank-results`. Over the cap the route returns **429** before calling Gemini. It is app-level runaway-bug insurance (~3× a realistic heavy day), fails open, and is unrelated to Gemini's own RPM quota. See [[../05-flows/ai-enrichment-flow#cost-cap]].
+
 ## Prompt strategy
 
 `buildPlaceProfilePrompt` in `src/lib/ai/prompts/place-profile-full.ts` builds the call:
@@ -143,6 +145,7 @@ If we ever add a second provider (Claude/OpenAI for ranking, vision, etc.), revi
 | Symptom | Cause | Recovery |
 |---|---|---|
 | Route returns `{ ok: false, reason: "ai_disabled" }` 503 | `GOOGLE_GENERATIVE_AI_API_KEY` not set | Add the env var in Vercel → redeploy. Settings AI tab also shows the "not configured" banner. |
+| Route returns 429 | User hit the daily AI cost cap (`AI_DAILY_CALL_CAP`, 3000/day) | Expected — wait for the UTC-midnight reset. An app-level guard, not a Gemini rate limit. |
 | Route returns 500 with "LLM generation failed" | Provider 5xx, rate limit, or schema validation failure | Retry from `AiSummaryCard` refresh button. Persistent failure → check Vercel logs for the underlying error. |
 | AI Summary card stays in skeleton state | Reviews not yet present OR profile hasn't been generated (pre-Phase-4 place) | If reviews exist, click "Generate" in the skeleton header. If not, wait for `step=reviews` to finish (~30 s on a fresh paste). |
 | Profile generated but tags/sub-cats not applied | `ai_features_enabled = false` on the profile, OR LLM proposed entities outside the 4-band threshold | Toggle AI on in Settings → AI; pending proposals queue up. |

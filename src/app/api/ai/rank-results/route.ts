@@ -11,7 +11,7 @@ import {
   buildRankResultsPrompt,
   type RankCandidate,
 } from "@/lib/ai/prompts/rank-results";
-import { trackAiUsage } from "@/lib/ai/track-usage";
+import { trackAiUsage, checkAiDailyCap } from "@/lib/ai/track-usage";
 import { log } from "@/lib/telemetry/logger";
 
 /** Cost guard: refuse to rerank more than this many candidates in one call. */
@@ -86,6 +86,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       { error: "AI not configured (GOOGLE_GENERATIVE_AI_API_KEY missing)" },
       { status: 503 }
+    );
+  }
+
+  // ─── Daily cost cap: runaway-bug insurance ───
+  const cap = await checkAiDailyCap(user.id);
+  if (cap.exceeded) {
+    return NextResponse.json(
+      { error: "Daily AI limit reached. Try again tomorrow.", used: cap.used, cap: cap.cap },
+      { status: 429 }
     );
   }
 

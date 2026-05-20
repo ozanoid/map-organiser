@@ -19,7 +19,7 @@ import { buildUserContext } from "@/lib/ai/context-builder";
 import { PlaceProfileSchema } from "@/lib/ai/schemas/place-profile";
 import { buildPlaceProfilePrompt } from "@/lib/ai/prompts/place-profile-full";
 import { applyProfileSuggestions } from "@/lib/ai/apply-suggestions";
-import { trackAiUsage } from "@/lib/ai/track-usage";
+import { trackAiUsage, checkAiDailyCap } from "@/lib/ai/track-usage";
 
 function getDataForSEOClient(): DataForSEOClient | null {
   const login = process.env.DATAFORSEO_LOGIN;
@@ -182,6 +182,15 @@ export async function POST(
       return NextResponse.json(
         { error: "AI not configured (GOOGLE_GENERATIVE_AI_API_KEY missing)" },
         { status: 503 }
+      );
+    }
+
+    // ─── Daily cost cap: runaway-bug insurance ───
+    const cap = await checkAiDailyCap(user.id);
+    if (cap.exceeded) {
+      return NextResponse.json(
+        { error: "Daily AI limit reached. Try again tomorrow.", used: cap.used, cap: cap.cap },
+        { status: 429 }
       );
     }
 

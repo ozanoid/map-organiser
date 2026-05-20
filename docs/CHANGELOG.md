@@ -6,6 +6,28 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 20.05.2026 — v1.11.0 — AI daily cost cap + enrichment-flow doc (Phase 7 close)
+
+Phase 7 closeout — a per-user daily cost cap on AI calls, and the missing
+AI-enrichment overview doc.
+
+- **Daily cost cap (F5).** `checkAiDailyCap` + `AI_DAILY_CALL_CAP = 3000`
+  in `src/lib/ai/track-usage.ts` — sums today's AI-SKU counters in
+  `api_usage`. The three AI routes — `parse-query`, `rank-results`, and
+  `enrich?step=profile` — return **429** before calling Gemini once a user
+  hits the cap. Runaway-bug insurance: ~3× a realistic heavy day, fails
+  open on a check error, never gates `step=info` / `step=reviews`
+  (DataForSEO, not AI). AI search surfaces the 429 as a toast.
+- **`05-flows/ai-enrichment-flow.md` (F4).** New overview doc — the
+  `enrich` cascade (`info → reviews → profile`), the per-entry-point
+  asymmetry (manual create auto-runs the full cascade; bulk import needs
+  the backfill), the completeness ladder, and the cost cap, in one place.
+- Docs updated for the cap: `api-routes/ai.md`, `gemini.md`,
+  `full-profile-flow.md`, `ai-search-flow.md`, `05-flows/_README.md`.
+  `api-routes/places.md` + `manual-place-create-flow.md` patch-bumped
+  (enrich/route.ts touched in `step=profile`, outside their documented
+  scope — no content change).
+
 ## 20.05.2026 — v1.10.2 — Import done screen surfaces the AI profile backfill
 
 The bulk-import "done" screen now renders the shared `BackfillProfilesPanel`

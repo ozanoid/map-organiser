@@ -2,8 +2,8 @@
 title: Places routes
 type: route-group
 domain: backend
-version: 1.0.0
-last_updated: 12.05.2026
+version: 1.0.1
+last_updated: 20.05.2026
 status: stable
 sources:
   - src/app/api/places/route.ts

@@ -2,8 +2,8 @@
 title: AI routes
 type: route-group
 domain: backend
-version: 1.1.0
-last_updated: 19.05.2026
+version: 1.2.0
+last_updated: 20.05.2026
 status: stable
 sources:
   - src/app/api/ai/parse-query/route.ts
@@ -40,15 +40,21 @@ into background jobs.
 
 ## Shared gating
 
-Every route in this group enforces three gates in order:
+Every route in this group enforces four gates in order:
 
 1. **Auth.** `supabase.auth.getUser()` must return a user. Otherwise 401.
 2. **`profiles.ai_features_enabled = true`.** The master toggle. Otherwise 403.
 3. **`GOOGLE_GENERATIVE_AI_API_KEY` env var set.** Otherwise 503.
+4. **Daily cost cap.** `checkAiDailyCap` (`src/lib/ai/track-usage.ts`) —
+   when the user's AI calls today have hit `AI_DAILY_CALL_CAP` (3000), the
+   route returns **429** before calling Gemini. Runaway-bug insurance;
+   fails open if the check itself errors. See
+   [[../../05-flows/ai-enrichment-flow#cost-cap]].
 
 When any gate fails the client falls back gracefully — the frontend
 hides the AI search input entirely when the toggle is off, so 403s
-shouldn't surface in normal use.
+shouldn't surface in normal use. A 429 surfaces as a toast on the AI
+search input.
 
 ## `POST /api/ai/parse-query`
 
