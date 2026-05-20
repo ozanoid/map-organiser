@@ -31,6 +31,19 @@ const apiKey = process.env.HONEYCOMB_API_KEY;
 const dataset = process.env.HONEYCOMB_DATASET ?? "map-organiser";
 const baseUrl = process.env.HONEYCOMB_API_URL ?? "https://api.honeycomb.io";
 
+// ─── Boot diagnostic (TEMPORARY) ───
+// Prints once per cold start to Vercel's runtime logs. Confirms whether
+// the Honeycomb env vars actually reached the running function — the
+// #1 suspect when "no data in Honeycomb". The key value is NEVER
+// printed, only presence + length. Remove once telemetry is verified.
+// eslint-disable-next-line no-console
+console.log(
+  `[instrumentation-node] boot · NEXT_RUNTIME=${process.env.NEXT_RUNTIME} ` +
+    `· HONEYCOMB_API_KEY=${apiKey ? `present(${apiKey.length} chars)` : "MISSING"} ` +
+    `· HONEYCOMB_DATASET=${dataset} · baseUrl=${baseUrl} ` +
+    `· → ${apiKey ? "exporters CONFIGURED" : "NO-OP (no exporter, nothing ships)"}`
+);
+
 if (!apiKey) {
   // Local dev / no-key path: SDK runs, in-memory spans only.
   registerOTel({ serviceName: "map-organiser" });
