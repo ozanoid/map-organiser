@@ -2,8 +2,8 @@
 title: Place Import Flow
 type: flow
 domain: places
-version: 1.0.0
-last_updated: 12.05.2026
+version: 1.1.0
+last_updated: 20.05.2026
 status: stable
 sources:
   - src/app/api/places/import-parse/route.ts
@@ -18,6 +18,7 @@ related:
   - "[[../03-frontend/stores/import-store]]"
   - "[[../02-backend/api-routes/places]]"
   - "[[../04-integrations/dataforseo]]"
+  - "[[../06-ops/runbooks/profile-backfill]]"
 ---
 
 # Place Import Flow
@@ -67,8 +68,22 @@ User goes to `/import`, picks a CSV or GeoJSON file (typically downloaded from G
        │  • 500 ms delay between places (rate-limit politeness)
        │  • Fire-and-forget from the client
        ▼
-8. Done
+8. Done — import summary card
+       │
+       ▼ once review enrichment settles (reviewsEnriching = false)
+9. BackfillProfilesPanel renders on the done screen
+       │  • One-click "Generate AI profiles" for the imported places
+       │  • By now they have reviews + CID → cheap step=profile each
+       │  • Shared component with Settings → AI; self-hides when nothing eligible
 ```
+
+> **Step 9 — AI profile backfill (added 20.05.2026).** Bulk import never
+> generates a `place_profile` (that's the full-profile LLM step). Once the
+> background review enrichment settles, the import done screen renders the
+> shared `BackfillProfilesPanel` — the same one-click, cost-shown backfill as
+> Settings → AI. Gated on `reviewsEnriching = false` so the backfill runs the
+> cheap `step=profile` rather than re-fetching reviews. See
+> [[../06-ops/runbooks/profile-backfill]].
 
 ## Inputs / outputs
 

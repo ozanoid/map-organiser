@@ -8,6 +8,7 @@ import { useImportStore } from "@/lib/stores/import-store";
 import type { ImportProgressItem, ImportResult } from "@/lib/stores/import-store";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { BackfillProfilesPanel } from "@/components/settings/backfill-profiles-panel";
 import {
   Upload, FileJson, Check, Loader2, AlertCircle, CheckCircle2,
   X as XIcon, Bookmark, CalendarCheck, CheckCircle, Heart, StopCircle,
@@ -353,6 +354,13 @@ export default function ImportPage() {
             </Button>
           </div>
         </Card>
+      )}
+
+      {/* AI profile backfill — surfaced once review enrichment has settled,
+          so the just-imported places get one-click profile generation.
+          Self-hides when there's nothing eligible. */}
+      {store.phase === "done" && !store.reviewsEnriching && (
+        <BackfillProfilesPanel />
       )}
     </div>
   );
