@@ -1,8 +1,8 @@
 ---
-title: Observability Flow (Axiom + OTel + structured logs)
+title: Observability Flow (Honeycomb, OTel-native)
 type: flow
 domain: infra
-version: 1.0.0
+version: 2.0.0
 last_updated: 20.05.2026
 status: stable
 sources:
@@ -18,134 +18,111 @@ related:
 
 # Observability Flow
 
-Single-tool stack for app + LLM telemetry. Everything ends up in **Axiom**;
-queryable, traceable, correlatable.
+Single-tool, OTel-native. Everything — traces, LLM spans, structured
+logs — flows to **Honeycomb** through one OTLP pipe.
+
+> **History:** v1.0 of this doc used Axiom (Vercel marketplace log
+> drain + a separate OTLP attempt). Axiom's free tier caps datasets at
+> 2 (one slot taken by the system `axiom-audit` dataset), which blocked
+> creating a `Kind: Traces` dataset for OTLP. Migrated to Honeycomb,
+> whose free tier has no dataset limit and is OTel-native. Vercel Log
+> Drain is no longer used.
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                       Axiom (dataset: vercel)               │
-│  ─ Structured JSON logs (queryable fields)                  │
-│  ─ OTel spans (incl. gen_ai.* from AI SDK telemetry)        │
-│  ─ Vercel runtime telemetry (report.durationMs, memory)     │
-│  ─ Edge request logs (path, status, IP, userAgent)          │
-└─────────────────────────────────────────────────────────────┘
-              ▲                              ▲
-              │ Vercel Log Drain             │ OTLP traces
-              │ (auto, console.log → JSON)   │ (via @vercel/otel)
-              │                              │
-   ┌──────────┴───────────┐      ┌───────────┴──────────┐
-   │  API routes          │      │  AI SDK generateText  │
-   │  log.info("event",   │      │  experimental_telem-  │
-   │           { attrs })  │      │  etry: isEnabled=true │
-   └──────────────────────┘      └───────────────────────┘
-              │                              │
-              └──────────  same trace_id ─────┘
-                  (OTel context propagates
-                   between log + span)
+                  ┌────────────────────────────────────┐
+                  │           Honeycomb                │
+                  │  ── HTTP request spans             │  ← @vercel/otel auto
+                  │  ── fetch spans (Supabase, Gemini) │  ← @vercel/otel auto
+                  │  ── gen_ai.* LLM spans             │  ← AI SDK telemetry
+                  │  ── structured log records         │  ← OTel Logs API
+                  │     (all bound by one traceId)     │
+                  └────────────────────────────────────┘
+                                  ▲
+                                  │  one OTLP/HTTP pipe
+                                  │  /v1/traces  +  /v1/logs
+                                  │  headers: x-honeycomb-team,
+                                  │           x-honeycomb-dataset
+                                  │
+                  ┌───────────────┴────────────────────┐
+                  │       Vercel Function (Next.js)     │
+                  │   instrumentation.ts → registerOTel │
+                  └─────────────────────────────────────┘
 ```
 
-## The two pipes
+No Vercel Log Drain. No second tool. One `traceId` correlates every
+span and log from a single request.
 
-### Pipe 1 — Vercel Log Drain (logs)
+## Two signals, one pipe
 
-Set up automatically by the Vercel-Axiom marketplace integration.
-Every `console.log` / `console.warn` / `console.error` in API routes,
-middleware, and edge functions ships to Axiom dataset `vercel` within
-seconds.
+### Traces
 
-We emit **structured JSON** via `log.*` helpers (see `src/lib/telemetry/logger.ts`).
-Each line becomes a queryable record in Axiom with these fields:
+`instrumentation.ts` registers `@vercel/otel` with an
+`OTLPHttpJsonTraceExporter` → `https://api.honeycomb.io/v1/traces`.
 
-```
-{
-  level:     "info" | "warn" | "error" | "debug",
-  event:     "ai.parse-query" | "ai.rank-results" | "api.places" | ...,
-  timestamp: "2026-05-20T00:20:47.123Z",
-  traceId:   "abc123..."  // present when OTel context is active
-  spanId:    "def456...",
-  ...attrs   // event-specific payload
-}
-```
+Span sources:
+- **HTTP request spans** — auto, every route handler invocation. Method,
+  path, status, duration as span attributes.
+- **fetch spans** — auto, every outbound `fetch` (Supabase REST calls,
+  Gemini API calls).
+- **gen_ai.* spans** — from AI SDK `generateText({ ...,
+  experimental_telemetry: { isEnabled: true, functionId, metadata } })`.
+  Carry GenAI semantic conventions:
+  ```
+  gen_ai.system, gen_ai.request.model,
+  gen_ai.usage.input_tokens, gen_ai.usage.output_tokens,
+  gen_ai.prompt, gen_ai.completion, gen_ai.response.finish_reason
+  ```
+  `functionId` is the span name (`ai.parse-query`, `ai.rank-results`);
+  `metadata` becomes span attributes (`userId`, `candidateCount`).
 
-### Pipe 2 — OTel spans (traces)
+### Logs
 
-`instrumentation.ts` registers `@vercel/otel` at process boot with an
-explicit `OTLPHttpJsonTraceExporter` pointing at Axiom's OTLP endpoint
-(`https://api.axiom.co/v1/traces`). Requires two env vars set on Vercel:
+`instrumentation.ts` also registers a `BatchLogRecordProcessor` wrapping
+an `OTLPLogExporter` → `https://api.honeycomb.io/v1/logs`.
 
-| Env var | Purpose |
-|---|---|
-| `AXIOM_TOKEN` | Ingest API token from Axiom dashboard (Settings → API tokens, ingest permission) |
-| `AXIOM_DATASET` | Target dataset (`vercel` to share with logs, or a separate `traces` dataset) |
+`src/lib/telemetry/logger.ts` exposes `log.{debug,info,warn,error}`.
+Each call emits an OTel log record:
+- `event` → record **body** (primary searchable name in Honeycomb)
+- `attrs` → record **attributes**, flattened (see below)
+- severity → `severityNumber` / `severityText`
+- trace context (traceId, spanId) → **auto-attached** by the OTel SDK
+  when emitted inside an active span
 
-When the token is absent (local `next dev` without env vars), the
-exporter is omitted — OTel still creates spans in-memory so the
-logger's `trace.getActiveSpan()` still returns a valid context (logs
-get traceId/spanId), but spans aren't shipped anywhere.
+Attribute flattening (`flatten()` in logger.ts): OTel log attributes
+must be primitives or arrays of primitives. Nested plain objects become
+dot-notation keys (`hard.city`); arrays of objects are JSON-stringified
+(`top5`); nulls are dropped. Honeycomb's data model is flat, so this is
+the natural shape.
 
-AI SDK's `generateText({ ..., experimental_telemetry: { isEnabled: true,
-functionId, metadata } })` produces spans with **GenAI semantic
-conventions**:
+## Required env vars (Vercel)
 
-```
-gen_ai.system                = "google_genai"
-gen_ai.request.model         = "gemini-flash-latest"
-gen_ai.usage.input_tokens    = 16553
-gen_ai.usage.output_tokens   = 1722
-gen_ai.prompt                = "<full system + user prompt>"
-gen_ai.completion            = "<full LLM response>"
-gen_ai.response.finish_reason = "stop"
-```
+| Env var | Purpose | Default |
+|---|---|---|
+| `HONEYCOMB_API_KEY` | Honeycomb write/ingest token | (required) |
+| `HONEYCOMB_DATASET` | Target dataset name | `map-organiser` |
+| `HONEYCOMB_API_URL` | Base URL — `https://api.honeycomb.io` (US) or `https://api.eu1.honeycomb.io` (EU) | `https://api.honeycomb.io` |
 
-The `functionId` is the span name (e.g. `ai.parse-query`); `metadata`
-becomes span attributes (e.g. `userId`, `candidateCount`).
-
-## Correlation via trace_id
-
-Every Axiom record (log OR span) emitted within a single request
-shares one `traceId`. In Axiom Stream / Query, filter
-`traceId = "abc123..."` and you get the full timeline:
-
-```
-00:20:47.121  span   POST /api/ai/parse-query    (HTTP)
-00:20:47.342  span   gen_ai.request               (parse-query LLM call)
-              attrs: gen_ai.usage.input_tokens=412 etc.
-00:20:47.844  log    event=ai.parse-query         (sanitized hard + intent)
-00:20:48.011  span   GET /api/places              (refetch with new filter)
-00:20:48.245  log    event=api.places             (sql_rows=25 returned=25)
-00:20:48.567  span   POST /api/ai/rank-results
-00:20:54.123  span   gen_ai.request               (rerank LLM call)
-              attrs: gen_ai.usage.input_tokens=16553 etc.
-00:20:54.456  log    event=ai.rank-results        (top5, hidden_count, etc.)
-```
-
-End-to-end debugging without grep.
-
-## Where instrumentation lives
-
-| File | What it does |
-|---|---|
-| `instrumentation.ts` (root) | Boots OTel for the Node.js runtime. Single call: `registerOTel({ serviceName: "map-organiser" })`. Auto-detects Vercel-Axiom OTel pipe. |
-| `src/lib/telemetry/logger.ts` | `log.{debug,info,warn,error}` helpers. Outputs structured JSON to stdout/stderr → Vercel Log Drain → Axiom. Auto-attaches `traceId`/`spanId` from current OTel context. |
-| `src/app/api/ai/parse-query/route.ts` | `experimental_telemetry: { isEnabled: true, functionId: "ai.parse-query", metadata: { userId, queryLen } }` on the generateText call. `log.info("ai.parse-query", { ... })` for diagnostic record. `log.error("ai.parse-query.llm_failed", err, ...)` on failure. |
-| `src/app/api/ai/rank-results/route.ts` | Same pattern, with extra `log.warn` events for `out_of_range_idx`, `duplicate_idx`, `skipped_candidates`, `salvaged`. Top-5 and full-ranked emitted as structured arrays, not stringified. |
-| `src/app/api/places/route.ts` | `log.info("api.places", { filters, sql_rows, returned, ... })` — only when `city` is present (AI search path). Manual browsing path stays silent. |
+When `HONEYCOMB_API_KEY` is absent (local `next dev`), no exporters are
+configured. The OTel SDK still runs — spans + log records are created
+in-memory so trace context works — but nothing ships. The logger falls
+back to `console.log` in non-production for local DX.
 
 ## Event taxonomy
 
-Predictable `event` names so Axiom queries / dashboards are stable:
+Predictable `event` (= log record body) names → stable Honeycomb
+queries / boards:
 
 | Event | Source | Level |
 |---|---|---|
 | `ai.parse-query` | parse-query route, success | info |
 | `ai.parse-query.llm_failed` | parse-query catch | error |
 | `ai.rank-results` | rank-results route, success | info |
-| `ai.rank-results.full_ranked` | rank-results route, success | debug (verbose) |
+| `ai.rank-results.full_ranked` | rank-results route, success | debug |
 | `ai.rank-results.llm_failed` | rank-results catch | error |
-| `ai.rank-results.salvaged` | rank-results, schema-failure-recovered | warn |
-| `ai.rank-results.salvage_failed` | rank-results, salvage also failed | error |
+| `ai.rank-results.salvaged` | schema-failure recovered | warn |
+| `ai.rank-results.salvage_failed` | salvage also failed | error |
 | `ai.rank-results.out_of_range_idx` | LLM returned idx ≥ N | warn |
 | `ai.rank-results.duplicate_idx` | LLM returned same idx twice | warn |
 | `ai.rank-results.skipped_candidates` | LLM omitted candidates | warn |
@@ -153,59 +130,51 @@ Predictable `event` names so Axiom queries / dashboards are stable:
 
 Add new events here when introducing new instrumentation.
 
-## How to debug in Axiom
+## How to debug in Honeycomb
 
-### Trace a single user session
-```
-['vercel']
-| where ['traceId'] == "abc123..."
-| sort by ['_time']
-```
+### One AI search session, full timeline
+Open any span → "View trace". The trace waterfall shows HTTP span →
+gen_ai span (parse-query) → fetch spans → rerank → with log records
+inline at the point they were emitted. One `traceId`, no grep.
 
-### LLM cost over time
-```
-['vercel']
-| where ['attributes.gen_ai.usage.input_tokens'] != ""
-| summarize sum(toint(['attributes.gen_ai.usage.input_tokens'])),
-            sum(toint(['attributes.gen_ai.usage.output_tokens']))
-            by bin(_time, 1h), ['attributes.gen_ai.request.model']
-```
+### LLM cost / token usage over time
+Query `gen_ai.usage.input_tokens` + `gen_ai.usage.output_tokens`,
+visualise `SUM`, group by `gen_ai.request.model`, `bin(time, 1h)`.
 
-### Which queries trigger LLM laziness (skipped candidates)
-```
-['vercel']
-| where ['event'] == "ai.rank-results.skipped_candidates"
-| project _time, ['userId'], ['count'], ['total'], ['missing']
-| sort by _time desc
-```
+### Which queries trigger LLM laziness
+Filter `event = ai.rank-results.skipped_candidates`, breakdown by
+`userId`. Should be rare since v1.8.5's idx-reference change.
 
-### p95 latency per route
-```
-['vercel']
-| where ['report.durationMs'] != ""
-| summarize percentile(toint(['report.durationMs']), 95)
-            by ['request.path']
-```
+### p95 LLM latency
+On the gen_ai spans, `P95(duration_ms)` grouped by `name`
+(`ai.parse-query` vs `ai.rank-results`).
+
+### AI Observability view
+Honeycomb's built-in AI Observability panel auto-detects the gen_ai.*
+spans — prompt, completion, token, cost rendered without hand-written
+queries.
 
 ## Diagnostic toggles
 
-| Surface | Production default | How to enable |
+| Surface | Production default | Enable |
 |---|---|---|
-| Server logs (`log.*`) | ON | n/a — always emitted |
-| Server `log.debug` lines | ON (no extra gate currently) | n/a |
-| Client `[ai-search/*]` console logs | OFF | `localStorage.setItem("ai-debug","1"); location.reload()` |
-| OTel spans (incl. gen_ai.*) | ON | Bound to `@vercel/otel` register; runtime auto |
+| Server log records (`log.*`) | ON → Honeycomb | always |
+| Server `console.log` mirror | OFF (prod) / ON (dev) | n/a |
+| OTel spans (incl. gen_ai.*) | ON → Honeycomb | bound to registerOTel |
+| Client `[ai-search/*]` console logs | OFF | `localStorage.setItem("ai-debug","1")` |
 | `window.__aiSearchStore` | OFF | same localStorage flag |
-
-If log drain costs climb later, demote `ai.rank-results.full_ranked`
-from `info` to `debug` and add a server-side debug gate. Currently it
-is emitted as `log.debug` already.
 
 ## Cost expectations
 
-For F&F scale (estimated):
-- Log drain volume: ~1-3 GB/month → ~$1-2 / month (Vercel Pro `$0.50/GB`).
-- OTel ingestion: well within Axiom free tier (500 GB/month).
-- AI SDK telemetry adds ~5% to span payload (prompt + completion bytes).
+F&F scale: well within Honeycomb's free tier (20M events/month, 60-day
+retention, unlimited datasets). Vercel Log Drain disabled → no
+`$0.50/GB` drain cost.
 
-Monitor monthly via Vercel dashboard → Usage → Logs.
+## Not yet instrumented
+
+Other API routes (`parse-link`, `enrich`, `import-batch`, etc.) still
+use ad-hoc `console.log`. With Vercel Log Drain disabled these no longer
+reach an external sink — they only appear in Vercel's own 1h-retention
+log view. Migrate to `log.*` opportunistically when touching those
+files. Frontend instrumentation (browser span → traceparent header →
+server) is also a future add.

@@ -6,78 +6,91 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
-## 20.05.2026 — v1.9.0 — Axiom observability (OTel + structured logs)
+## 20.05.2026 — v1.9.0 — Observability: Honeycomb (OTel-native)
 
-Single-tool observability stack via Vercel-Axiom marketplace integration.
-Two pipes, one destination (Axiom dataset `vercel`):
+Single-tool observability. Traces, LLM spans, and structured logs all
+flow to **Honeycomb** through one OTLP pipe.
 
-### Pipe 1 — Vercel Log Drain (logs)
+### Why Honeycomb (not Axiom)
 
-Set up by the Axiom marketplace integration. Every `console.log` ships
-to Axiom. We replaced ad-hoc string logs with structured JSON via a new
-`log` helper so each field becomes queryable in Axiom (no regex
-parsing).
+This PR initially targeted Axiom via its Vercel marketplace log drain.
+That part worked for logs, but Axiom's free tier caps datasets at 2 and
+one slot is consumed by the system `axiom-audit` dataset — leaving no
+room for a `Kind: Traces` dataset, which OTLP traces require. OTLP
+traces sent to the Events-kind `vercel` dataset were silently dropped.
 
-### Pipe 2 — OTel traces (incl. AI SDK GenAI semconv)
+Pivoted to Honeycomb: OTel-native, free tier has no dataset limit
+(20M events/month, 60-day retention). Vercel Log Drain is no longer
+used, eliminating the `$0.50/GB` drain cost.
 
-`instrumentation.ts` boots `@vercel/otel`. AI SDK's
-`experimental_telemetry: { isEnabled: true, functionId, metadata }`
-on `generateText` calls emits OTel spans with `gen_ai.*` semantic
-conventions: model, prompt, completion, input/output tokens, latency.
+### Architecture — one OTLP pipe
+
+`instrumentation.ts` registers `@vercel/otel` with BOTH:
+- `OTLPHttpJsonTraceExporter` → Honeycomb `/v1/traces`
+- `BatchLogRecordProcessor(OTLPLogExporter)` → Honeycomb `/v1/logs`
+
+Signals into Honeycomb:
+- HTTP request spans — auto (`@vercel/otel`)
+- fetch spans — auto (Supabase, Gemini HTTP)
+- `gen_ai.*` LLM spans — AI SDK `experimental_telemetry` on
+  `generateText` (model, prompt, completion, input/output tokens,
+  latency, finish_reason)
+- structured log records — `log.*` via the OTel Logs API
+
+One `traceId` correlates every span + log from a request — full
+timeline in Honeycomb's trace waterfall, no grep.
 
 ### What's new
 
-- `instrumentation.ts` (root) — OTel SDK registration.
-- `src/lib/telemetry/logger.ts` — `log.{debug,info,warn,error}` JSON
-  logger. Auto-attaches `traceId` / `spanId` from the active OTel
-  context so every log line correlates with its parent span and
-  sibling logs in the same request.
+- `instrumentation.ts` (root) — registerOTel with trace + log exporters
+  pointed at Honeycomb. No-op (in-memory only) when `HONEYCOMB_API_KEY`
+  absent, e.g. local `next dev`.
+- `src/lib/telemetry/logger.ts` — `log.{debug,info,warn,error}`. Emits
+  OTel log records (not `console.log`). Trace context auto-attached by
+  the SDK. Nested attrs flattened to dot-notation (OTel attribute
+  constraint); arrays of objects JSON-stringified.
 - `src/app/api/ai/parse-query/route.ts` — `experimental_telemetry`
-  enabled (functionId=`ai.parse-query`); diagnostic + error logs
-  switched to structured `log.*`.
-- `src/app/api/ai/rank-results/route.ts` — same pattern plus
-  structured warn events: `out_of_range_idx`, `duplicate_idx`,
-  `skipped_candidates`, `salvaged`. `top5` and `full_ranked` emitted
-  as arrays of objects, not stringified.
-- `src/app/api/places/route.ts` — diagnostic log switched to structured
-  `api.places` event with nested `filters` object.
+  enabled (functionId `ai.parse-query`); diagnostic + error → `log.*`.
+- `src/app/api/ai/rank-results/route.ts` — same, plus structured warn
+  events (`out_of_range_idx`, `duplicate_idx`, `skipped_candidates`,
+  `salvaged`).
+- `src/app/api/places/route.ts` — `api.places` structured event.
 
-### Trace correlation
+### Required env vars (Vercel)
 
-Every log + span in a request shares one `traceId`. In Axiom:
+| Env var | Default |
+|---|---|
+| `HONEYCOMB_API_KEY` | (required) |
+| `HONEYCOMB_DATASET` | `map-organiser` |
+| `HONEYCOMB_API_URL` | `https://api.honeycomb.io` (US); `https://api.eu1.honeycomb.io` for EU |
 
-```
-['vercel']
-| where ['traceId'] == "abc123..."
-| sort by ['_time']
-```
+Vercel Log Drain to Axiom should be DISABLED in project settings.
+`AXIOM_*` env vars can be removed.
 
-returns the full timeline: HTTP span → gen_ai span (parse-query) →
-`event=ai.parse-query` log → places fetch span → `event=api.places`
-log → rerank LLM span → `event=ai.rank-results` log.
+### Packages
 
-### Cost expectation (F&F scale)
+- `@vercel/otel`, `@opentelemetry/api`
+- `@opentelemetry/sdk-logs`, `@opentelemetry/exporter-logs-otlp-http`
 
-- Log drain: ~1-3 GB/month, ~$1-2/month at `$0.50/GB`
-- Axiom ingest: well within free tier (500 GB/month)
+### Cost (F&F scale)
 
-### Files touched
+Well within Honeycomb free tier. Vercel Log Drain disabled → $0 drain.
+
+### Files
 
 - `instrumentation.ts` (new)
 - `src/lib/telemetry/logger.ts` (new)
-- `src/app/api/ai/parse-query/route.ts`
-- `src/app/api/ai/rank-results/route.ts`
+- `src/app/api/ai/{parse-query,rank-results}/route.ts`
 - `src/app/api/places/route.ts`
-- `docs/05-flows/observability-flow.md` (new, v1.0.0)
-- `package.json` — added `@vercel/otel`, `@opentelemetry/api`
+- `docs/05-flows/observability-flow.md` (new, v2.0.0)
 
 ### Future
 
-Other API routes (`parse-link`, `enrich`, `import-batch`, etc.) still
-use ad-hoc `console.log` — they ship to Axiom but unstructured. Migrate
-opportunistically when touching those files. Frontend instrumentation
-(button click → span propagated via traceparent header) also a future
-add.
+Other API routes (`parse-link`, `enrich`, `import-batch`) still use
+ad-hoc `console.log` — with the drain disabled these only land in
+Vercel's 1h-retention view. Migrate to `log.*` opportunistically.
+Frontend span instrumentation (browser → traceparent header → server)
+is also a future add.
 
 ---
 

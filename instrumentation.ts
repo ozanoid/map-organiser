@@ -1,44 +1,74 @@
 /**
- * Next.js OpenTelemetry instrumentation entry point.
+ * Next.js OpenTelemetry instrumentation entry point — single-tool
+ * (Honeycomb) architecture.
  *
- * `register()` runs once per server process boot. Two roles:
+ * `register()` runs once per server process boot. Configures BOTH:
  *
- *   1. Activate OTel context for the request lifecycle — without this,
- *      `trace.getActiveSpan()` returns undefined inside route handlers
- *      and our logger can't attach traceId/spanId to logs.
- *
- *   2. Export OTel spans to Axiom via OTLP/HTTP. Spans include:
- *        - HTTP request spans (auto-instrumented by @vercel/otel)
- *        - fetch spans (e.g., calls to Supabase, Gemini)
+ *   1. Trace pipeline (OTLP/HTTP → Honeycomb /v1/traces)
+ *        - HTTP request spans (auto, @vercel/otel)
+ *        - fetch spans (Supabase, Gemini calls)
  *        - gen_ai.* spans from AI SDK `experimental_telemetry: true`
  *          (prompt, completion, input/output tokens, model, latency)
  *
- * Required env vars (set on Vercel via marketplace integration + manual):
- *   - AXIOM_TOKEN   — Axiom ingest API token (xat-...)
- *   - AXIOM_DATASET — Axiom dataset name (default: "vercel")
+ *   2. Log pipeline (OTLP/HTTP → Honeycomb /v1/logs)
+ *        - All `log.{debug,info,warn,error}` calls from
+ *          `lib/telemetry/logger.ts` flow through OTel Logger API
+ *        - Trace context (traceId, spanId) auto-attached by SDK
+ *        - Severity + body + attributes preserved on Honeycomb side
  *
- * When AXIOM_TOKEN is absent (e.g., local `next dev` without
- * env), exporter is omitted — OTel still produces spans in memory
- * (so logger trace context still works) but doesn't ship them.
+ * Single OTLP pipe, single Honeycomb destination. Vercel Log Drain to
+ * Axiom is no longer needed and should be disabled in Vercel project
+ * settings to avoid the $0.50/GB cost.
+ *
+ * Required env vars (set on Vercel):
+ *   - HONEYCOMB_API_KEY     — write token from honeycomb.io
+ *   - HONEYCOMB_DATASET     — dataset name (default: "map-organiser")
+ *   - HONEYCOMB_API_URL     — base URL (default: "https://api.honeycomb.io",
+ *                             use "https://api.eu1.honeycomb.io" for EU)
+ *
+ * When HONEYCOMB_API_KEY is absent (local `next dev` without env), no
+ * exporters are configured — OTel SDK still runs and produces in-memory
+ * spans, so logger's trace context attachment still works for stdout
+ * fallback logging in dev.
  *
  * See docs/05-flows/observability-flow.md for the full architecture.
  */
 import { registerOTel, OTLPHttpJsonTraceExporter } from "@vercel/otel";
+import { BatchLogRecordProcessor } from "@opentelemetry/sdk-logs";
+import { OTLPLogExporter } from "@opentelemetry/exporter-logs-otlp-http";
 
 export function register() {
-  const token = process.env.AXIOM_TOKEN;
-  const dataset = process.env.AXIOM_DATASET ?? "vercel";
+  const apiKey = process.env.HONEYCOMB_API_KEY;
+  const dataset = process.env.HONEYCOMB_DATASET ?? "map-organiser";
+  const baseUrl =
+    process.env.HONEYCOMB_API_URL ?? "https://api.honeycomb.io";
+
+  // No-op exporter path: local dev without env vars. OTel SDK still
+  // creates spans + log records in memory so the logger's trace
+  // context (traceId/spanId) propagation works for stdout logs.
+  if (!apiKey) {
+    registerOTel({ serviceName: "map-organiser" });
+    return;
+  }
+
+  const headers = {
+    "x-honeycomb-team": apiKey,
+    "x-honeycomb-dataset": dataset,
+  };
 
   registerOTel({
     serviceName: "map-organiser",
-    traceExporter: token
-      ? new OTLPHttpJsonTraceExporter({
-          url: "https://api.axiom.co/v1/traces",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "X-Axiom-Dataset": dataset,
-          },
+    traceExporter: new OTLPHttpJsonTraceExporter({
+      url: `${baseUrl}/v1/traces`,
+      headers,
+    }),
+    logRecordProcessors: [
+      new BatchLogRecordProcessor(
+        new OTLPLogExporter({
+          url: `${baseUrl}/v1/logs`,
+          headers,
         })
-      : undefined,
+      ),
+    ],
   });
 }
