@@ -2,8 +2,8 @@
 title: Observability Flow (dual-write — Honeycomb + Vercel/Axiom)
 type: flow
 domain: infra
-version: 3.1.0
-last_updated: 20.05.2026
+version: 3.2.0
+last_updated: 15.07.2026
 status: stable
 sources:
   - src/instrumentation.ts
@@ -202,7 +202,9 @@ body) → stable queries on both backends:
 ## Known follow-ups
 
 - **Serverless log flush:** the OTel log pipe uses
-  `BatchLogRecordProcessor`. In Vercel's freeze-after-response model,
+  `BatchLogRecordProcessor` (as of `@opentelemetry/sdk-logs` 0.220 its
+  constructor takes a single options object `{ exporter }` — updated in
+  `instrumentation-node.ts`, v1.15.0). In Vercel's freeze-after-response model,
   buffered records may be lost if `@vercel/otel` doesn't force-flush
   the LoggerProvider on suspend. To verify after deploy: compare
   Honeycomb log-record count against the (reliable) console/Axiom

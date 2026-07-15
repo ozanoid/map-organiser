@@ -39,7 +39,6 @@ function isOrchLogEnabled(): boolean {
 
 function orchLog(scope: string, event: string, payload: Record<string, unknown>) {
   if (!isOrchLogEnabled()) return;
-  // eslint-disable-next-line no-console
   console.log(`[ai-search/${scope}] ${event}`, payload);
 }
 

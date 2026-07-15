@@ -3,6 +3,7 @@
 import { useRef, useEffect, useState, useCallback, useImperativeHandle, forwardRef } from "react";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
+import type { FeatureCollection } from "geojson";
 import type { Place, Category } from "@/lib/types";
 import { registerCategoryIcons } from "@/lib/map/category-icons";
 
@@ -89,7 +90,7 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
   }, []);
 
   // Build GeoJSON from places
-  const buildGeoJSON = useCallback((data: Place[]): GeoJSON.FeatureCollection => ({
+  const buildGeoJSON = useCallback((data: Place[]): FeatureCollection => ({
     type: "FeatureCollection",
     features: data.map((place) => ({
       type: "Feature",
@@ -117,7 +118,7 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
   markerStyleRef.current = markerStyle;
 
   // Add source + layers to the map
-  const setupLayers = useCallback((m: mapboxgl.Map, geojson: GeoJSON.FeatureCollection) => {
+  const setupLayers = useCallback((m: mapboxgl.Map, geojson: FeatureCollection) => {
     const sourceId = "places";
 
     // Register category icons before adding layers

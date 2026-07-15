@@ -36,7 +36,6 @@ const baseUrl = process.env.HONEYCOMB_API_URL ?? "https://api.honeycomb.io";
 // the Honeycomb env vars actually reached the running function — the
 // #1 suspect when "no data in Honeycomb". The key value is NEVER
 // printed, only presence + length. Remove once telemetry is verified.
-// eslint-disable-next-line no-console
 console.log(
   `[instrumentation-node] boot · NEXT_RUNTIME=${process.env.NEXT_RUNTIME} ` +
     `· HONEYCOMB_API_KEY=${apiKey ? `present(${apiKey.length} chars)` : "MISSING"} ` +
@@ -60,12 +59,14 @@ if (!apiKey) {
       headers,
     }),
     logRecordProcessors: [
-      new BatchLogRecordProcessor(
-        new OTLPLogExporter({
+      // @opentelemetry/sdk-logs ≥0.220 takes a single options object
+      // ({ exporter, ... }) instead of a positional exporter argument.
+      new BatchLogRecordProcessor({
+        exporter: new OTLPLogExporter({
           url: `${baseUrl}/v1/logs`,
           headers,
-        })
-      ),
+        }),
+      }),
     ],
   });
 }

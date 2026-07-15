@@ -2,7 +2,7 @@
 title: DataForSEO Business Data
 type: integration
 domain: integrations
-version: 1.1.0
+version: 1.1.1
 last_updated: 15.07.2026
 status: stable
 sources:
@@ -59,7 +59,6 @@ Implementation in `src/lib/dataforseo/`:
 |---|---|
 | `/api/places/parse-link` | Fallback when Google is disabled or unavailable. |
 | `/api/places/import-batch` | **Primary path for bulk import.** Every batch of 3 places goes through DataForSEO. |
-| `/api/places/import` (legacy NDJSON) | Same. |
 | `/api/places/[id]/enrich?step=info` | Re-enrich a single place's business info. |
 | `/api/places/[id]/enrich?step=reviews` | Fetch reviews for a place. |
 | `/api/places/[id]/refresh-google-data` | Full re-lookup: info + `newest` reviews **merged** into the corpus (`mergeReviews`, not replace) + chains to `step=profile`. Also runs headless in the cron. |

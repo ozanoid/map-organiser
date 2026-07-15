@@ -494,7 +494,7 @@ export default function TripDetailPage() {
             <div className="flex flex-col items-center justify-center py-20 text-center">
               <MapPin className="h-10 w-10 text-gray-300 dark:text-gray-600 mb-3" />
               <p className="text-sm text-muted-foreground">No places in this trip yet.</p>
-              <p className="text-xs text-muted-foreground mt-1">Use "+ Add place" below each day to get started.</p>
+              <p className="text-xs text-muted-foreground mt-1">Use &quot;+ Add place&quot; below each day to get started.</p>
             </div>
           ) : (
             <div className="max-w-xl">
