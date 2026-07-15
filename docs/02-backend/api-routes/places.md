@@ -2,10 +2,11 @@
 title: Places routes
 type: route-group
 domain: backend
-version: 1.2.1
+version: 1.3.0
 last_updated: 15.07.2026
 status: stable
 sources:
+  - src/app/api/places/add-similar/route.ts
   - src/app/api/places/route.ts
   - src/app/api/places/[id]/route.ts
   - src/app/api/places/[id]/enrich/route.ts
@@ -28,7 +29,7 @@ related:
 
 > **Telemetry (v1.16.0):** `enrich?step=profile` stamps Langfuse trace fields (`place-profile`) around `generatePlaceProfile` and flushes via `after(flushLangfuse)`. See [[../../05-flows/observability-flow]].
 
-Ten route handler files under `/api/places/*`. The Place is the most-touched entity in the schema; this is the busiest part of the API.
+Eleven route handler files under `/api/places/*`. The Place is the most-touched entity in the schema; this is the busiest part of the API.
 
 ## At a glance
 
@@ -43,6 +44,7 @@ Ten route handler files under `/api/places/*`. The Place is the most-touched ent
 | `POST` | `/api/places/[id]/refresh-google-data` | Full re-fetch: info + `newest` reviews merged into the corpus (not replace) + photo, then chains to `step=profile`. Core logic in `src/lib/places/refresh-google-data.ts` (shared with the cron). |
 | `POST` | `/api/places/bulk` | Bulk update_category / add_tags / add_to_list / update_status / delete / check_trips. |
 | `POST` | `/api/places/bulk-enrich-reviews` | Background bulk review enrichment. |
+| `POST` | `/api/places/add-similar` | NF-05 (v1.18.0): add a place from a people_also_search suggestion by CID — biz-info lookup → insert (mirrors import-batch); 409 on CID/place_id dupe; SKU tracked. Client fires the standard enrich chain afterwards. |
 | `POST` | `/api/places/import-parse` | Parse a Takeout file → place list (no insert). |
 | `POST` | `/api/places/import-batch` | Enrich + insert a small batch (~3 places). |
 | `POST` | `/api/places/migrate-photos` | Backfill: Google photo URLs → Supabase Storage. |
@@ -71,6 +73,8 @@ All require auth.
 - **DB:** `places` SELECT, joins to `categories`; secondary in-memory filtering for tags and lists (via `place_tags` / `list_places` lookups).
 - **Response:** `Place[]` with `location` parsed to `{ lat, lng }`. `200`.
 - **Notes:** Tag/list filters applied post-query in JS. `google_rating_desc` sort happens post-fetch (JSONB sort).
+- **`open_now=true`** (v1.18.0): dynamic filter — JS post-filter evaluating `isOpenNow(google_data.work_timetable, google_data.tz)` at request time in the place's local timezone (`src/lib/places/open-now.ts`). Places without timetable/tz are EXCLUDED (unknown ≠ open).
+
 
 ### `POST /api/places`
 
@@ -153,6 +157,15 @@ All require auth.
 - **External:** DataForSEO `fetchReviews`, `transformReviews`, `trackUsage`. 500 ms delay between places.
 - **Response:** `{ enriched, failed, total }`.
 - **Notes:** Fire-and-forget. Skips places missing `google_data.cid`. Per-place errors silently increment `failed`.
+
+### `POST /api/places/add-similar`
+
+- **Source:** `src/app/api/places/add-similar/route.ts`
+- **Auth:** cookie session (401 without).
+- **Body:** `{ cid: string (≤40), title?: string (≤200) }` — Zod-validated; 400 on failure.
+- **Behavior:** NF-05 (v1.18.0). Dedup by stored `google_data->>cid`, then DataForSEO biz-info lookup (`keyword: cid:…`, SKU `dataforseo_business_info_live`), second dedup by resolved `google_place_id`, insert with `source: "similar"` (requires the widened `places_source_check`), best-effort photo download. The CLIENT then fires the standard `enrich?step=reviews` chain.
+- **Responses:** `200 {id}` inserted · `409 {id}` already in library · `404` CID resolves to nothing · `422` no coordinates · `500` config/insert failure.
+- **Known limit (accepted):** check-then-insert dedup has no unique index behind it — truly concurrent duplicate adds are possible; the client serializes adds and the app is single-user in practice.
 
 ### `POST /api/places/import-parse`
 

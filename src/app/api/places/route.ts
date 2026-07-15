@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { resolveCategoryId } from "@/lib/google/category-mapping";
 import { downloadAndStorePhotoFromUrl } from "@/lib/dataforseo/photo";
 import { parsePostgisPoint } from "@/lib/geo";
+import { isOpenNow } from "@/lib/places/open-now";
 import { log } from "@/lib/telemetry/logger";
 
 // GET /api/places - List all places for current user with filters
@@ -105,6 +106,17 @@ export async function GET(request: NextRequest) {
       const gr = p.google_data?.rating;
       return gr && gr >= min;
     });
+  }
+
+  // v1.18.0 dynamic "open now" — evaluated at request time from the
+  // stored structured timetable in the PLACE's own timezone (JS
+  // post-filter; a time-dependent JSONB predicate has no sane SQL form).
+  // Places without timetable/tz are EXCLUDED: unknown ≠ open.
+  if (searchParams.get("open_now") === "true") {
+    filteredPlaces = filteredPlaces.filter(
+      (p: any) =>
+        isOpenNow(p.google_data?.work_timetable, p.google_data?.tz) === true
+    );
   }
 
   // If filtering by tags, do a secondary filter

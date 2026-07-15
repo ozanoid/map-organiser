@@ -168,7 +168,31 @@ export interface GooglePlaceData {
   provider?: "google" | "dataforseo";
   cid?: string;
   rating_distribution?: Record<string, number>;
-  popular_times?: Record<string, Array<{ hour: number; popular_index: number }>>;
+  /** Days may be null — DataForSEO returns null for dataless days
+   *  (type widened v1.18.0; the old cast hid it). */
+  popular_times?: Record<
+    string,
+    Array<{ hour: number; popular_index: number }> | null
+  >;
+  /**
+   * Structured week timetable (v1.18.0, open-now) — DataForSEO
+   * work_hours.timetable passthrough. Day keys monday..sunday; a day may
+   * be null (closed / no data). Feeds the render-time isOpenNow
+   * computation (src/lib/places/open-now.ts).
+   */
+  work_timetable?: Record<
+    string,
+    Array<{
+      open: { hour: number; minute: number };
+      close: { hour: number; minute: number };
+    }> | null
+  >;
+  /**
+   * IANA timezone (v1.18.0) — derived ONCE server-side from coordinates
+   * via tz-lookup at extraction. Open-now must be evaluated in the
+   * PLACE's local time, never the viewer's.
+   */
+  tz?: string;
   place_topics?: Record<string, number>;
   attributes?: Record<string, boolean>;
   is_claimed?: boolean;
@@ -197,6 +221,13 @@ export interface PlaceFilters {
   visit_status?: VisitStatus;
   search?: string;
   sort?: string;
+  /**
+   * Dynamic "open now" (v1.18.0): evaluated at REQUEST TIME from
+   * work_timetable + tz (see src/lib/places/open-now.ts) — a JS
+   * post-filter in /api/places, not a SQL predicate. Places without
+   * timetable/tz data are EXCLUDED when the filter is on (unknown ≠ open).
+   */
+  open_now?: boolean;
   // Phase 6.5 LLM-as-judge pivot: `soft_features` was removed entirely.
   // Soft matching now happens inside rank-results LLM, which reads
   // place_profile.features.* + theme_insights + tldr + pros/cons.

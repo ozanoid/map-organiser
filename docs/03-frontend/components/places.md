@@ -2,7 +2,7 @@
 title: Places components
 type: component
 domain: frontend
-version: 1.3.0
+version: 1.4.0
 last_updated: 15.07.2026
 status: stable
 sources:
@@ -20,6 +20,7 @@ sources:
   - src/components/places/popular-times-widget.tsx
   - src/components/places/rating-distribution-bar.tsx
   - src/components/places/reviews-section.tsx
+  - src/components/places/similar-places.tsx
   - src/components/places/visit-status-toggle.tsx
 related:
   - "[[_README]]"
@@ -32,7 +33,7 @@ related:
 
 # Places components
 
-Fifteen files under `src/components/places/`. All `"use client"`. The Place-related UI surface.
+Sixteen files under `src/components/places/`. All `"use client"`. The Place-related UI surface.
 
 > **v1.17.0 (S1-PR1):** seven detail-page widgets extracted out of the
 > 1,155-line `places/[id]/page.tsx` into standalone components (below) —
@@ -179,6 +180,22 @@ with prev/next), `local_guide` chip, `votes_count` ("N people found
 this helpful"). All four fields are optional on `GoogleReview` — they
 exist only on reviews fetched after the v1.17.0 data-layer upgrade, so
 old corpora render exactly as before until refreshed.
+
+### `SimilarPlaces` (v1.18.0, NF-05)
+`{ items: Array<{title, cid?, rating?}> }` — people_also_search as a
+horizontal card strip (max 6). One-click inline add → `POST
+/api/places/add-similar`, then the standard client-side enrich chain
+(step=reviews → profile) exactly like AddPlaceDialog. Membership via the
+client-cached `usePlaces({})` CID set + a session-local map; existing
+suggestions render "Added ✓" linking to the place.
+
+> **v1.18.0 updates to the widgets above:** `PlaceStatusBadges` gained the
+> honest live open-now badge ("Open now · closes 23:00" / "Open 24 hours" /
+> "Closed now") computed render-time from `work_timetable`+`tz`;
+> `PlaceTopics` chips are clickable (NF-03 → filters ReviewsSection, page
+> owns the state); `ReviewsSection` accepts `topicFilter`/`onClearTopicFilter`
+> (header chip + count, clamped pagination); `AmenitiesGrid` is grouped +
+> iconized via `src/lib/places/attribute-icons.ts` (NF-04).
 
 ## Cross-component notes
 

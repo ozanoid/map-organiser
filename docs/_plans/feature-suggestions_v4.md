@@ -2,7 +2,7 @@
 title: "Feature Suggestions v4"
 type: plan
 domain: overview
-version: 4.2.0
+version: 4.3.0
 last_updated: 15.07.2026
 status: stable
 related:
@@ -149,7 +149,7 @@ v4 önerilerini v3'ten daha ucuz kılan, artık VAR olan altyapı:
 
 | ID | Feature | v4 Önceliği | Not |
 |----|---------|-------------|-----|
-| NF-01..06 | DataForSEO görselleştirme paketi (≈ F-21 place detail v2) | **🟡 S1 sürüyor** | **Durum düzeltmesi (15.07.2026):** ~yarısı Mayıs'ta zaten yapılmış (rating bars, popular times, amenities, topics, action buttons — page.tsx içinde temel halde; matris bunu yansıtmıyordu). S1-PR1 ✅: veri katmanı (current_status yol fix'i — 0/471 doluydu, review owner_answer/images/local_guide/votes artık saklanıyor) + 7 bileşene refactor + NF-06 review UI katmanı. S1-PR2 (bekliyor): NF-05 similar places, NF-03 tıkla→filtrele, NF-04 grup/ikon, **dinamik "şu an açık" (timetable saklama + tz-aware isOpenNow + filtre chip + canlı rozet — 15.07 kararı)**, parlatma |
+| NF-01..06 | DataForSEO görselleştirme paketi (≈ F-21 place detail v2) | **🟡 S1 sürüyor** | **Durum düzeltmesi (15.07.2026):** ~yarısı Mayıs'ta zaten yapılmış (rating bars, popular times, amenities, topics, action buttons — page.tsx içinde temel halde; matris bunu yansıtmıyordu). S1-PR1 ✅: veri katmanı (current_status yol fix'i — 0/471 doluydu, review owner_answer/images/local_guide/votes artık saklanıyor) + 7 bileşene refactor + NF-06 review UI katmanı. S1-PR2 ✅ (15.07.2026): NF-05 similar places (inline CID ekleme), NF-03 tıkla→filtrele, NF-04 gruplu/ikonlu grid, dinamik "şu an açık" (work_timetable+tz saklama, tz-aware isOpenNow, filtre chip'i + dürüst canlı rozet). **Tema 1 tamam** — kalan tek bacak: NF-04 attribute FİLTRESİ (bilinçli erteleme) |
 | NF-19 | Bulk edit (kategori/tag/status/liste) | **P1** | Import sonrası QoL |
 | F-03 / NF-20 / NF-21 | Kayıtlı filtreler + quick chips (+ "AI sorgusunu kaydet") | **P1** | AI-01 ile birleşik güçlü |
 | F-04 + AI-19* | Mekan karşılaştırma + AI analiz (*v3-ai-first; ≈ v3 AI-15) | **P1** | Profiller hazır → LLM karşılaştırma neredeyse bedava; AI-06(c)'yi de kapatır |
@@ -217,12 +217,13 @@ ayrılıp sonraya bırakılabilir (UI önce).
 > NF-01, NF-02 ve NF-03/04/06'nın temel halleri Mayıs'ta page.tsx içinde
 > zaten yapılmıştı. S1-PR1 ✅: veri katmanı düzeltmeleri (current_status
 > yolu, review owner_answer/images/local_guide/votes persist) + 7 bileşene
-> refactor + NF-06 review UI. **S1-PR2 kalanlar:** NF-05 (hiç yok),
-> NF-03 tıkla→filtrele, NF-04 grup/ikon grid, NF-02 canlı rozet,
-> **dinamik "şu an açık"** (DataForSEO `timetable`'ı saklanacak — bugün
-> weekday_text'e çevrilip atılıyor; mekanın YEREL saatinde `isOpenNow`
-> hesabı [tz-lookup ile koordinattan], filtre chip'i + detayda dürüst canlı
-> rozet; ileride AI aramaya hard filtre olarak da bağlanır), parlatma.
+> refactor + NF-06 review UI. **S1-PR2 ✅ (15.07.2026):** NF-05 similar
+> places (inline CID ekleme + `source='similar'` constraint genişletmesi),
+> NF-03 tıkla→filtrele, NF-04 gruplu/ikonlu grid, **dinamik "şu an açık"**
+> (`work_timetable`+`tz` saklama, tz-aware `isOpenNow`, filtre chip'i +
+> 60sn tick'li dürüst canlı rozet; ileride AI aramaya hard filtre olarak
+> da bağlanabilir). Tema 1 kapandı — kalan tek bacak: NF-04 attribute
+> FİLTRESİ (bilinçli erteleme).
 
 ## Tema 2 — "Profil varlığını işlet" (karşılaştırma + AI-06 kapanışı)
 
@@ -335,6 +336,7 @@ Effort/impact özeti (v3 matrisinin v4 revizyonu — sadece P1/P2):
 | 8 | **Model snapshot takibi + re-profile ihtiyacı** — 15.07.2026'da `gemini-3-flash-preview`'a geçildi; **AYRICA v1.15.1 prompt bug fix'i (review'lar index'e kesiliyordu, Phase 4'ten beri) nedeniyle mevcut 451 profilin TAMAMI bozuk girdiyle üretildi — re-profile kohortu artık tüm kütüphane** | 🔴 | Tema 6 re-profile mekanizması (öncelik yükseldi) |
 | 9 | **Back-to-back AI arama trace race** | 🟢 kabul | Ertelendi (v1.10.0) — tek kullanıcıda pratik etkisi yok |
 | 10 | **`api_usage` retention** | 🟢 | Yıllık ~yüzlerce satır/kullanıcı — şimdilik sorun değil |
+| 13 | **DataForSEO SKU'larında cap yok** — AI çağrılarının aylık bütçesi var ama dataforseo_* SKU'ları yalnız sayılıyor; add-similar (NF-05) dahil hiçbir yol harcamayı SINIRLAMIYOR ($5.4/1k biz-info). Tek kullanıcıda pratik risk düşük | 🟡 | AI bütçe altyapısına (checkAiBudget benzeri) dataforseo SKU'ları için de eşik ekle |
 | 11 | **Review'lar tek seferlik** — refresh sonrası profil yenilenmiyor (manuel akış) | 🟡 | `refresh-google-data` → profile chain (grandfather planının 1. maddesi) |
 | 12 | **Lint teknik borcu** — 49 `@typescript-eslint/no-explicit-any` (eskiden ESLint crash'inin ardında gizliydi) + 28 `react-hooks/*` (eslint-plugin-react-hooks@7 React-Compiler kuralları: `set-state-in-effect`, `preserve-manual-memoization`, `refs`, `use-memo`, `purity`) | 🟡 `warn`e çekildi (v1.15.0) | Kademeli tüket; **yeni kod bu kurallara error gibi uymalı**. Downgrade `eslint.config.mjs` rules bloğunda, geri açılacak |
 

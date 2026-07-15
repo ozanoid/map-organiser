@@ -2,7 +2,7 @@
 title: DataForSEO Business Data
 type: integration
 domain: integrations
-version: 1.2.0
+version: 1.3.0
 last_updated: 15.07.2026
 status: stable
 sources:
@@ -15,6 +15,8 @@ related:
 ---
 
 # DataForSEO Business Data
+
+> **v1.18.0:** structured `work_hours.timetable` is now STORED as `google_data.work_timetable` (was converted to weekday_text and discarded) + `google_data.tz` (IANA, from coordinates via tz-lookup at extraction) — feeds the dynamic open-now computation. See [[../05-flows/place-import-flow]] & `src/lib/places/open-now.ts`.
 
 > **v1.17.0 (S1-PR1):** `current_status` extraction path fixed (`work_time.work_hours.current_status` — the old top-level read never matched; 0/471 places had it) and `transformReviews` now carries `owner_answer`, `owner_time_ago`, `images` (≤6), `local_guide`, `votes_count` onto stored reviews. Dead `transformExtendedReviews` removed. `open_now` derivation in `opening-hours-adapter.ts` fixed the same way.
 

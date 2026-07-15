@@ -2,8 +2,8 @@
 title: Filters
 type: component
 domain: frontend
-version: 1.1.0
-last_updated: 18.05.2026
+version: 1.2.0
+last_updated: 15.07.2026
 status: stable
 sources:
   - src/components/filters/category-filter.tsx
@@ -14,6 +14,7 @@ sources:
   - src/components/filters/list-filter.tsx
   - src/components/filters/tag-filter.tsx
   - src/components/filters/visit-status-filter.tsx
+  - src/components/filters/open-now-filter.tsx
 related:
   - "[[_README]]"
   - "[[../hooks/use-filters]]"
@@ -23,6 +24,8 @@ related:
 ---
 
 # Filters
+
+> **v1.18.0:** new `OpenNowFilter` chip (panel + mobile sheet, "Hours" section) — toggles `PlaceFilters.open_now`; evaluation happens server-side at request time from stored timetable+tz in the place's local timezone. `sources:` += src/components/filters/open-now-filter.tsx.
 
 Components under `src/components/filters/`. All `"use client"`. Two top-level containers (`FilterPanel` for desktop, `FilterSheet` for mobile) compose the same set of filter controls.
 

@@ -12,6 +12,7 @@ import {
   RefreshCw,
   Star,
   ThumbsUp,
+  X,
 } from "lucide-react";
 import type { GoogleReview } from "@/lib/types";
 
@@ -33,6 +34,8 @@ export function ReviewsSection({
   refreshing,
   enriching,
   onRefresh,
+  topicFilter,
+  onClearTopicFilter,
 }: {
   reviews: GoogleReview[];
   hasPlaceId: boolean;
@@ -40,9 +43,21 @@ export function ReviewsSection({
   refreshing: boolean;
   enriching: boolean;
   onRefresh: () => void;
+  /** NF-03 (v1.18.0): active "People mention" topic — case-insensitive
+   *  substring match against review text. Page owns the state. */
+  topicFilter?: string | null;
+  onClearTopicFilter?: () => void;
 }) {
   const [page, setPage] = useState(0);
   const [sortByDate, setSortByDate] = useState(false);
+  // Render-time state adjustment (React-endorsed pattern): a NEW topic
+  // filter starts on page 1 — the clamp alone would land on the LAST
+  // page of the shrunken list, and clearing would jump to a stale page.
+  const [prevTopicFilter, setPrevTopicFilter] = useState(topicFilter);
+  if (prevTopicFilter !== topicFilter) {
+    setPrevTopicFilter(topicFilter);
+    setPage(0);
+  }
   // Lightbox for review photos: which review's images + which index.
   // `open` is separate so the content stays mounted through base-ui's
   // exit animation (nulling the data on close would collapse the popup
@@ -53,19 +68,31 @@ export function ReviewsSection({
   } | null>(null);
   const [lightboxOpen, setLightboxOpen] = useState(false);
 
+  // NF-03 topic filter first, then sort. Page reset on filter change is
+  // handled by the effect-free pattern: the page passes a fresh filter →
+  // computed pages shrink; clamp below keeps the index valid.
+  const topicFiltered = topicFilter
+    ? reviews.filter((r) =>
+        r.text.toLowerCase().includes(topicFilter.toLowerCase())
+      )
+    : reviews;
+
   const sorted = sortByDate
-    ? [...reviews].sort((a, b) => {
+    ? [...topicFiltered].sort((a, b) => {
         // publish_time is ISO string or undefined
         const ta = a.publish_time ? new Date(a.publish_time).getTime() : 0;
         const tb = b.publish_time ? new Date(b.publish_time).getTime() : 0;
         return tb - ta; // newest first
       })
-    : reviews;
+    : topicFiltered;
 
   const totalPages = Math.ceil(sorted.length / REVIEWS_PER_PAGE);
+  // Clamp instead of resetting via effect — the topic filter can shrink
+  // the page count under the current index.
+  const safePage = Math.min(page, Math.max(0, totalPages - 1));
   const pageReviews = sorted.slice(
-    page * REVIEWS_PER_PAGE,
-    (page + 1) * REVIEWS_PER_PAGE
+    safePage * REVIEWS_PER_PAGE,
+    (safePage + 1) * REVIEWS_PER_PAGE
   );
 
   // Page reset lives in the toggle handler (not an effect) — same
@@ -90,6 +117,17 @@ export function ReviewsSection({
             <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-muted-foreground">
               via {provider === "dataforseo" ? "DataForSEO" : "Google"}
             </span>
+          )}
+          {topicFilter && (
+            <button
+              type="button"
+              onClick={onClearTopicFilter}
+              className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] rounded-full cursor-pointer bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition-colors"
+              aria-label={`Clear "${topicFilter}" filter`}
+            >
+              “{topicFilter}” ({topicFiltered.length})
+              <X className="h-2.5 w-2.5" />
+            </button>
           )}
         </div>
         <div className="flex items-center gap-1">
@@ -129,7 +167,7 @@ export function ReviewsSection({
         <div className="space-y-3">
           {pageReviews.map((review, i) => (
             <div
-              key={`${page}-${i}`}
+              key={`${safePage}-${i}`}
               className="border rounded-lg p-3 space-y-1.5 text-sm"
             >
               <div className="flex items-center justify-between gap-2">
@@ -225,6 +263,17 @@ export function ReviewsSection({
           <RefreshCw className="h-3.5 w-3.5 animate-spin" />
           Loading reviews...
         </div>
+      ) : topicFilter ? (
+        <p className="text-xs text-muted-foreground">
+          No reviews mention “{topicFilter}”.{" "}
+          <button
+            type="button"
+            onClick={onClearTopicFilter}
+            className="underline cursor-pointer hover:text-foreground"
+          >
+            Clear filter
+          </button>
+        </p>
       ) : (
         <p className="text-xs text-muted-foreground">
           No reviews yet. Tap Refresh to fetch reviews.
@@ -236,20 +285,20 @@ export function ReviewsSection({
         <div className="flex items-center justify-between pt-1">
           <button
             type="button"
-            onClick={() => setPage((p) => Math.max(0, p - 1))}
-            disabled={page === 0}
+            onClick={() => setPage(Math.max(0, safePage - 1))}
+            disabled={safePage === 0}
             className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs rounded-md cursor-pointer transition-colors disabled:opacity-30 disabled:cursor-not-allowed hover:bg-gray-100"
           >
             <ChevronLeft className="h-3.5 w-3.5" />
             Prev
           </button>
           <span className="text-xs text-muted-foreground">
-            {page + 1} / {totalPages}
+            {safePage + 1} / {totalPages}
           </span>
           <button
             type="button"
-            onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-            disabled={page >= totalPages - 1}
+            onClick={() => setPage(Math.min(totalPages - 1, safePage + 1))}
+            disabled={safePage >= totalPages - 1}
             className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs rounded-md cursor-pointer transition-colors disabled:opacity-30 disabled:cursor-not-allowed hover:bg-gray-100"
           >
             Next

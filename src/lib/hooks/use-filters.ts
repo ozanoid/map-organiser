@@ -50,6 +50,9 @@ function parseUrlToFilters(searchParams: URLSearchParams): PlaceFilters {
     visit_status: (status as PlaceFilters["visit_status"]) || undefined,
     search: searchParams.get("q") || undefined,
     sort: searchParams.get("sort") || undefined,
+    // v1.18.0 dynamic open-now — boolean chip; only "true" is meaningful
+    // (off = filter absent, not "closed places only").
+    open_now: searchParams.get("open_now") === "true" ? true : undefined,
   };
 }
 

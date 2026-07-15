@@ -2,7 +2,7 @@
 title: Place
 type: entity
 domain: places
-version: 1.3.0
+version: 1.4.0
 last_updated: 15.07.2026
 status: stable
 sources:
@@ -44,6 +44,8 @@ related:
 
 # Place
 
+> **v1.18.0:** `google_data` gains `work_timetable` + `tz` (open-now raw material); `PlaceFilters` gains `open_now` (dynamic, request-time evaluation — unknown places excluded); new place `source: "similar"` for NF-05 adds.
+
 > **v1.17.0:** `GoogleReview` gained optional NF-06 fields — `owner_answer`, `owner_time_ago`, `images`, `local_guide`, `votes_count`. Present only on reviews fetched after 15.07.2026; older stored reviews lack them until the place refreshes.
 
 > **Telemetry (v1.16.0):** the enrich profile step now exports LLM spans to Langfuse (trace `place-profile`). Domain semantics unchanged. See [[../05-flows/observability-flow]].
@@ -69,7 +71,7 @@ Source of truth: `public.places` table + `Place` interface in `src/lib/types/ind
 | `rating` | smallint | no | User's own 1–5 rating. Check constraint `rating >= 1 AND rating <= 5`. |
 | `notes` | text | no | Free-form. |
 | `google_data` | jsonb | no | Rich data from Google Places or DataForSEO (see [[#google_data shape]] below). |
-| `source` | text | no | `manual` / `import` / `link`. Default `manual`. |
+| `source` | text | no | `manual` / `import` / `link` / `mapbox_search` / `similar` (v1.18.0, NF-05). Default `manual`. DB CHECK constraint `places_source_check` enforces the set. |
 | `visit_status` | text | no | One of `want_to_go` / `booked` / `visited` / `favorite`. Check constraint enforces. |
 | `visited_at` | timestamptz | no | Set when status transitions to `visited`. |
 | `booked_at` | timestamptz | no | Set when status transitions to `booked`. |
@@ -220,4 +222,4 @@ All `/api/places/*` routes live in `src/app/api/places/`. See [[../02-backend/ap
 ## Open questions
 
 - **Photo migration completeness.** `place_photos` has 0 rows but `places.google_data.photo_storage_url` is the canonical photo path. Worth checking whether `place_photos` is dormant or still wired to a flow.
-- **`source` enum.** Defined as text with default `'manual'`. Values observed in code: `manual`, `import`, `link`. No DB check constraint — silently accepts any text.
+- **`source` enum.** Text with default `'manual'`; values: `manual`, `import`, `link`, `mapbox_search`, `similar`. Enforced by the `places_source_check` DB constraint (widened 15.07.2026 for NF-05 via MCP migration).

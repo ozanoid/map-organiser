@@ -18,6 +18,7 @@ async function fetchPlaces(filters: PlaceFilters): Promise<Place[]> {
   if (filters.sort) params.set("sort", filters.sort);
   if (filters.subcategory_ids?.length)
     params.set("subcategory", filters.subcategory_ids.join(","));
+  if (filters.open_now) params.set("open_now", "true");
   // Phase 6.5 LLM-as-judge pivot: `soft_features` removed. Soft matching
   // now happens inside rank-results — no URL params for it.
 
@@ -35,6 +36,11 @@ export function usePlaces(filters: PlaceFilters) {
   return useQuery({
     queryKey: ["places", filters],
     queryFn: () => fetchPlaces(filters),
+    // open_now is evaluated SERVER-side at request time — without a
+    // periodic refetch the list is a frozen snapshot (a place that
+    // closes at 17:00 would linger for hours on a parked page).
+    // 60s bounds the staleness while the filter is active.
+    refetchInterval: filters.open_now ? 60_000 : false,
   });
 }
 
