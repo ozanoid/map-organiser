@@ -36,7 +36,10 @@ Second half of sprint S1 (v4 Tema 1) — completes place detail v2.
   profile + chips); save = standard POST /api/places + enrich chain
   with `source: "similar"` (new dialog prop). An interim one-click
   `/api/places/add-similar` route was built then REMOVED in favor of
-  the single path. Already-in-library suggestions render "Added ✓".
+  the single path. Already-in-library suggestions render "Added ✓". The
+  dialog preview also shows a free **View on Google Maps** link
+  (`placeData.googleMapsUrl` already came with the parse — no extra
+  call) — benefits every add path, not just similar places.
 - **NF-03 topic click→filter**: "People mention" chips are buttons;
   clicking filters the reviews list (case-insensitive text match) with
   an active-topic chip + count in the header, clearable; pagination
