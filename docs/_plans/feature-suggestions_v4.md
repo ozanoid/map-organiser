@@ -218,7 +218,7 @@ ayrılıp sonraya bırakılabilir (UI önce).
 > zaten yapılmıştı. S1-PR1 ✅: veri katmanı düzeltmeleri (current_status
 > yolu, review owner_answer/images/local_guide/votes persist) + 7 bileşene
 > refactor + NF-06 review UI. **S1-PR2 ✅ (15.07.2026):** NF-05 similar
-> places (inline CID ekleme + `source='similar'` constraint genişletmesi),
+> places (kart → AddPlaceDialog önizleme akışı; `source='similar'`),
 > NF-03 tıkla→filtrele, NF-04 gruplu/ikonlu grid, **dinamik "şu an açık"**
 > (`work_timetable`+`tz` saklama, tz-aware `isOpenNow`, filtre chip'i +
 > 60sn tick'li dürüst canlı rozet; ileride AI aramaya hard filtre olarak

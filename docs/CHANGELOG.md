@@ -28,13 +28,15 @@ Second half of sprint S1 (v4 Tema 1) — completes place detail v2.
   crawl-snapshot badge removed in v1.17.0. Coverage grows as places
   refresh (timetable/tz only exist on rows written after this release).
 - **NF-05 Similar places**: `people_also_search` (was never rendered)
-  → horizontal card strip (max 6) on place detail with one-click
-  inline add: new `POST /api/places/add-similar` (CID → biz-info
-  lookup → insert, mirroring import-batch; double dedup by stored CID
-  + resolved google_place_id → 409; SKU
-  `dataforseo_business_info_live` tracked; `source: "similar"`), then
-  the standard client-side enrich chain (step=reviews → profile).
-  Already-in-library suggestions render "Added ✓" linking to the place.
+  → horizontal card strip (max 6) on place detail. **Preview-first
+  add** (final design after user testing): clicking a card opens
+  AddPlaceDialog pre-filled with the suggestion's `?cid=` URL —
+  parse-link handles CID URLs natively — so the decision happens on the
+  same first-class preview as a manual add (photo, hours, lite AI
+  profile + chips); save = standard POST /api/places + enrich chain
+  with `source: "similar"` (new dialog prop). An interim one-click
+  `/api/places/add-similar` route was built then REMOVED in favor of
+  the single path. Already-in-library suggestions render "Added ✓".
 - **NF-03 topic click→filter**: "People mention" chips are buttons;
   clicking filters the reviews list (case-insensitive text match) with
   an active-topic chip + count in the header, clearable; pagination

@@ -44,9 +44,13 @@ interface AddPlaceDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initialUrl?: string;
+  /** Provenance stamp for the saved row (places.source). Defaults to
+   *  "link"; SimilarPlaces passes "similar" (v1.18.0 — the CHECK
+   *  constraint was widened for it). */
+  source?: string;
 }
 
-export function AddPlaceDialog({ open, onOpenChange, initialUrl }: AddPlaceDialogProps) {
+export function AddPlaceDialog({ open, onOpenChange, initialUrl, source }: AddPlaceDialogProps) {
   const [url, setUrl] = useState("");
   const [placeData, setPlaceData] = useState<ParsedPlaceData | null>(null);
   const [liteProfile, setLiteProfile] = useState<PlaceProfile | null>(null);
@@ -218,7 +222,7 @@ export function AddPlaceDialog({ open, onOpenChange, initialUrl }: AddPlaceDialo
           ...((placeData as any)._extended || {}),
         },
         photoRef: placeData.photoRef,
-        source: "link",
+        source: source ?? "link",
         visit_status: visitStatus || undefined,
         tag_ids: selectedTagIds.length > 0 ? selectedTagIds : undefined,
         list_ids: selectedListIds.length > 0 ? selectedListIds : undefined,

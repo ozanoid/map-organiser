@@ -2,7 +2,7 @@
 title: Places components
 type: component
 domain: frontend
-version: 1.4.1
+version: 1.4.2
 last_updated: 15.07.2026
 status: stable
 sources:
@@ -185,12 +185,18 @@ exist only on reviews fetched after the v1.17.0 data-layer upgrade, so
 old corpora render exactly as before until refreshed.
 
 ### `SimilarPlaces` (v1.18.0, NF-05)
-`{ items: Array<{title, cid?, rating?}> }` — people_also_search as a
-horizontal card strip (max 6) — cards show title, category and ★rating with compact vote count (v1.18.0 feedback round). One-click inline add → `POST
-/api/places/add-similar`, then the standard client-side enrich chain
-(step=reviews → profile) exactly like AddPlaceDialog. Membership via the
-client-cached `usePlaces({})` CID set + a session-local map; existing
-suggestions render "Added ✓" linking to the place.
+`{ items: Array<{title, cid?, rating?, category?, votes_count?}> }` —
+people_also_search as a horizontal card strip (max 6); cards show title,
+category and ★rating (compact vote count). **Single-path preview flow**
+(final design after preview testing): clicking a card opens
+`AddPlaceDialog` pre-filled with `https://maps.google.com/?cid=…`
+(parse-link handles `?cid=` natively) — the user gets the same
+first-class preview as a manual add (photo, hours, lite AI profile +
+chips, pickers) and decides there; save = standard `POST /api/places` +
+enrich chain with `source: "similar"` (dialog's new `source` prop). The
+interim one-click `/api/places/add-similar` route was removed.
+Membership via the client-cached `usePlaces({})` CID set; existing
+suggestions render "Added ✓" and navigate to the place.
 
 > **v1.18.0 updates to the widgets above:** `PlaceStatusBadges` gained the
 > honest live open-now badge ("Open now · closes 23:00" / "Open 24 hours" /
