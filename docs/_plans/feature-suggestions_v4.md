@@ -2,8 +2,8 @@
 title: "Feature Suggestions v4"
 type: plan
 domain: overview
-version: 4.0.0
-last_updated: 14.07.2026
+version: 4.1.0
+last_updated: 15.07.2026
 status: stable
 related:
   - "[[../_archive/feature-suggestions_v2]]"
@@ -101,13 +101,16 @@ v4 önerilerini v3'ten daha ucuz kılan, artık VAR olan altyapı:
   `popular_times`, `place_topics`, `attributes`, `people_also_search`,
   `book_online_url`, `owner_answer`, review images. NF-01..06'nın hammaddesi.
 
-## 0.4 Canlı durum (14.07.2026)
+## 0.4 Canlı durum (15.07.2026)
 
-- Production **sağlıklı** — `5919444` (30.06) deploy SUCCESS. v1.11.0 tüm
-  feature'lar canlıda.
-- ⚠️ PR #61 (dependabot, 21 paket) preview build'i **fail** — bkz. PART 4.
-- ⚠️ ESLint proje genelinde kırık (ESLint 10 × eslint-plugin-react uyumsuzluğu).
-- Test yok; migrations dashboard-managed.
+- Production **sağlıklı** — v1.14.1 canlıda. **S0 bakım paketi (v1.15.0)**
+  PR'da, preview test bekliyor.
+- ✅ PR #61 (dependabot) — S0'da `origin/main`'den taze yeniden uygulandı +
+  build kırıkları düzeltildi; #61 **superseded** olarak kapatılacak.
+- ✅ ESLint 10 kırığı düzeltildi (`settings.react.version` pin + `.claude/**`
+  ignore). `npm run lint` artık çalışıyor: **0 error, 107 warning**.
+- Test yok; migrations dashboard-managed. Lint teknik borcu (49 `any` + 28
+  react-hooks-7 kuralı) `warn`e çekildi — bkz. PART 4 #12.
 
 ---
 
@@ -284,7 +287,7 @@ Karar noktaları:
 
 | Sprint | İçerik | Süre | Çıktı |
 |--------|--------|------|-------|
-| **S0 — Bakım** | PR #61 fail'ini çöz + merge; ESLint 10 fix; legacy `/api/places/import` kaldırma kararı | 1-2g | Yeşil CI, temiz lint |
+| **S0 — Bakım** ✅ | PR #61 (superseded) + ESLint 10 fix + legacy `/api/places/import` kaldırıldı (v1.15.0) | 1-2g | ✅ Yeşil CI, temiz lint (0 error) |
 | **S1 — Veriyi Göster** | Tema 1 (NF-01→06) | ~2 hafta | Place detail v2 |
 | **S2 — Karşılaştır & Kaydet** | Tema 2 (F-04 + AI compare) + Tema 5 (bulk edit, saved filters, place share) | ~2 hafta | Profilleri işleten 2. feature + QoL paketi |
 | **S3 — Asistan** | Tema 3 (AI-02 v1, session-memory) | ~1.5-2 hafta | Chat ile mekan keşfi/aksiyonu |
@@ -311,17 +314,18 @@ Effort/impact özeti (v3 matrisinin v4 revizyonu — sadece P1/P2):
 
 | # | Konu | Durum | Aksiyon |
 |---|------|-------|---------|
-| 1 | **PR #61** — dependabot 21 paket, preview build FAIL (04.07) | 🔴 açık | Build log'una bak; kıran paketi ayır, kalanını merge et |
-| 2 | **ESLint kırık** — ESLint 10 × `eslint-plugin-react` (eslint-config-next üzerinden) uyumsuz; `npx eslint` crash | 🔴 açık | Sürüm pinle veya config'i flat-config'e taşı |
+| 1 | **PR #61** — dependabot 21 paket, preview build FAIL (04.07) | ✅ çözüldü (v1.15.0) | Taze yeniden uygulandı; kıran neden `@types/geojson`'un transitive düşmesi + `@opentelemetry/sdk-logs` 0.220 `BatchLogRecordProcessor` API değişikliğiydi. #61 superseded kapatılacak |
+| 2 | **ESLint kırık** — ESLint 10 × `eslint-plugin-react@7.37.5` (`context.getFilename()` ESLint 10'da kaldırıldı) | ✅ çözüldü (v1.15.0) | `settings.react.version` pin (detection atlanıyor) + `.claude/**` ignore |
 | 3 | **Test yok** | 🟠 | En azından Tema 6 eval seti + kritik API route'lara smoke test |
 | 4 | **Grandfather thin profiles** | 🟡 ertelendi | Plan hazır: [[backfill-grandfather-reenrich]]; AI-22 ajanının ilk görevi yap |
-| 5 | **Legacy `/api/places/import`** | 🟡 | Kullanan var mı doğrula → sil (place-import-flow open question) |
+| 5 | **Legacy `/api/places/import`** | ✅ kaldırıldı (v1.15.0) | Referansı yoktu; `import-parse` + `import-batch` aktif akış |
 | 6 | **`SECURITY DEFINER` fonksiyonlar anon'a açık** (advisor) | 🟡 | `handle_new_user`, `increment_api_usage` vb. — grant'leri daralt |
 | 7 | **Migrations dashboard-managed** — repo'da migration klasörü yok | 🟡 | Kabul edilmiş durum; en azından şema snapshot'ını vault'ta güncel tut |
 | 8 | **Model snapshot takibi** — 15.07.2026'da `gemini-3-flash-preview`'a geçildi (GA olunca id değişebilir); eski `gemini-flash-latest` damgalı profiller ilk re-profile kohortu | 🟡 | Tema 6 re-profile mekanizması |
 | 9 | **Back-to-back AI arama trace race** | 🟢 kabul | Ertelendi (v1.10.0) — tek kullanıcıda pratik etkisi yok |
 | 10 | **`api_usage` retention** | 🟢 | Yıllık ~yüzlerce satır/kullanıcı — şimdilik sorun değil |
 | 11 | **Review'lar tek seferlik** — refresh sonrası profil yenilenmiyor (manuel akış) | 🟡 | `refresh-google-data` → profile chain (grandfather planının 1. maddesi) |
+| 12 | **Lint teknik borcu** — 49 `@typescript-eslint/no-explicit-any` (eskiden ESLint crash'inin ardında gizliydi) + 28 `react-hooks/*` (eslint-plugin-react-hooks@7 React-Compiler kuralları: `set-state-in-effect`, `preserve-manual-memoization`, `refs`, `use-memo`, `purity`) | 🟡 `warn`e çekildi (v1.15.0) | Kademeli tüket; **yeni kod bu kurallara error gibi uymalı**. Downgrade `eslint.config.mjs` rules bloğunda, geri açılacak |
 
 ---
 
@@ -363,6 +367,8 @@ v3-ai-first kendi AI numaralarını kullandı; karışıklığı önlemek için 
 | Günlük AI cap = 3000 | 20.05.2026 | [[../05-flows/ai-enrichment-flow#cost-cap]] |
 | AI bütçeleri: arama 500/ay (arama başına 1 birim) + profil 1000/ay | 15.07.2026 | [[../05-flows/ai-enrichment-flow#cost-cap]] |
 | Cron sweep: kullanıcı başına TÜMÜYLE opt-in (default kapalı) + re-profile için >15 yeni yorum eşiği; omurga tazeleme Oca/Tem | 15.07.2026 | [[../06-ops/runbooks/periodic-refresh]] |
+| S0: PR #61 taze yeniden uygulandı (bayat dal), superseded kapatılır | 15.07.2026 | Bu doküman PART 4 #1 |
+| S0: yeni strict lint kuralları (any + react-hooks-7) `warn` — kademeli adopte | 15.07.2026 | Bu doküman PART 4 #12 |
 
 ## 5.3 Bu dokümanın bakımı
 

@@ -2,8 +2,8 @@
 title: Deployment
 type: overview
 domain: ops
-version: 1.0.0
-last_updated: 12.05.2026
+version: 1.0.1
+last_updated: 15.07.2026
 status: stable
 sources:
   - next.config.ts
@@ -116,7 +116,6 @@ Before promoting to production:
 
 Vercel Function default timeout is **60 seconds** (verify current plan default). Routes that can run close to this limit:
 
-- `POST /api/places/import` (legacy NDJSON streaming) — large batches can timeout.
 - `POST /api/places/[id]/enrich?step=reviews` — DataForSEO reviews can take ~30 s.
 - `GET /api/trips/[id]` — Mapbox Directions per day; long trips with many days can stack.
 

@@ -121,10 +121,8 @@ function write(level: LogLevel, event: string, attrs?: LogAttrs) {
       ...a,
     });
     if (level === "warn" || level === "error") {
-      // eslint-disable-next-line no-console
       console.warn(line);
     } else {
-      // eslint-disable-next-line no-console
       console.log(line);
     }
 
@@ -142,7 +140,6 @@ function write(level: LogLevel, event: string, attrs?: LogAttrs) {
     });
   } catch (e) {
     try {
-      // eslint-disable-next-line no-console
       console.error(`[logger] write failed for event "${event}":`, e);
     } catch {
       /* nothing left to do */

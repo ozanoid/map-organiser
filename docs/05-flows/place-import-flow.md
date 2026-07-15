@@ -2,7 +2,7 @@
 title: Place Import Flow
 type: flow
 domain: places
-version: 1.1.1
+version: 1.1.2
 last_updated: 15.07.2026
 status: stable
 sources:
@@ -111,7 +111,7 @@ The v1 design used a single long-running `/api/places/import` endpoint that NDJS
 - Cancel is cooperative, with the store as shared state.
 - Progress UI reads directly from the store.
 
-The legacy `/api/places/import` route still exists; verify whether any UI still uses it.
+The legacy `/api/places/import` route was **removed in v1.15.0** (S0 maintenance) — it had zero code references after the v2 redesign.
 
 ## Related code
 
@@ -127,6 +127,5 @@ The legacy `/api/places/import` route still exists; verify whether any UI still 
 
 ## Open questions
 
-- **Legacy `/api/places/import`.** Confirm if anything still hits it, otherwise delete.
 - **Batch size.** Fixed at 3. Auto-tune based on observed per-place latency would help in slow-network regions.
 - **Reviews retry.** No retry on review batch failures — places stay without reviews until the user manually runs refresh. A "retry failed reviews" button in Settings could help.

@@ -2,7 +2,7 @@
 title: Places routes
 type: route-group
 domain: backend
-version: 1.1.0
+version: 1.2.0
 last_updated: 15.07.2026
 status: stable
 sources:
@@ -12,7 +12,6 @@ sources:
   - src/app/api/places/[id]/refresh-google-data/route.ts
   - src/app/api/places/bulk/route.ts
   - src/app/api/places/bulk-enrich-reviews/route.ts
-  - src/app/api/places/import/route.ts
   - src/app/api/places/import-parse/route.ts
   - src/app/api/places/import-batch/route.ts
   - src/app/api/places/migrate-photos/route.ts
@@ -27,7 +26,7 @@ related:
 
 # Places routes
 
-Eleven route handler files under `/api/places/*`. The Place is the most-touched entity in the schema; this is the busiest part of the API.
+Ten route handler files under `/api/places/*`. The Place is the most-touched entity in the schema; this is the busiest part of the API.
 
 ## At a glance
 
@@ -42,7 +41,6 @@ Eleven route handler files under `/api/places/*`. The Place is the most-touched 
 | `POST` | `/api/places/[id]/refresh-google-data` | Full re-fetch: info + `newest` reviews merged into the corpus (not replace) + photo, then chains to `step=profile`. Core logic in `src/lib/places/refresh-google-data.ts` (shared with the cron). |
 | `POST` | `/api/places/bulk` | Bulk update_category / add_tags / add_to_list / update_status / delete / check_trips. |
 | `POST` | `/api/places/bulk-enrich-reviews` | Background bulk review enrichment. |
-| `POST` | `/api/places/import` | NDJSON-streaming legacy import. |
 | `POST` | `/api/places/import-parse` | Parse a Takeout file → place list (no insert). |
 | `POST` | `/api/places/import-batch` | Enrich + insert a small batch (~3 places). |
 | `POST` | `/api/places/migrate-photos` | Backfill: Google photo URLs → Supabase Storage. |
@@ -154,15 +152,6 @@ All require auth.
 - **Response:** `{ enriched, failed, total }`.
 - **Notes:** Fire-and-forget. Skips places missing `google_data.cid`. Per-place errors silently increment `failed`.
 
-### `POST /api/places/import`
-
-- **Source:** `src/app/api/places/import/route.ts`
-- **Body:** multipart `file` (CSV / GeoJSON Takeout).
-- **DB:** `categories` SELECT, `places` SELECT/INSERT/UPDATE.
-- **External:** DataForSEO business-info, transforms, photo download, `trackUsage`. Parse via `parseTakeoutGeoJson`/`parseTakeoutCsv`.
-- **Response:** **NDJSON stream** — each line is one of `{ type: "start"|"progress"|"done", ... }`. Final `done` carries `{ imported, failed, enriched, total, skipped: [...], importedPlaceIds: [...] }`.
-- **Notes:** Legacy long-running endpoint. Vercel Function timeout caveat — the v2 design doc explicitly preferred `import-parse` + `import-batch` client loop for production reliability.
-
 ### `POST /api/places/import-parse`
 
 - **Source:** `src/app/api/places/import-parse/route.ts`
@@ -213,5 +202,4 @@ All require auth.
 
 ## Open questions
 
-- **`/api/places/import` (NDJSON streaming) vs `/api/places/import-batch`.** Both still exist. The v2 design pivoted to client-driven batching for Vercel reliability — confirm whether the streaming endpoint is still wired to any UI and either delete it or document its preferred use case.
 - **Bulk operations atomicity.** `bulk` actions run as a sequence of Supabase calls. A partial failure leaves the system in a half-applied state. A stored proc per action would close that gap.

@@ -74,7 +74,7 @@ function kMeansClusters(places: Place[], k: number, iterations = 8): number[][] 
     usedIndices.add(maxIdx);
   }
 
-  let assignments = new Array(places.length).fill(0);
+  const assignments = new Array(places.length).fill(0);
 
   for (let iter = 0; iter < iterations; iter++) {
     // Assign each place to nearest centroid

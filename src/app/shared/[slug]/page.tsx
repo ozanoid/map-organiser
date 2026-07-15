@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
 import { MapView } from "@/components/map/map-view";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -93,9 +94,9 @@ export default function SharedPage() {
       <div className="flex flex-col items-center justify-center min-h-dvh p-6 text-center">
         <MapPin className="h-12 w-12 text-gray-300 dark:text-gray-600 mb-4" />
         <p className="text-lg font-medium">{error || "Not found"}</p>
-        <a href="/" className="text-emerald-600 text-sm mt-2 hover:underline">
+        <Link href="/" className="text-emerald-600 text-sm mt-2 hover:underline">
           Go to Map Organiser
-        </a>
+        </Link>
       </div>
     );
   }

@@ -2,8 +2,8 @@
 title: Place
 type: entity
 domain: places
-version: 1.1.0
-last_updated: 18.05.2026
+version: 1.2.0
+last_updated: 15.07.2026
 status: stable
 sources:
   - src/lib/types/index.ts
@@ -15,7 +15,6 @@ sources:
   - src/app/api/places/[id]/refresh-google-data/route.ts
   - src/app/api/places/bulk/route.ts
   - src/app/api/places/bulk-enrich-reviews/route.ts
-  - src/app/api/places/import/route.ts
   - src/app/api/places/import-parse/route.ts
   - src/app/api/places/import-batch/route.ts
   - src/app/api/places/migrate-photos/route.ts
@@ -197,7 +196,6 @@ All `/api/places/*` routes live in `src/app/api/places/`. See [[../02-backend/ap
 | `POST` | `/api/places/[id]/enrich` | Re-run enrichment (`step=info` or `step=reviews`). |
 | `POST` | `/api/places/[id]/refresh-google-data` | Force re-fetch from Google. |
 | `POST` | `/api/places/parse-link` | Parse a Google Maps URL → `ParsedPlaceData`. |
-| `POST` | `/api/places/import` | Legacy single-shot import. |
 | `POST` | `/api/places/import-parse` | Parse a Takeout file → place list. |
 | `POST` | `/api/places/import-batch` | Enrich + insert a batch of 3 places. |
 | `POST` | `/api/places/bulk` | Bulk operations (delete, list assignment, tag assignment, category, visit status; `check_trips` pre-check). |

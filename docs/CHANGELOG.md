@@ -6,6 +6,56 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 15.07.2026 — v1.15.0 — S0 maintenance: dependency batch, ESLint-10 unblock, legacy import removal
+
+Sprint **S0** from the v4 roadmap. Clears the two red maintenance items
+(PR #61, broken ESLint) and removes a dead route so the tree is green
+end-to-end (`tsc` + `next build` + `npm run lint` all exit 0).
+
+- **Dependency batch (supersedes dependabot PR #61).** Re-applied #61's
+  minor-and-patch group fresh on `main` — #61's branch was stale (based on
+  04.07; `main` has since advanced to v1.14.1): `next` 16.2.6→16.2.10,
+  `react`/`react-dom` 19.2.6→19.2.7, `@base-ui/react` 1.4.1→1.6.0,
+  `lucide-react` 1.16→1.23, `@tanstack/react-query` 5.100→5.101,
+  `@supabase/ssr` 0.10.3→0.12.3, `mapbox-gl` 3.23→3.25, `recharts` 3.8→3.9,
+  `date-fns` 4.1→4.4, `@opentelemetry/{sdk-logs,exporter-logs-otlp-http}`
+  0.219→0.220, `@vercel/otel` 2.1.2→2.1.3, `shadcn`, `zustand`,
+  `eslint-config-next` 16.2.6→16.2.10. **Close PR #61 as superseded.**
+- **Fixed the two build breaks the bump introduced** (the reason #61's
+  preview failed): (1) the group dropped the transitive `@types/geojson`, so
+  `GeoJSON.FeatureCollection` in `map-view.tsx` stopped resolving — declared
+  `@types/geojson` explicitly + switched to
+  `import type { FeatureCollection } from "geojson"`; (2)
+  `@opentelemetry/sdk-logs` ≥0.220 changed `BatchLogRecordProcessor` to a
+  single options object — `instrumentation-node.ts` now passes `{ exporter }`.
+- **ESLint 10 unblocked.** Root cause: `eslint-plugin-react@7.37.5` (bundled
+  by `eslint-config-next`) calls the removed `context.getFilename()` during
+  React-version detection → crashed project-wide on ESLint 10. Fix in
+  `eslint.config.mjs`: pin `settings.react.version` to `"19.2"` (skips
+  detection entirely) + ignore `.claude/**` (stop descending into worktree
+  checkouts).
+- **Lint baseline established (pragmatic, user-approved).** Fixing the crash
+  surfaced 81 errors it had always masked. Fixed the trivial ones
+  (`prefer-const`, `react/no-unescaped-entities` ×2,
+  `@next/next/no-html-link-for-pages`) and removed 5 dead
+  `eslint-disable no-console` directives. Deferred as **tracked tech debt**
+  (downgraded to `warn` — see v4 PART 4): 49 `@typescript-eslint/no-explicit-any`
+  (pre-existing) + 28 `react-hooks/*` from the newly-pulled
+  `eslint-plugin-react-hooks@7` React-Compiler rules (`set-state-in-effect`,
+  `preserve-manual-memoization`, `refs`, `use-memo`, `purity`). Result:
+  **0 errors, 107 warnings, exit 0.**
+- **Removed legacy `POST /api/places/import`** (v4 PART 4 #5). The v1
+  NDJSON-streaming single-shot importer, dormant since the client-driven
+  `import-parse` + `import-batch` redesign; zero code references. Docs
+  updated: `api-routes/places.md`, `01-domain/places.md`,
+  `place-import-flow.md`, `google-places.md`, `dataforseo.md`, `deployment.md`.
+- **Behavior-neutral source touches** (documented behavior unchanged, logged
+  for the record): `map-view.tsx` type-import swap, `auto-plan.ts` `let`→`const`,
+  `logger.ts` + `use-ai-search.ts` dead-comment removal.
+- Docs: `tech-stack.md` v1.2.0 (dep version table + ESLint config note),
+  `observability-flow.md` v3.2.0 (BatchLogRecordProcessor options object),
+  `feature-suggestions_v4.md` v4.1.0 (S0 done; PART 4 debt updated).
+
 ## 15.07.2026 — v1.14.2 — Post-deploy fixes from live v4 testing
 
 Three issues surfaced testing #62 on the live deploy:
@@ -26,6 +76,8 @@ Three issues surfaced testing #62 on the live deploy:
   diagnosable. (Investigating a separate report that manual refresh isn't
   regenerating the profile on the live deploy — model id `gemini-3-flash-preview`
   is verified valid; root cause pending a live signal.)
+
+## 15.07.2026 — v1.14.1 — Vault consistency sweep (post-v4)
 
 Documentation-only audit closing gaps left across the day's code changes.
 
