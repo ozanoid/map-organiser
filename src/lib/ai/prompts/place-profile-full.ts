@@ -92,8 +92,12 @@ export function buildPlaceProfilePrompt(
   const reviewCount = (gd as { user_ratings_total?: number }).user_ratings_total;
   const reviewsRaw =
     ((gd as { reviews?: PromptReview[] }).reviews ?? []) as PromptReview[];
+  // NOT `.map(compactReview)` — map passes (element, INDEX, array), and the
+  // index silently bound to compactReview's `maxChars` param, truncating
+  // review i to i characters. Every profile generated between Phase 4
+  // (19.05.2026) and this fix was built from near-empty review text.
   const reviewLines = selectReviewsForPrompt(reviewsRaw)
-    .map(compactReview)
+    .map((r) => compactReview(r))
     .filter((s) => s.length > 0);
 
   const subsByParent: Record<string, string[]> = {};
