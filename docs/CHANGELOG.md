@@ -6,6 +6,46 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 15.07.2026 — v1.17.0 — S1-PR1: place detail data layer + component refactor + NF-06 review layer
+
+First half of sprint **S1** (v4 Tema 1 — place detail v2). Discovery
+corrected the v4 status matrix: roughly half of NF-01..06 already
+existed in basic form inside `places/[id]/page.tsx` (built during the
+May sprint, never reflected in the roadmap). PR1 therefore focuses on
+the data layer + structure; PR2 (upcoming) adds NF-05, NF-03
+interaction and visual polish.
+
+- **`current_status` extraction fixed** — the field lives at
+  `work_time.work_hours.current_status` (verified against
+  docs.dataforseo.com), not `work_time.current_status`. The wrong path
+  meant **0/471 places** ever had it, and the detail page's status UI
+  was dead code. Same fix applied to `opening-hours-adapter.ts`'s
+  `open_now` derivation (also never populated). Stored places gain the
+  field on their next refresh.
+- **`GoogleReview` enriched (NF-06 data leg)** — `owner_answer`,
+  `owner_time_ago`, `images` (≤6, direct URLs), `local_guide`,
+  `votes_count` now flow through `transformReviews` → `mergeReviews`
+  and persist. Field paths verified against the DataForSEO reviews
+  schema. Dead `transformExtendedReviews` removed. Existing corpora
+  upgrade lazily: a re-fetched copy of a known review replaces it
+  in place (merge identity unchanged).
+- **Detail-page refactor** — 7 widgets extracted from the 1,155-line
+  client page (now 751 lines) into `src/components/places/`:
+  `rating-distribution-bar`, `popular-times-widget` (now null-day
+  safe — DataForSEO returns `null` for dataless days; the old cast
+  hid it), `place-status-badges`, `place-action-links`,
+  `amenities-grid`, `place-topics`, `reviews-section`.
+  Behavior-preserving except documented fixes. Lint warnings 107→101
+  (unused imports + a set-state-in-effect converted to an event-handler
+  reset per react-best-practices).
+- **NF-06 review layer (UI)** — review cards now show owner responses
+  (indented muted block), photo thumbnails with a Dialog lightbox
+  (prev/next), Local Guide chips and helpful-vote counts. All
+  empty-safe: old stored reviews render exactly as before.
+- Docs: `components/places.md` v1.3.0 (7 new component sections),
+  `dataforseo.md`, `01-domain/places.md`, `repo-structure.md`, v4 doc
+  4.2.0 (Tema 1 matrix corrected + S1 progress).
+
 ## 15.07.2026 — v1.16.0 — Langfuse LLM observability (all Gemini calls traced)
 
 System-wide Langfuse integration: every LLM call now exports OTel gen_ai

@@ -2,7 +2,7 @@
 title: Place
 type: entity
 domain: places
-version: 1.2.1
+version: 1.3.0
 last_updated: 15.07.2026
 status: stable
 sources:
@@ -43,6 +43,8 @@ related:
 ---
 
 # Place
+
+> **v1.17.0:** `GoogleReview` gained optional NF-06 fields — `owner_answer`, `owner_time_ago`, `images`, `local_guide`, `votes_count`. Present only on reviews fetched after 15.07.2026; older stored reviews lack them until the place refreshes.
 
 > **Telemetry (v1.16.0):** the enrich profile step now exports LLM spans to Langfuse (trace `place-profile`). Domain semantics unchanged. See [[../05-flows/observability-flow]].
 

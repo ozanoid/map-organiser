@@ -2,7 +2,7 @@
 title: Repo Structure
 type: overview
 domain: overview
-version: 1.2.1
+version: 1.2.2
 last_updated: 15.07.2026
 status: stable
 sources:
@@ -92,7 +92,8 @@ src/
 │   ├── filters/               Category / country-city / list / tag / visit-status / search filter UIs
 │   ├── layout/                AppHeader, AppSidebar, MobileNav, OfflineBanner
 │   ├── map/                   MapView, MapContent
-│   ├── places/                PlaceCard, AddPlaceDialog (with AI Suggestions panel + sub-cat strip), BulkActionBar, inline creators, VisitStatusToggle, AiSummaryCard
+│   ├── places/                PlaceCard, AddPlaceDialog (with AI Suggestions panel + sub-cat strip), BulkActionBar, inline creators, VisitStatusToggle, AiSummaryCard,
+│   │                          + detail-page widgets (v1.17.0): RatingDistributionBar, PopularTimesWidget, PlaceStatusBadges, PlaceActionLinks, AmenitiesGrid, PlaceTopics, ReviewsSection
 │   ├── settings/              ApiKeysManager, CostTracker, AiSettings (master toggle), AiSuggestionsQueue (moderation UI)
 │   ├── sw-register.tsx        Service worker registration (client component)
 │   └── ui/                    shadcn primitives (avatar, badge, button, card, command, dialog, dropdown-menu, input, input-group, popover, select, separator, sheet, skeleton, sonner, tabs, textarea)

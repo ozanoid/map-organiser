@@ -131,6 +131,22 @@ export interface GoogleReview {
   author_photo?: string;
   relative_time: string;
   publish_time?: string;
+  /**
+   * DataForSEO-only enrichment (v1.17.0, NF-06). Present only on reviews
+   * fetched/merged AFTER the data-layer upgrade — older stored reviews
+   * lack these until the place's reviews are refreshed. All optional;
+   * UI must be empty-safe. Field paths verified against
+   * docs.dataforseo.com (reviews task_get schema).
+   */
+  owner_answer?: string;
+  /** "time ago" display string for the owner's reply (e.g. "2 months ago"). */
+  owner_time_ago?: string;
+  /** Direct image URLs from the review, capped at 6 for JSONB size discipline. */
+  images?: string[];
+  /** Author has Google "Local Guide" status. */
+  local_guide?: boolean;
+  /** Helpful votes on this review (rating.votes_count in the raw item). */
+  votes_count?: number;
 }
 
 export interface GooglePlaceData {

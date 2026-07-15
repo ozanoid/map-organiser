@@ -2,7 +2,7 @@
 title: Components
 type: overview
 domain: frontend
-version: 1.2.0
+version: 1.2.1
 last_updated: 18.05.2026
 status: stable
 sources:
@@ -23,7 +23,7 @@ Feature components organized by area. shadcn primitives live separately in `src/
 | `filters/` | All filter UI (category w/ sub-cat cascade, country/city, list, tag, visit-status, search, panel + sheet) | [[filters]] |
 | `layout/` | App chrome (header, sidebar, mobile nav, offline banner) | [[layout]] |
 | `map/` | Mapbox view + the page-level map container | [[map]] |
-| `places/` | Place cards, dialogs (incl. lite-profile AI Suggestions panel), bulk actions, inline creators, visit-status toggle, AI Summary card (place detail) | [[places]] |
+| `places/` | Place cards, dialogs (incl. lite-profile AI Suggestions panel), bulk actions, inline creators, visit-status toggle, AI Summary card + detail-page widgets (rating distribution, popular times, status badges, action links, amenities, topics, reviews — v1.17.0) | [[places]] |
 | `search/` | AI natural-language search input (Phase 6) | [[search]] |
 | `settings/` | API key manager, cost tracker, AI master toggle (`AiSettings`), AI moderation queue (`AiSuggestionsQueue`) | [[settings]] |
 | `ui/` | shadcn primitives (avatar, button, card, dialog, etc.) | [[ui-shadcn]] |
