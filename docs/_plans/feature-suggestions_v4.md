@@ -321,7 +321,7 @@ Effort/impact özeti (v3 matrisinin v4 revizyonu — sadece P1/P2):
 | 5 | **Legacy `/api/places/import`** | ✅ kaldırıldı (v1.15.0) | Referansı yoktu; `import-parse` + `import-batch` aktif akış |
 | 6 | **`SECURITY DEFINER` fonksiyonlar anon'a açık** (advisor) | 🟡 | `handle_new_user`, `increment_api_usage` vb. — grant'leri daralt |
 | 7 | **Migrations dashboard-managed** — repo'da migration klasörü yok | 🟡 | Kabul edilmiş durum; en azından şema snapshot'ını vault'ta güncel tut |
-| 8 | **Model snapshot takibi** — 15.07.2026'da `gemini-3-flash-preview`'a geçildi (GA olunca id değişebilir); eski `gemini-flash-latest` damgalı profiller ilk re-profile kohortu | 🟡 | Tema 6 re-profile mekanizması |
+| 8 | **Model snapshot takibi + re-profile ihtiyacı** — 15.07.2026'da `gemini-3-flash-preview`'a geçildi; **AYRICA v1.15.1 prompt bug fix'i (review'lar index'e kesiliyordu, Phase 4'ten beri) nedeniyle mevcut 451 profilin TAMAMI bozuk girdiyle üretildi — re-profile kohortu artık tüm kütüphane** | 🔴 | Tema 6 re-profile mekanizması (öncelik yükseldi) |
 | 9 | **Back-to-back AI arama trace race** | 🟢 kabul | Ertelendi (v1.10.0) — tek kullanıcıda pratik etkisi yok |
 | 10 | **`api_usage` retention** | 🟢 | Yıllık ~yüzlerce satır/kullanıcı — şimdilik sorun değil |
 | 11 | **Review'lar tek seferlik** — refresh sonrası profil yenilenmiyor (manuel akış) | 🟡 | `refresh-google-data` → profile chain (grandfather planının 1. maddesi) |

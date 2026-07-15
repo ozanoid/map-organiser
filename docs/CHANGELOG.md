@@ -6,6 +6,37 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 15.07.2026 — v1.15.1 — CRITICAL: profile prompt was truncating review i to i characters
+
+Found while inspecting the first Langfuse traces (the prompt is finally
+visible!): the full-profile prompt's REVIEWS section showed review 0 as
+empty, review 1 as 1 char, review 2 as 2 chars… — a perfect
+index-length staircase.
+
+- **Root cause:** `place-profile-full.ts` used `.map(compactReview)` —
+  `Array.map` passes `(element, index, array)`, and the index silently
+  bound to `compactReview(r, maxChars = …)`'s second parameter. Review
+  *i* was `slice(0, i)`-truncated. The classic `map(parseInt)` foot-gun.
+- **Since when:** Phase 4 day one (19.05.2026, `90cac35`). The v4
+  overhaul (926da4c) only changed the default 400→1000 — the bug
+  predates it.
+- **Blast radius: ALL 451 full profiles** (448 `gemini-flash-latest`,
+  3 `gemini-3-flash-preview`) were generated from near-empty review
+  text. The LLM fabricated fluent profiles from place_topics,
+  DataForSEO attributes, rating distribution and the lite prior —
+  including plausible-but-invented "evidence quotes". Profile quality
+  silently degraded; nothing crashed, so it was invisible until
+  Langfuse exposed the raw prompt.
+- **Fix:** `.map((r) => compactReview(r))` + a warning comment.
+  Regression-tested by importing the real module (tsx): 8/8 long
+  reviews now appear in full; no truncated lines.
+- **Follow-up (v4 PART 4 #8 updated → 🔴):** every existing profile
+  needs regeneration — the re-profile cohort is now the whole library,
+  not just the old-model rows. ~451 × ~$0.01 ≈ ~$5, fits the monthly
+  profile budget (1000).
+- LLM-reported `generated_at`/`model_version` in the output are ignored
+  (server stamps its own — verified) so no stored metadata corruption.
+
 ## 15.07.2026 — v1.15.0 — S0 maintenance: dependency batch, ESLint-10 unblock, legacy import removal
 
 Sprint **S0** from the v4 roadmap. Clears the two red maintenance items
