@@ -1,12 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCategories } from "@/lib/hooks/use-categories";
 import { useTags } from "@/lib/hooks/use-tags";
 import { useLists } from "@/lib/hooks/use-lists";
 import { toast } from "sonner";
-import { Trash2, X } from "lucide-react";
+import { Scale, Trash2, X } from "lucide-react";
 
 interface BulkActionBarProps {
   selectedIds: Set<string>;
@@ -39,6 +40,7 @@ export function BulkActionBar({
   onClear,
   onComplete,
 }: BulkActionBarProps) {
+  const router = useRouter();
   const queryClient = useQueryClient();
   const { data: categories = [] } = useCategories();
   const { data: tags = [] } = useTags();
@@ -106,6 +108,27 @@ export function BulkActionBar({
           </button>
 
           <div className="h-4 w-px bg-border mx-1 hidden lg:block" />
+
+          {/* Compare (S2 F-04, v1.19.0) — only meaningful for 2-4 places;
+              disabled outside that range with a hint in the title. */}
+          <button
+            type="button"
+            disabled={loading || count < 2 || count > 4}
+            onClick={() =>
+              router.push(`/places/compare?ids=${ids.join(",")}`)
+            }
+            title={
+              count < 2
+                ? "Select at least 2 places to compare"
+                : count > 4
+                  ? "Compare works with at most 4 places"
+                  : undefined
+            }
+            className="h-9 px-3 text-xs border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400 rounded-md hover:bg-emerald-50 dark:hover:bg-emerald-950 flex items-center gap-1.5 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <Scale className="h-3.5 w-3.5" />
+            Compare
+          </button>
 
           {/* Delete — always visible, pushed right on mobile */}
           <button

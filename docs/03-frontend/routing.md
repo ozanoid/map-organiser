@@ -2,7 +2,7 @@
 title: Routing
 type: overview
 domain: frontend
-version: 1.0.0
+version: 1.1.0
 last_updated: 12.05.2026
 status: stable
 sources:
@@ -30,6 +30,7 @@ Every route in the app — pages, API handlers, and special routes — in one pl
 | `/map` | `src/app/(app)/map/page.tsx` | `(app)/layout.tsx` | Required | Default post-login destination. Mapbox GL view. |
 | `/places` | `src/app/(app)/places/page.tsx` | `(app)/layout.tsx` | Required | Filter/search/sort the user's places. |
 | `/places/[id]` | `src/app/(app)/places/[id]/page.tsx` | `(app)/layout.tsx` | Required | Place detail with tags, lists, photos, trip refs. |
+| `/places/compare` | `src/app/(app)/places/compare/page.tsx` | `(app)/layout.tsx` | Required | S2 F-04 (v1.19.0): side-by-side 2-4 place comparison (`?ids=a,b,c`) + deliberate-click AI analysis. |
 | `/lists` | `src/app/(app)/lists/page.tsx` | `(app)/layout.tsx` | Required | Lists + Trips tabbed view. |
 | `/lists/[id]` | `src/app/(app)/lists/[id]/page.tsx` | `(app)/layout.tsx` | Required | List detail with drag-and-drop reorder. |
 | `/trips/[id]` | `src/app/(app)/trips/[id]/page.tsx` | `(app)/layout.tsx` | Required | Trip timeline + map view. |

@@ -2,7 +2,7 @@
 title: Places routes
 type: route-group
 domain: backend
-version: 1.3.1
+version: 1.4.0
 last_updated: 15.07.2026
 status: stable
 sources:
@@ -71,6 +71,7 @@ All require auth.
 - **DB:** `places` SELECT, joins to `categories`; secondary in-memory filtering for tags and lists (via `place_tags` / `list_places` lookups).
 - **Response:** `Place[]` with `location` parsed to `{ lat, lng }`. `200`.
 - **Notes:** Tag/list filters applied post-query in JS. `google_rating_desc` sort happens post-fetch (JSONB sort).
+- **`ids`** (v1.19.0, compare view): CSV of place ids (cap 10) → `.in("id", ids)`. Deliberately on the LIST route — it has the EWKB-safe location parser + subcategory join the `[id]` route lacks.
 - **`open_now=true`** (v1.18.0): dynamic filter — JS post-filter evaluating `isOpenNow(google_data.work_timetable, google_data.tz)` at request time in the place's local timezone (`src/lib/places/open-now.ts`). Places without timetable/tz are EXCLUDED (unknown ≠ open).
 
 

@@ -2,7 +2,7 @@
 title: "Feature Suggestions v4"
 type: plan
 domain: overview
-version: 4.3.0
+version: 4.5.0
 last_updated: 15.07.2026
 status: stable
 related:
@@ -103,14 +103,20 @@ v4 önerilerini v3'ten daha ucuz kılan, artık VAR olan altyapı:
 
 ## 0.4 Canlı durum (15.07.2026)
 
-- Production **sağlıklı** — v1.14.1 canlıda. **S0 bakım paketi (v1.15.0)**
-  PR'da, preview test bekliyor.
-- ✅ PR #61 (dependabot) — S0'da `origin/main`'den taze yeniden uygulandı +
-  build kırıkları düzeltildi; #61 **superseded** olarak kapatılacak.
-- ✅ ESLint 10 kırığı düzeltildi (`settings.react.version` pin + `.claude/**`
-  ignore). `npm run lint` artık çalışıyor: **0 error, 107 warning**.
-- Test yok; migrations dashboard-managed. Lint teknik borcu (49 `any` + 28
-  react-hooks-7 kuralı) `warn`e çekildi — bkz. PART 4 #12.
+- Production **sağlıklı**. **S0 (v1.15.0), Langfuse (v1.16.0), S1-PR1
+  (v1.17.0), S1-PR2 (v1.18.0)** merge edildi — `origin/main` = v1.18.0.
+- ✅ **S0 bakım** kapandı: PR #61 superseded, ESLint 10 fix, legacy
+  `/api/places/import` kaldırıldı. `npm run lint` **0 error**.
+- ✅ **S1 (Tema 1 place detail v2) tamamlandı** — NF-01..06 hepsi + bonus
+  dinamik "şu an açık" (work_timetable+tz+isOpenNow). Bulgular: current_status
+  yol fix'i (0/471 doluydu), review prompt bug'ı (tüm profiller kesik
+  review'la üretilmişti — fix merge, re-profile ertelendi), NF-05 önizleme
+  akışı AddPlaceDialog'u yeniden kullanıyor.
+- 🟡 **Sıradaki: S2 (Karşılaştır & Kaydet)** başladı — NF-19 bulk edit ZATEN
+  vardı (matris düzeltmesi), kalan: F-04 compare + AI compare, saved filters,
+  tek mekan paylaşımı.
+- Test yok; migrations dashboard-managed. Lint teknik borcu `warn`e çekildi
+  (bkz. PART 4 #12). DataForSEO SKU cap borcu (PART 4 #13).
 
 ---
 
@@ -150,9 +156,9 @@ v4 önerilerini v3'ten daha ucuz kılan, artık VAR olan altyapı:
 | ID | Feature | v4 Önceliği | Not |
 |----|---------|-------------|-----|
 | NF-01..06 | DataForSEO görselleştirme paketi (≈ F-21 place detail v2) | **🟡 S1 sürüyor** | **Durum düzeltmesi (15.07.2026):** ~yarısı Mayıs'ta zaten yapılmış (rating bars, popular times, amenities, topics, action buttons — page.tsx içinde temel halde; matris bunu yansıtmıyordu). S1-PR1 ✅: veri katmanı (current_status yol fix'i — 0/471 doluydu, review owner_answer/images/local_guide/votes artık saklanıyor) + 7 bileşene refactor + NF-06 review UI katmanı. S1-PR2 ✅ (15.07.2026): NF-05 similar places (inline CID ekleme), NF-03 tıkla→filtrele, NF-04 gruplu/ikonlu grid, dinamik "şu an açık" (work_timetable+tz saklama, tz-aware isOpenNow, filtre chip'i + dürüst canlı rozet). **Tema 1 tamam** — kalan tek bacak: NF-04 attribute FİLTRESİ (bilinçli erteleme) |
-| NF-19 | Bulk edit (kategori/tag/status/liste) | **P1** | Import sonrası QoL |
+| NF-19 | Bulk edit (kategori/tag/status/liste) | **✅ zaten vardı** | `/api/places/bulk` + BulkActionBar (Mayıs) — matris bunu yansıtmıyordu, S2 keşfinde bulundu |
 | F-03 / NF-20 / NF-21 | Kayıtlı filtreler + quick chips (+ "AI sorgusunu kaydet") | **P1** | AI-01 ile birleşik güçlü |
-| F-04 + AI-19* | Mekan karşılaştırma + AI analiz (*v3-ai-first; ≈ v3 AI-15) | **P1** | Profiller hazır → LLM karşılaştırma neredeyse bedava; AI-06(c)'yi de kapatır |
+| F-04 + AI-19* | Mekan karşılaştırma + AI analiz (*v3-ai-first; ≈ v3 AI-15) | **🟡 S2-PR1 ✅ (15.07.2026)** | `/places/compare` + `POST /api/ai/compare` (SKU ai_compare, cap 200/ay) + BulkActionBar girişi. AI-06(c) karşılaştırmalı sentiment kısmen kapandı (tema kazananları). S2-PR2: saved filters + tek mekan paylaşımı |
 | AI-02 | Agentic asistan / chatbot | **P2 (büyük)** | Tool'ların yarısı zaten route olarak var; bkz. PART 2 |
 | AI-09 | AI trip planner | **P2 (büyük)** | Mevcut kural-tabanlı auto-plan'ın LLM üstyapısı |
 | NF-07 | Multi-modal routing (walking/driving/cycling) | **P2** | Mapbox zaten destekliyor |
@@ -227,6 +233,12 @@ ayrılıp sonraya bırakılabilir (UI önce).
 
 ## Tema 2 — "Profil varlığını işlet" (karşılaştırma + AI-06 kapanışı)
 
+> **Durum (15.07.2026):** F-04 Karşılaştırma UI + AI karşılaştırma analizi
+> **S2-PR1'de yapıldı** (`/places/compare` + `POST /api/ai/compare`, SKU
+> `ai_compare` cap 200/ay, BulkActionBar girişi). Aşağıdaki effort satırları
+> tarihsel plan. Kalan: AI-06 trend bacağı (re-profile mekanizmasına bağlı,
+> PART 4 #8).
+
 **Neden şimdi:** 450+ mekanın full profili var; onları okuyan ikinci feature
 hâlâ yok (ilki AI arama). Karşılaştırma, profillerin en doğal ikinci müşterisi.
 
@@ -300,8 +312,8 @@ Karar noktaları:
 | Sprint | İçerik | Süre | Çıktı |
 |--------|--------|------|-------|
 | **S0 — Bakım** ✅ | PR #61 (superseded) + ESLint 10 fix + legacy `/api/places/import` kaldırıldı (v1.15.0) | 1-2g | ✅ Yeşil CI, temiz lint (0 error) |
-| **S1 — Veriyi Göster** | Tema 1 (NF-01→06) | ~2 hafta | Place detail v2 |
-| **S2 — Karşılaştır & Kaydet** | Tema 2 (F-04 + AI compare) + Tema 5 (bulk edit, saved filters, place share) | ~2 hafta | Profilleri işleten 2. feature + QoL paketi |
+| **S1 — Veriyi Göster** ✅ | Tema 1 (NF-01→06) + dinamik open-now — 2 PR (v1.17.0 + v1.18.0) | ~2 hafta | ✅ Place detail v2 |
+| **S2 — Karşılaştır & Kaydet** 🟡 | Tema 2 (F-04 + AI compare) + Tema 5 (saved filters, place share — **bulk edit zaten vardı**) | ~2 hafta | Profilleri işleten 2. feature + QoL paketi |
 | **S3 — Asistan** | Tema 3 (AI-02 v1, session-memory) | ~1.5-2 hafta | Chat ile mekan keşfi/aksiyonu |
 | **S4 — Trip Intelligence** | Tema 4 (AI-09 v1 + NF-07/08) | ~2 hafta | LLM destekli trip planlama |
 | **S5 — Growth & Platform kararı** | NF-16 onboarding + NF-09 templates; **F-23 iOS go/no-go karar dokümanı** | ~2 hafta | Çok-kullanıcıya hazırlık |

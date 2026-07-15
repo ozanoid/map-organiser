@@ -38,6 +38,14 @@ export const AI_SKU_CONFIG = {
     costPer1k: 0,
     freeMonthly: 0,
   },
+  // v1.19.0 (S2 F-04): side-by-side AI comparison. Input = 2-4 stored
+  // place_profiles (~2-6K tokens) + a compact rubric — cost profile is
+  // close to ai_place_profile's.
+  ai_compare: {
+    name: "AI Compare",
+    costPer1k: 9.5,
+    freeMonthly: 0,
+  },
 } as const;
 
 export type AiSku = keyof typeof AI_SKU_CONFIG;
@@ -87,13 +95,17 @@ export async function trackAiUsage(
 export const AI_MONTHLY_SEARCH_CAP = 500;
 export const AI_MONTHLY_PROFILE_CAP = 1000;
 export const AI_MONTHLY_RANK_BACKSTOP = AI_MONTHLY_SEARCH_CAP * 3;
+/** v1.19.0 — hardcoded like its siblings (caps are code constants here,
+ *  not env vars; keep the convention). One unit per compare request. */
+export const AI_MONTHLY_COMPARE_CAP = 200;
 
-export type AiBudgetKind = "search" | "profile" | "rank_backstop";
+export type AiBudgetKind = "search" | "profile" | "rank_backstop" | "compare";
 
 const BUDGETS: Record<AiBudgetKind, { sku: AiSku; cap: number }> = {
   search: { sku: "ai_parse_query", cap: AI_MONTHLY_SEARCH_CAP },
   profile: { sku: "ai_place_profile", cap: AI_MONTHLY_PROFILE_CAP },
   rank_backstop: { sku: "ai_rank_results", cap: AI_MONTHLY_RANK_BACKSTOP },
+  compare: { sku: "ai_compare", cap: AI_MONTHLY_COMPARE_CAP },
 };
 
 export interface AiCapStatus {

@@ -2,11 +2,12 @@
 title: Places components
 type: component
 domain: frontend
-version: 1.4.3
+version: 1.5.0
 last_updated: 15.07.2026
 status: stable
 sources:
   - src/components/places/add-place-dialog.tsx
+  - src/components/places/ai-compare-card.tsx
   - src/components/places/ai-summary-card.tsx
   - src/components/places/amenities-grid.tsx
   - src/components/places/bulk-action-bar.tsx
@@ -33,7 +34,7 @@ related:
 
 # Places components
 
-Sixteen files under `src/components/places/`. All `"use client"`. The Place-related UI surface.
+Seventeen files under `src/components/places/`. All `"use client"`. The Place-related UI surface.
 
 > **v1.17.0 (S1-PR1):** seven detail-page widgets extracted out of the
 > 1,155-line `places/[id]/page.tsx` into standalone components (below) —
@@ -74,6 +75,13 @@ Sixteen files under `src/components/places/`. All `"use client"`. The Place-rela
 - **Used by:** Place detail page (`src/app/(app)/places/[id]/page.tsx`) above the Amenities section.
 - **Hidden when:** no reviews available (lets the existing "Loading reviews…" banner own that state).
 
+## `AiCompareCard`
+
+- **File:** `src/components/places/ai-compare-card.tsx` (S2 F-04, v1.19.0)
+- **Props:** `{ places: Place[] }` (2-4, column order = idx order).
+- **Behavior:** DELIBERATE-CLICK only — `POST /api/ai/compare` fires on the button, never on mount (each run burns one `ai_compare` unit, 200/mo). Renders `overall` + per-theme winners (trophy) + occasion picks; `idx` resolves via the route-echoed `order` array. Re-run link after first result.
+- **Used by:** `/places/compare`.
+
 ## `BulkActionBar`
 
 - **File:** `src/components/places/bulk-action-bar.tsx`
@@ -81,7 +89,7 @@ Sixteen files under `src/components/places/`. All `"use client"`. The Place-rela
 - **Hooks:** `useState`, `useQueryClient`, `useCategories`, `useTags`, `useLists`.
 - **API call:** `POST /api/places/bulk` with action and payload.
 - **State:** `loading` (mutation in-flight).
-- **Renders:** fixed bottom bar — selection count + clear, four action dropdowns (Category, Tag, List, Status), and a delete button.
+- **Renders:** fixed bottom bar — selection count + clear, **Compare (v1.19.0 — enabled only for 2-4 selections → `/places/compare?ids=…`)**, four action dropdowns (Category, Tag, List, Status), and a delete button.
 - **Pre-delete:** runs `check_trips` action first; if there are trip references, surfaces a confirm with the affected trip names.
 - **Cache invalidation on success:** `["places"]`, `["lists"]`, `["trips"]`.
 - **Used by:** `/places` page when one or more places are selected.
@@ -132,7 +140,7 @@ Sixteen files under `src/components/places/`. All `"use client"`. The Place-rela
 
 ## Detail-page widgets (extracted v1.17.0)
 
-All seven render inside `places/[id]/page.tsx`'s DataForSEO extended
+Primary consumer: `places/[id]/page.tsx`'s DataForSEO extended block; since v1.19.0 `RatingDistributionBar` + `PlaceStatusBadges` are ALSO reused by `/places/compare`. They render inside the extended
 block (except `ReviewsSection`, which renders for any place with
 reviews or a `google_place_id`). Every one is data-gated: renders
 `null` (or is conditionally mounted by the page) when its

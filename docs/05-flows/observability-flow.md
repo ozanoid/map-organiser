@@ -2,7 +2,7 @@
 title: Observability Flow (Honeycomb + Vercel/Axiom + Langfuse)
 type: flow
 domain: infra
-version: 3.3.0
+version: 3.4.0
 last_updated: 15.07.2026
 status: stable
 sources:
@@ -128,15 +128,16 @@ Span sources:
   experimental_telemetry: { isEnabled: true, functionId, metadata } })`.
   GenAI semantic conventions: model, prompt, completion, input/output
   tokens, latency, finish_reason. → Honeycomb **and** Langfuse.
-  All THREE LLM call sites carry this: `ai.parse-query`,
+  All FOUR LLM call sites carry this: `ai.parse-query`,
   `ai.rank-results`, `ai.generate-profile` (lib — runs under both the
-  enrich route and the refresh cron).
+  enrich route and the refresh cron), and `ai.compare` (v1.19.0).
 
 **Langfuse trace-level fields** (name, user, tags) are stamped via
 `propagateAttributes({ traceName, userId, tags }, () => generateText(…))`
 (`@langfuse/tracing`) at each call site: `ai-search` (parse-query +
 rank-results — one merged trace via the traceparent below),
-`place-profile` (enrich step=profile), `cron-refresh-places` (cron).
+`place-profile` (enrich step=profile), `cron-refresh-places` (cron),
+`ai-compare` (compare route, v1.19.0).
 
 **Serverless flush:** Langfuse batches span exports; Vercel can suspend
 the function right after the response. Every route that produces LLM
