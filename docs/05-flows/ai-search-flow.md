@@ -88,10 +88,15 @@ The full design rationale lives in `docs/_plans/phase-6-llm-as-judge-pivot.md`.
 
 ## Trigger
 
-User types into [[../03-frontend/components/search#aisearchinput|AiSearchInput]]
-in the FilterPanel and submits. The input is gated — hidden when
-`profiles.ai_features_enabled = false` or `GOOGLE_GENERATIVE_AI_API_KEY`
-is missing.
+Two entry points (both call the same `useAiSearch` mutation):
+
+1. User types into [[../03-frontend/components/search#aisearchinput|AiSearchInput]]
+   in the FilterPanel and submits. The input is gated — hidden when
+   `profiles.ai_features_enabled = false` or `GOOGLE_GENERATIVE_AI_API_KEY`
+   is missing.
+2. **v1.20.0 (NF-21):** clicking a saved AI-search chip
+   (`SavedFilterChips` on /places) re-runs the stored NL query through
+   the same pipeline — fresh rankings every time, never persisted.
 
 ## Steps
 

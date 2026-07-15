@@ -22,7 +22,7 @@ function paramKeyFor(key: string): string {
   return PARAM_MAP[key] || key;
 }
 
-function parseUrlToFilters(searchParams: URLSearchParams): PlaceFilters {
+export function parseUrlToFilters(searchParams: URLSearchParams): PlaceFilters {
   const category = searchParams.get("category");
   const subcategory = searchParams.get("subcategory");
   const tagIds = searchParams.get("tags");
@@ -56,7 +56,7 @@ function parseUrlToFilters(searchParams: URLSearchParams): PlaceFilters {
   };
 }
 
-function filtersToQueryString(filters: PlaceFilters): string {
+export function filtersToQueryString(filters: PlaceFilters): string {
   const params = new URLSearchParams();
   Object.entries(filters).forEach(([key, value]) => {
     if (value === undefined || value === null || value === "") return;

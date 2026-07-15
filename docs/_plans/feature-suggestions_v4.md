@@ -2,7 +2,7 @@
 title: "Feature Suggestions v4"
 type: plan
 domain: overview
-version: 4.5.0
+version: 4.6.0
 last_updated: 15.07.2026
 status: stable
 related:
@@ -104,7 +104,8 @@ v4 önerilerini v3'ten daha ucuz kılan, artık VAR olan altyapı:
 ## 0.4 Canlı durum (15.07.2026)
 
 - Production **sağlıklı**. **S0 (v1.15.0), Langfuse (v1.16.0), S1-PR1
-  (v1.17.0), S1-PR2 (v1.18.0)** merge edildi — `origin/main` = v1.18.0.
+  (v1.17.0), S1-PR2 (v1.18.0), S2-PR1 (v1.19.0)** merge edildi —
+  `origin/main` = v1.19.0.
 - ✅ **S0 bakım** kapandı: PR #61 superseded, ESLint 10 fix, legacy
   `/api/places/import` kaldırıldı. `npm run lint` **0 error**.
 - ✅ **S1 (Tema 1 place detail v2) tamamlandı** — NF-01..06 hepsi + bonus
@@ -112,11 +113,15 @@ v4 önerilerini v3'ten daha ucuz kılan, artık VAR olan altyapı:
   yol fix'i (0/471 doluydu), review prompt bug'ı (tüm profiller kesik
   review'la üretilmişti — fix merge, re-profile ertelendi), NF-05 önizleme
   akışı AddPlaceDialog'u yeniden kullanıyor.
-- 🟡 **Sıradaki: S2 (Karşılaştır & Kaydet)** başladı — NF-19 bulk edit ZATEN
-  vardı (matris düzeltmesi), kalan: F-04 compare + AI compare, saved filters,
-  tek mekan paylaşımı.
+- 🟡 **S2 (Karşılaştır & Kaydet)** — S2-PR1 (F-04 compare + AI compare,
+  v1.19.0) merge edildi. S2-PR2 (F-03/NF-20/21 saved filters + NF-18 tek
+  mekan paylaşımı, v1.20.0) PR'da — kullanıcı testi bekliyor. Review
+  bulgusu: share-save orijinal okumaları RLS'e takılıyordu (Nisan'dan beri
+  latent) — service-client fix bu PR'da; public place payload whitelist'e
+  çevrildi; deaktive link yeniden paylaşımda reaktive ediliyor.
 - Test yok; migrations dashboard-managed. Lint teknik borcu `warn`e çekildi
-  (bkz. PART 4 #12). DataForSEO SKU cap borcu (PART 4 #13).
+  (bkz. PART 4 #12). DataForSEO SKU cap borcu (PART 4 #13). Paylaşım linki
+  iptal UI'ı yok (PATCH var, çağıran yok — PART 4 #14).
 
 ---
 
@@ -157,14 +162,14 @@ v4 önerilerini v3'ten daha ucuz kılan, artık VAR olan altyapı:
 |----|---------|-------------|-----|
 | NF-01..06 | DataForSEO görselleştirme paketi (≈ F-21 place detail v2) | **🟡 S1 sürüyor** | **Durum düzeltmesi (15.07.2026):** ~yarısı Mayıs'ta zaten yapılmış (rating bars, popular times, amenities, topics, action buttons — page.tsx içinde temel halde; matris bunu yansıtmıyordu). S1-PR1 ✅: veri katmanı (current_status yol fix'i — 0/471 doluydu, review owner_answer/images/local_guide/votes artık saklanıyor) + 7 bileşene refactor + NF-06 review UI katmanı. S1-PR2 ✅ (15.07.2026): NF-05 similar places (inline CID ekleme), NF-03 tıkla→filtrele, NF-04 gruplu/ikonlu grid, dinamik "şu an açık" (work_timetable+tz saklama, tz-aware isOpenNow, filtre chip'i + dürüst canlı rozet). **Tema 1 tamam** — kalan tek bacak: NF-04 attribute FİLTRESİ (bilinçli erteleme) |
 | NF-19 | Bulk edit (kategori/tag/status/liste) | **✅ zaten vardı** | `/api/places/bulk` + BulkActionBar (Mayıs) — matris bunu yansıtmıyordu, S2 keşfinde bulundu |
-| F-03 / NF-20 / NF-21 | Kayıtlı filtreler + quick chips (+ "AI sorgusunu kaydet") | **P1** | AI-01 ile birleşik güçlü |
+| F-03 / NF-20 / NF-21 | Kayıtlı filtreler + quick chips (+ "AI sorgusunu kaydet") | **✅ S2-PR2 (15.07.2026)** | `saved_filters` tablosu + panel/sheet'te Save + /places'te chips; ✨ chip AI pipeline'ını yeniden koşturur |
 | F-04 + AI-19* | Mekan karşılaştırma + AI analiz (*v3-ai-first; ≈ v3 AI-15) | **🟡 S2-PR1 ✅ (15.07.2026)** | `/places/compare` + `POST /api/ai/compare` (SKU ai_compare, cap 200/ay) + BulkActionBar girişi. AI-06(c) karşılaştırmalı sentiment kısmen kapandı (tema kazananları). S2-PR2: saved filters + tek mekan paylaşımı |
 | AI-02 | Agentic asistan / chatbot | **P2 (büyük)** | Tool'ların yarısı zaten route olarak var; bkz. PART 2 |
 | AI-09 | AI trip planner | **P2 (büyük)** | Mevcut kural-tabanlı auto-plan'ın LLM üstyapısı |
 | NF-07 | Multi-modal routing (walking/driving/cycling) | **P2** | Mapbox zaten destekliyor |
 | NF-08 | Trip budget tracking | **P2** | |
 | NF-16 | Onboarding wizard | **P2** | Çok kullanıcıya açılmadan önce şart |
-| NF-18 | Tek mekan paylaşımı | **P2** | `shared_links`'e `'place'` tipi — ~1 gün |
+| NF-18 | Tek mekan paylaşımı | **✅ S2-PR2 (15.07.2026)** | `'place'` tipi + SharedPlaceView (reviews/profil public'e sızmaz); bonus: `source='shared'` latent constraint bug'ı bulunup düzeltildi |
 | AI-22 (v3) | Veri kalite ajanı (cron) | **🟡 v1 kuruldu (15.07.2026)** | Günlük refresh cron canlı — [[../06-ops/runbooks/periodic-refresh]]; grandfather re-enrich + kapanmış-mekan tespiti sonraki görev tipleri |
 | F-06 (v3) / NF-22 | Export & backup (CSV/JSON/GeoJSON/KML) | **P2** | Veri güveni; düşük effort |
 | AI-13 (v3) | Mood-based discovery | **P3** | AI-02'nin alt senaryosu olarak daha ucuz |
@@ -313,7 +318,7 @@ Karar noktaları:
 |--------|--------|------|-------|
 | **S0 — Bakım** ✅ | PR #61 (superseded) + ESLint 10 fix + legacy `/api/places/import` kaldırıldı (v1.15.0) | 1-2g | ✅ Yeşil CI, temiz lint (0 error) |
 | **S1 — Veriyi Göster** ✅ | Tema 1 (NF-01→06) + dinamik open-now — 2 PR (v1.17.0 + v1.18.0) | ~2 hafta | ✅ Place detail v2 |
-| **S2 — Karşılaştır & Kaydet** 🟡 | Tema 2 (F-04 + AI compare) + Tema 5 (saved filters, place share — **bulk edit zaten vardı**) | ~2 hafta | Profilleri işleten 2. feature + QoL paketi |
+| **S2 — Karşılaştır & Kaydet** ✅ | Tema 2 (F-04 + AI compare, v1.19.0 merge) + Tema 5 (saved filters + place share, v1.20.0 — PR'da, test bekliyor; bulk edit zaten vardı) | 1 gün (2 PR) | ✅ Profilleri işleten 2. feature + QoL paketi |
 | **S3 — Asistan** | Tema 3 (AI-02 v1, session-memory) | ~1.5-2 hafta | Chat ile mekan keşfi/aksiyonu |
 | **S4 — Trip Intelligence** | Tema 4 (AI-09 v1 + NF-07/08) | ~2 hafta | LLM destekli trip planlama |
 | **S5 — Growth & Platform kararı** | NF-16 onboarding + NF-09 templates; **F-23 iOS go/no-go karar dokümanı** | ~2 hafta | Çok-kullanıcıya hazırlık |
@@ -351,6 +356,7 @@ Effort/impact özeti (v3 matrisinin v4 revizyonu — sadece P1/P2):
 | 13 | **DataForSEO SKU'larında cap yok** — AI çağrılarının aylık bütçesi var ama dataforseo_* SKU'ları yalnız sayılıyor; add-similar (NF-05) dahil hiçbir yol harcamayı SINIRLAMIYOR ($5.4/1k biz-info). Tek kullanıcıda pratik risk düşük | 🟡 | AI bütçe altyapısına (checkAiBudget benzeri) dataforseo SKU'ları için de eşik ekle |
 | 11 | **Review'lar tek seferlik** — refresh sonrası profil yenilenmiyor (manuel akış) | 🟡 | `refresh-google-data` → profile chain (grandfather planının 1. maddesi) |
 | 12 | **Lint teknik borcu** — 49 `@typescript-eslint/no-explicit-any` (eskiden ESLint crash'inin ardında gizliydi) + 28 `react-hooks/*` (eslint-plugin-react-hooks@7 React-Compiler kuralları: `set-state-in-effect`, `preserve-manual-memoization`, `refs`, `use-memo`, `purity`) | 🟡 `warn`e çekildi (v1.15.0) | Kademeli tüket; **yeni kod bu kurallara error gibi uymalı**. Downgrade `eslint.config.mjs` rules bloğunda, geri açılacak |
+| 14 | **Paylaşım linki iptal UI'ı yok** — `PATCH /api/shared` + `useToggleSharedLink` mevcut ama hiçbir yüzey çağırmıyor; deaktivasyon yalnız doğrudan API ile mümkün. Hafifletme (v1.20.0): yeniden paylaşım deaktive linki reaktive ediyor | 🟡 | Place/list/trip detayına "Sharing on/off" toggle'ı (küçük popover) — S3 veya ilk uygun PR |
 
 ---
 

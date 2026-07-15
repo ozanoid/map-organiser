@@ -2,7 +2,7 @@
 title: Filters
 type: component
 domain: frontend
-version: 1.2.0
+version: 1.3.0
 last_updated: 15.07.2026
 status: stable
 sources:
@@ -15,6 +15,8 @@ sources:
   - src/components/filters/tag-filter.tsx
   - src/components/filters/visit-status-filter.tsx
   - src/components/filters/open-now-filter.tsx
+  - src/components/filters/save-filter-button.tsx
+  - src/components/filters/saved-filter-chips.tsx
 related:
   - "[[_README]]"
   - "[[../hooks/use-filters]]"
@@ -24,6 +26,8 @@ related:
 ---
 
 # Filters
+
+> **v1.20.0 (F-03/NF-20/21):** `SaveFilterButton` (panel + sheet başlıklarında, Clear'ın yanında; aktif filtre setini — AI araması aktifse NL sorgusuyla birlikte — `saved_filters`'a kaydeder) ve `SavedFilterChips` (/places'te arama satırının altında; tıkla → `router.push(?query_string)` tam-replace; ✨'li chip AI pipeline'ını `useAiSearch` ile yeniden koşturur; X → sil).
 
 > **v1.18.0:** new `OpenNowFilter` chip (panel + mobile sheet, "Hours" section) — toggles `PlaceFilters.open_now`; evaluation happens server-side at request time from stored timetable+tz in the place's local timezone. `sources:` += src/components/filters/open-now-filter.tsx.
 

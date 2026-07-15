@@ -43,9 +43,61 @@ export async function GET(
     return await handleListShare(supabase, link, ownerName);
   } else if (link.resource_type === "trip") {
     return await handleTripShare(supabase, link, ownerName);
+  } else if (link.resource_type === "place") {
+    return await handlePlaceShare(supabase, link, ownerName);
   }
 
   return NextResponse.json({ error: "Unknown resource type" }, { status: 400 });
+}
+
+// NF-18 (v1.20.0): single-place public payload. Deliberate deviation
+// from the list/trip full-row passthrough: the payload is a WHITELIST of
+// exactly what SharedPlaceView renders. Owner-personal fields
+// (user_id, rating, visit_status, booked_at/visited_at, source,
+// timestamps) and heavy/private google_data (reviews, place_profile,
+// work_timetable, attributes, topics) never leave the server — this is
+// an unauthenticated URL. `notes` stays (consistent with list shares;
+// sharing is a deliberate act).
+async function handlePlaceShare(supabase: any, link: any, ownerName: string) {
+  const { data: place } = await supabase
+    .from("places")
+    .select("*, category:categories(name, color)")
+    .eq("id", link.resource_id)
+    .single();
+
+  if (!place) {
+    return NextResponse.json({ error: "Place not found" }, { status: 404 });
+  }
+
+  const gd = (place.google_data ?? {}) as Record<string, unknown>;
+
+  return NextResponse.json({
+    type: "place",
+    slug: link.slug,
+    ownerName,
+    place: {
+      id: place.id,
+      name: place.name,
+      address: place.address,
+      city: place.city,
+      country: place.country,
+      notes: place.notes,
+      category: place.category
+        ? { name: place.category.name, color: place.category.color }
+        : null,
+      google_data: {
+        photo_storage_url: gd.photo_storage_url ?? null,
+        rating: gd.rating ?? null,
+        user_ratings_total: gd.user_ratings_total ?? null,
+        opening_hours: gd.opening_hours ?? null,
+        website: gd.website ?? null,
+        url: gd.url ?? null,
+      },
+      location: place.location
+        ? parsePostgisPoint(place.location)
+        : { lat: 0, lng: 0 },
+    },
+  });
 }
 
 async function handleListShare(supabase: any, link: any, ownerName: string) {

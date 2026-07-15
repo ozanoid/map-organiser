@@ -2,8 +2,8 @@
 title: useSharedLinks
 type: hook
 domain: frontend
-version: 1.0.0
-last_updated: 12.05.2026
+version: 1.1.0
+last_updated: 15.07.2026
 status: stable
 sources:
   - src/lib/hooks/use-shared-links.ts
@@ -20,15 +20,16 @@ Four exports for the public-sharing surface.
 ## Signatures
 
 ```ts
+// v1.20.0 (NF-18): resource_type unions widened to include "place"
 function useSharedLink(
-  resourceType: "list" | "trip",
+  resourceType: "list" | "trip" | "place",
   resourceId: string | undefined
 ): UseQueryResult<SharedLink | null, Error>
 
 function useCreateSharedLink(): UseMutationResult<
   SharedLink,
   Error,
-  { resource_type: "list" | "trip"; resource_id: string }
+  { resource_type: "list" | "trip" | "place"; resource_id: string }
 >
 
 function useToggleSharedLink(): UseMutationResult<

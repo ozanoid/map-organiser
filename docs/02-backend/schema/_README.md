@@ -2,8 +2,8 @@
 title: Schema
 type: overview
 domain: backend
-version: 1.0.0
-last_updated: 12.05.2026
+version: 1.1.0
+last_updated: 15.07.2026
 status: stable
 sources:
   - Supabase project hukppmaevcapvbrvxtph (via MCP)
@@ -34,7 +34,8 @@ All user-facing tables in the `public` schema of the Supabase project `hukppmaev
 | `trips` | [[trips]] | 5 | Multi-day trip plans |
 | `trip_days` | [[trip_days]] | 33 | Days within a trip |
 | `trip_day_places` | [[trip_day_places]] | 102 | Places within a trip day, ordered |
-| `shared_links` | [[shared_links]] | 3 | Public slug links to lists/trips |
+| `shared_links` | [[shared_links]] | 3 | Public slug links to lists/trips/places |
+| `saved_filters` | [[saved_filters]] | 0 | Saved filter presets / quick chips (v1.20.0) |
 | `ai_suggestions_queue` | [[ai_suggestions_queue]] | 0 | Moderation queue for AI-proposed tags & sub-categories (Phase 4 writer, Phase 5 reader) |
 
 > `public.spatial_ref_sys` exists but it's a PostGIS internal table (8500 rows of SRID reference data). Not documented separately.

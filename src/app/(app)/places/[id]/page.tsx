@@ -26,9 +26,11 @@ import { PlaceTopics } from "@/components/places/place-topics";
 import { ReviewsSection } from "@/components/places/reviews-section";
 import { SimilarPlaces } from "@/components/places/similar-places";
 import { useLists } from "@/lib/hooks/use-lists";
+import { useCreateSharedLink } from "@/lib/hooks/use-shared-links";
 import type { PlaceProfile } from "@/lib/ai/schemas/place-profile";
 import {
   ArrowLeft,
+  Share2,
   Star,
   MapPin,
   Clock,
@@ -57,6 +59,7 @@ export default function PlaceDetailPage() {
   // NF-03 (v1.18.0): active "People mention" topic → filters ReviewsSection.
   const [topicFilter, setTopicFilter] = useState<string | null>(null);
   const { data: allLists = [] } = useLists();
+  const createSharedLink = useCreateSharedLink();
 
   const fetchPlace = useCallback(() => {
     return fetch(`/api/places/${params.id}`)
@@ -169,6 +172,23 @@ export default function PlaceDetailPage() {
     } else {
       toast.error("Failed to update status");
     }
+  }
+
+  // NF-18 (v1.20.0): public single-place share — mirrors the trip page's
+  // handleShare (create/reuse link → clipboard + toast).
+  function handleShare() {
+    createSharedLink.mutate(
+      { resource_type: "place", resource_id: params.id as string },
+      {
+        onSuccess: (link) => {
+          navigator.clipboard.writeText(
+            `${window.location.origin}/shared/${link.slug}`
+          );
+          toast.success("Link copied to clipboard!");
+        },
+        onError: (err) => toast.error(err.message),
+      }
+    );
   }
 
   async function handleRefreshGoogle() {
@@ -329,14 +349,26 @@ export default function PlaceDetailPage() {
         <h1 className="text-lg font-semibold truncate flex-1 text-center">
           {place.name}
         </h1>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={handleDelete}
-          className="cursor-pointer text-red-500 hover:text-red-600 hover:bg-red-50 shrink-0"
-        >
-          <Trash2 className="h-4 w-4" />
-        </Button>
+        <div className="flex items-center shrink-0">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleShare}
+            disabled={createSharedLink.isPending}
+            className="cursor-pointer"
+            aria-label="Share this place"
+          >
+            <Share2 className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleDelete}
+            className="cursor-pointer text-red-500 hover:text-red-600 hover:bg-red-50"
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
 
       {/* Visit Status Toggle */}

@@ -6,6 +6,63 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 15.07.2026 — v1.20.0 — S2-PR2: saved filters + quick chips (F-03/NF-20/21) + single-place share (NF-18)
+
+Closes sprint S2 (v4 Tema 2 + Tema 5'in kalanı).
+
+- **THREE live DB migrations (Supabase MCP):**
+  1. `create_saved_filters_table` — new per-user table (id, user_id FK
+     auth.users CASCADE, name unique-per-user, query_string, ai_query,
+     sort_order, created_at) + RLS (single ALL policy,
+     `auth.uid() = user_id`, USING + WITH CHECK).
+  2. `widen_shared_links_resource_type_add_place` — CHECK += 'place'
+     (caught in DISCOVERY this time, before any code was written).
+  3. `widen_places_source_check_add_shared` — **pre-existing latent bug
+     found in passing**: the save-to-account copiers (saveList/saveTrip)
+     have inserted `source: "shared"` since April but the CHECK never
+     included it (0 such rows exist — the copy path could never have
+     succeeded). Widened; savePlace now shares the same code path.
+- **Saved filters**: `filtersToQueryString`/`parseUrlToFilters` exported;
+  `use-saved-filters.ts` (browser-client CRUD, RLS boundary — tags/lists
+  pattern); `SaveFilterButton` in the panel + sheet headers (captures
+  LOCAL filter state, not the debounce-lagged URL; stores the NL query
+  too when an AI search is active); `SavedFilterChips` on /places —
+  click = `router.push(?qs)` full replace (back/forward-safe), ✨ chips
+  re-run the AI pipeline via the same `useAiSearch` hook (rankings are
+  session-only by design and never stored).
+- **Single-place share (NF-18)**: Share2 button on place detail →
+  create/reuse link → `/shared/[slug]` renders `SharedPlaceView`
+  (photo, category, rating, address, hours, map pin, owner note).
+  **Deliberate deviation:** the public payload is a WHITELIST of exactly
+  what the view renders (id, name, address, city, country, notes,
+  category name+color, location, and google_data limited to photo,
+  rating, ratings count, hours, website, maps URL) — owner-personal
+  fields (user_id, rating, visit_status, booked_at/visited_at, source,
+  timestamps) and reviews/place_profile never leave the server.
+  "Save to my places" copies with dedupe by google_place_id.
+- **Review fixes (28/28 adversarial findings addressed):**
+  - **HIGH:** `POST /api/shared/[slug]/save` read the ORIGINAL content
+    with the visitor's cookie client — owner-scoped RLS 404'd every
+    cross-user save **since April** (savePlace + pre-existing
+    saveList/saveTrip). Originals now read via `createServiceClient()`;
+    INSERTs stay on the cookie client (RLS WITH CHECK enforces owner).
+    Together with the `source` CHECK widening this makes save-to-account
+    actually work for the first time.
+  - `POST /api/shared` now reactivates a deactivated existing link
+    instead of returning a dead URL. Revocation UI still missing —
+    tracked as v4 PART 4 #14.
+  - Saved filters polish: Enter-key in-flight guard, AI-chip error
+    toast, `Place.source` type union += similar/shared, stale-comment
+    fixes; debounce-revert + stale-taxonomy-ID edges documented as
+    accepted.
+- Docs: new `schema/saved_filters.md`; rls-policies (saved_filters row
+  format), shared_links (place CHECK, FK no-cascade note, reactivation),
+  places schema + domain (source enum similar/shared),
+  api-routes/shared (place branch + two-client save), share-flow +
+  sharing (place branch, whitelist, RLS fix), use-shared-links (unions),
+  ai-search-flow (chip trigger), hooks/schema indexes, routing,
+  repo-structure, v4 doc (0.4 canlı durum + PART 4 #14).
+
 ## 15.07.2026 — v1.19.0 — S2-PR1: place comparison (F-04) + AI compare
 
 First half of sprint S2 (v4 Tema 2). The second consumer of the

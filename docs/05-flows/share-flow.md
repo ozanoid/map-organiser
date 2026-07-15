@@ -2,8 +2,8 @@
 title: Share Flow
 type: flow
 domain: sharing
-version: 1.0.0
-last_updated: 12.05.2026
+version: 1.2.0
+last_updated: 15.07.2026
 status: stable
 sources:
   - src/app/api/shared/route.ts
@@ -19,11 +19,13 @@ related:
 
 # Share Flow
 
-End-to-end public sharing of a list or trip — from creating the slug to a logged-in viewer saving the content into their own account.
+> **v1.20.0 (NF-18):** tek mekan paylaşımı eklendi — detay sayfası başlığında Share2 butonu → link → `/shared/[slug]` `SharedPlaceView` (public payload WHITELIST: foto, kategori, rating, adres, saatler, harita pini, not — owner alanları ve review/AI profili sızmaz). "Save to my places" → tek mekan kopyası. İki düzeltme: save route orijinal içeriği artık service client'la okuyor (owner-scoped RLS her cross-user save'i Nisan'dan beri 404'lüyordu) ve deaktive edilmiş kaynağı yeniden paylaşmak mevcut linki reaktive ediyor.
+
+End-to-end public sharing of a list, trip, or single place — from creating the slug to a logged-in viewer saving the content into their own account.
 
 ## Trigger
 
-Owner clicks "Share" on a list or trip detail page.
+Owner clicks "Share" on a list, trip, or place detail page.
 
 ## Steps
 
@@ -32,16 +34,18 @@ Owner clicks "Share" on a list or trip detail page.
        │
        ▼
 2. useCreateSharedLink → POST /api/shared { resource_type, resource_id }
-       │  • Verifies user owns lists.id or trips.id
+       │  • Verifies user owns lists.id, trips.id, or places.id
        │  • Returns existing link if (user_id, resource_type, resource_id)
-       │    already shared — idempotent
+       │    already shared — idempotent; if that link was deactivated,
+       │    flips is_active back to true (v1.20.0) so the URL works
        │  • Else: nanoid(10) slug + INSERT shared_links
        │  • Returns the link (with slug)
        │
        ▼
 3. UI shows public URL: https://<host>/shared/<slug>
        │  • Copy-to-clipboard button
-       │  • Toggle to disable later (PATCH /api/shared { id, is_active: false })
+       │  • Disable = PATCH /api/shared { id, is_active: false }
+       │    (API only — no UI calls it yet; v4 debt)
        │
        ▼ (some time later)
 4. Viewer (anonymous OR authenticated) opens /shared/<slug>
@@ -59,36 +63,47 @@ Owner clicks "Share" on a list or trip detail page.
        │      — list: SELECT lists, list_places, places + categories
        │      — trip: SELECT trip, trip_days, trip_day_places, places + categories
        │              + Mapbox getRoute per multi-stop day
+       │      — place (v1.20.0): SELECT single place + categories(name, color)
+       │              payload is a WHITELIST of rendered fields only
+       │              (no user_id / rating / visit_status / dates / source;
+       │               google_data limited to photo, rating, hours, website, url)
        │  • Returns assembled payload (no owner user_id leaked)
        │
        ▼
 6. Public page renders:
        │  • List: place cards + map view
        │  • Trip: day timeline + day-colored polylines on map
+       │  • Place: SharedPlaceView — photo, category chip, rating, address,
+       │    notes, map pin, opening hours, website/maps links
        │
        ▼ (if viewer is authenticated)
 7. "Save to my account" CTA appears
        │
        ▼ Viewer clicks Save
 8. useSaveSharedContent → POST /api/shared/<slug>/save
-       │  • Cookie-scoped client (viewer's session)
-       │  • Resolve slug → list or trip data (via service-role join, careful what's exposed)
+       │  • Link lookup: cookie client (public-read policy covers active links)
+       │  • ORIGINAL content reads: createServiceClient() — v1.20.0 fix;
+       │    owner-scoped RLS had 404'd every cross-user save since April
+       │  • All INSERTs: cookie client (RLS WITH CHECK enforces user_id)
        │  • Branch by type:
        │      — list:
        │          • INSERT new lists row owned by viewer (copy name, color, description)
        │          • For each source place:
        │              if viewer already has it (by google_place_id) → reuse
-       │              else → INSERT new places row owned by viewer
+       │              else → INSERT new places row owned by viewer (source: 'shared')
        │          • INSERT list_places rows preserving sort_order
        │      — trip:
        │          • INSERT new trips row owned by viewer
        │          • INSERT trip_days rows (date offset preserved)
        │          • INSERT trip_day_places rows referencing viewer's place IDs
        │          • INSERT new places as needed (same dedup as above)
+       │      — place (v1.20.0):
+       │          • Single-place copy — same dedupe by google_place_id;
+       │            omits rating/visit_status/category; source: 'shared'
        │  • Returns { type, id: newResourceId }
        │
        ▼  Invalidates ["lists"], ["trips"], ["places"]
-9. Toast: "Saved!" — viewer navigates to their new list/trip.
+9. Toast: "Saved!" — viewer navigates to their new list/trip/place.
 ```
 
 ## Inputs / outputs
@@ -104,8 +119,8 @@ Owner clicks "Share" on a list or trip detail page.
 | Action | Endpoint | Effect |
 |---|---|---|
 | Create / reuse share | `POST /api/shared` | Returns slug |
-| Disable | `PATCH /api/shared { id, is_active: false }` | `/shared/<slug>` now 404s |
-| Re-enable | `PATCH /api/shared { id, is_active: true }` | Public read works again |
+| Disable | `PATCH /api/shared { id, is_active: false }` | `/shared/<slug>` now 404s — **API only, no UI yet (v4 debt)** |
+| Re-enable | `PATCH /api/shared { id, is_active: true }` — or simply Share again (auto-reactivates, v1.20.0) | Public read works again |
 | Hard delete | Direct Supabase delete (no API yet) | Slug is gone forever |
 
 ## Anonymous vs authenticated viewer
@@ -129,6 +144,7 @@ Same payload either way (step 5). The **Save** action requires auth — anonymou
 ## Related code
 
 - `src/components/places/place-card.tsx` (and similar trip card) — share button entry points.
+- `src/app/(app)/places/[id]/page.tsx` — place detail Share2 button (v1.20.0).
 - `src/lib/hooks/use-shared-links.ts` — hooks.
 - `src/app/api/shared/route.ts` — create/patch.
 - `src/app/api/shared/[slug]/route.ts` — public read (service-role).

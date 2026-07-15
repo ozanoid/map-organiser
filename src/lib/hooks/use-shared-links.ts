@@ -5,14 +5,14 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 interface SharedLink {
   id: string;
   slug: string;
-  resource_type: "list" | "trip";
+  resource_type: "list" | "trip" | "place";
   resource_id: string;
   is_active: boolean;
   view_count: number;
   created_at: string;
 }
 
-export function useSharedLink(resourceType: "list" | "trip", resourceId: string | undefined) {
+export function useSharedLink(resourceType: "list" | "trip" | "place", resourceId: string | undefined) {
   return useQuery({
     queryKey: ["shared-link", resourceType, resourceId],
     queryFn: async (): Promise<SharedLink | null> => {
@@ -32,7 +32,7 @@ export function useCreateSharedLink() {
       resource_type,
       resource_id,
     }: {
-      resource_type: "list" | "trip";
+      resource_type: "list" | "trip" | "place";
       resource_id: string;
     }): Promise<SharedLink> => {
       const res = await fetch("/api/shared", {

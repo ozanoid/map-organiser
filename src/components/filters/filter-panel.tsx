@@ -5,6 +5,7 @@ import { CountryCityFilter } from "./country-city-filter";
 import { CategoryFilter } from "./category-filter";
 import { VisitStatusFilter } from "./visit-status-filter";
 import { OpenNowFilter } from "./open-now-filter";
+import { SaveFilterButton } from "./save-filter-button";
 import { TagFilter } from "./tag-filter";
 import { ListFilter } from "./list-filter";
 import { DebouncedSearchInput } from "./debounced-search-input";
@@ -38,17 +39,23 @@ export function FilterPanel() {
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold">Filters</h3>
-        {hasActiveFilters && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleClearAll}
-            className="cursor-pointer text-xs h-7 px-2"
-          >
-            <X className="h-3 w-3 mr-1" />
-            Clear
-          </Button>
-        )}
+        <div className="flex items-center gap-1">
+          {/* Save = only meaningful with active filters (same gate as
+              Clear, enforced inside the component). Does NOT reset AI
+              state — only Clear does that. */}
+          <SaveFilterButton />
+          {hasActiveFilters && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleClearAll}
+              className="cursor-pointer text-xs h-7 px-2"
+            >
+              <X className="h-3 w-3 mr-1" />
+              Clear
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* AI natural-language search (hidden when ai_features_enabled = false) */}
