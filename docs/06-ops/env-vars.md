@@ -2,8 +2,8 @@
 title: Env Vars
 type: overview
 domain: ops
-version: 1.2.0
-last_updated: 14.05.2026
+version: 1.3.0
+last_updated: 15.07.2026
 status: stable
 sources:
   - .env.local.example
@@ -13,6 +13,9 @@ sources:
   - src/lib/ai/client.ts
   - src/lib/google/get-user-api-keys.ts
   - src/lib/dataforseo/client.ts
+  - src/instrumentation-node.ts
+  - src/lib/telemetry/langfuse.ts
+  - src/app/api/cron/refresh-places/route.ts
 related:
   - "[[_README]]"
   - "[[encryption]]"
@@ -41,6 +44,13 @@ Every environment variable the app reads, where it lives, and who depends on it.
 | `DATAFORSEO_LOGIN` | ❌ server-only | yes | DataForSEO account | Default enrichment provider basic auth |
 | `DATAFORSEO_PASSWORD` | ❌ server-only | yes | DataForSEO account | Same |
 | `GOOGLE_GENERATIVE_AI_API_KEY` | ❌ server-only | optional (required for AI features) | https://aistudio.google.com/apikey | `src/lib/ai/client.ts#getAiClient` — Gemini Flash for AI-01/AI-03/AI-04/AI-05. When absent, `/api/user/ai-settings` reports `available: false` and the Settings AI toggle is disabled. |
+| `CRON_SECRET` | ❌ server-only | yes (for the refresh cron) | Generated; set in Vercel | `GET /api/cron/refresh-places` bearer auth (Vercel Cron sends it). Absent → cron returns 500. See [[runbooks/periodic-refresh]]. |
+| `HONEYCOMB_API_KEY` | ❌ server-only | optional (required for the Honeycomb pipe) | Honeycomb → ingest key | `src/instrumentation-node.ts` — OTel trace + log exporters. Absent → Honeycomb pipe dark, console pipe unaffected. |
+| `HONEYCOMB_DATASET` | ❌ server-only | optional | — | Dataset name; defaults to `map-organiser`. |
+| `HONEYCOMB_API_URL` | ❌ server-only | optional | — | Defaults to `https://api.honeycomb.io` (US). |
+| `LANGFUSE_PUBLIC_KEY` | ❌ server-only | optional (required for the Langfuse pipe) | cloud.langfuse.com → Settings → API Keys | `src/lib/telemetry/langfuse.ts` — LLM span export. Absent (with the secret) → processor skipped entirely. |
+| `LANGFUSE_SECRET_KEY` | ❌ server-only | optional (same) | Same | Same. |
+| `LANGFUSE_BASE_URL` | ❌ server-only | optional | — | Read by the Langfuse SDK itself; EU cloud default `https://cloud.langfuse.com`. |
 
 ## Where they're set
 
@@ -97,6 +107,10 @@ Practical rules:
 | `ENCRYPTION_SECRET` | `process.env.ENCRYPTION_SECRET` in the AES-256-GCM helpers |
 | `DATAFORSEO_LOGIN` / `DATAFORSEO_PASSWORD` | `process.env.DATAFORSEO_*` in `src/lib/dataforseo/client.ts` |
 | `GOOGLE_GENERATIVE_AI_API_KEY` | `process.env.GOOGLE_GENERATIVE_AI_API_KEY` in `src/lib/ai/client.ts#getAiClient` |
+| `CRON_SECRET` | `process.env.CRON_SECRET` in `src/app/api/cron/refresh-places/route.ts` (bearer check) |
+| `HONEYCOMB_API_KEY` / `HONEYCOMB_DATASET` / `HONEYCOMB_API_URL` | `process.env.HONEYCOMB_*` in `src/instrumentation-node.ts` |
+| `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` | `process.env.LANGFUSE_*` in `src/lib/telemetry/langfuse.ts` (presence gate) |
+| `LANGFUSE_BASE_URL` | Read internally by `LangfuseSpanProcessor` (`@langfuse/otel`) — no direct `process.env` read in app code |
 
 ## When to add a new env var
 

@@ -2,7 +2,7 @@
 title: AI Enrichment Flow
 type: flow
 domain: places
-version: 1.3.1
+version: 1.3.2
 last_updated: 15.07.2026
 status: stable
 sources:
@@ -25,6 +25,8 @@ related:
 # AI Enrichment Flow
 
 > **Bug fix (v1.15.1, 15.07.2026):** `.map(compactReview)` was passing the array INDEX as `compactReview`'s `maxChars` param — review *i* was truncated to *i* characters, so every full profile generated since Phase 4 (19.05.2026) was built from near-empty review text (all 451 profiles affected; the LLM leaned on place_topics/attributes/lite-prior and fabricated the rest, including evidence quotes). Fixed to `.map((r) => compactReview(r))`; all affected profiles need regeneration — see v4 PART 4 #8.
+
+> **Telemetry (v1.16.0):** `generatePlaceProfile` carries `experimental_telemetry` (span `ai.generate-profile`, userId+placeId metadata); the enrich route stamps Langfuse trace fields (`place-profile`) and flushes via `after(flushLangfuse)`. See [[observability-flow]].
 
 > The map of how a saved place accretes AI data. Every place starts as a
 > bare row; enrichment layers extended data, reviews, and AI profiles onto

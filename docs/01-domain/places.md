@@ -2,7 +2,7 @@
 title: Place
 type: entity
 domain: places
-version: 1.2.0
+version: 1.2.1
 last_updated: 15.07.2026
 status: stable
 sources:
@@ -43,6 +43,8 @@ related:
 ---
 
 # Place
+
+> **Telemetry (v1.16.0):** the enrich profile step now exports LLM spans to Langfuse (trace `place-profile`). Domain semantics unchanged. See [[../05-flows/observability-flow]].
 
 A single user-saved location. The atomic unit of the app — every other entity (List, Trip, Tag, Share) ultimately points at one or more Places.
 

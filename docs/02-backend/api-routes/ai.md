@@ -2,7 +2,7 @@
 title: AI routes
 type: route-group
 domain: backend
-version: 1.4.0
+version: 1.4.1
 last_updated: 15.07.2026
 status: stable
 sources:
@@ -21,6 +21,8 @@ related:
 ---
 
 # AI routes
+
+> **Telemetry (v1.16.0):** both routes wrap their `generateText` call in Langfuse `propagateAttributes` (trace `ai-search`, userId, tags) and flush the Langfuse span batch via `after(flushLangfuse)`. See [[../../05-flows/observability-flow]].
 
 Routes that call Gemini Flash directly from the request handler (not via
 the enrich background chain). Shipped in Phase 6 to support the AI-01

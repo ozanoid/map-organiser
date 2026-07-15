@@ -2,7 +2,7 @@
 title: Periodic place refresh (cron)
 type: runbook
 domain: ops
-version: 1.1.0
+version: 1.1.1
 last_updated: 15.07.2026
 status: stable
 sources:
@@ -18,6 +18,8 @@ related:
 ---
 
 # Periodic place refresh (cron)
+
+> **Telemetry (v1.16.0):** each cron re-profile call exports gen_ai spans to Langfuse under trace `cron-refresh-places` (tag `cron`); the route flushes the batch via `after(flushLangfuse)`. See [[../../05-flows/observability-flow]].
 
 The **AI-22 v1** data-freshness sweep. A daily Vercel Cron keeps every
 place's Google data and AI profile from going stale — the systemic answer

@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
+import { propagateAttributes } from "@langfuse/tracing";
 import { createClient } from "@/lib/supabase/server";
 import { DataForSEOClient } from "@/lib/dataforseo/client";
 import { fetchBusinessInfoLive } from "@/lib/dataforseo/business-info";
@@ -12,6 +13,7 @@ import type { GoogleReview } from "@/lib/types";
 import { downloadAndStorePhotoFromUrl } from "@/lib/dataforseo/photo";
 import { trackUsage } from "@/lib/google/track-usage";
 import { generatePlaceProfile } from "@/lib/ai/generate-profile";
+import { flushLangfuse } from "@/lib/telemetry/langfuse";
 
 function getDataForSEOClient(): DataForSEOClient | null {
   const login = process.env.DATAFORSEO_LOGIN;
@@ -170,7 +172,13 @@ export async function POST(
   // refresh cron can run it with the service client. This branch is the
   // cookie-authed HTTP shell; response shapes are unchanged.
   if (step === "profile") {
-    const outcome = await generatePlaceProfile(supabase, user.id, id);
+    // Flush the Langfuse span batch once the response is sent (serverless).
+    after(flushLangfuse);
+    // Langfuse trace-level fields for the gen_ai spans created inside.
+    const outcome = await propagateAttributes(
+      { traceName: "place-profile", userId: user.id, tags: ["enrichment"] },
+      () => generatePlaceProfile(supabase, user.id, id)
+    );
     if (outcome.ok) {
       return NextResponse.json({ ok: true, applied: outcome.applied });
     }

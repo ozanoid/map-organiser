@@ -1,8 +1,10 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
+import { propagateAttributes } from "@langfuse/tracing";
 import { createServiceClient } from "@/lib/supabase/server";
 import { refreshPlaceGoogleData } from "@/lib/places/refresh-google-data";
 import { generatePlaceProfile } from "@/lib/ai/generate-profile";
 import { log } from "@/lib/telemetry/logger";
+import { flushLangfuse } from "@/lib/telemetry/langfuse";
 
 /**
  * GET /api/cron/refresh-places — periodic data-freshness sweep (AI-22 v1).
@@ -72,6 +74,10 @@ export async function GET(request: NextRequest) {
   if (request.headers.get("authorization") !== `Bearer ${secret}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  // Flush the tail of Langfuse's span batch when the sweep is done —
+  // intermediate batches auto-flush during the (up to 300s) run.
+  after(flushLangfuse);
 
   const admin = createServiceClient();
 
@@ -192,10 +198,21 @@ export async function GET(request: NextRequest) {
           r.totalReviews > 0 &&
           (r.newReviews > CRON_REPROFILE_MIN_NEW_REVIEWS || !r.hadProfile);
         if (wantsProfile && (await aiEnabledFor(place.user_id as string))) {
-          const p = await generatePlaceProfile(
-            admin,
-            place.user_id as string,
-            place.id as string
+          // Langfuse trace-level fields for the gen_ai spans inside. The
+          // whole sweep is ONE OTel trace; per-place userId still lands on
+          // each generation span (single-user in practice, so no clashes).
+          const p = await propagateAttributes(
+            {
+              traceName: "cron-refresh-places",
+              userId: place.user_id as string,
+              tags: ["cron"],
+            },
+            () =>
+              generatePlaceProfile(
+                admin,
+                place.user_id as string,
+                place.id as string
+              )
           );
           if (p.ok) profiled++;
           else {

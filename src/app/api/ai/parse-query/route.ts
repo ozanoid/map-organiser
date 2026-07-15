@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { generateText, Output } from "ai";
+import { propagateAttributes } from "@langfuse/tracing";
 import { createClient } from "@/lib/supabase/server";
 import { getAiClient, FLASH_MODEL } from "@/lib/ai/client";
 import { buildUserContext, countriesForCity } from "@/lib/ai/context-builder";
@@ -10,6 +11,7 @@ import {
 import { buildParseQueryPrompt } from "@/lib/ai/prompts/parse-query";
 import { trackAiUsage, checkAiBudget } from "@/lib/ai/track-usage";
 import { log } from "@/lib/telemetry/logger";
+import { flushLangfuse } from "@/lib/telemetry/langfuse";
 
 /**
  * POST /api/ai/parse-query
@@ -38,6 +40,10 @@ export async function POST(request: NextRequest) {
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  // Langfuse ships spans in batches; a serverless function can suspend
+  // right after the response is sent. Flush once the response is done.
+  after(flushLangfuse);
 
   // ─── Auth gate: ai_features_enabled flag ───
   const { data: profileRow } = await supabase
@@ -102,21 +108,33 @@ export async function POST(request: NextRequest) {
   // UUIDs), but unknown LLM weirdness still gets a graceful degrade.
   let parsed: ParseQueryOutput;
   try {
-    const result = await generateText({
-      model: aiClient(FLASH_MODEL),
-      output: Output.object({ schema: ParseQuerySchema }),
-      system: systemPrompt,
-      prompt: userPrompt,
-      // OTel: produces gen_ai.* spans (system, model, prompt, completion,
-      // input_tokens, output_tokens, latency). Picked up by @vercel/otel
-      // and forwarded to Axiom via Vercel's platform pipe. functionId
-      // becomes the span name. metadata becomes span attributes.
-      experimental_telemetry: {
-        isEnabled: true,
-        functionId: "ai.parse-query",
-        metadata: { userId: user.id, queryLen: query.length },
+    // propagateAttributes stamps Langfuse trace-level fields (name, user,
+    // tags) onto every span created inside the callback. rank-results
+    // continues this same OTel trace via traceparent (v1.10.0), so the
+    // whole search pipeline shows up as ONE "ai-search" trace in Langfuse.
+    const result = await propagateAttributes(
+      {
+        traceName: "ai-search",
+        userId: user.id,
+        tags: ["ai-search"],
       },
-    });
+      () =>
+        generateText({
+          model: aiClient(FLASH_MODEL),
+          output: Output.object({ schema: ParseQuerySchema }),
+          system: systemPrompt,
+          prompt: userPrompt,
+          // OTel: produces gen_ai.* spans (system, model, prompt, completion,
+          // input_tokens, output_tokens, latency). Exported to Honeycomb +
+          // Langfuse (see instrumentation-node.ts). functionId becomes the
+          // span name. metadata becomes span attributes.
+          experimental_telemetry: {
+            isEnabled: true,
+            functionId: "ai.parse-query",
+            metadata: { userId: user.id, queryLen: query.length },
+          },
+        })
+    );
     parsed = result.output;
   } catch (e) {
     log.error("ai.parse-query.llm_failed", e, { userId: user.id, query });

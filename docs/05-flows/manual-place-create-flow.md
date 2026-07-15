@@ -2,8 +2,8 @@
 title: Manual Place Create Flow
 type: flow
 domain: places
-version: 1.1.1
-last_updated: 20.05.2026
+version: 1.1.2
+last_updated: 15.07.2026
 status: stable
 sources:
   - src/components/places/add-place-dialog.tsx
@@ -23,6 +23,8 @@ related:
 ---
 
 # Manual Place Create Flow
+
+> **Telemetry (v1.16.0):** the enrich chain's profile step now exports LLM spans to Langfuse. Flow behavior unchanged. See [[observability-flow]].
 
 How a single place is added — by pasting a Google Maps URL into the Add Place dialog. The same flow handles places coming in via the PWA share target (see [[share-target-flow]]).
 

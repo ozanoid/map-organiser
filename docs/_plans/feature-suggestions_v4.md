@@ -2,7 +2,7 @@
 title: "Feature Suggestions v4"
 type: plan
 domain: overview
-version: 4.1.0
+version: 4.1.1
 last_updated: 15.07.2026
 status: stable
 related:
@@ -369,6 +369,7 @@ v3-ai-first kendi AI numaralarını kullandı; karışıklığı önlemek için 
 | Cron sweep: kullanıcı başına TÜMÜYLE opt-in (default kapalı) + re-profile için >15 yeni yorum eşiği; omurga tazeleme Oca/Tem | 15.07.2026 | [[../06-ops/runbooks/periodic-refresh]] |
 | S0: PR #61 taze yeniden uygulandı (bayat dal), superseded kapatılır | 15.07.2026 | Bu doküman PART 4 #1 |
 | S0: yeni strict lint kuralları (any + react-hooks-7) `warn` — kademeli adopte | 15.07.2026 | Bu doküman PART 4 #12 |
+| Langfuse LLM observability: tüm Gemini çağrıları Honeycomb'a EK olarak Langfuse'a export (OTel spanProcessors, LLM-only filtre; S0.5 ara işi, kullanıcı talebi) | 15.07.2026 | [[../05-flows/observability-flow]] |
 
 ## 5.3 Bu dokümanın bakımı
 

@@ -2,8 +2,8 @@
 title: AI Search Flow (LLM-as-judge, Phase 6.5)
 type: flow
 domain: places
-version: 2.5.1
-last_updated: 20.05.2026
+version: 2.5.2
+last_updated: 15.07.2026
 status: stable
 sources:
   - src/app/api/ai/parse-query/route.ts
@@ -30,6 +30,8 @@ related:
 ---
 
 # AI Search Flow (LLM-as-judge, Phase 6.5)
+
+> **Telemetry (v1.16.0):** parse-query + rank-results gen_ai spans now also export to Langfuse (LLM-only); the traceparent propagation below means the whole search shows as ONE `ai-search` trace there. See [[observability-flow]].
 
 User types a natural-language query — `"restaurants for dating in london"`,
 `"cozy cafes for remote work"`, `"all my vegan restaurants"` — and the

@@ -2,7 +2,7 @@
 title: Repo Structure
 type: overview
 domain: overview
-version: 1.2.0
+version: 1.2.1
 last_updated: 15.07.2026
 status: stable
 sources:
@@ -110,6 +110,8 @@ src/
     ├── map/                   category-icons.ts (canvas marker rendering)
     ├── trip/                  auto-plan.ts (k-means clustering), directions.ts (Mapbox wrapper)
     ├── supabase/              client.ts (browser), server.ts (+ createServiceClient), middleware.ts (updateSession)
+    ├── telemetry/             logger.ts (dual-write log.*), trace-context.ts (W3C traceparent mint),
+    │                          langfuse.ts (LangfuseSpanProcessor singleton + flushLangfuse) — see [[../05-flows/observability-flow]]
     ├── types/                 index.ts — domain types (Place, Trip, Category, Subcategory, Tag, …)
     ├── geo.ts                 Shared PostGIS point parser (EWKB hex / WKT / GeoJSON / plain object)
     ├── providers.tsx          ThemeProvider + QueryClientProvider
