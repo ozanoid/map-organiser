@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
+import { AI_SKU_CONFIG } from "@/lib/ai/track-usage";
 
 export const SKU_CONFIG = {
   text_search_pro: { name: "Text Search", costPer1k: 17.0, freeMonthly: 5000 },
@@ -84,8 +85,12 @@ export async function getMonthlyUsage(
     totals[row.sku] = (totals[row.sku] || 0) + row.count;
   }
 
-  // Build result for all SKUs
-  return Object.entries(SKU_CONFIG).map(([sku, config]) => {
+  // Build result for all SKUs — Google/DataForSEO/Mapbox (SKU_CONFIG) plus
+  // the AI SKUs (AI_SKU_CONFIG), which live in a separate registry but write
+  // the same api_usage table. Without the merge the cost tracker silently
+  // omits every ai_* SKU.
+  const DISPLAY_CONFIG = { ...SKU_CONFIG, ...AI_SKU_CONFIG };
+  return Object.entries(DISPLAY_CONFIG).map(([sku, config]) => {
     const count = totals[sku] || 0;
     const billableCount = Math.max(0, count - config.freeMonthly);
     const estimatedCost = (billableCount / 1000) * config.costPer1k;

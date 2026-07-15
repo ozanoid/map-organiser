@@ -6,7 +6,26 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
-## 15.07.2026 — v1.14.1 — Vault consistency sweep (post-v4)
+## 15.07.2026 — v1.14.2 — Post-deploy fixes from live v4 testing
+
+Three issues surfaced testing #62 on the live deploy:
+
+- **Cron 307-redirected to `/login`** (never ran). `src/lib/supabase/middleware.ts`
+  now exempts `/api/cron/*` from the session-redirect — the cron has no cookie
+  (Vercel sends `CRON_SECRET` as a bearer) and authenticates itself. Doc:
+  `05-flows/auth-flow.md` v1.1.0.
+- **Cost tracker omitted every AI SKU.** `getMonthlyUsage` iterated only the
+  Google `SKU_CONFIG`; the `ai_*` SKUs live in `AI_SKU_CONFIG` and were dropped
+  from the display even though the rows exist. Now merges both registries.
+  (Estimated cost uses the current config price, so AI lines show Gemini 3
+  rates going forward; historical rows keep their stamped `cost_per_1k`, which
+  the display doesn't read.)
+- **AI summary refresh failed silently.** `AiSummaryCard` now toasts the
+  server's reason on failure (LLM error / not configured / budget) instead of
+  a bare `console.error` — makes summary-generation failures visible and
+  diagnosable. (Investigating a separate report that manual refresh isn't
+  regenerating the profile on the live deploy — model id `gemini-3-flash-preview`
+  is verified valid; root cause pending a live signal.)
 
 Documentation-only audit closing gaps left across the day's code changes.
 

@@ -37,7 +37,11 @@ export async function updateSession(request: NextRequest) {
     request.nextUrl.pathname === "/" ||
     request.nextUrl.pathname.startsWith("/auth/callback") ||
     request.nextUrl.pathname.startsWith("/shared/") ||
-    request.nextUrl.pathname.startsWith("/api/shared/");
+    request.nextUrl.pathname.startsWith("/api/shared/") ||
+    // Cron runs with no cookie (Vercel sends CRON_SECRET as a bearer);
+    // the route authenticates itself, so skip the session-redirect here.
+    // Without this the cron 307-redirects to /login and never executes.
+    request.nextUrl.pathname.startsWith("/api/cron/");
 
   if (!user && !isAuthRoute && !isPublicRoute) {
     const url = request.nextUrl.clone();
