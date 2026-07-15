@@ -7,6 +7,9 @@ last_updated: 15.07.2026
 status: stable
 sources:
   - src/app/api/places/[id]/enrich/route.ts
+  - src/lib/ai/generate-profile.ts
+  - src/lib/places/refresh-google-data.ts
+  - src/lib/dataforseo/transform.ts
   - src/lib/ai/track-usage.ts
 related:
   - "[[lite-profile-flow]]"

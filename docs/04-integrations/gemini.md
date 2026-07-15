@@ -125,7 +125,7 @@ Free tier: 15 RPM / 1M TPM (verify in AI Studio). Beyond that, paid quota. At ou
 `buildPlaceProfilePrompt` in `src/lib/ai/prompts/place-profile-full.ts` builds the call:
 
 - **System prompt** bakes the user's full taxonomy inline — every existing category (name), every sub-category slug grouped by parent, every existing tag (ID + name), every list (ID + name), and the user's cities/countries. The LLM is told to **prefer existing IDs** and only propose new vocabulary when nothing fits.
-- **User prompt** ships place metadata (name, address, current_category_name, Google types, DataForSEO attributes, place_topics, rating distribution, price level) + up to 50 reviews, each capped at 400 chars.
+- **User prompt** ships place metadata (name, address, current_category_name, Google types, DataForSEO attributes, place_topics, rating distribution, price level) + up to 50 reviews, each capped at 1000 chars (raised from 400 on 15.07.2026). When the stored corpus exceeds 50, the prompt blends **35 relevance-backbone + 15 freshest** (`selectReviewsForPrompt`) — never newest-50 alone; see [[../05-flows/full-profile-flow]].
 - The LLM is also instructed to push back if the current category is wrong: that's how Phase 5.5's category-mismatch detection works without an extra schema field.
 
 The output schema is Zod-strict (`PlaceProfileSchema` in `src/lib/ai/schemas/place-profile.ts`) — any field type mismatch trips the SDK before we touch the DB.

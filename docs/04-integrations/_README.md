@@ -2,8 +2,8 @@
 title: Integrations
 type: overview
 domain: integrations
-version: 1.1.0
-last_updated: 18.05.2026
+version: 1.2.0
+last_updated: 15.07.2026
 status: stable
 related:
   - "[[supabase]]"
@@ -29,7 +29,7 @@ Third-party services and runtime libraries that materially shape how this app wo
 | **Mapbox** | Map rendering (GL JS) + Directions API for trip routes | [[mapbox]] |
 | **Google Places API** | Authoritative place data when the user provides a key | [[google-places]] |
 | **DataForSEO Business Data** | Default enrichment provider (no per-user key) | [[dataforseo]] |
-| **Google Gemini** (Generative Language API) | AI feature provider — Phase 4 full place_profile, Phase 6 NL search (planned) | [[gemini]] |
+| **Google Gemini** (Generative Language API) | AI feature provider — `gemini-3-flash-preview`. Phase 4 full place_profile, Phase 6 NL search (both shipped) | [[gemini]] |
 
 ## Runtime libraries (architecturally significant)
 
@@ -65,7 +65,9 @@ Observed SKUs (see [[../02-backend/schema/api_usage#sku-naming-convention]]):
 - `google.place_photo`
 - `dataforseo.business_info`
 - `dataforseo.reviews`
-- `ai_place_profile` (Phase 4) — one Gemini Flash call per place_profile generation/refresh.
+- `ai_place_profile` (Phase 4) — one Gemini call per place_profile generation/refresh.
+- `ai_parse_query` (Phase 6) — NL search parse; one per search (also the search-budget unit).
+- `ai_rank_results` (Phase 6) — LLM-as-judge rerank when a query needs semantic ranking.
 
 Mapbox calls (map tile loads, Directions) are **not** tracked through `api_usage` — Mapbox tracks them on their dashboard.
 

@@ -2,8 +2,8 @@
 title: Places components
 type: component
 domain: frontend
-version: 1.1.0
-last_updated: 18.05.2026
+version: 1.2.0
+last_updated: 15.07.2026
 status: stable
 sources:
   - src/components/places/add-place-dialog.tsx
@@ -52,10 +52,10 @@ Seven files under `src/components/places/`. All `"use client"`. The Place-relate
 ## `AiSummaryCard`
 
 - **File:** `src/components/places/ai-summary-card.tsx` (Phase 4)
-- **Props:** `{ placeId, profile?, reviewsAvailable, onRefreshed? }`.
+- **Props:** `{ placeId, profile?, reviewsAvailable, reviews?, onRefreshed? }`. `reviews` (15.07.2026) is read only to compare the newest review's `publish_time` against `profile.generated_at` for the staleness badge.
 - **Renders:** Two states.
   - **Skeleton state** — reviews exist but `profile.completeness !== "full"`. Shows three skeleton lines + a `↻ generate` button (Phase 4 patch added the button to skeleton so pre-Phase-4 places can be backfilled manually).
-  - **Full state** — TLDR paragraph + two-column **✓ Highlights** (pros) / **⚠ Watch out** (cons) lists + theme-insight pills (sentiment emoji + mention count + click-to-expand evidence quote) + distinctive feature pills. Refresh button (`↻ refresh`) in the top-right re-fires `step=profile`.
+  - **Full state** — an amber **staleness hint** when a stored review is newer than the summary (15.07.2026 — safety net; the refresh chain normally regenerates automatically) + TLDR paragraph + two-column **✓ Highlights** (pros) / **⚠ Watch out** (cons) lists + theme-insight pills (sentiment emoji + mention count + click-to-expand evidence quote) + distinctive feature pills. Refresh button (`↻ refresh`) in the top-right re-fires `step=profile`.
 - **API call:** `POST /api/places/[id]/enrich?step=profile` on refresh.
 - **Used by:** Place detail page (`src/app/(app)/places/[id]/page.tsx`) above the Amenities section.
 - **Hidden when:** no reviews available (lets the existing "Loading reviews…" banner own that state).

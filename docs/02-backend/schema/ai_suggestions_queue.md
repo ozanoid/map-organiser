@@ -41,7 +41,7 @@ review before they pollute the user's tag/sub-category vocabulary.
 | `confidence` | numeric | no | — | LLM confidence 0..1 (CHECK `>= 0 AND <= 1`). |
 | `status` | text | no | `'pending'` | CHECK: `'pending'` / `'accepted'` / `'rejected'`. |
 | `resolved_at` | timestamptz | yes | — | Set when status leaves pending. |
-| `source_model` | text | yes | — | e.g. `gemini-flash-latest`. For traceability when models change. |
+| `source_model` | text | yes | — | e.g. `gemini-3-flash-preview` (older rows carry `gemini-flash-latest`). For traceability when models change. |
 | `created_at` | timestamptz | no | `now()` | — |
 
 ## Indexes
