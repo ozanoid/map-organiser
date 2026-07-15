@@ -2,8 +2,8 @@
 title: DataForSEO Business Data
 type: integration
 domain: integrations
-version: 1.0.0
-last_updated: 12.05.2026
+version: 1.1.0
+last_updated: 15.07.2026
 status: stable
 sources:
   - src/lib/dataforseo/
@@ -46,7 +46,7 @@ Implementation in `src/lib/dataforseo/`:
 | `client.ts` | Low-level HTTP client; auth header construction. |
 | `api-types.ts` | Type definitions for DataForSEO responses. |
 | `business-info.ts` | `fetchBusinessInfoLive(query)` — the main endpoint. Returns full business profile. |
-| `reviews.ts` | `fetchReviews(cid, depth)` — reviews endpoint with pagination. |
+| `reviews.ts` | `fetchReviews({cid, depth, sort_by})` — reviews endpoint. Default sort `relevant` (initial/import — establishes the relevance backbone); refreshes pass `newest` to discover new reviews. |
 | `transform.ts` | `transformBusinessInfoToPlaceData(response)` → `ParsedPlaceData`. |
 | `category-adapter.ts` | DataForSEO category string → one of our 12 default categories. |
 | `opening-hours-adapter.ts` | DataForSEO `work_time` → `weekday_text[]` + `open_now`. |
@@ -62,7 +62,7 @@ Implementation in `src/lib/dataforseo/`:
 | `/api/places/import` (legacy NDJSON) | Same. |
 | `/api/places/[id]/enrich?step=info` | Re-enrich a single place's business info. |
 | `/api/places/[id]/enrich?step=reviews` | Fetch reviews for a place. |
-| `/api/places/[id]/refresh-google-data` | One-shot info + reviews refresh. |
+| `/api/places/[id]/refresh-google-data` | Full re-lookup: info + `newest` reviews **merged** into the corpus (`mergeReviews`, not replace) + chains to `step=profile`. Also runs headless in the cron. |
 | `/api/places/bulk-enrich-reviews` | Background bulk review enrichment (batch=5, depth=50). |
 
 ## SKUs tracked

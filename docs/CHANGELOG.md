@@ -6,6 +6,26 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 15.07.2026 — v1.14.1 — Vault consistency sweep (post-v4)
+
+Documentation-only audit closing gaps left across the day's code changes.
+
+- **Structural docs caught up:** `repo-structure.md` v1.2.0 (new `/api/cron/`
+  route group, `src/lib/places/`, `generate-profile.ts`, route count);
+  `api-routes/_README.md` v1.4.0 (Cron group; the RLS convention now carves
+  out the service-role/cron exception — those paths MUST filter by
+  `user_id`; service-role client list + helper table + count updated).
+- **Stale facts fixed:** `full-profile-flow.md` daily→monthly cap +
+  `generate-profile.ts` in sources; `gemini.md` review-input line
+  (400→1000 chars + 35/15 blend); `ai_suggestions_queue.md` source_model
+  example; `04-integrations/_README.md` "NL search (planned)" → shipped +
+  `ai_parse_query`/`ai_rank_results` SKUs; `dataforseo.md` v1.1.0
+  (`fetchReviews` sort_by + refresh merge/chain); `places.md` route
+  description; `ai-enrichment-flow.md` sources.
+- **New surfaces documented:** `users-and-profiles.md` v1.2.0
+  (`cron_refresh_enabled`); `components/places.md` v1.2.0 (AiSummaryCard
+  `reviews` prop + staleness badge).
+
 ## 15.07.2026 — v1.14.0 — Periodic refresh cron (AI-22 v1) + Gemini 3 pricing true-up
 
 The systemic answer to profile staleness: a daily sweep keeps Google data

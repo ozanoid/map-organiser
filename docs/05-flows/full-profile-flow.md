@@ -7,6 +7,7 @@ last_updated: 15.07.2026
 status: stable
 sources:
   - src/app/api/places/[id]/enrich/route.ts
+  - src/lib/ai/generate-profile.ts
   - src/lib/ai/prompts/place-profile-full.ts
   - src/lib/ai/apply-suggestions.ts
   - src/lib/ai/schemas/place-profile.ts
@@ -199,7 +200,7 @@ match is found, the route reuses that entity — no duplicate row.
 
 - **AI features disabled** → step=profile returns 403; UI never renders the card (skeleton hidden because `reviewsAvailable` check is independent of the toggle, but the chain from reviews skips, so no card materializes).
 - **`GOOGLE_GENERATIVE_AI_API_KEY` missing** → 503 from step=profile. AiSummaryCard skeleton lingers until polling cap (2 min) then stops; user sees the placeholder. Acceptable in dev environments.
-- **Daily cost cap exceeded** → step=profile returns 429 before the Gemini call. A backfill dispatch swallows it (fire-and-forget); a manual refresh surfaces it. Resets at UTC midnight. See [[ai-enrichment-flow#cost-cap]].
+- **Monthly profile budget exceeded** → step=profile returns 429 before the Gemini call (`AI_MONTHLY_PROFILE_CAP`, 1000/month). A backfill/cron dispatch swallows it (fire-and-forget); a manual refresh surfaces it. Resets on the 1st (UTC). See [[ai-enrichment-flow#cost-cap]].
 - **LLM throws or returns invalid JSON** → caught; 500 returned. `places.google_data.place_profile` stays `lite` (or null). Polling caps at 2 min. User can hit the Refresh button on the (lite or absent) card to retry.
 - **No reviews on the place** → 400 `no_reviews`. Card stays in pending-with-message state.
 - **Apply-suggestions throws mid-flight** → profile is already persisted (step 5h finished). Some suggestions may apply, some may not. Re-running step=profile is safe; junction rows are deduped by check-then-insert.

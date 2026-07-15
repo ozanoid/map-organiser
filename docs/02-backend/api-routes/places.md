@@ -39,7 +39,7 @@ Eleven route handler files under `/api/places/*`. The Place is the most-touched 
 | `PATCH` | `/api/places/[id]` | Partial update + tag/list sync. |
 | `DELETE` | `/api/places/[id]` | Delete with cascade across junctions. |
 | `POST` | `/api/places/[id]/enrich` | Re-run enrichment (`step=info` or `step=reviews`). |
-| `POST` | `/api/places/[id]/refresh-google-data` | Full re-fetch (info + reviews + photo). |
+| `POST` | `/api/places/[id]/refresh-google-data` | Full re-fetch: info + `newest` reviews merged into the corpus (not replace) + photo, then chains to `step=profile`. Core logic in `src/lib/places/refresh-google-data.ts` (shared with the cron). |
 | `POST` | `/api/places/bulk` | Bulk update_category / add_tags / add_to_list / update_status / delete / check_trips. |
 | `POST` | `/api/places/bulk-enrich-reviews` | Background bulk review enrichment. |
 | `POST` | `/api/places/import` | NDJSON-streaming legacy import. |

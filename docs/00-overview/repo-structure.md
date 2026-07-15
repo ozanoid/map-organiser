@@ -2,8 +2,8 @@
 title: Repo Structure
 type: overview
 domain: overview
-version: 1.1.0
-last_updated: 18.05.2026
+version: 1.2.0
+last_updated: 15.07.2026
 status: stable
 sources:
   - src/
@@ -79,7 +79,8 @@ src/
 │   ├── shared/layout.tsx
 │   ├── offline/page.tsx       PWA offline fallback
 │   └── api/                   Route handlers (see [[../02-backend/api-routes/_README]])
-│       ├── places/            CRUD + bulk + enrich (info/reviews/profile) + import + parse-link (returns lite_profile) + migrate-photos
+│       ├── places/            CRUD + bulk + enrich (info/reviews/profile) + refresh-google-data (merge + profile chain) + import + parse-link (returns lite_profile) + migrate-photos
+│       ├── cron/              refresh-places — daily periodic-refresh sweep (CRON_SECRET, service-role, opt-in per user)
 │       ├── trips/             CRUD + auto-plan + day reorder + day places + swap-days
 │       ├── lists/[id]/reorder
 │       ├── subcategories/     CRUD (per-user; default seed via signup trigger)
@@ -96,12 +97,13 @@ src/
 │   ├── sw-register.tsx        Service worker registration (client component)
 │   └── ui/                    shadcn primitives (avatar, badge, button, card, command, dialog, dropdown-menu, input, input-group, popover, select, separator, sheet, skeleton, sonner, tabs, textarea)
 └── lib/
-    ├── ai/                    AI SDK v6 wiring (Gemini Flash). client.ts, context-builder.ts,
-    │                          dedup.ts, normalize.ts, track-usage.ts; schemas/ (Zod);
-    │                          prompts/ (place-profile-full.ts); extract/ (lite-profile.ts,
+    ├── ai/                    AI SDK v6 wiring (Gemini 3 Flash). client.ts, context-builder.ts,
+    │                          dedup.ts, normalize.ts, track-usage.ts (budgets), generate-profile.ts;
+    │                          schemas/ (Zod); prompts/ (place-profile-full.ts); extract/ (lite-profile.ts,
     │                          category-resolver.ts, features-extractor.ts,
     │                          suggestions-from-profile.ts); apply-suggestions.ts.
-    ├── dataforseo/            DataForSEO client + types + adapters + transform + reviews + photo
+    ├── places/                refresh-google-data.ts — service-client-safe full re-lookup + review merge (shared by refresh route + cron)
+    ├── dataforseo/            DataForSEO client + types + adapters + transform (mergeReviews) + reviews + photo
     ├── google/                Google Places + URL parser + category mapping + Takeout parser + usage tracker + key access
     ├── hooks/                 React Query hooks: useCategories, useDebounce, useFilters, useLists, useMapStyle, usePlaces, useSharedLinks, useStats, useTags, useTrips, useSubcategories, useAiSuggestions
     ├── stores/                Zustand stores (currently just import-store.ts)
@@ -166,7 +168,7 @@ Counts (approximate, as of `last_updated`):
 | Area | Files |
 |---|---|
 | App routes (`src/app/**/page.tsx`) | 12 page files |
-| API route handlers (`src/app/api/**/route.ts`) | ~31 routes (added: 4 subcategories + 5 user/ai-* + step=profile branch) |
+| API route handlers (`src/app/api/**/route.ts`) | ~36 routes (added: 4 subcategories + 5 user/ai-* + step=profile branch + 2 `/api/ai/*` + `/api/cron/refresh-places`) |
 | Feature components (`src/components/{filters,layout,map,places,settings}`) | ~25 |
 | shadcn UI (`src/components/ui/`) | 19 primitives |
 | Custom hooks (`src/lib/hooks/`) | 12 (added: useSubcategories, useAiSuggestions) |

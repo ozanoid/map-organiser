@@ -2,8 +2,8 @@
 title: API Routes
 type: overview
 domain: backend
-version: 1.3.0
-last_updated: 18.05.2026
+version: 1.4.0
+last_updated: 15.07.2026
 status: stable
 sources:
   - src/app/api/
@@ -32,6 +32,7 @@ All Next.js route handlers grouped by area. Each linked doc is the canonical ref
 | User | `/api/user/*` — includes `ai-settings` (Phase 1) and `ai-suggestions/*` (Phase 5 moderation queue: list, accept, reject) | Required | [[user]] |
 | AI | `/api/ai/*` (Phase 6) — `parse-query`, `rank-results` for NL filtering | Required | [[ai]] |
 | Search | `/api/search/*` (Mapbox geocoder proxy) | Required | [[search]] |
+| Cron | `/api/cron/refresh-places` (15.07.2026) — daily periodic-refresh sweep | **`CRON_SECRET` bearer** (service-role) | [[../../06-ops/runbooks/periodic-refresh]] |
 | Share target | `/api/share-target` | **None** (PWA inbound) | [[share-target]] |
 | Auth callback | `/auth/callback` | **None** (OAuth handshake) | [[auth-callback]] |
 
@@ -39,7 +40,7 @@ All Next.js route handlers grouped by area. Each linked doc is the canonical ref
 
 ## Counts
 
-- ~35 route handler files (`src/app/api/**/route.ts` + `src/app/auth/callback/route.ts`) — Phase 6 adds 2: `/api/ai/parse-query`, `/api/ai/rank-results`.
+- ~36 route handler files (`src/app/api/**/route.ts` + `src/app/auth/callback/route.ts`) — Phase 6 added `/api/ai/parse-query` + `/api/ai/rank-results`; 15.07.2026 added `/api/cron/refresh-places`.
 - ~58 HTTP method exports across them
 
 ## Cross-route conventions
@@ -54,7 +55,7 @@ These hold for every route. See [[../_agent/conventions#api-routes]] for the ful
    if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
    ```
 
-2. **RLS does access control**, not the route. Don't add `.eq("user_id", user.id)` — it's redundant.
+2. **RLS does access control**, not the route. Don't add `.eq("user_id", user.id)` — it's redundant. **Exception:** the service-role paths (`GET /api/shared/[slug]`, `/api/cron/refresh-places` and the libs it calls) BYPASS RLS, so they MUST filter by `user_id` explicitly on every query. Never assume RLS on a service-role client.
 3. **Validate inputs.** Either Zod (preferred for complex bodies) or explicit destructuring with checks.
 4. **Status codes**:
    - `200` — success (including `Response.redirect`).
@@ -64,7 +65,7 @@ These hold for every route. See [[../_agent/conventions#api-routes]] for the ful
    - `409` — duplicate (e.g. `google_place_id` collision).
    - `500` — unhandled error.
 5. **Cost-tracked external calls go through `trackUsage`** (`src/lib/google/track-usage.ts`) → `increment_api_usage` RPC. Apply to every Google Places and DataForSEO call. For AI calls, use `trackAiUsage` (`src/lib/ai/track-usage.ts`) which writes the same table under `ai_*` SKUs.
-6. **Service-role client** (`createServiceClient()`) is used ONLY in `GET /api/shared/[slug]`. Every other route uses the cookie-scoped `createClient()`.
+6. **Service-role client** (`createServiceClient()`) is used in `GET /api/shared/[slug]` and `GET /api/cron/refresh-places` (the periodic sweep runs cross-user, so it can't use a cookie). Every other route uses the cookie-scoped `createClient()`. Service-role paths must filter by `user_id` (see #2).
 7. **PostGIS coords are always parsed.** Every route that returns a place coercion `location` to `{ lat, lng }` via `src/lib/geo.ts#parsePostgisPoint` before serializing.
 
 ## Common helpers
@@ -94,7 +95,10 @@ These are reused across many routes:
 | `applyProfileSuggestions` | `src/lib/ai/apply-suggestions.ts` | 4-band auto-apply policy for LLM output. |
 | `buildLiteProfile` | `src/lib/ai/extract/lite-profile.ts` | LLM-less rule-based profile inline in `parse-link`. |
 | `dedupProposals` / `isFuzzyMatch` | `src/lib/ai/dedup.ts`, `normalize.ts` | Post-LLM and accept-time fuzzy match. |
-| `trackAiUsage` | `src/lib/ai/track-usage.ts` | Per-SKU AI call counter. |
+| `trackAiUsage` / `checkAiBudget` | `src/lib/ai/track-usage.ts` | Per-SKU AI counter + monthly budget gate (search 500 / profile 1000). |
+| `generatePlaceProfile` | `src/lib/ai/generate-profile.ts` | Full place_profile generation + auto-apply. Service-client-safe (used by enrich route + cron). |
+| `refreshPlaceGoogleData` | `src/lib/places/refresh-google-data.ts` | Full DataForSEO re-lookup + review merge. Service-client-safe (used by refresh route + cron). |
+| `mergeReviews` / `countNewReviews` | `src/lib/dataforseo/transform.ts` | Two-tier review corpus (relevance backbone + newest pool). |
 
 ## When you add a new route
 
