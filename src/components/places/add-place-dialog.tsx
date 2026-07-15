@@ -35,6 +35,7 @@ import {
   Check,
   X,
   Sparkles,
+  ExternalLink,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { ParsedPlaceData, VisitStatus } from "@/lib/types";
@@ -376,6 +377,22 @@ export function AddPlaceDialog({ open, onOpenChange, initialUrl, source }: AddPl
                   </Badge>
                 )}
               </div>
+
+              {/* View on Google Maps — the URL already came back with the
+                  parse (used at save as google_data.url), so surfacing it
+                  as a link costs nothing. Lets the user verify the place
+                  on Maps before adding — works for every add path. */}
+              {placeData.googleMapsUrl && (
+                <a
+                  href={placeData.googleMapsUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 mt-2 text-xs text-emerald-600 hover:underline cursor-pointer"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
+                  View on Google Maps
+                </a>
+              )}
 
               {/* Provider indicator */}
               {providerInfo && (

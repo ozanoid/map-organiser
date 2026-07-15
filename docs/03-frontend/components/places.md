@@ -2,7 +2,7 @@
 title: Places components
 type: component
 domain: frontend
-version: 1.4.2
+version: 1.4.3
 last_updated: 15.07.2026
 status: stable
 sources:
@@ -61,7 +61,7 @@ Sixteen files under `src/components/places/`. All `"use client"`. The Place-rela
   6. `useCreatePlace` runs → place is saved.
   7. Two-phase enrichment after save: `info` (await) → `reviews` (fire-and-forget). When AI is enabled, the reviews route chains into `step=profile` (Phase 4) which populates `google_data.place_profile` and runs the 4-band auto-apply for tags + sub-cat + category-change.
 - **Used by:** `AppHeader` (Add Place button), `MapContent` (FAB + share-target intake).
-- **Notes:** Auto-resolves category from Google `types` via `resolveCategoryId` (lite path). Displays which provider served the parse (Google vs DataForSEO) + fetch time. Sticky action buttons at the bottom. The AI Suggestions panel is hidden when no chips are produced (handles AI-off cleanly).
+- **Notes:** Auto-resolves category from Google `types` via `resolveCategoryId` (lite path). Preview surfaces a free **View on Google Maps** link (`placeData.googleMapsUrl` already fetched by the parse — zero extra cost; v1.18.0). Displays which provider served the parse (Google vs DataForSEO) + fetch time. Sticky action buttons at the bottom. The AI Suggestions panel is hidden when no chips are produced (handles AI-off cleanly).
 
 ## `AiSummaryCard`
 
