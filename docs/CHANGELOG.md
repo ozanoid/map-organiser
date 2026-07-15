@@ -6,6 +6,75 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 15.07.2026 — v1.18.0 — S1-PR2: dynamic open-now, NF-05 similar places, NF-03 topic filter, NF-04 grouped amenities
+
+Second half of sprint S1 (v4 Tema 1) — completes place detail v2.
+
+- **Dynamic "Open now"** (user-requested during S1-PR1 testing): the
+  structured DataForSEO `timetable` (previously converted to
+  weekday_text and DISCARDED) is now stored as
+  `google_data.work_timetable`, alongside `google_data.tz` (IANA,
+  derived once server-side from coordinates via the new `tz-lookup`
+  dep — never shipped to client bundles). `src/lib/places/open-now.ts`
+  computes open/closed at RENDER/FILTER time in the place's OWN
+  timezone — overnight slots (18:00→02:00), 24h (open==close), null
+  days and invalid-tz all handled; 15-case smoke suite (tsx, real
+  module) ALL PASS incl. the same-UTC-instant Istanbul-open vs
+  London-closed pair. Surfaces: **"Open now" filter chip** (panel +
+  mobile sheet; `PlaceFilters.open_now` → `?open_now=true` → JS
+  post-filter in GET /api/places; unknown = excluded) and the **honest
+  live badge** on place detail ("Open now · closes 23:00" / "Open 24
+  hours" / "Closed now") — the correct replacement for the
+  crawl-snapshot badge removed in v1.17.0. Coverage grows as places
+  refresh (timetable/tz only exist on rows written after this release).
+- **NF-05 Similar places**: `people_also_search` (was never rendered)
+  → horizontal card strip (max 6) on place detail. **Preview-first
+  add** (final design after user testing): clicking a card opens
+  AddPlaceDialog pre-filled with the suggestion's `?cid=` URL —
+  parse-link handles CID URLs natively — so the decision happens on the
+  same first-class preview as a manual add (photo, hours, lite AI
+  profile + chips); save = standard POST /api/places + enrich chain
+  with `source: "similar"` (new dialog prop). An interim one-click
+  `/api/places/add-similar` route was built then REMOVED in favor of
+  the single path. Already-in-library suggestions render "Added ✓". The
+  dialog preview also shows a free **View on Google Maps** link
+  (`placeData.googleMapsUrl` already came with the parse — no extra
+  call) — benefits every add path, not just similar places.
+- **NF-03 topic click→filter**: "People mention" chips are buttons;
+  clicking filters the reviews list (case-insensitive text match) with
+  an active-topic chip + count in the header, clearable; pagination
+  index clamps instead of effect-resetting.
+- **NF-04 grouped amenities**: new `src/lib/places/attribute-icons.ts`
+  reconstructs groups from key prefixes (DataForSEO's own groups are
+  flattened away at storage): Accessibility / Food & Drink / Payments /
+  Atmosphere / Planning / Good to know / Facilities, each with lucide
+  icons; high-signal attributes get curated icons (wifi, dog, wine…).
+- **DB migration (LIVE, via Supabase MCP):**
+  `widen_places_source_check_add_similar` — `places_source_check`
+  CHECK widened to include `'similar'` (was
+  manual/import/link/mapbox_search; caught in adversarial review — the
+  insert would have failed on every add). Additive-only.
+- Adversarial review (24 agents, 4 lenses): 20 findings, 20 confirmed
+  (1 high = the CHECK constraint, 5 medium, 14 low) — 18 fixed, 2
+  accepted with notes (dedup race — single-user + serialized client;
+  DataForSEO cap absence → PART 4 #13 debt). Notable fixes: 60s
+  refetch bound on the open-now list, 60s badge tick, omitUndefined in
+  extractExtendedData (degraded crawl no longer strips stored keys),
+  topic-filter page reset, `{}` timetable = unknown not "closed".
+- **Preview-test feedback round (same day):** (a) SimilarPlaces cards
+  now show `category` + compact vote count ("Bakery · ★4.8 (1.2k)") —
+  both fields existed in the raw API and were DROPPED at transform;
+  older rows gain them on refresh. (b) Topic chips: Google's pool-wide
+  counts contradicted the local filter on screen ("scallop ceviche (5)"
+  → 0 results). Chips now show the LOCAL match count using the same
+  token-AND matcher the filter uses (`lib/places/topic-match.ts` —
+  consistent by construction); ordering still follows Google's salience
+  signal; zero-match chips render muted/non-clickable.
+- Deps: `tz-lookup` (+ local d.ts — no bundled types).
+- Docs: api-routes/places.md (add-similar + open_now param),
+  components/places.md, components/filters.md, tech-stack, dataforseo,
+  01-domain/places, repo-structure, v4 doc (Tema 1 → PR2 complete).
+
 ## 15.07.2026 — v1.17.0 — S1-PR1: place detail data layer + component refactor + NF-06 review layer
 
 First half of sprint **S1** (v4 Tema 1 — place detail v2). Discovery

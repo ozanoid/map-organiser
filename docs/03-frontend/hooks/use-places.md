@@ -2,8 +2,8 @@
 title: usePlaces
 type: hook
 domain: frontend
-version: 1.1.0
-last_updated: 20.05.2026
+version: 1.2.0
+last_updated: 15.07.2026
 status: stable
 sources:
   - src/lib/hooks/use-places.ts
@@ -15,6 +15,8 @@ related:
 ---
 
 # `usePlaces` and family
+
+> **v1.18.0:** `fetchPlaces` serializes `open_now=true`; `usePlaces` adds `refetchInterval: 60s` while the open-now filter is active (the list is a server-evaluated snapshot — the interval bounds its staleness).
 
 The most-used hook in the app. Five exports: the main filtered list query plus four mutations.
 

@@ -35,6 +35,7 @@ import {
   Check,
   X,
   Sparkles,
+  ExternalLink,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { ParsedPlaceData, VisitStatus } from "@/lib/types";
@@ -44,9 +45,13 @@ interface AddPlaceDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initialUrl?: string;
+  /** Provenance stamp for the saved row (places.source). Defaults to
+   *  "link"; SimilarPlaces passes "similar" (v1.18.0 — the CHECK
+   *  constraint was widened for it). */
+  source?: string;
 }
 
-export function AddPlaceDialog({ open, onOpenChange, initialUrl }: AddPlaceDialogProps) {
+export function AddPlaceDialog({ open, onOpenChange, initialUrl, source }: AddPlaceDialogProps) {
   const [url, setUrl] = useState("");
   const [placeData, setPlaceData] = useState<ParsedPlaceData | null>(null);
   const [liteProfile, setLiteProfile] = useState<PlaceProfile | null>(null);
@@ -218,7 +223,7 @@ export function AddPlaceDialog({ open, onOpenChange, initialUrl }: AddPlaceDialo
           ...((placeData as any)._extended || {}),
         },
         photoRef: placeData.photoRef,
-        source: "link",
+        source: source ?? "link",
         visit_status: visitStatus || undefined,
         tag_ids: selectedTagIds.length > 0 ? selectedTagIds : undefined,
         list_ids: selectedListIds.length > 0 ? selectedListIds : undefined,
@@ -372,6 +377,22 @@ export function AddPlaceDialog({ open, onOpenChange, initialUrl }: AddPlaceDialo
                   </Badge>
                 )}
               </div>
+
+              {/* View on Google Maps — the URL already came back with the
+                  parse (used at save as google_data.url), so surfacing it
+                  as a link costs nothing. Lets the user verify the place
+                  on Maps before adding — works for every add path. */}
+              {placeData.googleMapsUrl && (
+                <a
+                  href={placeData.googleMapsUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 mt-2 text-xs text-emerald-600 hover:underline cursor-pointer"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
+                  View on Google Maps
+                </a>
+              )}
 
               {/* Provider indicator */}
               {providerInfo && (

@@ -6,11 +6,30 @@
  * and GoogleReview[] shapes regardless of which provider is active.
  */
 
+import tzLookup from "tz-lookup";
 import type { ParsedPlaceData, GoogleReview, GooglePlaceData } from "@/lib/types";
 import type { RawBusinessInfo, RawReview } from "./api-types";
 import { dataforseoCategoriesToGoogleTypes } from "./category-adapter";
 import { convertWorkTimeToOpeningHours } from "./opening-hours-adapter";
 import { convertPriceLevel } from "./price-level-adapter";
+
+/**
+ * Coordinate → IANA timezone, computed ONCE at extraction (server-side —
+ * every transform.ts importer is a route/server lib, so the ~70KB
+ * tz-lookup table never reaches a client bundle). tz-lookup throws
+ * RangeError on out-of-range coords — degrade to undefined.
+ */
+function safeTz(
+  lat: number | null | undefined,
+  lng: number | null | undefined
+): string | undefined {
+  if (lat == null || lng == null) return undefined;
+  try {
+    return tzLookup(lat, lng);
+  } catch {
+    return undefined;
+  }
+}
 
 // ISO 3166-1 alpha-2 → country name (common countries)
 const COUNTRY_CODE_MAP: Record<string, string> = {
@@ -175,6 +194,23 @@ const UK_CITY_FROM_ADDRESS_RE =
  * Extract DataForSEO-exclusive fields for storage in google_data JSONB.
  * These fields provide extra value beyond what Google Places API offers.
  */
+/**
+ * Drop undefined-valued keys before returning. Object spread COPIES
+ * own props with value undefined, and JSONB serialization then DROPS
+ * those keys — so `{...stored, ...extended}` merge paths (enrich,
+ * refresh) would silently strip previously-stored values whenever a
+ * degraded crawl returns nulls (e.g. work_time null → work_timetable
+ * gone → the place loses open-now until a future good crawl). Stale
+ * beats lost.
+ */
+function omitUndefined<T extends Record<string, unknown>>(obj: T): Partial<T> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (v !== undefined) out[k] = v;
+  }
+  return out as Partial<T>;
+}
+
 export function extractExtendedData(
   raw: RawBusinessInfo
 ): Partial<GooglePlaceData> {
@@ -207,11 +243,18 @@ export function extractExtendedData(
     }
   }
 
-  return {
-    provider: "dataforseo",
+  return omitUndefined({
+    provider: "dataforseo" as const,
     cid: raw.cid || undefined,
     rating_distribution: raw.rating_distribution || undefined,
     popular_times: (raw.popular_times as GooglePlaceData["popular_times"]) || undefined,
+    // v1.18.0 open-now: keep the STRUCTURED timetable (previously only
+    // converted to weekday_text and discarded) + the place's IANA tz so
+    // isOpenNow can be computed at render/filter time in LOCAL time.
+    work_timetable:
+      (raw.work_time?.work_hours?.timetable as GooglePlaceData["work_timetable"]) ||
+      undefined,
+    tz: safeTz(raw.latitude, raw.longitude),
     place_topics: raw.place_topics || undefined,
     attributes: Object.keys(attributes).length > 0 ? attributes : undefined,
     is_claimed: raw.is_claimed ?? undefined,
@@ -233,9 +276,12 @@ export function extractExtendedData(
         title: p.title || "",
         cid: p.cid || undefined,
         rating: p.rating?.value,
+        // v1.18.0: previously dropped — the suggestion cards' "brief info".
+        category: p.category || undefined,
+        votes_count: p.rating?.votes_count || undefined,
       })) || undefined,
     enriched_at: new Date().toISOString(),
-  };
+  });
 }
 
 /**

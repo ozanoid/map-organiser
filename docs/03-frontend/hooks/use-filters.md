@@ -2,8 +2,8 @@
 title: useFilters
 type: hook
 domain: frontend
-version: 1.0.0
-last_updated: 12.05.2026
+version: 1.1.0
+last_updated: 15.07.2026
 status: stable
 sources:
   - src/lib/hooks/use-filters.ts
@@ -15,6 +15,8 @@ related:
 ---
 
 # `useFilters`
+
+> **v1.18.0:** `open_now` key added — parsed from `?open_now=true`, serialized back, boolean chip (`OpenNowFilter`). Evaluation is server-side at request time; see [[../../02-backend/api-routes/places]].
 
 The canonical URL-state hook. Bidirectional sync between local filter state and URL search params, with debounce.
 

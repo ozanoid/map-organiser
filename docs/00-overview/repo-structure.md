@@ -2,7 +2,7 @@
 title: Repo Structure
 type: overview
 domain: overview
-version: 1.2.2
+version: 1.2.3
 last_updated: 15.07.2026
 status: stable
 sources:
@@ -103,7 +103,8 @@ src/
     │                          schemas/ (Zod); prompts/ (place-profile-full.ts); extract/ (lite-profile.ts,
     │                          category-resolver.ts, features-extractor.ts,
     │                          suggestions-from-profile.ts); apply-suggestions.ts.
-    ├── places/                refresh-google-data.ts — service-client-safe full re-lookup + review merge (shared by refresh route + cron)
+    ├── places/                refresh-google-data.ts — service-client-safe full re-lookup + review merge (shared by refresh route + cron);
+    │                          open-now.ts (tz-aware render-time isOpenNow, v1.18.0); attribute-icons.ts (NF-04 group/icon map)
     ├── dataforseo/            DataForSEO client + types + adapters + transform (mergeReviews) + reviews + photo
     ├── google/                Google Places + URL parser + category mapping + Takeout parser + usage tracker + key access
     ├── hooks/                 React Query hooks: useCategories, useDebounce, useFilters, useLists, useMapStyle, usePlaces, useSharedLinks, useStats, useTags, useTrips, useSubcategories, useAiSuggestions

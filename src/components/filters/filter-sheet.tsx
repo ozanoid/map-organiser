@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { CountryCityFilter } from "./country-city-filter";
 import { CategoryFilter } from "./category-filter";
 import { VisitStatusFilter } from "./visit-status-filter";
+import { OpenNowFilter } from "./open-now-filter";
 import { TagFilter } from "./tag-filter";
 import { ListFilter } from "./list-filter";
 import { DebouncedSearchInput } from "./debounced-search-input";
@@ -92,6 +93,14 @@ export function FilterSheet({ open, onOpenChange }: FilterSheetProps) {
           <div className="pt-2 pb-4">
             <label className="text-sm font-medium mb-2 block">Status</label>
             <VisitStatusFilter />
+          </div>
+
+          <div className="border-t" />
+
+          {/* Open now (v1.18.0) */}
+          <div className="py-4">
+            <label className="text-sm font-medium mb-2 block">Hours</label>
+            <OpenNowFilter />
           </div>
 
           <div className="border-t" />

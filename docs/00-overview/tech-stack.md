@@ -2,7 +2,7 @@
 title: Tech Stack
 type: overview
 domain: overview
-version: 1.3.0
+version: 1.4.0
 last_updated: 15.07.2026
 status: stable
 sources:
@@ -89,6 +89,7 @@ See [[../05-flows/observability-flow]] for the full architecture.
 | `@types/mapbox-gl` | `^3.5.0` | Types | — |
 | `@types/geojson` | `^7946.0.16` | GeoJSON types | Declared explicitly (v1.15.0): the mapbox bump dropped it as a transitive dep, breaking the `GeoJSON` namespace in `map-view.tsx`. |
 | `s2-geometry` | `^1.2.10` | S2 cell decoding | Used **only** in `src/lib/google/parse-maps-url.ts` to decode the FTid in Google Maps URLs. See [[../01-domain/geo-and-s2]]. |
+| `tz-lookup` | `^6.1.25` | Coordinate → IANA timezone (offline, ~70KB) | Server-only (dataforseo/transform.ts) — stamps `google_data.tz` once at extraction for the open-now computation. Local d.ts in `src/types/tz-lookup.d.ts` (no bundled types). |
 
 ## Drag & drop
 

@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { CountryCityFilter } from "./country-city-filter";
 import { CategoryFilter } from "./category-filter";
 import { VisitStatusFilter } from "./visit-status-filter";
+import { OpenNowFilter } from "./open-now-filter";
 import { TagFilter } from "./tag-filter";
 import { ListFilter } from "./list-filter";
 import { DebouncedSearchInput } from "./debounced-search-input";
@@ -102,6 +103,14 @@ export function FilterPanel() {
           Status
         </label>
         <VisitStatusFilter />
+      </div>
+
+      {/* Open now (v1.18.0 — dynamic, place-local time) */}
+      <div>
+        <label className="text-xs font-medium mb-1.5 block text-muted-foreground">
+          Hours
+        </label>
+        <OpenNowFilter />
       </div>
 
       {/* Search */}

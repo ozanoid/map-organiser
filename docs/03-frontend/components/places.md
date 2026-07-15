@@ -2,7 +2,7 @@
 title: Places components
 type: component
 domain: frontend
-version: 1.3.0
+version: 1.4.3
 last_updated: 15.07.2026
 status: stable
 sources:
@@ -20,6 +20,7 @@ sources:
   - src/components/places/popular-times-widget.tsx
   - src/components/places/rating-distribution-bar.tsx
   - src/components/places/reviews-section.tsx
+  - src/components/places/similar-places.tsx
   - src/components/places/visit-status-toggle.tsx
 related:
   - "[[_README]]"
@@ -32,7 +33,7 @@ related:
 
 # Places components
 
-Fifteen files under `src/components/places/`. All `"use client"`. The Place-related UI surface.
+Sixteen files under `src/components/places/`. All `"use client"`. The Place-related UI surface.
 
 > **v1.17.0 (S1-PR1):** seven detail-page widgets extracted out of the
 > 1,155-line `places/[id]/page.tsx` into standalone components (below) —
@@ -60,7 +61,7 @@ Fifteen files under `src/components/places/`. All `"use client"`. The Place-rela
   6. `useCreatePlace` runs → place is saved.
   7. Two-phase enrichment after save: `info` (await) → `reviews` (fire-and-forget). When AI is enabled, the reviews route chains into `step=profile` (Phase 4) which populates `google_data.place_profile` and runs the 4-band auto-apply for tags + sub-cat + category-change.
 - **Used by:** `AppHeader` (Add Place button), `MapContent` (FAB + share-target intake).
-- **Notes:** Auto-resolves category from Google `types` via `resolveCategoryId` (lite path). Displays which provider served the parse (Google vs DataForSEO) + fetch time. Sticky action buttons at the bottom. The AI Suggestions panel is hidden when no chips are produced (handles AI-off cleanly).
+- **Notes:** Auto-resolves category from Google `types` via `resolveCategoryId` (lite path). Preview surfaces a free **View on Google Maps** link (`placeData.googleMapsUrl` already fetched by the parse — zero extra cost; v1.18.0). Displays which provider served the parse (Google vs DataForSEO) + fetch time. Sticky action buttons at the bottom. The AI Suggestions panel is hidden when no chips are produced (handles AI-off cleanly).
 
 ## `AiSummaryCard`
 
@@ -167,8 +168,11 @@ attribute chip wall; green check = available, gray strikethrough =
 unavailable. Grouping/icons deferred to S1-PR2.
 
 ### `PlaceTopics`
-`{ topics: Record<string, number> }` — NF-03. Top-15 review topics as
-chips sorted by mention count. Click-to-filter-reviews: S1-PR2.
+`{ topics, reviews, activeTopic?, onTopicClick? }` — NF-03 (completed
+v1.18.0). Top-15 topics ordered by Google's pool-wide counts, but the
+paren shows the LOCAL match count (token-AND matcher shared with the
+reviews filter via `lib/places/topic-match.ts`); zero-match chips are
+muted/non-clickable. Clicking filters ReviewsSection (page owns state).
 
 ### `ReviewsSection`
 `{ reviews, hasPlaceId, provider?, refreshing, enriching, onRefresh }`
@@ -179,6 +183,28 @@ with prev/next), `local_guide` chip, `votes_count` ("N people found
 this helpful"). All four fields are optional on `GoogleReview` — they
 exist only on reviews fetched after the v1.17.0 data-layer upgrade, so
 old corpora render exactly as before until refreshed.
+
+### `SimilarPlaces` (v1.18.0, NF-05)
+`{ items: Array<{title, cid?, rating?, category?, votes_count?}> }` —
+people_also_search as a horizontal card strip (max 6); cards show title,
+category and ★rating (compact vote count). **Single-path preview flow**
+(final design after preview testing): clicking a card opens
+`AddPlaceDialog` pre-filled with `https://maps.google.com/?cid=…`
+(parse-link handles `?cid=` natively) — the user gets the same
+first-class preview as a manual add (photo, hours, lite AI profile +
+chips, pickers) and decides there; save = standard `POST /api/places` +
+enrich chain with `source: "similar"` (dialog's new `source` prop). The
+interim one-click `/api/places/add-similar` route was removed.
+Membership via the client-cached `usePlaces({})` CID set; existing
+suggestions render "Added ✓" and navigate to the place.
+
+> **v1.18.0 updates to the widgets above:** `PlaceStatusBadges` gained the
+> honest live open-now badge ("Open now · closes 23:00" / "Open 24 hours" /
+> "Closed now") computed render-time from `work_timetable`+`tz`;
+> `PlaceTopics` chips are clickable (NF-03 → filters ReviewsSection, page
+> owns the state); `ReviewsSection` accepts `topicFilter`/`onClearTopicFilter`
+> (header chip + count, clamped pagination); `AmenitiesGrid` is grouped +
+> iconized via `src/lib/places/attribute-icons.ts` (NF-04).
 
 ## Cross-component notes
 

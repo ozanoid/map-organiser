@@ -24,6 +24,7 @@ import { PlaceActionLinks } from "@/components/places/place-action-links";
 import { AmenitiesGrid } from "@/components/places/amenities-grid";
 import { PlaceTopics } from "@/components/places/place-topics";
 import { ReviewsSection } from "@/components/places/reviews-section";
+import { SimilarPlaces } from "@/components/places/similar-places";
 import { useLists } from "@/lib/hooks/use-lists";
 import type { PlaceProfile } from "@/lib/ai/schemas/place-profile";
 import {
@@ -53,6 +54,8 @@ export default function PlaceDetailPage() {
   const [savingNotes, setSavingNotes] = useState(false);
   const [listPopoverOpen, setListPopoverOpen] = useState(false);
   const [tagPopoverOpen, setTagPopoverOpen] = useState(false);
+  // NF-03 (v1.18.0): active "People mention" topic → filters ReviewsSection.
+  const [topicFilter, setTopicFilter] = useState<string | null>(null);
   const { data: allLists = [] } = useLists();
 
   const fetchPlace = useCallback(() => {
@@ -515,10 +518,12 @@ export default function PlaceDetailPage() {
             </section>
           )}
 
-          {/* Current Status + Verified */}
+          {/* Persistent status + live open-now + Verified */}
           <PlaceStatusBadges
             currentStatus={googleData.current_status}
             isClaimed={googleData.is_claimed}
+            timetable={googleData.work_timetable}
+            tz={googleData.tz}
           />
 
           {/* Rating Distribution */}
@@ -560,10 +565,21 @@ export default function PlaceDetailPage() {
             <AmenitiesGrid attributes={googleData.attributes} />
           )}
 
-          {/* Place Topics */}
+          {/* Place Topics — click a chip to filter the reviews below */}
           {googleData.place_topics && (
-            <PlaceTopics topics={googleData.place_topics} />
+            <PlaceTopics
+              topics={googleData.place_topics}
+              reviews={reviews}
+              activeTopic={topicFilter}
+              onTopicClick={setTopicFilter}
+            />
           )}
+
+          {/* Similar places (NF-05, v1.18.0) */}
+          {googleData.people_also_search &&
+            googleData.people_also_search.length > 0 && (
+              <SimilarPlaces items={googleData.people_also_search} />
+            )}
         </>
       )}
 
@@ -576,6 +592,8 @@ export default function PlaceDetailPage() {
           refreshing={refreshing}
           enriching={!!googleData.cid && reviews.length === 0}
           onRefresh={handleRefreshGoogle}
+          topicFilter={topicFilter}
+          onClearTopicFilter={() => setTopicFilter(null)}
         />
       )}
 
