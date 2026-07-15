@@ -2,7 +2,7 @@
 title: Places components
 type: component
 domain: frontend
-version: 1.4.0
+version: 1.4.1
 last_updated: 15.07.2026
 status: stable
 sources:
@@ -168,8 +168,11 @@ attribute chip wall; green check = available, gray strikethrough =
 unavailable. Grouping/icons deferred to S1-PR2.
 
 ### `PlaceTopics`
-`{ topics: Record<string, number> }` — NF-03. Top-15 review topics as
-chips sorted by mention count. Click-to-filter-reviews: S1-PR2.
+`{ topics, reviews, activeTopic?, onTopicClick? }` — NF-03 (completed
+v1.18.0). Top-15 topics ordered by Google's pool-wide counts, but the
+paren shows the LOCAL match count (token-AND matcher shared with the
+reviews filter via `lib/places/topic-match.ts`); zero-match chips are
+muted/non-clickable. Clicking filters ReviewsSection (page owns state).
 
 ### `ReviewsSection`
 `{ reviews, hasPlaceId, provider?, refreshing, enriching, onRefresh }`
@@ -183,7 +186,7 @@ old corpora render exactly as before until refreshed.
 
 ### `SimilarPlaces` (v1.18.0, NF-05)
 `{ items: Array<{title, cid?, rating?}> }` — people_also_search as a
-horizontal card strip (max 6). One-click inline add → `POST
+horizontal card strip (max 6) — cards show title, category and ★rating with compact vote count (v1.18.0 feedback round). One-click inline add → `POST
 /api/places/add-similar`, then the standard client-side enrich chain
 (step=reviews → profile) exactly like AddPlaceDialog. Membership via the
 client-cached `usePlaces({})` CID set + a session-local map; existing
