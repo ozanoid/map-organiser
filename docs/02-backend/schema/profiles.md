@@ -2,8 +2,8 @@
 title: profiles
 type: table
 domain: backend
-version: 1.1.0
-last_updated: 18.05.2026
+version: 1.2.0
+last_updated: 15.07.2026
 status: stable
 sources:
   - Supabase project hukppmaevcapvbrvxtph (live)
@@ -36,6 +36,7 @@ Per-user profile and settings. 1:1 with `auth.users` (the `id` is both PK and FK
 | `dataforseo_password_enc` | text | yes | — | Encrypted DataForSEO password. |
 | `google_places_enabled` | boolean | yes | `true` | Per-user toggle for Google enrichment path. |
 | `ai_features_enabled` | boolean | no | `true` | **Phase 1.** Master kill-switch for every AI feature. Set `false` to: skip `lite_profile` in `parse-link`, skip `step=profile` chain, hide moderation UI, short-circuit `/api/ai/*` + `/api/user/ai-*` routes. Surfaced as the Settings → AI toggle. See [[../../05-flows/full-profile-flow]]. |
+| `cron_refresh_enabled` | boolean | no | `false` | **15.07.2026.** Opt-in for the ENTIRE periodic refresh sweep. Default off — the user's places are never scanned by the cron. When on: daily Google-data refresh + AI summary regeneration past >15 new reviews (if `ai_features_enabled`). Surfaced as the "Background data refresh" toggle in Settings → AI. See [[../../06-ops/runbooks/periodic-refresh]]. |
 | `created_at` | timestamptz | yes | `now()` | — |
 | `updated_at` | timestamptz | yes | `now()` | App-managed (no DB trigger). |
 
@@ -84,6 +85,8 @@ Profile rows themselves are created by `handle_new_user()`, which fires on `auth
   - `add_dataforseo_credential_columns` (2026-04-14)
   - `add_google_places_enabled_to_profiles` (2026-04-15)
   - `add_ai_features_enabled_to_profiles` (2026-05-10, Phase 1)
+  - `add_cron_reprofile_enabled_to_profiles` (2026-07-15)
+  - `rename_cron_reprofile_to_cron_refresh` (2026-07-15 — semantics widened to the whole sweep)
 - **Encryption.** All `*_enc` columns use AES-256-GCM with `ENCRYPTION_SECRET` server-only env var. Helpers in `src/lib/google/get-user-api-keys.ts` and `src/components/settings/api-keys-manager.tsx` flow. See [[../../06-ops/encryption]] when written.
 - **Why FK to `auth.users` and not Supabase Auth API.** The 1:1 with FK lets RLS predicates use `auth.uid() = id` directly without subqueries.
 - **Why no `email` column.** Email lives in `auth.users.email` (Supabase Auth's responsibility). Reading it requires the service-role client.

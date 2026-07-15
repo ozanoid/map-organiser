@@ -87,7 +87,8 @@ export const PlaceProfileSchema = z.object({
     )
     .nullable(),
 
-  /** 150-250 words optimized for keyword + semantic ranking (AI-01). */
+  /** 250-400 words optimized for keyword + semantic ranking (AI-01).
+   *  Profiles generated before 15.07.2026 carry 150-250 words. */
   searchable_summary: z.string().nullable(),
 
   // ===== meta =====

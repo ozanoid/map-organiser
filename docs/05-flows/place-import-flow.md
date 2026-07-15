@@ -2,8 +2,8 @@
 title: Place Import Flow
 type: flow
 domain: places
-version: 1.1.0
-last_updated: 20.05.2026
+version: 1.1.1
+last_updated: 15.07.2026
 status: stable
 sources:
   - src/app/api/places/import-parse/route.ts
@@ -64,7 +64,7 @@ User goes to `/import`, picks a CSV or GeoJSON file (typically downloaded from G
        ▼
 7. Background: POST /api/places/bulk-enrich-reviews { placeIds }
        │  • Iterates placeIds in batches of 5
-       │  • For each: fetch reviews via DataForSEO, transform, UPDATE places.google_data.reviews
+       │  • For each: fetch reviews via DataForSEO, transform, MERGE into places.google_data.reviews (dedup, newest-first, cap 200 — see mergeReviews)
        │  • 500 ms delay between places (rate-limit politeness)
        │  • Fire-and-forget from the client
        ▼

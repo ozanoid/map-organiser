@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { generateText, Output } from "ai";
 import { createClient } from "@/lib/supabase/server";
 import { DataForSEOClient } from "@/lib/dataforseo/client";
 import { fetchBusinessInfoLive } from "@/lib/dataforseo/business-info";
@@ -7,19 +6,12 @@ import { fetchReviews } from "@/lib/dataforseo/reviews";
 import {
   transformReviews,
   extractExtendedData,
+  mergeReviews,
 } from "@/lib/dataforseo/transform";
+import type { GoogleReview } from "@/lib/types";
 import { downloadAndStorePhotoFromUrl } from "@/lib/dataforseo/photo";
 import { trackUsage } from "@/lib/google/track-usage";
-import {
-  getAiClient,
-  FLASH_MODEL,
-  MODEL_VERSION,
-} from "@/lib/ai/client";
-import { buildUserContext } from "@/lib/ai/context-builder";
-import { PlaceProfileSchema } from "@/lib/ai/schemas/place-profile";
-import { buildPlaceProfilePrompt } from "@/lib/ai/prompts/place-profile-full";
-import { applyProfileSuggestions } from "@/lib/ai/apply-suggestions";
-import { trackAiUsage, checkAiDailyCap } from "@/lib/ai/track-usage";
+import { generatePlaceProfile } from "@/lib/ai/generate-profile";
 
 function getDataForSEOClient(): DataForSEOClient | null {
   const login = process.env.DATAFORSEO_LOGIN;
@@ -139,8 +131,16 @@ export async function POST(
 
       const { data: cur } = await supabase.from("places").select("google_data").eq("id", id).single();
       const curData = (cur?.google_data as Record<string, unknown>) || {};
-      await supabase.from("places").update({ google_data: { ...curData, reviews } }).eq("id", id);
-      console.log(`[enrich:reviews] ${reviews.length} reviews saved for ${id}`);
+      // Merge, don't replace — re-runs accumulate the corpus. This fetch
+      // uses the default "relevant" sort, so it establishes/refreshes the
+      // relevance backbone (see mergeReviews).
+      const merged = mergeReviews(
+        (curData.reviews as GoogleReview[] | undefined) ?? [],
+        reviews,
+        { incomingOrder: "relevant" }
+      );
+      await supabase.from("places").update({ google_data: { ...curData, reviews: merged } }).eq("id", id);
+      console.log(`[enrich:reviews] ${reviews.length} fetched, ${merged.length} stored for ${id}`);
 
       // ─── Phase 4: chain into profile generation (fire-and-forget) ───
       // Gated by ai_features_enabled. Errors here never affect the reviews
@@ -166,147 +166,48 @@ export async function POST(
   }
 
   // ─── step=profile: Gemini Flash full place_profile ───
+  // Logic extracted to src/lib/ai/generate-profile.ts (15.07.2026) so the
+  // refresh cron can run it with the service client. This branch is the
+  // cookie-authed HTTP shell; response shapes are unchanged.
   if (step === "profile") {
-    // Auth gate: ai_features_enabled flag check
-    const { data: profileRow } = await supabase
-      .from("profiles")
-      .select("ai_features_enabled")
-      .eq("id", user.id)
-      .single();
-    if (!profileRow?.ai_features_enabled) {
-      return NextResponse.json({ error: "AI features disabled" }, { status: 403 });
+    const outcome = await generatePlaceProfile(supabase, user.id, id);
+    if (outcome.ok) {
+      return NextResponse.json({ ok: true, applied: outcome.applied });
     }
-
-    const aiClient = getAiClient();
-    if (!aiClient) {
-      return NextResponse.json(
-        { error: "AI not configured (GOOGLE_GENERATIVE_AI_API_KEY missing)" },
-        { status: 503 }
-      );
+    switch (outcome.reason) {
+      case "ai_disabled":
+        return NextResponse.json(
+          { error: "AI features disabled" },
+          { status: 403 }
+        );
+      case "not_configured":
+        return NextResponse.json(
+          { error: "AI not configured (GOOGLE_GENERATIVE_AI_API_KEY missing)" },
+          { status: 503 }
+        );
+      case "cap_exceeded":
+        return NextResponse.json(
+          {
+            error: "Monthly AI profile limit reached (1000). Resets on the 1st.",
+            used: outcome.capUsed,
+            cap: outcome.capLimit,
+          },
+          { status: 429 }
+        );
+      case "no_reviews":
+        return NextResponse.json(
+          { ok: false, reason: "no_reviews" },
+          { status: 400 }
+        );
+      case "not_found":
+        return NextResponse.json({ error: "Place not found" }, { status: 404 });
+      case "llm_failed":
+      default:
+        return NextResponse.json(
+          { ok: false, error: "LLM generation failed" },
+          { status: 500 }
+        );
     }
-
-    // ─── Daily cost cap: runaway-bug insurance ───
-    const cap = await checkAiDailyCap(user.id);
-    if (cap.exceeded) {
-      return NextResponse.json(
-        { error: "Daily AI limit reached. Try again tomorrow.", used: cap.used, cap: cap.cap },
-        { status: 429 }
-      );
-    }
-
-    const reviewsArr =
-      (googleData as { reviews?: unknown[] }).reviews ?? [];
-    if (!Array.isArray(reviewsArr) || reviewsArr.length === 0) {
-      // Without reviews, the prompt is starved; defer to a future re-run.
-      return NextResponse.json(
-        { ok: false, reason: "no_reviews" },
-        { status: 400 }
-      );
-    }
-
-    // Fetch the full place row (we need name/address/city/country for the prompt)
-    const { data: placeFull } = await supabase
-      .from("places")
-      .select("name, address, city, country, google_data, category_id, subcategory_id")
-      .eq("id", id)
-      .eq("user_id", user.id)
-      .single();
-    if (!placeFull) {
-      return NextResponse.json({ error: "Place not found" }, { status: 404 });
-    }
-
-    const userContext = await buildUserContext(supabase, user.id);
-    const liteForPrior =
-      (placeFull.google_data as Record<string, unknown> | null)?.place_profile ??
-      undefined;
-
-    const currentCategoryId = (placeFull.category_id as string | null) ?? null;
-    const currentCategoryName =
-      currentCategoryId
-        ? userContext.categories.find((c) => c.id === currentCategoryId)
-            ?.name ?? null
-        : null;
-
-    const { systemPrompt, userPrompt } = buildPlaceProfilePrompt(
-      {
-        name: placeFull.name as string,
-        address: (placeFull.address as string | null) ?? null,
-        city: (placeFull.city as string | null) ?? null,
-        country: (placeFull.country as string | null) ?? null,
-        current_category_name: currentCategoryName,
-        google_data: (placeFull.google_data as Record<string, unknown>) ?? {},
-      },
-      userContext,
-      liteForPrior
-    );
-
-    console.log(`[enrich:profile] Calling Gemini for ${id}…`);
-
-    let profile;
-    try {
-      const result = await generateText({
-        model: aiClient(FLASH_MODEL),
-        output: Output.object({ schema: PlaceProfileSchema }),
-        system: systemPrompt,
-        prompt: userPrompt,
-      });
-      profile = result.output;
-    } catch (e) {
-      console.error(`[enrich:profile] LLM call failed for ${id}:`, e);
-      return NextResponse.json(
-        { ok: false, error: "LLM generation failed" },
-        { status: 500 }
-      );
-    }
-
-    // Force-stamp meta fields the LLM might miss / get wrong.
-    profile.completeness = "full";
-    profile.generated_at = new Date().toISOString();
-    profile.model_version = MODEL_VERSION;
-    profile.source_review_count = reviewsArr.length;
-
-    // Persist into google_data.place_profile
-    const { data: cur } = await supabase
-      .from("places")
-      .select("google_data")
-      .eq("id", id)
-      .single();
-    const curData = (cur?.google_data as Record<string, unknown>) || {};
-    await supabase
-      .from("places")
-      .update({
-        google_data: { ...curData, place_profile: profile },
-      })
-      .eq("id", id);
-
-    // Unified auto-apply (Phase 5.5): considers LLM's primary vs current
-    // category, queues a category_change or a sub-cat-with-move when they
-    // disagree.
-    const applied = await applyProfileSuggestions(supabase, profile, {
-      userId: user.id,
-      placeId: id,
-      tags: userContext.tags.map(({ id: tagId, name }) => ({ id: tagId, name })),
-      subcategories: userContext.subcategories.map((s) => ({
-        id: s.id,
-        slug: s.slug,
-        parent_category_id: s.parent_category_id,
-      })),
-      categories: userContext.categories.map(({ id: cid, name }) => ({
-        id: cid,
-        name,
-      })),
-      currentCategoryId,
-      currentCategoryName,
-      modelVersion: MODEL_VERSION,
-    });
-
-    trackAiUsage(user.id, "ai_place_profile").catch(() => {});
-
-    console.log(
-      `[enrich:profile] Done for ${id}: tagsApplied=${applied.tagsApplied} tagsQueued=${applied.tagsQueued} subCat=${applied.subcategoryApplied ?? applied.subcategoryQueued ?? "none"} catChange=${applied.categoryChangeQueued ?? "none"}`
-    );
-
-    return NextResponse.json({ ok: true, applied });
   }
 
   return NextResponse.json(

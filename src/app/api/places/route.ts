@@ -54,23 +54,41 @@ export async function GET(request: NextRequest) {
     .eq("user_id", user.id)
     .order(sortColumn, { ascending: sortAscending });
 
+  // PostgREST or() values containing commas/parentheses must be
+  // double-quoted (backslash-escaping the comma is NOT valid PostgREST
+  // syntax and breaks the filter). Inside the quotes, escape \ and ";
+  // escape % so user-typed percent signs match literally instead of
+  // acting as LIKE wildcards.
+  const orLikePattern = (term: string) =>
+    `"%${term
+      .replace(/\\/g, "\\\\")
+      .replace(/"/g, '\\"')
+      .replace(/%/g, "\\%")}%"`;
+
   if (country) query = query.eq("country", country);
   if (city) {
     // OR-match against `city` AND `address` ilike. Workaround for the
     // import bug that stores some addresses with city=administrative
     // region ("England") while the actual locality ("London") only
     // appears in the address. See docs/_plans/data-bugs.md.
-    const escaped = city.replace(/%/g, "\\%").replace(/,/g, "\\,");
-    query = query.or(
-      `city.ilike.%${escaped}%,address.ilike.%${escaped}%`
-    );
+    const p = orLikePattern(city);
+    query = query.or(`city.ilike.${p},address.ilike.${p}`);
   }
   if (categoryIds?.length) query = query.in("category_id", categoryIds);
   if (subcategoryIds?.length)
     query = query.in("subcategory_id", subcategoryIds);
   if (visitStatus) query = query.eq("visit_status", visitStatus);
   if (ratingMin) query = query.gte("rating", parseInt(ratingMin));
-  if (search) query = query.or(`name.ilike.%${search}%,address.ilike.%${search}%,notes.ilike.%${search}%`);
+  if (search) {
+    // name/address/notes are the classic fields. The two profile fields
+    // extend keyword search into review-derived vocabulary ("matcha",
+    // "rooftop") that never appears in the place's own columns — keeps
+    // plain search consistent with what AI search can find.
+    const p = orLikePattern(search);
+    query = query.or(
+      `name.ilike.${p},address.ilike.${p},notes.ilike.${p},google_data->place_profile->>searchable_summary.ilike.${p},google_data->place_profile->>tldr.ilike.${p}`
+    );
+  }
 
   const { data: places, error } = await query;
 

@@ -19,11 +19,40 @@ interface PromptInputPlace {
   google_data: Record<string, unknown>;
 }
 
+/** Max reviews fed to the LLM per profile generation. */
+const PROMPT_REVIEW_MAX = 50;
+/** How many of those come from the relevance backbone (array head). */
+const PROMPT_BACKBONE_TAKE = 35;
+
+interface PromptReview {
+  rating?: number;
+  text?: string;
+  publish_time?: string;
+}
+
+/**
+ * Blend the review corpus into the ≤50 reviews the LLM actually reads:
+ * the head of the array (Google's relevance-ranked backbone from the
+ * initial fetch — the quality floor) + the freshest reviews from the rest
+ * of the corpus (the change signal). NEVER "newest 50" alone — recency ≠
+ * signal quality, and a newest-only diet would make each regeneration
+ * WORSE than the original relevance-based profile.
+ */
+function selectReviewsForPrompt(reviews: PromptReview[]): PromptReview[] {
+  if (reviews.length <= PROMPT_REVIEW_MAX) return reviews;
+  const backbone = reviews.slice(0, PROMPT_BACKBONE_TAKE);
+  const fresh = [...reviews.slice(PROMPT_BACKBONE_TAKE)]
+    .sort((a, b) => (b.publish_time ?? "").localeCompare(a.publish_time ?? ""))
+    .slice(0, PROMPT_REVIEW_MAX - backbone.length);
+  return [...backbone, ...fresh];
+}
+
 /**
  * Truncate a single review for prompt-size control. Keeps the rating + first
- * 400 chars so the LLM sees enough signal without paying for boilerplate.
+ * 1000 chars — long-form reviews carry the richest signal for the
+ * searchable_summary and theme_insights; 400 was cutting them too early.
  */
-function compactReview(r: { rating?: number; text?: string }, maxChars = 400) {
+function compactReview(r: { rating?: number; text?: string }, maxChars = 1000) {
   const stars = typeof r.rating === "number" ? `[${r.rating}★] ` : "";
   const text = (r.text ?? "").replace(/\s+/g, " ").trim().slice(0, maxChars);
   return `${stars}${text}`;
@@ -32,9 +61,10 @@ function compactReview(r: { rating?: number; text?: string }, maxChars = 400) {
 /**
  * Build the system + user prompt for the full place_profile generation.
  *
- * Token budgeting: 50 reviews × ~400 chars ≈ 20K input chars ≈ ~5K input
- * tokens. Plus user context (~500 tokens) + system rules (~500 tokens).
- * Output is ~1-2K tokens. Comfortably under Gemini Flash's window.
+ * Token budgeting: 50 reviews × ≤1000 chars ≈ up to 50K input chars ≈ ~12.5K
+ * input tokens worst case (most reviews are shorter). Plus user context
+ * (~500 tokens) + system rules (~500 tokens). Output is ~1-2K tokens.
+ * Comfortably under Gemini Flash's window.
  */
 export function buildPlaceProfilePrompt(
   place: PromptInputPlace,
@@ -61,10 +91,8 @@ export function buildPlaceProfilePrompt(
   const rating = (gd as { rating?: number }).rating;
   const reviewCount = (gd as { user_ratings_total?: number }).user_ratings_total;
   const reviewsRaw =
-    ((gd as { reviews?: Array<{ rating?: number; text?: string }> }).reviews ??
-      []) as Array<{ rating?: number; text?: string }>;
-  const reviewLines = reviewsRaw
-    .slice(0, 50)
+    ((gd as { reviews?: PromptReview[] }).reviews ?? []) as PromptReview[];
+  const reviewLines = selectReviewsForPrompt(reviewsRaw)
     .map(compactReview)
     .filter((s) => s.length > 0);
 
@@ -114,7 +142,7 @@ CRITICAL RULES:
    - price_range: pick "$" / "$$" / "$$$" / "$$$$" or null.
 
 7. SEARCHABLE_SUMMARY
-   - 150-250 words in English. Optimized for keyword + semantic ranking. Include: cuisine, atmosphere, occasions, distinctive features, location context. Avoid generic filler.
+   - 250-400 words in English. Optimized for keyword + semantic ranking. Include: cuisine, atmosphere, occasions, distinctive features, location context, and recurring specifics reviewers mention (signature dishes, standout details). Avoid generic filler.
 
 8. OUTPUT
    - STRICT JSON ONLY. No prose, no markdown, no commentary. The runtime will reject any output that fails Zod validation.
@@ -138,5 +166,5 @@ ${liteProfileForPrior ? `LITE PROFILE (prior — use as evidence but feel free t
 ${reviewLines.join("\n---\n") || "(no reviews available)"}
 `;
 
-  return { systemPrompt, userPrompt };
+  return { systemPrompt, userPrompt, usedReviewCount: reviewLines.length };
 }

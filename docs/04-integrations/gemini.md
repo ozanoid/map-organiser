@@ -2,8 +2,8 @@
 title: Google Gemini (LLM)
 type: integration
 domain: integrations
-version: 1.2.0
-last_updated: 20.05.2026
+version: 1.5.0
+last_updated: 15.07.2026
 status: stable
 sources:
   - src/lib/ai/client.ts
@@ -22,7 +22,7 @@ related:
 
 # Google Gemini
 
-The LLM provider behind the AI features added across PRs #30–#35 (Phases 1–5.5). Model: **`gemini-flash-latest`** (Gemini 2.5 Flash family at the time of writing). Accessed through Vercel's AI SDK v6 with the Google provider — **direct provider wiring**, not via the Vercel AI Gateway (deliberate; see "Why direct, not Gateway?" below).
+The LLM provider behind the AI features added across PRs #30–#35 (Phases 1–5.5). Model: **`gemini-3-flash-preview`** (Gemini 3 Flash — upgraded from `gemini-flash-latest` / 2.5 family on 15.07.2026; old profiles remain distinguishable via `model_version`). Note the id namespace: this is the **Generative Language API** id (what our direct provider hits); the Vercel AI Gateway catalog normalizes the same model as `google/gemini-3-flash`. Accessed through Vercel's AI SDK v6 with the Google provider — **direct provider wiring**, not via the Vercel AI Gateway (deliberate; see "Why direct, not Gateway?" below).
 
 ## Account & access
 
@@ -61,8 +61,8 @@ export function getAiClient() {
   return _google;
 }
 
-export const FLASH_MODEL = "gemini-flash-latest";
-export const MODEL_VERSION = "gemini-flash-latest";
+export const FLASH_MODEL = "gemini-3-flash-preview";
+export const MODEL_VERSION = "gemini-3-flash-preview";
 ```
 
 Every consumer goes through `getAiClient()` so the env check and singleton creation live in one place. `MODEL_VERSION` is stamped onto `places.google_data.place_profile.model_version` for cache-invalidation reasoning.
@@ -105,20 +105,20 @@ Phase 6 splits AI calls into two groups by behaviour: **background** (`enrich?st
 
 ## Cost & limits
 
-Gemini Flash latest pricing (~mid-2026, verify against current rates):
+Gemini 3 Flash Preview pricing (verified 15.07.2026, ai.google.dev, standard tier):
 
-- Input: **\$0.075 / 1M tokens**
-- Output: **\$0.30 / 1M tokens**
+- Input: **\$0.50 / 1M tokens** (text)
+- Output: **\$3.00 / 1M tokens**
 
-Per `step=profile` call:
+~7-10× the 2.5-era rates the app launched on. Per `step=profile` call:
 
-- Input: ~6–7K tokens (user context + 50 reviews × 400 chars + system prompt) → ~\$0.0005
-- Output: ~1–2K tokens (PlaceProfile JSON) → ~\$0.0005
-- **Total: ~\$0.001 per place_profile**, or ~\$1 per 1000 — the value used in `AI_SKU_CONFIG.ai_place_profile.costPer1k`.
+- Input: ~7–14K tokens (user context + ≤50 reviews × ≤1000 chars + system prompt) → ~\$0.004–0.007
+- Output: ~1–2K tokens (PlaceProfile JSON) → ~\$0.003–0.006
+- **Total: ~\$0.008–0.012 per place_profile.** `AI_SKU_CONFIG` values updated accordingly (profile \$9.5/1k, rank \$20/1k, parse \$0.70/1k).
 
 Free tier: 15 RPM / 1M TPM (verify in AI Studio). Beyond that, paid quota. At our usage scale (a few hundred profiles + occasional regenerations), the monthly cost stays under \$2.
 
-**Per-user daily cap.** `checkAiDailyCap` (`src/lib/ai/track-usage.ts`) caps each user at `AI_DAILY_CALL_CAP` (3000) AI calls/day across all AI SKUs — `enrich?step=profile`, `parse-query`, `rank-results`. Over the cap the route returns **429** before calling Gemini. It is app-level runaway-bug insurance (~3× a realistic heavy day), fails open, and is unrelated to Gemini's own RPM quota. See [[../05-flows/ai-enrichment-flow#cost-cap]].
+**Per-user monthly budgets** (`checkAiBudget`, `src/lib/ai/track-usage.ts`): **search** = 500 searches/month (one unit per search, charged at `parse-query`; `rank-results` rides free behind a 3× runaway backstop) ≈ \$10.5/month ceiling; **profile** = 1000 generations/month across the add-chain, refresh, backfill, and cron ≈ \$9.5/month ceiling (a full ~470-place backfill fits in one month). Over budget the route returns **429** before calling Gemini; resets on the 1st (UTC). Fails open; unrelated to Gemini's own RPM quota. See [[../05-flows/ai-enrichment-flow#cost-cap]].
 
 ## Prompt strategy
 
@@ -132,7 +132,7 @@ The output schema is Zod-strict (`PlaceProfileSchema` in `src/lib/ai/schemas/pla
 
 ## Why direct, not Gateway?
 
-We hard-wire `@ai-sdk/google` rather than routing through the Vercel AI Gateway (`"google/gemini-flash-latest"` string format) for three reasons specific to this app:
+We hard-wire `@ai-sdk/google` rather than routing through the Vercel AI Gateway (`"google/gemini-3-flash"` string format) for three reasons specific to this app:
 
 1. **Single provider, single key.** We only call Gemini. The Gateway's killer features — model fallbacks, multi-provider routing, observability across providers — don't pay off when there's exactly one provider.
 2. **Cost transparency.** The Gateway adds a flat fee on top of provider pricing. At our \$1-2/month scale that's a meaningful percentage.
@@ -145,13 +145,13 @@ If we ever add a second provider (Claude/OpenAI for ranking, vision, etc.), revi
 | Symptom | Cause | Recovery |
 |---|---|---|
 | Route returns `{ ok: false, reason: "ai_disabled" }` 503 | `GOOGLE_GENERATIVE_AI_API_KEY` not set | Add the env var in Vercel → redeploy. Settings AI tab also shows the "not configured" banner. |
-| Route returns 429 | User hit the daily AI cost cap (`AI_DAILY_CALL_CAP`, 3000/day) | Expected — wait for the UTC-midnight reset. An app-level guard, not a Gemini rate limit. |
+| Route returns 429 | User spent a monthly AI budget (search 500 / profile 1000) | Expected — resets on the 1st (UTC). An app-level guard, not a Gemini rate limit. |
 | Route returns 500 with "LLM generation failed" | Provider 5xx, rate limit, or schema validation failure | Retry from `AiSummaryCard` refresh button. Persistent failure → check Vercel logs for the underlying error. |
 | AI Summary card stays in skeleton state | Reviews not yet present OR profile hasn't been generated (pre-Phase-4 place) | If reviews exist, click "Generate" in the skeleton header. If not, wait for `step=reviews` to finish (~30 s on a fresh paste). |
 | Profile generated but tags/sub-cats not applied | `ai_features_enabled = false` on the profile, OR LLM proposed entities outside the 4-band threshold | Toggle AI on in Settings → AI; pending proposals queue up. |
 
 ## Open questions
 
-- **Model version pinning.** `gemini-flash-latest` is an alias — Google updates it on their schedule. We capture `model_version` on each profile but a major regression would require a new pin (`gemini-2.5-flash-002` etc.) and a backfill.
+- **Model snapshots.** `gemini-3-flash-preview` is a *preview* id — when Google GAs the model the id will likely change (drop the `-preview` suffix) and this pin must be updated. `model_version` stamps make selective re-profiling possible; the old `gemini-flash-latest` profiles are the natural first re-profile cohort.
 - **Phase 6 model choice.** NL filtering may benefit from the larger `gemini-pro` for ambiguous queries. Leave the routing decision to that PR.
 - **Rate-limit telemetry.** No alerting on 429s yet — they'd just show up as failed `step=profile` runs in Vercel logs.

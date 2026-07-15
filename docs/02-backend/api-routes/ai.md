@@ -2,8 +2,8 @@
 title: AI routes
 type: route-group
 domain: backend
-version: 1.2.0
-last_updated: 20.05.2026
+version: 1.4.0
+last_updated: 15.07.2026
 status: stable
 sources:
   - src/app/api/ai/parse-query/route.ts
@@ -45,10 +45,13 @@ Every route in this group enforces four gates in order:
 1. **Auth.** `supabase.auth.getUser()` must return a user. Otherwise 401.
 2. **`profiles.ai_features_enabled = true`.** The master toggle. Otherwise 403.
 3. **`GOOGLE_GENERATIVE_AI_API_KEY` env var set.** Otherwise 503.
-4. **Daily cost cap.** `checkAiDailyCap` (`src/lib/ai/track-usage.ts`) —
-   when the user's AI calls today have hit `AI_DAILY_CALL_CAP` (3000), the
-   route returns **429** before calling Gemini. Runaway-bug insurance;
-   fails open if the check itself errors. See
+4. **Monthly search budget.** `checkAiBudget("search")`
+   (`src/lib/ai/track-usage.ts`) — 500 searches per calendar month, ONE
+   budget unit per search: charged at `parse-query` (every search runs
+   exactly one parse). `rank-results` is not budgeted separately — it
+   rides on the admitted search; its own gate is a 3× runaway backstop
+   (`AI_MONTHLY_RANK_BACKSTOP`) against client-side rerank loops. 429
+   before Gemini when spent; fails open on check errors. See
    [[../../05-flows/ai-enrichment-flow#cost-cap]].
 
 When any gate fails the client falls back gracefully — the frontend
@@ -77,7 +80,7 @@ Turn natural-language input into the three-layer match spec.
 | `hard.visit_status` | enum? | `want_to_go` / `booked` / `visited` / `favorite` |
 | `hard.rating_min` / `google_rating_min` | `number?` | 1-5 |
 | `hard.created_after` | ISO date? | Resolved from phrases like "last week", "in May". |
-| `hard.search` | `string?` | Free-text fallback matching `name/address/notes`. |
+| `hard.search` | `string?` | Free-text fallback matching `name/address/notes` + `place_profile.searchable_summary/tldr` (since 15.07.2026). |
 | `soft_features.atmosphere` | `string[]?` | Matched against `place_profile.features.atmosphere`. |
 | `soft_features.dietary` | `string[]?` | Same for `.dietary`. |
 | `soft_features.occasions` | `string[]?` | Same for `.occasions`. |
@@ -120,7 +123,7 @@ query's semantic intent using its `place_profile.searchable_summary`.
   candidates: {
     id: string;                     // uuid
     name: string;
-    searchable_summary: string;     // capped at 1500 chars server-side
+    searchable_summary: string;     // capped at 3000 chars server-side
     subcategory_id?: string | null; // for sub-cat boost (no extra query)
   }[];                              // 1 ≤ length ≤ 200
 

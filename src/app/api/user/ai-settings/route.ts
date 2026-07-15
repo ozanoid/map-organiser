@@ -21,7 +21,7 @@ export async function GET() {
 
   const { data: profile, error } = await supabase
     .from("profiles")
-    .select("ai_features_enabled")
+    .select("ai_features_enabled, cron_refresh_enabled")
     .eq("id", user.id)
     .single();
 
@@ -32,12 +32,19 @@ export async function GET() {
   return NextResponse.json({
     enabled: profile?.ai_features_enabled ?? true,
     available: isAiAvailable(),
+    cronRefreshEnabled: profile?.cron_refresh_enabled ?? false,
   });
 }
 
-const PutBodySchema = z.object({
-  enabled: z.boolean(),
-});
+const PutBodySchema = z
+  .object({
+    enabled: z.boolean().optional(),
+    cronRefreshEnabled: z.boolean().optional(),
+  })
+  .refine(
+    (b) => b.enabled !== undefined || b.cronRefreshEnabled !== undefined,
+    { message: "Provide at least one setting" }
+  );
 
 /**
  * PUT /api/user/ai-settings
@@ -70,14 +77,22 @@ export async function PUT(request: NextRequest) {
     );
   }
 
+  const patch: Record<string, boolean> = {};
+  if (parsed.data.enabled !== undefined) {
+    patch.ai_features_enabled = parsed.data.enabled;
+  }
+  if (parsed.data.cronRefreshEnabled !== undefined) {
+    patch.cron_refresh_enabled = parsed.data.cronRefreshEnabled;
+  }
+
   const { error } = await supabase
     .from("profiles")
-    .update({ ai_features_enabled: parsed.data.enabled })
+    .update(patch)
     .eq("id", user.id);
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ success: true, enabled: parsed.data.enabled });
+  return NextResponse.json({ success: true, ...parsed.data });
 }

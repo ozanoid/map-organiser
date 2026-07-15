@@ -66,7 +66,7 @@ Every runtime, library, and tool the repo currently depends on. Pin sources are 
 | Lib | Version | Role | Notes |
 |---|---|---|---|
 | `ai` | `^6.0.182` | AI SDK v6 — model-agnostic call layer (`generateText` + `Output.object`) | Used by Phase 4 `step=profile` enrich branch. Direct provider wiring (not AI Gateway) — see [[../04-integrations/gemini]] for the explicit choice. |
-| `@ai-sdk/google` | `^3.0.73` | Google provider for AI SDK | `createGoogleGenerativeAI({ apiKey: GOOGLE_GENERATIVE_AI_API_KEY })`. Model: `gemini-flash-latest`. |
+| `@ai-sdk/google` | `^3.0.73` | Google provider for AI SDK | `createGoogleGenerativeAI({ apiKey: GOOGLE_GENERATIVE_AI_API_KEY })`. Model: `gemini-3-flash-preview` (since 15.07.2026). |
 
 ## Maps & geo
 
@@ -97,7 +97,7 @@ Every runtime, library, and tool the repo currently depends on. Pin sources are 
 - **Mapbox** — GL JS map + Directions API. Free tier: 100K directions requests/month.
 - **Google Places API** — server-only via `GOOGLE_PLACES_API_KEY`. Per-user opt-in via `profiles.google_places_enabled`.
 - **DataForSEO Business Data API** — default enrichment provider. HTTP basic auth via `DATAFORSEO_LOGIN`/`DATAFORSEO_PASSWORD`.
-- **Google Gemini** (via Generative Language API) — Phase 4+ AI feature provider. Model: `gemini-flash-latest`. Key: `GOOGLE_GENERATIVE_AI_API_KEY` (server-only). Cost-tracked via `api_usage` table under SKUs `ai_*`. See [[../04-integrations/gemini]].
+- **Google Gemini** (via Generative Language API) — Phase 4+ AI feature provider. Model: `gemini-3-flash-preview` (since 15.07.2026). Key: `GOOGLE_GENERATIVE_AI_API_KEY` (server-only). Cost-tracked via `api_usage` table under SKUs `ai_*`. See [[../04-integrations/gemini]].
 - **Vercel** — hosting platform. CLI permission granted in `.claude/settings.local.json`.
 
 See [[../04-integrations/_README]] (when written) for per-service deep-dives.

@@ -9,8 +9,8 @@ import "server-only";
 export interface RankCandidate {
   id: string;
   name: string;
-  /** ~150-250 words distilled from reviews by Phase 4. May be empty for
-   *  pre-Phase-4 places. */
+  /** ~250-400 words distilled from reviews by Phase 4 (150-250 on profiles
+   *  generated before 15.07.2026). May be empty for pre-Phase-4 places. */
   searchable_summary: string;
   /** Per-axis arrays: atmosphere, occasions, dietary, seating,
    *  cuisine_types, music, crowd, distinctive, price_range. Whatever
@@ -55,7 +55,7 @@ export function buildRankResultsPrompt(
     "",
     "Each candidate ships with a rich profile:",
     "  - `name`",
-    "  - `searchable_summary` (~150-250 word distillation from reviews; primary signal)",
+    "  - `searchable_summary` (~250-400 word distillation from reviews; primary signal)",
     "  - `features` (atmosphere, occasions, dietary, seating, cuisine_types, music,",
     "    crowd, distinctive, price_range — Phase 4 LLM-generated, natural language)",
     "  - `theme_insights` (per-theme sentiment: food/drink/service/atmosphere/value/",

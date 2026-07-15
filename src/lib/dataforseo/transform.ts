@@ -252,6 +252,135 @@ export function transformReviews(rawReviews: RawReview[]): GoogleReview[] {
     }));
 }
 
+/** First N stored positions form the protected relevance backbone. */
+export const REVIEW_BACKBONE_SIZE = 50;
+
+/** Stable identity for a review across fetches. */
+const reviewKey = (r: GoogleReview) =>
+  r.publish_time
+    ? `${r.publish_time}|${r.author_name}`
+    : `${r.author_name}|${r.text.slice(0, 60)}`;
+
+const newestFirst = (a: GoogleReview, b: GoogleReview) =>
+  (b.publish_time ?? "").localeCompare(a.publish_time ?? "");
+
+/**
+ * Count how many incoming reviews are genuinely new (not in the stored
+ * set). Key-diff based, NOT length-delta based — once the corpus is at
+ * cap, a length delta reads 0 even when new reviews arrived and evicted
+ * old pool entries.
+ */
+export function countNewReviews(
+  existing: GoogleReview[],
+  incoming: GoogleReview[]
+): number {
+  const have = new Set(existing.map(reviewKey));
+  const seen = new Set<string>();
+  let n = 0;
+  for (const r of incoming) {
+    const k = reviewKey(r);
+    if (have.has(k) || seen.has(k)) continue;
+    seen.add(k);
+    n++;
+  }
+  return n;
+}
+
+/**
+ * Merge a fresh review fetch into the stored set instead of replacing it.
+ *
+ * Structure of the stored array — TWO tiers, one array:
+ *
+ *   [ backbone: first ≤50 positions ][ pool: rolling newest-first window ]
+ *
+ * The BACKBONE is Google's relevance-ordered "most valuable" picks. Its
+ * ORDER IS the ranking, so it is never reshuffled or evicted by newest
+ * fetches. Recency ≠ signal quality: a profile built from "newest 50"
+ * alone would be worse than one built from the relevant set, so the
+ * backbone is the permanent quality floor.
+ *
+ * `incomingOrder` MUST reflect the sort the fetch used:
+ *
+ * - "relevant": the incoming set IS the current relevance ranking → it
+ *   ESTABLISHES (or refreshes) the backbone in its fetch order. Whatever
+ *   was stored before — legacy 5-review heads, a corpus first populated
+ *   by a newest fetch — is demoted to the pool, not lost. This also makes
+ *   the initial population correct (empty `existing` + relevant fetch →
+ *   backbone = the relevant order, untouched).
+ * - "newest": discovery refresh → existing positions are preserved
+ *   (backbone untouched), genuinely new reviews join the pool.
+ *
+ * The POOL is a newest-first window capped so total storage stays ≤ cap.
+ * The profile prompt blends both tiers — see selectReviewsForPrompt in
+ * prompts/place-profile-full.ts.
+ *
+ * Identity: publish_time + author_name (falls back to author + text
+ * prefix for legacy reviews without a timestamp). A re-fetched copy of a
+ * known review updates it in place.
+ *
+ * Known imperfection (accepted): the tier boundary is positional. For
+ * corpora that never had ≥50 relevant reviews, later "newest" merges can
+ * freeze a few pool entries into the sub-50 head — harmless, because a
+ * ≤50-review corpus fits the prompt whole anyway.
+ */
+export function mergeReviews(
+  existing: GoogleReview[],
+  incoming: GoogleReview[],
+  opts: { incomingOrder: "relevant" | "newest"; cap?: number }
+): GoogleReview[] {
+  const cap = opts.cap ?? 200;
+
+  if (opts.incomingOrder === "relevant") {
+    // Incoming is the fresh relevance ranking → it becomes the backbone.
+    const seen = new Set<string>();
+    const backbone: GoogleReview[] = [];
+    const overflow: GoogleReview[] = [];
+    for (const r of incoming) {
+      const k = reviewKey(r);
+      if (seen.has(k)) continue;
+      seen.add(k);
+      if (backbone.length < REVIEW_BACKBONE_SIZE) backbone.push(r);
+      else overflow.push(r);
+    }
+    const demoted: GoogleReview[] = [];
+    for (const r of existing) {
+      const k = reviewKey(r);
+      if (seen.has(k)) continue;
+      seen.add(k);
+      demoted.push(r);
+    }
+    const pool = [...demoted, ...overflow]
+      .sort(newestFirst)
+      .slice(0, Math.max(0, cap - backbone.length));
+    return [...backbone, ...pool];
+  }
+
+  // "newest": existing entries keep their positions; fresh copies win in
+  // place; genuinely new reviews join the pool.
+  const freshByKey = new Map(incoming.map((r) => [reviewKey(r), r] as const));
+  const seen = new Set<string>();
+  const updatedExisting: GoogleReview[] = [];
+  for (const r of existing) {
+    const k = reviewKey(r);
+    if (seen.has(k)) continue;
+    seen.add(k);
+    updatedExisting.push(freshByKey.get(k) ?? r);
+  }
+  const additions: GoogleReview[] = [];
+  for (const r of incoming) {
+    const k = reviewKey(r);
+    if (seen.has(k)) continue;
+    seen.add(k);
+    additions.push(r);
+  }
+
+  const backbone = updatedExisting.slice(0, REVIEW_BACKBONE_SIZE);
+  const pool = [...updatedExisting.slice(REVIEW_BACKBONE_SIZE), ...additions]
+    .sort(newestFirst)
+    .slice(0, Math.max(0, cap - backbone.length));
+  return [...backbone, ...pool];
+}
+
 /**
  * Extract extended review data (DataForSEO exclusive fields).
  * These provide richer review information than Google Places API.

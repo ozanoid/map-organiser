@@ -11,13 +11,14 @@ import {
   buildRankResultsPrompt,
   type RankCandidate,
 } from "@/lib/ai/prompts/rank-results";
-import { trackAiUsage, checkAiDailyCap } from "@/lib/ai/track-usage";
+import { trackAiUsage, checkAiBudget } from "@/lib/ai/track-usage";
 import { log } from "@/lib/telemetry/logger";
 
 /** Cost guard: refuse to rerank more than this many candidates in one call. */
 const MAX_CANDIDATES = 200;
-/** Per-summary cap to keep token cost bounded. */
-const SUMMARY_CHAR_CAP = 1500;
+/** Per-summary cap to keep token cost bounded. Sized for the 250-400 word
+ *  summaries generated from 15.07.2026 (~2800 chars max). */
+const SUMMARY_CHAR_CAP = 3000;
 /** Per-tldr cap. */
 const TLDR_CHAR_CAP = 400;
 
@@ -89,11 +90,14 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // ─── Daily cost cap: runaway-bug insurance ───
-  const cap = await checkAiDailyCap(user.id);
+  // ─── Runaway backstop only ───
+  // The search budget is charged at parse time (one unit per search);
+  // legitimate re-ranks (broaden toggles) are free. This 3× ceiling just
+  // stops a client-side rerank-loop bug from bypassing the parse gate.
+  const cap = await checkAiBudget("rank_backstop", user.id);
   if (cap.exceeded) {
     return NextResponse.json(
-      { error: "Daily AI limit reached. Try again tomorrow.", used: cap.used, cap: cap.cap },
+      { error: "Monthly AI limit reached. Resets on the 1st.", used: cap.used, cap: cap.cap },
       { status: 429 }
     );
   }

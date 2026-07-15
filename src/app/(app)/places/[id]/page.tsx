@@ -644,6 +644,10 @@ export default function PlaceDetailPage() {
               Array.isArray((googleData as { reviews?: unknown[] }).reviews) &&
               ((googleData as { reviews?: unknown[] }).reviews as unknown[]).length > 0
             }
+            reviews={
+              ((googleData as { reviews?: { publish_time?: string }[] })
+                .reviews) ?? []
+            }
             onRefreshed={fetchPlace}
           />
 

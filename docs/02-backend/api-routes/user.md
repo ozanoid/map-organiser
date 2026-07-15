@@ -2,8 +2,8 @@
 title: User routes
 type: route-group
 domain: backend
-version: 1.2.0
-last_updated: 19.05.2026
+version: 1.3.0
+last_updated: 15.07.2026
 status: stable
 sources:
   - src/app/api/user/api-keys/route.ts
@@ -34,8 +34,8 @@ Two endpoints under `/api/user/*` — both about the **caller's own** profile.
 | `GET` | `/api/user/api-keys` | Read masked API key state + `googlePlacesEnabled` flag. |
 | `PUT` | `/api/user/api-keys` | Update / clear encrypted API keys + flag. |
 | `GET` | `/api/user/usage` | Monthly API usage rollup + estimated cost. |
-| `GET` | `/api/user/ai-settings` | Read the master AI toggle + server-side availability flag. |
-| `PUT` | `/api/user/ai-settings` | Flip `profiles.ai_features_enabled`. |
+| `GET` | `/api/user/ai-settings` | Read the master AI toggle + background-refresh opt-in + server-side availability flag. |
+| `PUT` | `/api/user/ai-settings` | Flip `profiles.ai_features_enabled` and/or `profiles.cron_refresh_enabled`. |
 | `GET` | `/api/user/ai-suggestions` | List pending AI proposals (Phase 5 moderation queue), pre-grouped by `(type, slug, parent)`. |
 | `POST` | `/api/user/ai-suggestions/[id]/accept` | Create the proposed tag / sub-category and apply it to every queued place. |
 | `POST` | `/api/user/ai-suggestions/[id]/reject` | Mark proposal (and siblings) as `rejected`. Vocabulary untouched. |
@@ -96,12 +96,12 @@ All require auth.
 ### `GET /api/user/ai-settings`
 
 - **Source:** `src/app/api/user/ai-settings/route.ts`
-- **DB:** `profiles` SELECT (`ai_features_enabled`).
-- **Response:** `{ enabled: boolean, available: boolean }`. `available` reflects the presence of `GOOGLE_GENERATIVE_AI_API_KEY` on the server.
+- **DB:** `profiles` SELECT (`ai_features_enabled, cron_refresh_enabled`).
+- **Response:** `{ enabled: boolean, available: boolean, cronRefreshEnabled: boolean }`. `available` reflects the presence of `GOOGLE_GENERATIVE_AI_API_KEY` on the server; `cronRefreshEnabled` is the opt-in for the whole periodic refresh sweep (default false — see [[../../06-ops/runbooks/periodic-refresh]]).
 
 ### `PUT /api/user/ai-settings`
 
-- **Body:** `{ enabled: boolean }` (Zod-validated).
+- **Body:** `{ enabled?: boolean, cronRefreshEnabled?: boolean }` (Zod-validated; at least one required).
 - **DB:** `profiles` UPDATE.
 - **Response:** `{ success: true, enabled }`.
 - **Notes:** Phase 1 master toggle. When `false`, every other AI endpoint short-circuits and the UI hides AI affordances.

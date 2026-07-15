@@ -2,8 +2,8 @@
 title: Places routes
 type: route-group
 domain: backend
-version: 1.0.1
-last_updated: 20.05.2026
+version: 1.1.0
+last_updated: 15.07.2026
 status: stable
 sources:
   - src/app/api/places/route.ts
@@ -66,7 +66,7 @@ All require auth.
   - `status` (one of `want_to_go` / `booked` / `visited` / `favorite`)
   - `rating` (min user rating)
   - `google_rating` (min Google rating)
-  - `q` (search text)
+  - `q` (search text — ILIKE over `name`, `address`, `notes`, and since 15.07.2026 also `place_profile.searchable_summary` + `tldr`; `%`/`,` escaped)
   - `sort` (`newest` / `oldest` / `name_asc` / `name_desc` / `rating_desc` / `google_rating_desc`)
 - **DB:** `places` SELECT, joins to `categories`; secondary in-memory filtering for tags and lists (via `place_tags` / `list_places` lookups).
 - **Response:** `Place[]` with `location` parsed to `{ lat, lng }`. `200`.

@@ -1,3 +1,4 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 
 export const SKU_CONFIG = {
@@ -36,10 +37,11 @@ export type SkuType = keyof typeof SKU_CONFIG;
 
 export async function trackUsage(
   userId: string,
-  sku: SkuType
+  sku: SkuType,
+  client?: SupabaseClient
 ): Promise<void> {
   try {
-    const supabase = await createClient();
+    const supabase = client ?? (await createClient());
     const config = SKU_CONFIG[sku];
     await supabase.rpc("increment_api_usage", {
       p_user_id: userId,
