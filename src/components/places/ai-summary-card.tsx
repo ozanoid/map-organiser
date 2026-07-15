@@ -15,6 +15,7 @@ import {
   Users,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { toast } from "sonner";
 import type { PlaceProfile } from "@/lib/ai/schemas/place-profile";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -81,8 +82,15 @@ export function AiSummaryCard({
         throw new Error(body.error ?? body.reason ?? "Failed to refresh");
       }
       onRefreshed?.();
+      toast.success("AI summary refreshed");
     } catch (e) {
+      // Surface the server's reason (e.g. "LLM generation failed", "AI not
+      // configured", "Monthly AI profile limit reached") — a silent
+      // console.error made summary-generation failures invisible.
       console.error("[ai-summary] refresh failed:", e);
+      toast.error(
+        e instanceof Error ? e.message : "Couldn't refresh the AI summary."
+      );
     } finally {
       setRefreshing(false);
     }

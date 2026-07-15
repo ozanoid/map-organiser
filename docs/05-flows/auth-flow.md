@@ -2,8 +2,8 @@
 title: Auth Flow
 type: flow
 domain: auth
-version: 1.0.0
-last_updated: 12.05.2026
+version: 1.1.0
+last_updated: 15.07.2026
 status: stable
 sources:
   - src/middleware.ts
@@ -78,6 +78,7 @@ Same path from step 5 onward. Steps 1–4 replaced by:
 - `/auth/callback/*`
 - `/shared/*`
 - `/api/shared/*`
+- `/api/cron/*` (15.07.2026) — cron runs with no cookie; it authenticates itself via `CRON_SECRET`. **Without this exemption the middleware 307-redirects the cron to `/login` and it never runs.**
 
 Plus `/login`, `/signup` are "auth routes" — accessible while unauthenticated, redirect to `/map` if authenticated.
 
