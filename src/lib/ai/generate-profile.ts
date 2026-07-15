@@ -114,6 +114,15 @@ export async function generatePlaceProfile(
       output: Output.object({ schema: PlaceProfileSchema }),
       system: systemPrompt,
       prompt: userPrompt,
+      // OTel: gen_ai.* spans → Honeycomb + Langfuse (see
+      // instrumentation-node.ts). Runs under both the cookie-authed enrich
+      // route and the refresh cron — the parent span in the trace tells
+      // which. functionId becomes the span name.
+      experimental_telemetry: {
+        isEnabled: true,
+        functionId: "ai.generate-profile",
+        metadata: { userId, placeId },
+      },
     });
     profile = result.output;
   } catch (e) {

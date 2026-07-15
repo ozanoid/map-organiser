@@ -2,7 +2,7 @@
 title: Google Gemini (LLM)
 type: integration
 domain: integrations
-version: 1.5.1
+version: 1.5.2
 last_updated: 15.07.2026
 status: stable
 sources:
@@ -23,6 +23,8 @@ related:
 # Google Gemini
 
 > **Bug fix (v1.15.1, 15.07.2026):** `.map(compactReview)` was passing the array INDEX as `compactReview`'s `maxChars` param — review *i* was truncated to *i* characters, so every full profile generated since Phase 4 (19.05.2026) was built from near-empty review text (all 451 profiles affected; the LLM leaned on place_topics/attributes/lite-prior and fabricated the rest, including evidence quotes). Fixed to `.map((r) => compactReview(r))`; all affected profiles need regeneration — see v4 PART 4 #8.
+
+> **Telemetry (v1.16.0):** every Gemini call now exports gen_ai spans to Honeycomb **and** Langfuse (LLM-only view: prompts, completions, tokens, cost). See [[../05-flows/observability-flow]].
 
 The LLM provider behind the AI features added across PRs #30–#35 (Phases 1–5.5). Model: **`gemini-3-flash-preview`** (Gemini 3 Flash — upgraded from `gemini-flash-latest` / 2.5 family on 15.07.2026; old profiles remain distinguishable via `model_version`). Note the id namespace: this is the **Generative Language API** id (what our direct provider hits); the Vercel AI Gateway catalog normalizes the same model as `google/gemini-3-flash`. Accessed through Vercel's AI SDK v6 with the Google provider — **direct provider wiring**, not via the Vercel AI Gateway (deliberate; see "Why direct, not Gateway?" below).
 

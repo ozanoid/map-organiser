@@ -7,25 +7,34 @@
  * `@opentelemetry/exporter-logs-otlp-http`) are never evaluated there.
  * See instrumentation.ts for the why.
  *
- * Configures `@vercel/otel` with BOTH:
+ * Configures `@vercel/otel` with:
  *   1. Trace pipeline → Honeycomb /v1/traces
  *        - HTTP request spans (auto)
  *        - fetch spans (Supabase, Gemini)
  *        - gen_ai.* spans from AI SDK `experimental_telemetry`
  *   2. Log pipeline → Honeycomb /v1/logs
  *        - `log.{debug,info,warn,error}` records, trace-correlated
+ *   3. Langfuse span processor → cloud.langfuse.com (LLM observability)
+ *        - SAME trace pipeline, additional processor: `spanProcessors:
+ *          ["auto", …]` keeps the default Honeycomb export processor and
+ *          adds Langfuse alongside. Langfuse's built-in filter exports
+ *          ONLY GenAI/Langfuse spans — infra spans never leave for it.
+ *        - See src/lib/telemetry/langfuse.ts.
  *
  * Required env vars (Vercel):
  *   - HONEYCOMB_API_KEY  — ingest token, production environment
  *   - HONEYCOMB_DATASET  — dataset name (default: "map-organiser")
  *   - HONEYCOMB_API_URL  — base URL (default US; EU = api.eu1.honeycomb.io)
+ *   - LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY / LANGFUSE_BASE_URL
  *
- * When HONEYCOMB_API_KEY is absent (local dev), exporters are omitted —
- * the OTel SDK still runs so logger trace-context still works.
+ * Each backend degrades independently: missing Honeycomb key → no
+ * Honeycomb exporters; missing Langfuse keys → no Langfuse processor.
+ * The OTel SDK itself always runs so logger trace-context still works.
  */
 import { registerOTel, OTLPHttpJsonTraceExporter } from "@vercel/otel";
 import { BatchLogRecordProcessor } from "@opentelemetry/sdk-logs";
 import { OTLPLogExporter } from "@opentelemetry/exporter-logs-otlp-http";
+import { langfuseSpanProcessor } from "@/lib/telemetry/langfuse";
 
 const apiKey = process.env.HONEYCOMB_API_KEY;
 const dataset = process.env.HONEYCOMB_DATASET ?? "map-organiser";
@@ -40,12 +49,22 @@ console.log(
   `[instrumentation-node] boot · NEXT_RUNTIME=${process.env.NEXT_RUNTIME} ` +
     `· HONEYCOMB_API_KEY=${apiKey ? `present(${apiKey.length} chars)` : "MISSING"} ` +
     `· HONEYCOMB_DATASET=${dataset} · baseUrl=${baseUrl} ` +
+    `· LANGFUSE=${langfuseSpanProcessor ? "CONFIGURED" : "off (no keys)"} ` +
     `· → ${apiKey ? "exporters CONFIGURED" : "NO-OP (no exporter, nothing ships)"}`
 );
 
+// "auto" = the default span processors @vercel/otel would configure on its
+// own (incl. the batch processor wrapping `traceExporter` below). Langfuse
+// rides alongside; omitted entirely when its keys are absent.
+const spanProcessors = [
+  "auto" as const,
+  ...(langfuseSpanProcessor ? [langfuseSpanProcessor] : []),
+];
+
 if (!apiKey) {
-  // Local dev / no-key path: SDK runs, in-memory spans only.
-  registerOTel({ serviceName: "map-organiser" });
+  // Local dev / no-Honeycomb path: no Honeycomb exporters. Langfuse (if
+  // configured) still exports LLM spans via its own processor.
+  registerOTel({ serviceName: "map-organiser", spanProcessors });
 } else {
   const headers = {
     "x-honeycomb-team": apiKey,
@@ -54,6 +73,7 @@ if (!apiKey) {
 
   registerOTel({
     serviceName: "map-organiser",
+    spanProcessors,
     traceExporter: new OTLPHttpJsonTraceExporter({
       url: `${baseUrl}/v1/traces`,
       headers,

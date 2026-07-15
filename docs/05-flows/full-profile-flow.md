@@ -2,7 +2,7 @@
 title: Full Profile Flow (AI Phase 4)
 type: flow
 domain: places
-version: 1.4.1
+version: 1.4.2
 last_updated: 15.07.2026
 status: stable
 sources:
@@ -24,6 +24,8 @@ related:
 # Full Profile Flow (AI Phase 4)
 
 > **Bug fix (v1.15.1, 15.07.2026):** `.map(compactReview)` was passing the array INDEX as `compactReview`'s `maxChars` param — review *i* was truncated to *i* characters, so every full profile generated since Phase 4 (19.05.2026) was built from near-empty review text (all 451 profiles affected; the LLM leaned on place_topics/attributes/lite-prior and fabricated the rest, including evidence quotes). Fixed to `.map((r) => compactReview(r))`; all affected profiles need regeneration — see v4 PART 4 #8.
+
+> **Telemetry (v1.16.0):** the profile LLM call now emits gen_ai spans to Honeycomb + Langfuse (`ai.generate-profile`). See [[observability-flow]].
 
 The **first real LLM call** in the app. After reviews land for a place, a
 background pipeline triggers Gemini Flash to produce a structured

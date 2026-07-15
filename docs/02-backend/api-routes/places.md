@@ -2,7 +2,7 @@
 title: Places routes
 type: route-group
 domain: backend
-version: 1.2.0
+version: 1.2.1
 last_updated: 15.07.2026
 status: stable
 sources:
@@ -25,6 +25,8 @@ related:
 ---
 
 # Places routes
+
+> **Telemetry (v1.16.0):** `enrich?step=profile` stamps Langfuse trace fields (`place-profile`) around `generatePlaceProfile` and flushes via `after(flushLangfuse)`. See [[../../05-flows/observability-flow]].
 
 Ten route handler files under `/api/places/*`. The Place is the most-touched entity in the schema; this is the busiest part of the API.
 

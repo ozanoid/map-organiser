@@ -2,8 +2,8 @@
 title: Monitoring
 type: overview
 domain: ops
-version: 1.0.0
-last_updated: 12.05.2026
+version: 1.1.0
+last_updated: 15.07.2026
 status: stable
 related:
   - "[[_README]]"
@@ -12,24 +12,30 @@ related:
 
 # Monitoring
 
-What we can see when something goes wrong. Honest answer: not much. The current setup is **dashboard-only** — no aggregation, no alerting.
+What we can see when something goes wrong. Server-side observability is
+solid since v1.9.0 (traces + structured logs); alerting and frontend
+tracking are still the gaps. Full pipeline architecture:
+[[../05-flows/observability-flow]].
 
 ## What's available today
 
 | Surface | Where | Useful for |
 |---|---|---|
-| Vercel logs | Vercel dashboard → Deployments → Logs | Function invocations, errors, response times |
+| **Honeycomb** (since v1.9.0) | ui.honeycomb.io — 2 boards | Trace waterfalls, gen_ai LLM spans, OTel logs, latency/error queries |
+| **Langfuse** (since v1.16.0) | cloud.langfuse.com | LLM-only traces: prompts, completions, tokens, cost per call/user |
+| **Axiom** (`vercel_parsed` view) | app.axiom.co | Structured log search (APL), 30-day retention |
+| Vercel logs | Vercel dashboard → Deployments → Logs | Raw stdout, quick checks, 1h retention |
 | Supabase logs | Supabase dashboard → Logs Explorer | DB queries, auth events, slow queries |
 | Supabase advisors | MCP `get_advisors` or dashboard → Advisors | Schema issues, RLS gaps, performance hints |
 | Mapbox dashboard | mapbox.com/account/statistics | Map loads + Directions calls per month |
 | DataForSEO dashboard | app.dataforseo.com | Account balance, calls per day |
 | Google Cloud Console | console.cloud.google.com | Places API quota + per-user billing (system key) |
+| CostTracker (in-app) | Settings → API usage | Per-SKU monthly usage + estimated cost (Google + AI SKUs) |
 
 ## What's NOT available
 
-- **No Sentry / Datadog / Honeycomb.** Errors don't aggregate.
-- **No frontend error tracking.** A user can see a broken UI and we won't know.
-- **No alerting.** Nothing pings on quota exhaustion, function failures, or DB slowdowns.
+- **No frontend error tracking.** A user can see a broken UI and we won't know. (Sentry/browser-OTel still absent.)
+- **No alerting.** Nothing pings on quota exhaustion, function failures, or DB slowdowns — Honeycomb triggers are a natural next step.
 - **No uptime monitoring.** No external pinger.
 - **No analytics.** No Plausible, PostHog, Vercel Analytics, etc.
 

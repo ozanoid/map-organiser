@@ -6,6 +6,60 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 15.07.2026 — v1.16.0 — Langfuse LLM observability (all Gemini calls traced)
+
+System-wide Langfuse integration: every LLM call now exports OTel gen_ai
+spans to **both** Honeycomb (unchanged) and **Langfuse** (new; EU cloud).
+Rides the existing OTel pipeline — `registerOTel({ spanProcessors:
+["auto", langfuseSpanProcessor] })` keeps the Honeycomb export processor
+and adds Langfuse alongside. No behavior change to any AI feature; zero
+new AI cost (telemetry only).
+
+- **New `src/lib/telemetry/langfuse.ts`** — `LangfuseSpanProcessor`
+  singleton (skipped entirely when `LANGFUSE_PUBLIC_KEY`/`SECRET_KEY`
+  are absent) + `flushLangfuse()` (error-swallowing forceFlush).
+  Composed `shouldExportSpan`: the default filter keeps Langfuse
+  LLM-only (no infra spans), PLUS the AI SDK's outer umbrella spans
+  (`…:ai.generateText`) are dropped — **found in live testing**: the
+  umbrella loses its input/output token attributes in emission (AI SDK
+  v6 `totalUsage` aggregation bug) but keeps `reasoningTokens`, so
+  Langfuse priced reasoning tokens twice (~37% trace-cost inflation —
+  e.g. the first live search showed $0.0321 instead of the true
+  $0.0235). The `…doGenerate` child carries complete usage + full
+  message IO; costs now match reality. Filter verified with a 7-case
+  functional test through a real processor + fake exporter.
+  **The singleton is stashed on `globalThis` via `Symbol.for`** — found
+  in adversarial review: Turbopack compiles the instrumentation hook and
+  the routes into disjoint bundle graphs, each evaluating the module
+  separately; a plain module-level instance would leave the routes
+  flushing a never-registered second copy (silent no-op).
+- **`generate-profile.ts` gains `experimental_telemetry`** (span
+  `ai.generate-profile`, metadata userId+placeId) — was the one LLM call
+  site without it. parse-query/rank-results already had theirs.
+- **Langfuse trace-level fields** via `propagateAttributes` at all three
+  call sites: `ai-search` (parse-query + rank-results — traceparent
+  propagation merges them into ONE Langfuse trace), `place-profile`
+  (enrich `step=profile`), `cron-refresh-places` (refresh cron, tag `cron`).
+- **Serverless flush:** parse-query, rank-results, enrich and the cron
+  route call `after(flushLangfuse)` (`next/server`) so the span batch
+  survives Vercel's freeze-after-response.
+- **Env** (already set in Vercel; local `.env.local.example` updated):
+  `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_BASE_URL`.
+  Connectivity verified pre-implementation with a test trace
+  (`langfuse-connectivity-test`, trace `700fca39…`) confirmed via the
+  Langfuse API.
+- **Deps:** `@langfuse/otel` + `@langfuse/tracing` `^5.9.1`.
+- Docs: `observability-flow.md` v3.3.0 (architecture diagram + env table
+  + "four places to look" + diagnostic toggles), `env-vars.md` v1.3.0
+  (canonical list now truly canonical — added the missing `CRON_SECRET`
+  + `HONEYCOMB_*` rows too), `tech-stack.md` v1.3.0 (new Observability
+  section), `monitoring.md` v1.1.0 (was pre-Honeycomb stale),
+  `repo-structure.md` v1.2.1 (lib/telemetry/ tree), telemetry notes in
+  `api-routes/ai.md`, `api-routes/places.md`, `ai-search-flow.md`,
+  `ai-enrichment-flow.md`, `full-profile-flow.md`,
+  `runbooks/periodic-refresh.md`, `gemini.md`, `01-domain/places.md`,
+  `manual-place-create-flow.md`, v4 doc 5.2 decision record.
+
 ## 15.07.2026 — v1.15.1 — CRITICAL: profile prompt was truncating review i to i characters
 
 Found while inspecting the first Langfuse traces (the prompt is finally

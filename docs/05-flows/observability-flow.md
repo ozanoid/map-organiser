@@ -1,8 +1,8 @@
 ---
-title: Observability Flow (dual-write — Honeycomb + Vercel/Axiom)
+title: Observability Flow (Honeycomb + Vercel/Axiom + Langfuse)
 type: flow
 domain: infra
-version: 3.2.0
+version: 3.3.0
 last_updated: 15.07.2026
 status: stable
 sources:
@@ -10,6 +10,7 @@ sources:
   - src/instrumentation-node.ts
   - src/lib/telemetry/logger.ts
   - src/lib/telemetry/trace-context.ts
+  - src/lib/telemetry/langfuse.ts
   - src/app/api/ai/parse-query/route.ts
   - src/app/api/ai/rank-results/route.ts
   - src/app/api/places/route.ts
@@ -20,10 +21,11 @@ related:
 
 # Observability Flow
 
-**Dual-write.** Every server log goes to two independent destinations;
-traces go to Honeycomb. The two log pipes have independent failure
-modes, so a misconfigured telemetry backend can never black out
-monitoring.
+**Dual-write logs, dual-export traces.** Every server log goes to two
+independent destinations; traces go to Honeycomb, and the LLM subset of
+those spans additionally goes to Langfuse (v1.16.0). Every pipe has
+independent failure modes, so a misconfigured telemetry backend can
+never black out monitoring.
 
 ## Why dual-write (v1.9.0 post-mortem)
 
@@ -54,19 +56,24 @@ fix is the rule the otel-migration skill states outright (Phase 5):
    ┌──────────┴───────────────┐         ▲              ▲
    │  Axiom  (vercel dataset, │         │ OTLP /v1/logs│ OTLP /v1/traces
    │  vercel_parsed view)     │         │              │
-   └──────────────────────────┘         │              │
-              ▲                         │              │
-              │ Vercel Log Drain        │              │
-              │ (drains stdout)         │              │
-   ┌──────────┴─────────────────────────┴──────────────┴──────────┐
-   │                  Vercel Function (Next.js)                    │
-   │                                                               │
-   │   log.info(...)  ─┬─▶ console.log(JSON)  → stdout             │
-   │                   └─▶ logs.getLogger().emit() → OTel pipe     │
-   │                                                               │
-   │   generateText({ experimental_telemetry }) → gen_ai.* spans   │
-   │   @vercel/otel auto → HTTP + fetch spans                      │
-   └───────────────────────────────────────────────────────────────┘
+   └──────────────────────────┘         │              │   ┌──────────────────────────┐
+              ▲                         │              │   │        Langfuse          │
+              │ Vercel Log Drain        │              │   │  ── gen_ai.* LLM spans   │
+              │ (drains stdout)         │              │   │     ONLY (built-in       │
+              │                         │              │   │     shouldExportSpan)    │
+              │                         │              │   └──────────────────────────┘
+              │                         │              │              ▲
+              │                         │              │              │ LangfuseSpanProcessor
+   ┌──────────┴─────────────────────────┴──────────────┴──────────────┴──────┐
+   │                        Vercel Function (Next.js)                         │
+   │                                                                          │
+   │   log.info(...)  ─┬─▶ console.log(JSON)  → stdout                        │
+   │                   └─▶ logs.getLogger().emit() → OTel pipe                │
+   │                                                                          │
+   │   generateText({ experimental_telemetry }) → gen_ai.* spans              │
+   │     (→ Honeycomb AND Langfuse — spanProcessors: ["auto", langfuse])      │
+   │   @vercel/otel auto → HTTP + fetch spans (→ Honeycomb only)              │
+   └──────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### Logs — dual-write
@@ -93,16 +100,50 @@ writes BOTH:
 `JSON.stringify` on a circular ref, an SDK error) is swallowed and
 never propagates into the request handler.
 
-### Traces — Honeycomb only
+### Traces — Honeycomb (all spans) + Langfuse (LLM spans)
 
-`instrumentation-node.ts` registers `@vercel/otel` with an
-`OTLPHttpJsonTraceExporter` → Honeycomb `/v1/traces`. Span sources:
-- HTTP request spans — auto (`@vercel/otel`)
-- fetch spans — auto (Supabase, Gemini HTTP)
+`instrumentation-node.ts` registers `@vercel/otel` with
+`spanProcessors: ["auto", langfuseSpanProcessor]`:
+
+- `"auto"` keeps the default export processor, which wraps the
+  `OTLPHttpJsonTraceExporter` → Honeycomb `/v1/traces` (ALL spans).
+- `LangfuseSpanProcessor` (`src/lib/telemetry/langfuse.ts`, singleton,
+  only constructed when `LANGFUSE_PUBLIC_KEY`+`LANGFUSE_SECRET_KEY` are
+  set) rides the same pipeline → cloud.langfuse.com. A **composed
+  `shouldExportSpan` filter** (`isDefaultExportSpan && !umbrella`):
+  the default keeps it LLM-only (infra spans — HTTP, Supabase fetch —
+  never reach Langfuse), and on top of that the AI SDK's outer umbrella
+  spans (`…:ai.generateText`) are dropped. WHY: the umbrella span loses
+  its input/output token attrs in emission (AI SDK v6 aggregation bug)
+  but keeps `reasoningTokens`, so Langfuse priced those reasoning tokens
+  a SECOND time (~37% trace-cost inflation, live-verified 15.07.2026).
+  The `…doGenerate` child carries the complete usage + full message IO
+  and is the single source of truth. Honeycomb still receives BOTH
+  levels (its exporter has no such filter).
+
+Span sources:
+- HTTP request spans — auto (`@vercel/otel`) → Honeycomb only
+- fetch spans — auto (Supabase, Gemini HTTP) → Honeycomb only
 - `gen_ai.*` LLM spans — AI SDK `generateText({ ...,
   experimental_telemetry: { isEnabled: true, functionId, metadata } })`.
   GenAI semantic conventions: model, prompt, completion, input/output
-  tokens, latency, finish_reason.
+  tokens, latency, finish_reason. → Honeycomb **and** Langfuse.
+  All THREE LLM call sites carry this: `ai.parse-query`,
+  `ai.rank-results`, `ai.generate-profile` (lib — runs under both the
+  enrich route and the refresh cron).
+
+**Langfuse trace-level fields** (name, user, tags) are stamped via
+`propagateAttributes({ traceName, userId, tags }, () => generateText(…))`
+(`@langfuse/tracing`) at each call site: `ai-search` (parse-query +
+rank-results — one merged trace via the traceparent below),
+`place-profile` (enrich step=profile), `cron-refresh-places` (cron).
+
+**Serverless flush:** Langfuse batches span exports; Vercel can suspend
+the function right after the response. Every route that produces LLM
+spans calls `after(flushLangfuse)` (`next/server`) so the batch is
+force-flushed once the response is sent. `flushLangfuse()` no-ops when
+the processor is unconfigured and swallows its own errors — telemetry
+never breaks the request path.
 
 > **File location:** the project uses a `src/` directory, so Next.js
 > looks for `src/instrumentation.ts` — NOT a root-level one. A root
@@ -154,26 +195,32 @@ unrelated `/api/places` fetches.
 | `HONEYCOMB_API_KEY` | Honeycomb **ingest** key, `production` environment | (required for the OTel pipe) |
 | `HONEYCOMB_DATASET` | Honeycomb dataset name | `map-organiser` |
 | `HONEYCOMB_API_URL` | Base URL — US default; EU = `https://api.eu1.honeycomb.io` | `https://api.honeycomb.io` |
+| `LANGFUSE_PUBLIC_KEY` | Langfuse project public key (`pk-lf-…`) | (required for the Langfuse pipe) |
+| `LANGFUSE_SECRET_KEY` | Langfuse project secret key (`sk-lf-…`) | (required for the Langfuse pipe) |
+| `LANGFUSE_BASE_URL` | Langfuse endpoint — EU cloud | `https://cloud.langfuse.com` |
 
 Vercel only applies env vars to deployments built AFTER they were
 added. Adding a var requires a fresh deploy (or Redeploy) to take
 effect.
 
 When `HONEYCOMB_API_KEY` is absent, `instrumentation-node.ts` registers
-OTel with no exporter — the console-log pipe still works fully; only
-the Honeycomb pipe is dark.
+OTel with no Honeycomb exporter — the console-log pipe still works
+fully; only the Honeycomb pipe is dark. The Langfuse processor degrades
+independently the same way (absent keys → processor skipped, everything
+else unaffected).
 
 `instrumentation-node.ts` prints a one-line boot diagnostic to stdout
 (`[instrumentation-node] boot · …`) reporting whether the key reached
 the runtime. Visible in the Vercel dashboard Logs view on cold start.
 
-## Three places to look
+## Four places to look
 
 | Where | What | When to use |
 |---|---|---|
 | **Vercel dashboard → Logs** | Raw stdout JSON lines | Quick "is anything happening", 1h retention |
 | **Axiom** (`vercel_parsed` view) | Structured, queryable logs (APL) | Log search/aggregation, 30-day retention |
-| **Honeycomb** | Traces + gen_ai LLM spans + OTel logs | LLM cost/latency, trace waterfalls, AI Observability |
+| **Honeycomb** | Traces + gen_ai LLM spans + OTel logs | Trace waterfalls across the WHOLE request (HTTP + DB + LLM) |
+| **Langfuse** (cloud.langfuse.com) | LLM-only traces: prompts, completions, tokens, cost, per-user/per-tag filtering | Prompt debugging, LLM cost/quality analysis, eval workflows (future) |
 
 The Axiom Vercel Log Drain may be left enabled (it costs ~$0.50/GB but
 F&F volume is ~$1–2/mo) — it is the structured-log search surface while
@@ -227,6 +274,7 @@ body) → stable queries on both backends:
 |---|---|---|
 | Server `log.*` → stdout | ON | always |
 | Server `log.*` → OTel/Honeycomb | ON when `HONEYCOMB_API_KEY` set | env var |
-| OTel spans (incl. gen_ai.*) | ON when key set | env var |
+| OTel spans → Honeycomb | ON when `HONEYCOMB_API_KEY` set | env var |
+| gen_ai.* spans → Langfuse | ON when `LANGFUSE_PUBLIC_KEY`+`SECRET_KEY` set (independent of Honeycomb) | env vars |
 | Client `[ai-search/*]` console logs | OFF | `localStorage.setItem("ai-debug","1")` |
 | `window.__aiSearchStore` | OFF | same localStorage flag |

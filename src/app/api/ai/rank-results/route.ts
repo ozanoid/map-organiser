@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { generateText, Output } from "ai";
+import { propagateAttributes } from "@langfuse/tracing";
 import { createClient } from "@/lib/supabase/server";
 import { getAiClient, FLASH_MODEL } from "@/lib/ai/client";
 import {
@@ -13,6 +14,7 @@ import {
 } from "@/lib/ai/prompts/rank-results";
 import { trackAiUsage, checkAiBudget } from "@/lib/ai/track-usage";
 import { log } from "@/lib/telemetry/logger";
+import { flushLangfuse } from "@/lib/telemetry/langfuse";
 
 /** Cost guard: refuse to rerank more than this many candidates in one call. */
 const MAX_CANDIDATES = 200;
@@ -67,6 +69,9 @@ export async function POST(request: NextRequest) {
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  // Flush Langfuse's span batch once the response is sent (serverless).
+  after(flushLangfuse);
 
   // ─── Auth gate: ai_features_enabled ───
   const { data: profileRow } = await supabase
@@ -193,23 +198,34 @@ export async function POST(request: NextRequest) {
 
   let llmRanked: LlmRankOutput;
   try {
-    const result = await generateText({
-      model: aiClient(FLASH_MODEL),
-      output: Output.object({ schema: LlmRankSchema }),
-      system: systemPrompt,
-      prompt: userPrompt,
-      // OTel: GenAI semantic-convention spans flow to Axiom via @vercel/otel.
-      // candidateCount as metadata so cost-per-call queries can stratify
-      // by payload size.
-      experimental_telemetry: {
-        isEnabled: true,
-        functionId: "ai.rank-results",
-        metadata: {
-          userId: user.id,
-          candidateCount: candidates.length,
-        },
+    // Same trace-level attributes as parse-query: this call continues the
+    // parse-query OTel trace (traceparent, v1.10.0), so identical values
+    // merge cleanly into the single "ai-search" Langfuse trace.
+    const result = await propagateAttributes(
+      {
+        traceName: "ai-search",
+        userId: user.id,
+        tags: ["ai-search"],
       },
-    });
+      () =>
+        generateText({
+          model: aiClient(FLASH_MODEL),
+          output: Output.object({ schema: LlmRankSchema }),
+          system: systemPrompt,
+          prompt: userPrompt,
+          // OTel: GenAI semantic-convention spans → Honeycomb + Langfuse
+          // (see instrumentation-node.ts). candidateCount as metadata so
+          // cost-per-call queries can stratify by payload size.
+          experimental_telemetry: {
+            isEnabled: true,
+            functionId: "ai.rank-results",
+            metadata: {
+              userId: user.id,
+              candidateCount: candidates.length,
+            },
+          },
+        })
+    );
     llmRanked = result.output;
   } catch (e) {
     // Salvage path (v1.8.3, kept). AI SDK throws AI_NoObjectGeneratedError

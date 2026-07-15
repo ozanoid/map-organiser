@@ -2,7 +2,7 @@
 title: Tech Stack
 type: overview
 domain: overview
-version: 1.2.0
+version: 1.3.0
 last_updated: 15.07.2026
 status: stable
 sources:
@@ -67,6 +67,19 @@ Every runtime, library, and tool the repo currently depends on. Pin sources are 
 |---|---|---|---|
 | `ai` | `^6.0.184` | AI SDK v6 — model-agnostic call layer (`generateText` + `Output.object`) | Used by Phase 4 `step=profile` enrich branch. Direct provider wiring (not AI Gateway) — see [[../04-integrations/gemini]] for the explicit choice. |
 | `@ai-sdk/google` | `^3.0.75` | Google provider for AI SDK | `createGoogleGenerativeAI({ apiKey: GOOGLE_GENERATIVE_AI_API_KEY })`. Model: `gemini-3-flash-preview` (since 15.07.2026). |
+
+## Observability
+
+| Lib | Version | Role | Notes |
+|---|---|---|---|
+| `@vercel/otel` | `^2.1.3` | OTel SDK bootstrap (`registerOTel`) | `src/instrumentation-node.ts`. Traces → Honeycomb; auto HTTP + fetch spans. |
+| `@opentelemetry/api` | `^1.9.1` | OTel API surface | Logger/tracer access (`src/lib/telemetry/logger.ts`). |
+| `@opentelemetry/sdk-logs` | `^0.220.0` | OTel log pipeline | `BatchLogRecordProcessor` (≥0.220: options-object ctor). |
+| `@opentelemetry/exporter-logs-otlp-http` | `^0.220.0` | OTLP log exporter | → Honeycomb `/v1/logs`. |
+| `@langfuse/otel` | `^5.9.1` | Langfuse span processor | `src/lib/telemetry/langfuse.ts` — LLM-only span export to cloud.langfuse.com (v1.16.0). |
+| `@langfuse/tracing` | `^5.9.1` | Langfuse trace helpers | `propagateAttributes` (trace name/user/tags) in the four routes that trigger LLM calls (parse-query, rank-results, enrich, refresh cron). |
+
+See [[../05-flows/observability-flow]] for the full architecture.
 
 ## Maps & geo
 
