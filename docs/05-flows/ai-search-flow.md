@@ -2,7 +2,7 @@
 title: AI Search Flow (LLM-as-judge, Phase 6.5)
 type: flow
 domain: places
-version: 2.5.0
+version: 2.5.1
 last_updated: 20.05.2026
 status: stable
 sources:
@@ -276,19 +276,21 @@ Worked examples in the prompt cover date-restaurant scoring (McDonald's
 |---|---|---|
 | All POSTs 403 | `ai_features_enabled = false` | Toggle in Settings → AI |
 | All POSTs 503 | `GOOGLE_GENERATIVE_AI_API_KEY` missing | Set env, redeploy |
-| All POSTs 429 | Daily AI cost cap hit (`AI_DAILY_CALL_CAP`, 3000/user/day) | Wait — the cap resets at UTC midnight. Surfaces as a toast on the search input. |
+| All POSTs 429 | Monthly search budget spent (`AI_MONTHLY_SEARCH_CAP`, 500 searches/month — one unit per search, charged at parse) | Resets on the 1st (UTC). Surfaces as a toast on the search input. |
 | Empty card grid in AI mode | LLM scored every candidate < 0.20 | Query may be too restrictive; toggle banner to broader |
 | Broaden banner doesn't appear | narrow ≥ 10 OR no restricted hard | By design — no broaden needed |
 | `[ai/parse-query] paired city` log fires | LLM emitted city without country | Server safety net (PR #44) kicks in |
 
 ## Cost
 
-- `ai_parse_query` — ~$0.0002/call (slightly larger prompt for the new
-  framing).
-- `ai_rank_results` — ~$0.005/call at 50 candidates with full payload
-  (was ~$0.002 in v1.7.x summary-only). Worth it for cross-axis reasoning.
+Gemini 3 Flash Preview rates ($0.50/$3.00 per 1M in/out, 15.07.2026):
 
-User with 20 semantic queries/day → ~$3/month at current pricing.
+- `ai_parse_query` — ~$0.0007/call.
+- `ai_rank_results` — ~$0.015-0.025/call at 50 candidates with full
+  payload (grows with the 250-400 word summaries). Worth it for
+  cross-axis reasoning, but the dominant AI cost.
+
+User with 20 semantic queries/day → ~$10-15/month at current pricing.
 
 ## Related code
 

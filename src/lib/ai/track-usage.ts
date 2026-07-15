@@ -1,34 +1,36 @@
 import "server-only";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 
 /**
- * AI SKU registry. Pricing in USD per 1k calls (approximate, May 2026).
+ * AI SKU registry. Pricing in USD per 1k calls (approximate).
  *
- * Gemini Flash latest (gemini-2.5-flash family):
- *   - $0.075 / 1M input tokens
- *   - $0.30 / 1M output tokens
+ * Model: gemini-3-flash-preview (since 15.07.2026). Verified rates
+ * (ai.google.dev pricing, standard tier):
+ *   - $0.50 / 1M input tokens (text)
+ *   - $3.00 / 1M output tokens
  * Typical AI calls in this app:
- *   - parse_query:   ~500 input + ~150 output  ≈ $0.0001/call → $0.10 / 1k
- *   - rank_results:  ~25k input + ~1k output   ≈ $0.0021/call → $2.10 / 1k
- *   - place_profile: ~5k input + ~2k output    ≈ $0.0010/call → $1.00 / 1k
- *   - embedding:     free tier (text-embedding-004)
+ *   - parse_query:   ~500 input + ~150 output   ≈ $0.0007/call → $0.70 / 1k
+ *   - rank_results:  ~30k input + ~1.5k output  ≈ $0.020/call  → $20.00 / 1k
+ *   - place_profile: ~10k input + ~1.5k output  ≈ $0.0095/call → $9.50 / 1k
+ *   - embedding:     unused placeholder
  *
  * Values are stored in api_usage.cost_per_1k and consumed by CostTracker UI.
  */
 export const AI_SKU_CONFIG = {
   ai_parse_query: {
     name: "AI Parse Query",
-    costPer1k: 0.1,
+    costPer1k: 0.7,
     freeMonthly: 0,
   },
   ai_rank_results: {
     name: "AI Rank Results",
-    costPer1k: 2.1,
+    costPer1k: 20.0,
     freeMonthly: 0,
   },
   ai_place_profile: {
     name: "AI Place Profile",
-    costPer1k: 1.0,
+    costPer1k: 9.5,
     freeMonthly: 0,
   },
   ai_embedding: {
@@ -49,10 +51,11 @@ export type AiSku = keyof typeof AI_SKU_CONFIG;
  */
 export async function trackAiUsage(
   userId: string,
-  sku: AiSku
+  sku: AiSku,
+  client?: SupabaseClient
 ): Promise<void> {
   try {
-    const supabase = await createClient();
+    const supabase = client ?? (await createClient());
     const config = AI_SKU_CONFIG[sku];
     await supabase.rpc("increment_api_usage", {
       p_user_id: userId,
@@ -65,62 +68,86 @@ export async function trackAiUsage(
 }
 
 /**
- * Per-user daily ceiling on AI calls — runaway-bug insurance.
+ * Per-user MONTHLY AI budgets — two separate buckets (15.07.2026;
+ * replaced the single per-call cap after the Gemini 3 price verification
+ * showed searches dominate cost).
  *
- * Sits well above any legitimate heavy day (one full backfill of a large
- * library + a bulk import + a day of searches is ~800-1000 calls) and far
- * below a runaway loop (10k+ calls). One constant — tune here if real
- * usage ever approaches it. At ~$1/1k for profiles, a runaway is capped
- * at roughly $3-6 of spend before the gate trips.
+ * - SEARCH: 500 searches/month. One search burns ONE budget unit no
+ *   matter how many LLM calls it makes — counted via the ai_parse_query
+ *   SKU (every search runs exactly one parse; rank re-fires from broaden
+ *   toggles are free). Ceiling ≈ 500 × ~$0.021 ≈ $10.5/month.
+ * - PROFILE: 1000 place-profile generations/month — covers the add-place
+ *   chain, manual refresh chain, backfill, and the cron sweep together.
+ *   Ceiling = 1000 × ~$9.5/1k ≈ $9.5/month. A full ~470-place backfill
+ *   fits inside a single month.
+ * - RANK BACKSTOP: rank_results is already budgeted through the search
+ *   bucket at parse time; its own 3× ceiling exists ONLY so a client-side
+ *   rerank-loop bug can't bypass the parse gate and run up cost.
  */
-export const AI_DAILY_CALL_CAP = 3000;
+export const AI_MONTHLY_SEARCH_CAP = 500;
+export const AI_MONTHLY_PROFILE_CAP = 1000;
+export const AI_MONTHLY_RANK_BACKSTOP = AI_MONTHLY_SEARCH_CAP * 3;
 
-const AI_SKUS = Object.keys(AI_SKU_CONFIG) as AiSku[];
+export type AiBudgetKind = "search" | "profile" | "rank_backstop";
+
+const BUDGETS: Record<AiBudgetKind, { sku: AiSku; cap: number }> = {
+  search: { sku: "ai_parse_query", cap: AI_MONTHLY_SEARCH_CAP },
+  profile: { sku: "ai_place_profile", cap: AI_MONTHLY_PROFILE_CAP },
+  rank_backstop: { sku: "ai_rank_results", cap: AI_MONTHLY_RANK_BACKSTOP },
+};
 
 export interface AiCapStatus {
-  /** True once today's AI call count has reached the cap. */
+  /** True once this month's AI call count has reached the cap. */
   exceeded: boolean;
-  /** Today's total AI calls for the user across all AI SKUs. */
+  /** This calendar month's total AI calls for the user across all AI SKUs. */
   used: number;
   /** The cap that `used` is measured against. */
   cap: number;
 }
 
 /**
- * Check a user's AI calls for today (UTC) against AI_DAILY_CALL_CAP.
+ * Check one of the user's monthly AI budgets (calendar month, UTC —
+ * resets naturally on the 1st).
  *
  * Reads the per-(user, sku, day) counters in api_usage — the same rows
- * trackAiUsage() / increment_api_usage write — and sums the AI SKUs only
- * (DataForSEO / Google SKUs are excluded).
+ * trackAiUsage() / increment_api_usage write — summing only the SKU that
+ * backs the requested budget (see BUDGETS).
  *
  * Fails OPEN: if the check itself errors (api_usage unreachable), returns
- * exceeded=false. The cap is insurance against a runaway bug, not a hard
- * billing gate — a transient DB blip must never 429 a legitimate request.
+ * exceeded=false. The budget is a spend guard, not a hard billing gate —
+ * a transient DB blip must never 429 a legitimate request.
  */
-export async function checkAiDailyCap(userId: string): Promise<AiCapStatus> {
+export async function checkAiBudget(
+  kind: AiBudgetKind,
+  userId: string,
+  client?: SupabaseClient
+): Promise<AiCapStatus> {
+  const budget = BUDGETS[kind];
   try {
-    const supabase = await createClient();
-    // api_usage.created_at is a DATE written as CURRENT_DATE (UTC) by
-    // increment_api_usage; this UTC day string matches it exactly.
-    const today = new Date().toISOString().slice(0, 10);
+    const supabase = client ?? (await createClient());
+    // api_usage.created_at is a DATE (UTC) — month window via >= YYYY-MM-01.
+    const now = new Date();
+    const monthStart = `${now.getUTCFullYear()}-${String(
+      now.getUTCMonth() + 1
+    ).padStart(2, "0")}-01`;
     const { data, error } = await supabase
       .from("api_usage")
       .select("count")
       .eq("user_id", userId)
-      .eq("created_at", today)
-      .in("sku", AI_SKUS);
+      .gte("created_at", monthStart)
+      .eq("sku", budget.sku);
     if (error) throw error;
     const used = (data ?? []).reduce(
       (sum, row) => sum + (row.count ?? 0),
       0
     );
     return {
-      exceeded: used >= AI_DAILY_CALL_CAP,
+      exceeded: used >= budget.cap,
       used,
-      cap: AI_DAILY_CALL_CAP,
+      cap: budget.cap,
     };
   } catch (e) {
-    console.error("[AI Cap] check failed — failing open:", e);
-    return { exceeded: false, used: 0, cap: AI_DAILY_CALL_CAP };
+    console.error(`[AI Budget:${kind}] check failed — failing open:`, e);
+    return { exceeded: false, used: 0, cap: budget.cap };
   }
 }

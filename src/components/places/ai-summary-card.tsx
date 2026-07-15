@@ -24,6 +24,9 @@ interface AiSummaryCardProps {
   /** Reviews exist so the LLM has something to chew on. When false, the
    *  "analyzing" pending state is misleading — show a softer message. */
   reviewsAvailable: boolean;
+  /** Stored reviews — used to detect a summary that's older than the
+   *  newest review (staleness badge). Only publish_time is read. */
+  reviews?: Array<{ publish_time?: string }>;
   onRefreshed?: () => void;
 }
 
@@ -54,6 +57,7 @@ export function AiSummaryCard({
   placeId,
   profile,
   reviewsAvailable,
+  reviews,
   onRefreshed,
 }: AiSummaryCardProps) {
   const [refreshing, setRefreshing] = useState(false);
@@ -137,6 +141,31 @@ export function AiSummaryCard({
     (t) => t.mention_count >= 3
   );
 
+  // Staleness: the newest stored review was published AFTER this summary
+  // was generated. The refresh→profile chain normally regenerates
+  // automatically; this badge is the safety net for chain failures and
+  // legacy data.
+  // DataForSEO stamps look like "2026-05-12 03:24:18 +00:00" — not strict
+  // ISO, so bare Date.parse is implementation-defined (NaN on some
+  // engines, e.g. Safari). Normalize to ISO as a fallback.
+  const parseReviewTime = (s: string) => {
+    const direct = Date.parse(s);
+    if (!Number.isNaN(direct)) return direct;
+    return Date.parse(
+      s.replace(" ", "T").replace(" +", "+").replace(" -", "-")
+    );
+  };
+  const generatedMs = Date.parse(profile.generated_at);
+  const latestReviewMs = (reviews ?? []).reduce((max, r) => {
+    if (!r.publish_time) return max;
+    const t = parseReviewTime(r.publish_time);
+    return Number.isNaN(t) ? max : Math.max(max, t);
+  }, 0);
+  const summaryStale =
+    !Number.isNaN(generatedMs) &&
+    latestReviewMs > 0 &&
+    latestReviewMs > generatedMs;
+
   return (
     <section className="rounded-lg border border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/40 dark:bg-emerald-950/20 p-4 space-y-3">
       <div className="flex items-start justify-between gap-2">
@@ -159,6 +188,14 @@ export function AiSummaryCard({
           refresh
         </button>
       </div>
+
+      {/* Staleness hint — newer reviews exist than this summary covers */}
+      {summaryStale && (
+        <p className="text-[10px] text-amber-700 dark:text-amber-400 flex items-center gap-1">
+          <RefreshCw className="h-2.5 w-2.5 shrink-0" />
+          New reviews arrived after this summary — refresh to update it.
+        </p>
+      )}
 
       {/* TLDR */}
       {profile.tldr && (

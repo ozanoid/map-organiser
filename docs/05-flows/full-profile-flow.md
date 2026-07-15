@@ -2,8 +2,8 @@
 title: Full Profile Flow (AI Phase 4)
 type: flow
 domain: places
-version: 1.1.0
-last_updated: 20.05.2026
+version: 1.4.0
+last_updated: 15.07.2026
 status: stable
 sources:
   - src/app/api/places/[id]/enrich/route.ts
@@ -34,6 +34,26 @@ moderation, Phase 6 NL filtering, future ranking/discovery).
 At the end of that handler, if `profiles.ai_features_enabled = true`, a
 fire-and-forget `fetch` chains into `?step=profile` on the same place.
 
+Since 15.07.2026 the same regeneration fires from two more paths:
+`refresh-google-data` (the manual "Refresh Google data" action, via the
+same fire-and-forget chain) and the daily **refresh cron**
+([[../06-ops/runbooks/periodic-refresh]], via direct
+`generatePlaceProfile` calls — only when new reviews actually arrived).
+
+Review storage is a **two-tier corpus** (`mergeReviews` in
+`src/lib/dataforseo/transform.ts`): the first ≤50 positions are the
+relevance-ordered *backbone* from the initial `sort_by:"relevant"` fetch
+(never reshuffled or evicted — Google's "most valuable" picks are the
+quality floor), followed by a rolling newest-first *pool* (total cap 200).
+Refresh fetches use `sort_by: "newest"` to discover what's new. The
+profile prompt blends both tiers — 35 backbone + 15 freshest
+(`selectReviewsForPrompt`) — never "newest 50" alone, because recency ≠
+signal quality.
+
+The profile logic itself lives in `src/lib/ai/generate-profile.ts`
+(extracted from the route so the cron can run it with the service
+client); `enrich?step=profile` is now a thin HTTP shell over it.
+
 The user never waits for this — they save the place, see the lite profile
 chips, and the full profile materializes later on the place detail page via
 polling.
@@ -48,7 +68,7 @@ polling.
        │  → google_data filled with extended fields + photo storage
        ▼
 3. POST /api/places/[id]/enrich?step=reviews  (~30s)
-       │  → google_data.reviews populated (50 reviews)
+       │  → google_data.reviews merged in (newest-first, cap 200)
        │
        ▼ NEW (Phase 4)
 4. Reviews handler chains into step=profile (fire-and-forget):
@@ -59,7 +79,7 @@ polling.
 5. step=profile handler:
        │  a. Re-check ai_features_enabled (defense in depth)
        │  b. getAiClient() — null if GOOGLE_GENERATIVE_AI_API_KEY missing → 503
-       │     · then checkAiDailyCap() — over AI_DAILY_CALL_CAP → 429 (fails open)
+       │     · then checkAiBudget("profile") — over AI_MONTHLY_PROFILE_CAP (1000/mo) → 429 (fails open)
        │  c. Bail if no reviews (defensive — chain only fires when reviews exist,
        │     but a manual call from the AI Summary refresh button might not)
        │  d. SELECT place full row + buildUserContext(user.id)
@@ -67,7 +87,7 @@ polling.
        │       → systemPrompt + userPrompt (English, strict-JSON instructions,
        │         user entity IDs inline, subcategory dictionary per parent)
        │  f. generateText({
-       │       model: google('gemini-flash-latest'),
+       │       model: aiClient(FLASH_MODEL),  // gemini-3-flash-preview
        │       output: Output.object({ schema: PlaceProfileSchema }),
        │       system, prompt
        │     })
@@ -168,12 +188,12 @@ match is found, the route reuses that entity — no duplicate row.
 
 ## Token budgeting
 
-- 50 reviews × ~400 chars/review (capped in prompt builder) = ~20K input chars ≈ ~5K input tokens.
+- 50 reviews × ≤1000 chars/review (capped in prompt builder; raised from 400 on 14.07.2026 — long reviews were being cut too early) = up to ~50K input chars ≈ ~12.5K input tokens worst case. Most reviews are shorter, so typical is well below.
 - User context + system rules ≈ ~1K tokens.
 - Subcategory dictionary varies by user; ~500 tokens for 62 default subs.
-- Total input: ~6-7K tokens.
+- Total input: ~7-14K tokens depending on review lengths.
 - Output: ~1-2K tokens (Zod schema is generous but most fields are short).
-- Gemini Flash latest has ample window; cost ≈ ~$0.001-0.002 per profile call.
+- Gemini Flash has ample window; cost ≈ ~$0.008-0.012 per profile call at Gemini 3 Flash Preview rates ($0.50/$3.00 per 1M in/out, verified 15.07.2026).
 
 ## Failure modes
 

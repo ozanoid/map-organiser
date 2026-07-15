@@ -6,6 +6,144 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 15.07.2026 — v1.14.0 — Periodic refresh cron (AI-22 v1) + Gemini 3 pricing true-up
+
+The systemic answer to profile staleness: a daily sweep keeps Google data
+and AI summaries fresh without manual refreshes.
+
+- **`GET /api/cron/refresh-places`** (new) — daily Vercel Cron
+  (`vercel.json`, 03:00 UTC, `CRON_SECRET`-guarded). Picks the 14 stalest
+  places (`google_data->>enriched_at` missing/older than 30 days), runs a
+  full DataForSEO re-lookup with newest-sorted review merge, and
+  regenerates the profile **only when genuinely new reviews arrived** (or
+  none existed). Runbook: `06-ops/runbooks/periodic-refresh.md`.
+  **Setup required: add `CRON_SECRET` env var in Vercel.**
+- **Service-client-safe extractions** so the cron shares the exact
+  interactive logic: `src/lib/places/refresh-google-data.ts` +
+  `src/lib/ai/generate-profile.ts`; the refresh + enrich?step=profile
+  routes are now thin HTTP shells (response shapes unchanged). All queries
+  filter by userId explicitly; `trackUsage`/`trackAiUsage`/`checkAiDailyCap`
+  accept an injected client.
+- **Gemini 3 pricing true-up** (verified ai.google.dev): $0.50/$3.00 per
+  1M in/out — ~7-10× the 2.5-era assumptions. `AI_SKU_CONFIG` updated
+  (parse $0.70/1k, rank $20/1k, profile $9.5/1k) so CostTracker shows
+  real numbers; docs updated (`gemini.md`, `ai-search-flow.md`,
+  `full-profile-flow.md`).
+- **AI budgets: two monthly buckets** (user decision, following the price
+  verification — searches dominate cost). `checkAiBudget(kind)` replaces
+  the single cap; calendar month (UTC), resets on the 1st:
+  - **SEARCH** — 500 searches/month, ONE unit per search (charged at
+    parse; rank rides free behind a 3× rerank-loop backstop). Ceiling ≈
+    $10.5/month.
+  - **PROFILE** — 1000 generations/month across the add-chain, manual
+    refresh, backfill, and cron. Ceiling ≈ $9.5/month; a full ~470-place
+    backfill now fits in one month.
+- **The whole sweep is opt-in per user + re-profiling is thresholded.**
+  New `profiles.cron_refresh_enabled` (migrations
+  `add_cron_reprofile_enabled_to_profiles` +
+  `rename_cron_reprofile_to_cron_refresh`, default **false**) surfaced as
+  Settings → AI → "Background data refresh" (`/api/user/ai-settings`
+  GET/PUT extended; toggle independent of the AI master since the data
+  half isn't AI). Non-opted-in users are never scanned — no DataForSEO
+  cost, no writes. Within the sweep, a profile regenerates only past
+  `CRON_REPROFILE_MIN_NEW_REVIEWS` (>15 new reviews; reviewed-but-
+  profileless places regenerate regardless) and only when the owner has
+  `ai_features_enabled`.
+- **Backbone refresh cycles.** During January and July (UTC,
+  `BACKBONE_REFRESH_MONTHS`) the sweep fetches `sort_by:"relevant"`
+  instead of `"newest"`, letting Google's current relevance ranking
+  rebuild each place's backbone tier twice a year.
+- **Hardening from a 24-agent adversarial review** of the whole change
+  set (19 confirmed findings across 8 distinct defects, all fixed):
+  - `mergeReviews` was destroying the relevance order on INITIAL
+    population (empty existing → relevant fetch got re-sorted
+    newest-first) and letting legacy heads squat the backbone — now
+    mode-aware: `incomingOrder:"relevant"` fetches ESTABLISH/refresh the
+    backbone; `"newest"` fetches feed the pool.
+  - `newReviews` was a length delta → read 0 at the 200-cap, permanently
+    disabling cron re-profiling for busy places → now a key-diff
+    (`countNewReviews`).
+  - Cron staleness marker moved to always-stamped
+    `google_data.refresh_attempted_at` (biz-info-dead places no longer
+    starve the daily batch) + `bizInfoFailed` surfaced in the summary.
+  - 240 s soft deadline: workers stop picking places in time for the
+    summary/log to emit (a 14-place batch could exceed `maxDuration`).
+  - PostgREST `or()` values are now double-quoted (backslash-escaping
+    commas is invalid PostgREST syntax) — fixes comma-containing search
+    AND the pre-existing city-filter variant of the same bug.
+  - Reviews SKU tracked even on zero-result fetches (the task is billed
+    regardless); staleness badge timestamp parsing made Safari-safe;
+    residual `gemini-flash-latest` refs swept from tech-stack/glossary/
+    flow docs.
+
+## 15.07.2026 — v1.13.0 — Gemini 3 Flash Preview + two-tier review corpus + summary reach
+
+AI content freshness & search-reach bundle, follow-up to the v4 review.
+
+- **Model → `gemini-3-flash-preview`.** `FLASH_MODEL` / `MODEL_VERSION`
+  upgraded from `gemini-flash-latest` (2.5 family). Id verified against
+  Google's own pricing docs — note the namespace split: the Generative
+  Language API (our direct provider) uses `gemini-3-flash-preview`, while
+  the Vercel AI Gateway catalog normalizes the same model as
+  `google/gemini-3-flash`. Old profiles keep their old `model_version`
+  stamp → natural re-profile cohort.
+- **`searchable_summary` 150-250 → 250-400 words** (profile prompt rule 7 +
+  schema comment); rank-results `SUMMARY_CHAR_CAP` 1500 → 3000.
+- **Two-tier review corpus (merge, not replace).** New `mergeReviews` in
+  `dataforseo/transform.ts`: the first ≤50 stored positions are the
+  relevance-ordered **backbone** from the initial `sort_by:"relevant"`
+  fetch (never reshuffled/evicted — the quality floor), followed by a
+  rolling newest-first **pool** (total cap 200). All three review-write
+  sites merge, mode-aware: `"relevant"`-sorted fetches (initial enrich,
+  bulk import) establish/refresh the backbone; `"newest"`-sorted refresh
+  fetches feed the pool. The profile prompt blends **35 backbone + 15 freshest**
+  (`selectReviewsForPrompt`) — never "newest 50" alone, since recency ≠
+  signal quality.
+- **Refresh → profile chain.** `refresh-google-data` regenerates the AI
+  summary after a successful refresh (fire-and-forget chain, mirroring
+  enrich). Covered by the AI cost cap.
+- **Staleness badge.** `AiSummaryCard` shows an amber hint when the newest
+  stored review post-dates `place_profile.generated_at` (safety net — the
+  chain normally regenerates automatically).
+- **Keyword search reach.** `/api/places?q=` ILIKE now also covers
+  `place_profile.searchable_summary` + `tldr` (PostgREST `or()` with JSONB
+  paths — syntax smoke-tested against live REST). The search term is now
+  `%`/`,`-escaped.
+- Docs: `gemini.md`, `api-routes/ai.md` v1.3.0, `api-routes/places.md`
+  v1.1.0, `full-profile-flow.md`, `ai-enrichment-flow.md`,
+  `place-import-flow.md` v1.1.1.
+
+## 14.07.2026 — v1.12.1 — Profile prompt: review input cap 400 → 1000 chars
+
+`compactReview` in `src/lib/ai/prompts/place-profile-full.ts` now keeps up
+to 1000 chars per review (was 400) — long-form reviews carry the richest
+signal for `searchable_summary` and `theme_insights` and were being cut too
+early. Worst-case profile input grows ~5K → ~12.5K tokens (~$0.001/profile
+→ ~$0.002); typical is lower since most reviews are short. Applies to
+future generations only — existing profiles keep their summaries until
+re-profiled. Docs: `full-profile-flow.md` v1.2.0, `gemini.md` v1.2.1.
+
+## 14.07.2026 — v1.12.0 — Feature roadmap v4
+
+New `_plans/feature-suggestions_v4.md` — the canonical roadmap, superseding
+the three archived v2/v3 docs. Written after a ~2-month pause, on a full
+review of the archived roadmaps against the May 2026 AI sprint (PR #28–#49).
+
+- **Status sync**: everything implemented through v1.11.0 marked done —
+  AI-01 (as LLM-as-judge), AI-03/04/05, partial AI-06/F-01/AI-08/AI-28,
+  plus off-roadmap wins (sub-categories, moderation queue, backfill,
+  observability, cost cap).
+- **Decision records**: Gemini-direct over Claude/Gateway, soft-features →
+  judge pivot, embeddings deferred, collaborative/social/premium shelved.
+- **Re-priced backlog**: NF-01..06 DataForSEO visualization package as the
+  P1 quick-win theme; comparison (F-04 + AI compare) as the second consumer
+  of the place_profile asset; AI-02 assistant re-estimated cheaper (~5-7d)
+  given existing tool routes.
+- **Sprint plan S0–S5** + tech-debt register (PR #61 preview failure,
+  broken ESLint, grandfather re-enrich → data-quality agent).
+- Numbering: v3 F-xx/AI-xx canonical; NF-xx kept as its own series;
+  v3-ai-first's conflicting AI numbers mapped in an appendix.
+
 ## 20.05.2026 — v1.11.0 — AI daily cost cap + enrichment-flow doc (Phase 7 close)
 
 Phase 7 closeout — a per-user daily cost cap on AI calls, and the missing

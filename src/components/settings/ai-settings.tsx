@@ -10,6 +10,7 @@ import { BackfillProfilesPanel } from "@/components/settings/backfill-profiles-p
 interface AiSettingsState {
   enabled: boolean;
   available: boolean;
+  cronRefreshEnabled: boolean;
 }
 
 /**
@@ -63,6 +64,33 @@ export function AiSettings() {
       // Rollback
       setState({ ...state, enabled: !next });
       toast.error(e instanceof Error ? e.message : "Failed to update AI settings");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleCronToggle(next: boolean) {
+    if (!state) return;
+    setSaving(true);
+    // Optimistic update
+    setState({ ...state, cronRefreshEnabled: next });
+    try {
+      const res = await fetch("/api/user/ai-settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cronRefreshEnabled: next }),
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(body.error ?? "Failed to update settings");
+      }
+      toast.success(
+        next ? "Background refresh enabled" : "Background refresh disabled"
+      );
+    } catch (e) {
+      // Rollback
+      setState({ ...state, cronRefreshEnabled: !next });
+      toast.error(e instanceof Error ? e.message : "Failed to update settings");
     } finally {
       setSaving(false);
     }
@@ -127,6 +155,44 @@ export function AiSettings() {
           </div>
         </div>
       )}
+
+      <Separator />
+
+      {/* Background refresh opt-in (default off) — governs the ENTIRE
+          daily sweep for this user's places: Google data refresh AND,
+          when the master AI toggle is on, summary regeneration after
+          >15 new reviews. Independent of the AI master toggle because
+          the data-refresh half isn't an AI feature. */}
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex-1 min-w-0">
+          <h3 className="text-sm font-medium">Background data refresh</h3>
+          <p className="text-xs text-muted-foreground mt-1">
+            A daily sweep keeps your places&apos; Google data (reviews,
+            hours, ratings) fresh and — when AI is on — regenerates
+            summaries after 15+ new reviews. When off, your places are
+            never auto-refreshed.
+          </p>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={state.cronRefreshEnabled}
+          aria-label="Background data refresh"
+          disabled={saving}
+          onClick={() => handleCronToggle(!state.cronRefreshEnabled)}
+          className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200 ${
+            state.cronRefreshEnabled
+              ? "bg-emerald-600"
+              : "bg-gray-200 dark:bg-gray-700"
+          } ${saving ? "opacity-50 cursor-not-allowed" : ""}`}
+        >
+          <span
+            className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${
+              state.cronRefreshEnabled ? "translate-x-5" : "translate-x-0.5"
+            }`}
+          />
+        </button>
+      </div>
 
       {/* Phase 5: moderation queue + Phase 6 follow-up: profile backfill.
           Both gated on master AI toggle + provider availability. */}

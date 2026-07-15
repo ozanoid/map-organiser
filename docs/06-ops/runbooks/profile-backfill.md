@@ -2,8 +2,8 @@
 title: AI place_profile backfill (per user)
 type: runbook
 domain: ops
-version: 1.1.0
-last_updated: 20.05.2026
+version: 1.2.0
+last_updated: 15.07.2026
 status: stable
 related:
   - "[[_README]]"
@@ -48,7 +48,12 @@ Eligibility split:
 | `ai_place_profile` | \$1.00 | \$0.001 |
 | `dataforseo_reviews` | \$1.00 (approx) | \$0.001 |
 
-Worst case per place (reviews + profile): ~\$0.002. A user with 300 reviewless places: ~\$0.60. Tracked in the cost tracker like any other AI call.
+Worst case per place (reviews + profile): ~\$0.011 at Gemini 3 Flash rates (15.07.2026). A user with 300 reviewless places: ~\$3.30. Tracked in the cost tracker like any other AI call.
+
+> **Monthly budget interaction (15.07.2026):** profile calls count against
+> the per-user PROFILE budget (`AI_MONTHLY_PROFILE_CAP`, 1000/month) — a
+> full backfill of a ~470-place library fits within a single month
+> alongside normal usage. Searches have their own separate budget.
 
 ### Rate limiting
 

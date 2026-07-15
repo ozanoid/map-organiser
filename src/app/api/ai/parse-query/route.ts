@@ -8,7 +8,7 @@ import {
   type ParseQueryOutput,
 } from "@/lib/ai/schemas/parse-query";
 import { buildParseQueryPrompt } from "@/lib/ai/prompts/parse-query";
-import { trackAiUsage, checkAiDailyCap } from "@/lib/ai/track-usage";
+import { trackAiUsage, checkAiBudget } from "@/lib/ai/track-usage";
 import { log } from "@/lib/telemetry/logger";
 
 /**
@@ -61,11 +61,13 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // ─── Daily cost cap: runaway-bug insurance ───
-  const cap = await checkAiDailyCap(user.id);
+  // ─── Monthly SEARCH budget ───
+  // Every search runs exactly one parse, so gating (and counting) here
+  // charges one budget unit per search — the rank call rides along free.
+  const cap = await checkAiBudget("search", user.id);
   if (cap.exceeded) {
     return NextResponse.json(
-      { error: "Daily AI limit reached. Try again tomorrow.", used: cap.used, cap: cap.cap },
+      { error: "Monthly search limit reached (500). Resets on the 1st.", used: cap.used, cap: cap.cap },
       { status: 429 }
     );
   }

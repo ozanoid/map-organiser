@@ -2,8 +2,8 @@
 title: AI Enrichment Flow
 type: flow
 domain: places
-version: 1.0.0
-last_updated: 20.05.2026
+version: 1.3.0
+last_updated: 15.07.2026
 status: stable
 sources:
   - src/app/api/places/[id]/enrich/route.ts
@@ -36,7 +36,7 @@ precondition for the next:
 | 1 · Base | name, address, coords, `google_place_id` | initial fetch (`parse-link` / `import-parse`) | — |
 | 2 · Extended | hours, photos, `cid`, attributes, topics, `rating_distribution` | `enrich?step=info` · `import-batch` biz-info | — |
 | 3 · Lite profile | rule-based category signals + features, **no LLM** | `buildLiteProfile` (in `parse-link`) | `lite` |
-| 4 · Reviews | up to 50 reviews via DataForSEO `cid` lookup | `enrich?step=reviews` · `bulk-enrich-reviews` | — |
+| 4 · Reviews | reviews via DataForSEO `cid` lookup — each fetch ≤50, **merged** into a corpus of up to 200 (`mergeReviews`) | `enrich?step=reviews` · `bulk-enrich-reviews` · `refresh-google-data` | — |
 | 5 · Full profile | Gemini `place_profile`: tldr / pros / cons / theme_insights / refined features / suggested tags | `enrich?step=profile` | `full` |
 
 Layers **3** and **5** are the AI layers. Layer 3 is rule-based — free and
@@ -61,7 +61,9 @@ step=profile  Gemini Flash → full place_profile              (~5 s)
 ```
 
 - `step=reviews` **chains** into `step=profile` on success — see
-  [[full-profile-flow]] for the chain + the auto-apply matrix.
+  [[full-profile-flow]] for the chain + the auto-apply matrix. Since
+  15.07.2026 `refresh-google-data` chains the same way, so a manual review
+  refresh also regenerates the profile.
 - `step=info` and `step=reviews` are DataForSEO calls. Only `step=profile`
   is an LLM call.
 - DataForSEO-sourced places already carry extended data + `cid` from save
@@ -77,6 +79,7 @@ automatically.** This asymmetry is the thing to know:
 | **Manual create** — paste a Maps URL | ✅ inline in `parse-link` | ✅ `step=reviews` auto | ✅ chained auto | [[manual-place-create-flow]] |
 | **Bulk import** — Takeout file | ❌ `import-batch` skips lite | ✅ `bulk-enrich-reviews` (background) | ❌ **not automatic** | [[place-import-flow]] |
 | **Backfill** — Settings → AI / import done screen | — | ✅ if missing | ✅ that's the point | [[../06-ops/runbooks/profile-backfill]] |
+| **Refresh cron** — daily, stalest ≤14 places of OPT-IN users (`cron_refresh_enabled`, default off) | — | ✅ newest, merged (relevant in Jan/Jul → backbone rebuild) | ✅ only past >15 new reviews | [[../06-ops/runbooks/periodic-refresh]] |
 
 **The gap:** a bulk-imported place gets reviews but **no full profile** —
 `bulk-enrich-reviews` does not chain to `step=profile` (unlike the manual
@@ -91,13 +94,22 @@ lite profile at save time, full profile in the background minutes later.
 ## Cost cap
 
 `step=profile` — and the AI-search routes `parse-query` / `rank-results` —
-are gated by a per-user daily cap: `checkAiDailyCap` in
-`src/lib/ai/track-usage.ts`, `AI_DAILY_CALL_CAP = 3000` AI calls per user
-per day. Over the cap, the route returns **429** instead of calling Gemini.
+are gated by TWO per-user monthly budgets (`checkAiBudget` in
+`src/lib/ai/track-usage.ts`; calendar month UTC, resets on the 1st;
+introduced 15.07.2026 after the Gemini 3 price verification — searches
+dominate cost):
 
-- It is **runaway-bug insurance**, not a billing gate — it sits ~3× above a
-  realistic heavy day (one full backfill of a large library ≈ 800-1000
-  calls) and far below a runaway loop (10k+ calls).
+- **SEARCH — `AI_MONTHLY_SEARCH_CAP = 500` searches.** One search burns
+  ONE budget unit regardless of LLM call count: the unit is charged at
+  `parse-query` (every search runs exactly one parse); `rank-results`
+  rides free — its own 3× ceiling (`AI_MONTHLY_RANK_BACKSTOP`) exists
+  only to stop a client-side rerank-loop bug. Ceiling ≈ $10.5/month.
+- **PROFILE — `AI_MONTHLY_PROFILE_CAP = 1000` generations.** Covers the
+  add-place chain, manual refresh chain, backfill, and the cron sweep
+  together. Ceiling ≈ $9.5/month. A full ~470-place backfill fits within
+  a single month alongside normal usage.
+
+Both fail open (a tracking outage must never 429 a legitimate request).
 - It **fails open**: if the cap check itself errors, the request proceeds.
   A tracking-table outage must never 429 a legitimate request.
 - `step=info` / `step=reviews` are **not** capped — they are DataForSEO,
@@ -117,7 +129,7 @@ Both AI layers are gated. A place skips them silently when a gate fails:
 | `profiles.ai_features_enabled` | required | required |
 | `GOOGLE_GENERATIVE_AI_API_KEY` set | not needed (no LLM) | required (else 503) |
 | Reviews present | not needed | required (else 400 `no_reviews`) |
-| Under daily cost cap | not needed | required (else 429) |
+| Under the monthly profile budget | not needed | required (else 429) |
 
 ## Failure modes
 
@@ -126,7 +138,7 @@ Both AI layers are gated. A place skips them silently when a gate fails:
 - **No reviews** → `step=profile` returns 400 `no_reviews`. Places saved
   without a `cid` cannot fetch reviews at all — see the grandfather-account
   limitation in [[../06-ops/runbooks/profile-backfill]].
-- **Daily cap exceeded** → 429; covered above.
+- **Monthly budget exceeded** → 429; covered above.
 - **LLM throws / invalid JSON** → `step=profile` 500; `place_profile`
   stays `lite` or absent. Re-runnable — idempotent, see [[full-profile-flow]].
 - **Thin profile** → a place with very few reviews (≤5) still profiles, but
@@ -135,7 +147,7 @@ Both AI layers are gated. A place skips them silently when a gate fails:
 ## Related code
 
 - `src/app/api/places/[id]/enrich/route.ts` — the cascade (`step=info|reviews|profile`).
-- `src/lib/ai/track-usage.ts` — `trackAiUsage`, `checkAiDailyCap`, `AI_DAILY_CALL_CAP`.
+- `src/lib/ai/track-usage.ts` — `trackAiUsage`, `checkAiBudget`, `AI_MONTHLY_SEARCH_CAP` / `AI_MONTHLY_PROFILE_CAP`.
 - `src/lib/ai/extract/lite-profile.ts` — `buildLiteProfile` (layer 3). See [[lite-profile-flow]].
 - `src/lib/ai/prompts/place-profile-full.ts`, `src/lib/ai/apply-suggestions.ts` — layer 5. See [[full-profile-flow]].
 - `src/app/api/places/import-batch/route.ts`, `src/app/api/places/bulk-enrich-reviews/route.ts` — bulk import path.

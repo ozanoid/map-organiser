@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { DataForSEOClient } from "@/lib/dataforseo/client";
 import { fetchReviews } from "@/lib/dataforseo/reviews";
-import { transformReviews } from "@/lib/dataforseo/transform";
+import { transformReviews, mergeReviews } from "@/lib/dataforseo/transform";
+import type { GoogleReview } from "@/lib/types";
 import { trackUsage } from "@/lib/google/track-usage";
 
 function getDataForSEOClient(): DataForSEOClient | null {
@@ -76,12 +77,19 @@ export async function POST(request: NextRequest) {
         const transformed = transformReviews(reviews);
         await trackUsage(user.id, "dataforseo_reviews");
 
+        const gd = (place.google_data as Record<string, unknown>) || {};
         await supabase
           .from("places")
           .update({
             google_data: {
-              ...(place.google_data as Record<string, unknown>),
-              reviews: transformed,
+              ...gd,
+              // Merge, don't replace. Default "relevant" sort fetch →
+              // establishes/refreshes the relevance backbone (mergeReviews).
+              reviews: mergeReviews(
+                (gd.reviews as GoogleReview[] | undefined) ?? [],
+                transformed,
+                { incomingOrder: "relevant" }
+              ),
             },
           })
           .eq("id", placeId);
