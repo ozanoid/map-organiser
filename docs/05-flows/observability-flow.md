@@ -109,9 +109,17 @@ never propagates into the request handler.
   `OTLPHttpJsonTraceExporter` → Honeycomb `/v1/traces` (ALL spans).
 - `LangfuseSpanProcessor` (`src/lib/telemetry/langfuse.ts`, singleton,
   only constructed when `LANGFUSE_PUBLIC_KEY`+`LANGFUSE_SECRET_KEY` are
-  set) rides the same pipeline → cloud.langfuse.com. Its built-in
-  `shouldExportSpan` filter exports ONLY GenAI/Langfuse spans — infra
-  spans (HTTP, Supabase fetch) never reach Langfuse.
+  set) rides the same pipeline → cloud.langfuse.com. A **composed
+  `shouldExportSpan` filter** (`isDefaultExportSpan && !umbrella`):
+  the default keeps it LLM-only (infra spans — HTTP, Supabase fetch —
+  never reach Langfuse), and on top of that the AI SDK's outer umbrella
+  spans (`…:ai.generateText`) are dropped. WHY: the umbrella span loses
+  its input/output token attrs in emission (AI SDK v6 aggregation bug)
+  but keeps `reasoningTokens`, so Langfuse priced those reasoning tokens
+  a SECOND time (~37% trace-cost inflation, live-verified 15.07.2026).
+  The `…doGenerate` child carries the complete usage + full message IO
+  and is the single source of truth. Honeycomb still receives BOTH
+  levels (its exporter has no such filter).
 
 Span sources:
 - HTTP request spans — auto (`@vercel/otel`) → Honeycomb only

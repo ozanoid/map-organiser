@@ -1,5 +1,5 @@
 import "server-only";
-import { LangfuseSpanProcessor } from "@langfuse/otel";
+import { LangfuseSpanProcessor, isDefaultExportSpan } from "@langfuse/otel";
 
 /**
  * Langfuse span processor singleton.
@@ -41,10 +41,32 @@ type GlobalWithLangfuse = typeof globalThis & {
 
 const g = globalThis as GlobalWithLangfuse;
 
+/**
+ * AI SDK v6 emits TWO nested spans per LLM call: an outer umbrella
+ * (`ai.generateText`, prefixed by functionId → `ai.parse-query:ai.generateText`)
+ * and the provider call (`…ai.generateText.doGenerate`). The umbrella
+ * span's aggregated input/output token attributes get lost in emission
+ * (AI SDK v6 `totalUsage` aggregation bug), but `ai.usage.reasoningTokens`
+ * survives — so Langfuse sees a reasoning-only usage on the umbrella and
+ * prices those reasoning tokens a SECOND time on top of the child's
+ * complete cost (~37% trace-cost inflation observed on live data,
+ * 15.07.2026). The doGenerate span carries the complete usage + full
+ * message IO, so it is the single source of truth: drop the umbrella.
+ *
+ * NOTE: a custom shouldExportSpan REPLACES the default filter entirely,
+ * so we compose with `isDefaultExportSpan` to keep the LLM-only behavior.
+ */
+const AI_SDK_UMBRELLA_SPAN =
+  /(^|:)ai\.(generateText|streamText|generateObject|streamObject)$/;
+
 if (g[GLOBAL_KEY] === undefined) {
   g[GLOBAL_KEY] =
     process.env.LANGFUSE_PUBLIC_KEY && process.env.LANGFUSE_SECRET_KEY
-      ? new LangfuseSpanProcessor()
+      ? new LangfuseSpanProcessor({
+          shouldExportSpan: ({ otelSpan }) =>
+            isDefaultExportSpan(otelSpan) &&
+            !AI_SDK_UMBRELLA_SPAN.test(otelSpan.name),
+        })
       : null;
 }
 

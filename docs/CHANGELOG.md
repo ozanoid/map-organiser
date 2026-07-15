@@ -18,8 +18,16 @@ new AI cost (telemetry only).
 - **New `src/lib/telemetry/langfuse.ts`** — `LangfuseSpanProcessor`
   singleton (skipped entirely when `LANGFUSE_PUBLIC_KEY`/`SECRET_KEY`
   are absent) + `flushLangfuse()` (error-swallowing forceFlush).
-  The processor's built-in filter exports ONLY GenAI/Langfuse spans, so
-  infra spans (HTTP, Supabase fetch) never reach Langfuse.
+  Composed `shouldExportSpan`: the default filter keeps Langfuse
+  LLM-only (no infra spans), PLUS the AI SDK's outer umbrella spans
+  (`…:ai.generateText`) are dropped — **found in live testing**: the
+  umbrella loses its input/output token attributes in emission (AI SDK
+  v6 `totalUsage` aggregation bug) but keeps `reasoningTokens`, so
+  Langfuse priced reasoning tokens twice (~37% trace-cost inflation —
+  e.g. the first live search showed $0.0321 instead of the true
+  $0.0235). The `…doGenerate` child carries complete usage + full
+  message IO; costs now match reality. Filter verified with a 7-case
+  functional test through a real processor + fake exporter.
   **The singleton is stashed on `globalThis` via `Symbol.for`** — found
   in adversarial review: Turbopack compiles the instrumentation hook and
   the routes into disjoint bundle graphs, each evaluating the module
