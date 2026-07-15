@@ -2,7 +2,7 @@
 title: Google Gemini (LLM)
 type: integration
 domain: integrations
-version: 1.5.2
+version: 1.6.0
 last_updated: 15.07.2026
 status: stable
 sources:
@@ -103,6 +103,7 @@ The output is Zod-validated at the SDK boundary, so route code can treat it as a
 |---|---|---|---|---|
 | `POST /api/places/[id]/enrich?step=profile` | Full place_profile generation. Triggered by the `step=reviews` fire-and-forget chain (Phase 4) or the manual refresh/generate button in `AiSummaryCard`. | Once per place, plus opt-in refresh | ~4–6 s | `ai_place_profile` |
 | `POST /api/ai/parse-query` (Phase 6) | Parse NL search query into structured filters + semantic intent. | Per user-submitted query | ~700 ms – 1.5 s | `ai_parse_query` |
+| `POST /api/ai/compare` (S2 F-04, v1.19.0) | Per-theme winners + occasion picks for 2-4 places from stored profiles. | Deliberate click on /places/compare | ~2-5 s | `ai_compare` |
 | `POST /api/ai/rank-results` (Phase 6) | LLM-as-judge rerank against `place_profile.searchable_summary` when `requires_semantic_ranking` is set. | Conditional — only when the query has fuzzy intent | ~1–2 s | `ai_rank_results` |
 
 Phase 6 splits AI calls into two groups by behaviour: **background** (`enrich?step=profile` — fire-and-forget, latency-tolerant) and **interactive** (`/api/ai/*` — user is waiting). Both share `getAiClient()` / `FLASH_MODEL` / Output.object pattern; they differ only in error handling and observability expectations.
@@ -118,11 +119,11 @@ Gemini 3 Flash Preview pricing (verified 15.07.2026, ai.google.dev, standard tie
 
 - Input: ~7–14K tokens (user context + ≤50 reviews × ≤1000 chars + system prompt) → ~\$0.004–0.007
 - Output: ~1–2K tokens (PlaceProfile JSON) → ~\$0.003–0.006
-- **Total: ~\$0.008–0.012 per place_profile.** `AI_SKU_CONFIG` values updated accordingly (profile \$9.5/1k, rank \$20/1k, parse \$0.70/1k).
+- **Total: ~\$0.008–0.012 per place_profile.** `AI_SKU_CONFIG` values updated accordingly (profile \$9.5/1k, rank \$20/1k, parse \$0.70/1k, compare \$9.5/1k).
 
 Free tier: 15 RPM / 1M TPM (verify in AI Studio). Beyond that, paid quota. At our usage scale (a few hundred profiles + occasional regenerations), the monthly cost stays under \$2.
 
-**Per-user monthly budgets** (`checkAiBudget`, `src/lib/ai/track-usage.ts`): **search** = 500 searches/month (one unit per search, charged at `parse-query`; `rank-results` rides free behind a 3× runaway backstop) ≈ \$10.5/month ceiling; **profile** = 1000 generations/month across the add-chain, refresh, backfill, and cron ≈ \$9.5/month ceiling (a full ~470-place backfill fits in one month). Over budget the route returns **429** before calling Gemini; resets on the 1st (UTC). Fails open; unrelated to Gemini's own RPM quota. See [[../05-flows/ai-enrichment-flow#cost-cap]].
+**Per-user monthly budgets** (`checkAiBudget`, `src/lib/ai/track-usage.ts`): **search** = 500 searches/month (one unit per search, charged at `parse-query`; `rank-results` rides free behind a 3× runaway backstop) ≈ \$10.5/month ceiling; **compare** = 200 runs/month (v1.19.0, one unit per /api/ai/compare); **profile** = 1000 generations/month across the add-chain, refresh, backfill, and cron ≈ \$9.5/month ceiling (a full ~470-place backfill fits in one month). Over budget the route returns **429** before calling Gemini; resets on the 1st (UTC). Fails open; unrelated to Gemini's own RPM quota. See [[../05-flows/ai-enrichment-flow#cost-cap]].
 
 ## Prompt strategy
 

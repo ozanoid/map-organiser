@@ -2,7 +2,7 @@
 title: Repo Structure
 type: overview
 domain: overview
-version: 1.2.3
+version: 1.3.0
 last_updated: 15.07.2026
 status: stable
 sources:
@@ -64,6 +64,7 @@ src/
 │   │   ├── map/page.tsx       Mapbox view
 │   │   ├── places/page.tsx
 │   │   ├── places/[id]/page.tsx
+│   │   ├── places/compare/page.tsx  S2 F-04 yan-yana karşılaştırma (v1.19.0)
 │   │   ├── lists/page.tsx     Lists + Trips tabs
 │   │   ├── lists/[id]/page.tsx
 │   │   ├── trips/[id]/page.tsx Timeline + map
@@ -100,7 +101,7 @@ src/
 └── lib/
     ├── ai/                    AI SDK v6 wiring (Gemini 3 Flash). client.ts, context-builder.ts,
     │                          dedup.ts, normalize.ts, track-usage.ts (budgets), generate-profile.ts;
-    │                          schemas/ (Zod); prompts/ (place-profile-full.ts); extract/ (lite-profile.ts,
+    │                          schemas/ (Zod — +compare.ts v1.19.0); prompts/ (place-profile-full.ts, compare.ts); extract/ (lite-profile.ts,
     │                          category-resolver.ts, features-extractor.ts,
     │                          suggestions-from-profile.ts); apply-suggestions.ts.
     ├── places/                refresh-google-data.ts — service-client-safe full re-lookup + review merge (shared by refresh route + cron);

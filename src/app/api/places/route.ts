@@ -66,6 +66,24 @@ export async function GET(request: NextRequest) {
       .replace(/"/g, '\\"')
       .replace(/%/g, "\\%")}%"`;
 
+  // v1.19.0 (compare view): fetch an explicit id set in ONE round-trip.
+  // Deliberately on the LIST route — it has the EWKB-capable location
+  // parser + subcategory join the [id] route lacks. Cap 10 (compare uses
+  // 2-4; the cap just bounds abuse). Combines with other filters as a
+  // plain AND (in practice used alone).
+  const idsParam = searchParams.get("ids");
+  if (idsParam) {
+    // UUID-validate: a malformed id would otherwise reach Postgres and
+    // surface as a raw 22P02 500. Non-UUIDs are silently dropped.
+    const UUID_RE =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const ids = idsParam
+      .split(",")
+      .filter((id) => UUID_RE.test(id))
+      .slice(0, 10);
+    if (ids.length > 0) query = query.in("id", ids);
+  }
+
   if (country) query = query.eq("country", country);
   if (city) {
     // OR-match against `city` AND `address` ilike. Workaround for the

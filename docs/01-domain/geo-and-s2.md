@@ -2,7 +2,7 @@
 title: Geo & S2
 type: entity
 domain: geo
-version: 1.0.0
+version: 1.1.0
 last_updated: 12.05.2026
 status: stable
 sources:
@@ -97,7 +97,7 @@ import { parsePostgisPoint } from "@/lib/geo";
 
 The repo doesn't currently issue `ST_DWithin` or similar from the frontend. Distance comes up in two places, both client-side after data is loaded:
 
-- **Auto-plan** (`src/lib/trip/auto-plan.ts`) — haversine on `{lat, lng}` for the nearest-neighbor heuristic and for k-means cluster assignment.
+- **Auto-plan** (`src/lib/trip/auto-plan.ts`) — haversine on `{lat, lng}` for the nearest-neighbor heuristic and for k-means cluster assignment. (v1.19.0: `haversineDistance` itself moved to `src/lib/geo.ts` — shared with the compare view's distance column; auto-plan imports it.)
 - **Mapbox Directions** — Mapbox returns segment distance and duration in the response; the app surfaces those without recomputing.
 
 If a future feature needs "places within N km", that would be the first DB-side spatial query. `idx_places_location` is already in place to support it.

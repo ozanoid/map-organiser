@@ -2,7 +2,7 @@
 title: AI routes
 type: route-group
 domain: backend
-version: 1.4.1
+version: 1.5.0
 last_updated: 15.07.2026
 status: stable
 sources:
@@ -12,6 +12,9 @@ sources:
   - src/lib/ai/schemas/rank-results.ts
   - src/lib/ai/prompts/parse-query.ts
   - src/lib/ai/prompts/rank-results.ts
+  - src/app/api/ai/compare/route.ts
+  - src/lib/ai/schemas/compare.ts
+  - src/lib/ai/prompts/compare.ts
 related:
   - "[[_README]]"
   - "[[../../01-domain/places]]"
@@ -39,6 +42,7 @@ into background jobs.
 |---|---|---|
 | `POST` | `/api/ai/parse-query` | Parse a free-form NL query into structured filters + semantic intent |
 | `POST` | `/api/ai/rank-results` | LLM-as-judge rerank for queries with fuzzy semantic intent |
+| `POST` | `/api/ai/compare` | S2 F-04 (v1.19.0): per-theme winners + occasion picks for 2-4 places from stored profiles |
 
 ## Shared gating
 
@@ -47,7 +51,7 @@ Every route in this group enforces four gates in order:
 1. **Auth.** `supabase.auth.getUser()` must return a user. Otherwise 401.
 2. **`profiles.ai_features_enabled = true`.** The master toggle. Otherwise 403.
 3. **`GOOGLE_GENERATIVE_AI_API_KEY` env var set.** Otherwise 503.
-4. **Monthly search budget.** `checkAiBudget("search")`
+4. **Monthly budget (kind varies per route: `search` for parse-query, `rank_backstop` for rank-results, `compare` for compare).** `checkAiBudget("search")`
    (`src/lib/ai/track-usage.ts`) — 500 searches per calendar month, ONE
    budget unit per search: charged at `parse-query` (every search runs
    exactly one parse). `rank-results` is not budgeted separately — it
@@ -182,6 +186,18 @@ stripped before returning.
 
 **SKU:** `ai_rank_results` — ~$0.002/call at 50 candidates (~25K input
 + ~1.5K output tokens).
+
+## `POST /api/ai/compare`
+
+S2 F-04 (v1.19.0). Side-by-side AI comparison of 2-4 saved places.
+
+- **Body:** `{ place_ids: string[] }` — 2-4 UUIDs owned by the user (Zod; dupes collapsed).
+- **Gates:** same sequence as the sibling routes (auth → `after(flushLangfuse)` → `ai_features_enabled` → client → **budget `compare`**: SKU `ai_compare`, cap `AI_MONTHLY_COMPARE_CAP = 200`/month → 429).
+- **Input to the LLM:** the stored `place_profile`s (pre-digested corpora — ~$0.002/compare), serialized compactly by `buildComparePrompt`; **NOT raw reviews**. Places referenced by INDEX (the v1.8.5 lesson — no UUIDs to the LLM); out-of-range indices dropped after parse.
+- **Output:** `{ result: { overall, theme_verdicts[], pick_by_occasion[] }, order: string[], profiledCount }` — `order` echoes prompt-order ids so the client resolves `idx → place` without trusting the LLM.
+- **Failure:** LLM error → 502 (budget unit still burned — the call was made).
+- **Telemetry:** `propagateAttributes({traceName: "ai-compare"})` + `experimental_telemetry` functionId `ai.compare`; events `ai.compare` / `ai.compare.llm_failed`.
+- **Consumer:** `AiCompareCard` on `/places/compare` — deliberate-click only (never auto-fires on page load; each run costs a budget unit).
 
 ## Common helpers
 

@@ -6,6 +6,36 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 15.07.2026 — v1.19.0 — S2-PR1: place comparison (F-04) + AI compare
+
+First half of sprint S2 (v4 Tema 2). The second consumer of the
+place_profile asset (the first was AI search).
+
+- **`/places/compare?ids=…`** — side-by-side 2-4 places: rating +
+  distribution (reuses `RatingDistributionBar`), price range, live
+  open-now (reuses `PlaceStatusBadges`), distance from the first
+  selected place (`haversineDistance` moved from trip/auto-plan.ts to
+  `lib/geo.ts` — single source of truth), `theme_insights` rows aligned
+  across columns (union ordered by salience), pros/cons. Entry:
+  multi-select on /places → **Compare** button in BulkActionBar
+  (enabled for 2-4).
+- **`POST /api/ai/compare`** — feeds the STORED place_profiles (not raw
+  reviews; ~$0.002/run) to Gemini → `overall` verdict + per-theme
+  winners + occasion-based picks ("special dinner" → A, "casual
+  weeknight" → B). parse-query gate skeleton; LLM references places by
+  INDEX (v1.8.5 lesson), sanitized after parse; response echoes `order`
+  so the client never trusts LLM ids. New SKU **`ai_compare`** + budget
+  kind `compare`, cap `AI_MONTHLY_COMPARE_CAP = 200`/month (hardcoded
+  like its siblings — caps are code constants, not env). CostTracker
+  picks the SKU up automatically via the config spread.
+- **`AiCompareCard`** — deliberate-click design: the LLM call fires
+  ONLY on the button (never on page load) so refreshes don't burn
+  budget units.
+- **GET /api/places `ids` param** (cap 10) — one-round-trip fetch for
+  the compare view on the list route (EWKB-safe parser + subcategory
+  join).
+- No DB change. No new env.
+
 ## 15.07.2026 — v1.18.0 — S1-PR2: dynamic open-now, NF-05 similar places, NF-03 topic filter, NF-04 grouped amenities
 
 Second half of sprint S1 (v4 Tema 1) — completes place detail v2.
