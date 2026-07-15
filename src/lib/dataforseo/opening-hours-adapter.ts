@@ -53,14 +53,16 @@ export function convertWorkTimeToOpeningHours(
     weekdayText.push(`${label}: ${timeRanges.join(", ")}`);
   }
 
-  // Determine open_now from current_status
+  // Determine open_now from current_status (nested in work_hours — the
+  // old top-level read never matched; see api-types.ts RawWorkHours).
+  const currentStatus = workTime.work_hours?.current_status;
   let openNow: boolean | undefined;
-  if (workTime.current_status === "opened") {
+  if (currentStatus === "opened") {
     openNow = true;
   } else if (
-    workTime.current_status === "closed" ||
-    workTime.current_status === "temporarily_closed" ||
-    workTime.current_status === "closed_forever"
+    currentStatus === "closed" ||
+    currentStatus === "temporarily_closed" ||
+    currentStatus === "closed_forever"
   ) {
     openNow = false;
   }

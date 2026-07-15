@@ -2,16 +2,24 @@
 title: Places components
 type: component
 domain: frontend
-version: 1.2.0
+version: 1.3.0
 last_updated: 15.07.2026
 status: stable
 sources:
   - src/components/places/add-place-dialog.tsx
+  - src/components/places/ai-summary-card.tsx
+  - src/components/places/amenities-grid.tsx
   - src/components/places/bulk-action-bar.tsx
   - src/components/places/inline-category-creator.tsx
   - src/components/places/inline-list-creator.tsx
   - src/components/places/inline-tag-input.tsx
+  - src/components/places/place-action-links.tsx
   - src/components/places/place-card.tsx
+  - src/components/places/place-status-badges.tsx
+  - src/components/places/place-topics.tsx
+  - src/components/places/popular-times-widget.tsx
+  - src/components/places/rating-distribution-bar.tsx
+  - src/components/places/reviews-section.tsx
   - src/components/places/visit-status-toggle.tsx
 related:
   - "[[_README]]"
@@ -24,7 +32,12 @@ related:
 
 # Places components
 
-Seven files under `src/components/places/`. All `"use client"`. The Place-related UI surface.
+Fifteen files under `src/components/places/`. All `"use client"`. The Place-related UI surface.
+
+> **v1.17.0 (S1-PR1):** seven detail-page widgets extracted out of the
+> 1,155-line `places/[id]/page.tsx` into standalone components (below) —
+> behavior-preserving, plus the NF-06 review layer (owner answers, photo
+> lightbox, Local Guide chip, helpful votes) in `ReviewsSection`.
 
 ## `AddPlaceDialog`
 
@@ -115,6 +128,57 @@ Seven files under `src/components/places/`. All `"use client"`. The Place-relate
 - **No hooks.** Stateless.
 - **UI:** 4 buttons (Bookmark/CalendarCheck/CheckCircle2/Heart) with status-specific colors (amber/blue/emerald/red). Toggle: clicking the active one deselects.
 - **Used by:** `AddPlaceDialog`, `MapContent` (detail panel), `PlaceCard` (badge), trip/place detail pages.
+
+## Detail-page widgets (extracted v1.17.0)
+
+All seven render inside `places/[id]/page.tsx`'s DataForSEO extended
+block (except `ReviewsSection`, which renders for any place with
+reviews or a `google_place_id`). Every one is data-gated: renders
+`null` (or is conditionally mounted by the page) when its
+`google_data` field is absent — extended-data coverage is ~28% of
+places, so empty states are the norm, not the exception.
+
+### `RatingDistributionBar`
+`{ distribution: Record<string, number> }` — NF-01. CSS-only 5→1 star
+bars with counts; percentages derived from the distribution total.
+
+### `PopularTimesWidget`
+`{ popularTimes: Record<string, Array<{hour, popular_index}> | null | undefined> }`
+— NF-02. Day-pill selector (defaults to today) + 6-23h bar chart,
+current hour highlighted. Type deliberately admits `null` days
+(DataForSEO returns them; the pre-refactor cast hid it and could
+crash). Renders `null` only when ALL days are empty; a single empty
+day shows "No data for this day."
+
+### `PlaceStatusBadges`
+`{ currentStatus?: string; isClaimed?: boolean }` — NF-04 (badge leg).
+Status dot + label (opened / closed / temporarily_closed /
+closed_forever) + "Verified" chip. The field only populates after the
+v1.17.0 extraction-path fix — stored places gain it on next refresh.
+
+### `PlaceActionLinks`
+`{ bookOnlineUrl?: string; links?: Array<{type, url, title?}> }` —
+NF-06 (action leg). "Book Online" + one outline button per
+local_business_link (menu icon for `type === "menu"`).
+
+### `AmenitiesGrid`
+`{ attributes: Record<string, boolean> }` — NF-04 (grid leg). Boolean
+attribute chip wall; green check = available, gray strikethrough =
+unavailable. Grouping/icons deferred to S1-PR2.
+
+### `PlaceTopics`
+`{ topics: Record<string, number> }` — NF-03. Top-15 review topics as
+chips sorted by mention count. Click-to-filter-reviews: S1-PR2.
+
+### `ReviewsSection`
+`{ reviews, hasPlaceId, provider?, refreshing, enriching, onRefresh }`
+— paginated (5/page) review list with newest-first sort toggle and a
+refresh button. **NF-06 review layer:** `owner_answer` (indented muted
+block + `owner_time_ago`), `images` (thumbnail strip → Dialog lightbox
+with prev/next), `local_guide` chip, `votes_count` ("N people found
+this helpful"). All four fields are optional on `GoogleReview` — they
+exist only on reviews fetched after the v1.17.0 data-layer upgrade, so
+old corpora render exactly as before until refreshed.
 
 ## Cross-component notes
 

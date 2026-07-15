@@ -2,7 +2,7 @@
 title: "Feature Suggestions v4"
 type: plan
 domain: overview
-version: 4.1.1
+version: 4.2.0
 last_updated: 15.07.2026
 status: stable
 related:
@@ -149,7 +149,7 @@ v4 önerilerini v3'ten daha ucuz kılan, artık VAR olan altyapı:
 
 | ID | Feature | v4 Önceliği | Not |
 |----|---------|-------------|-----|
-| NF-01..06 | DataForSEO görselleştirme paketi (≈ F-21 place detail v2) | **P1** | Veri DB'de hazır, API maliyeti sıfır |
+| NF-01..06 | DataForSEO görselleştirme paketi (≈ F-21 place detail v2) | **🟡 S1 sürüyor** | **Durum düzeltmesi (15.07.2026):** ~yarısı Mayıs'ta zaten yapılmış (rating bars, popular times, amenities, topics, action buttons — page.tsx içinde temel halde; matris bunu yansıtmıyordu). S1-PR1 ✅: veri katmanı (current_status yol fix'i — 0/471 doluydu, review owner_answer/images/local_guide/votes artık saklanıyor) + 7 bileşene refactor + NF-06 review UI katmanı. S1-PR2 (bekliyor): NF-05 similar places, NF-03 tıkla→filtrele, NF-04 grup/ikon, **dinamik "şu an açık" (timetable saklama + tz-aware isOpenNow + filtre chip + canlı rozet — 15.07 kararı)**, parlatma |
 | NF-19 | Bulk edit (kategori/tag/status/liste) | **P1** | Import sonrası QoL |
 | F-03 / NF-20 / NF-21 | Kayıtlı filtreler + quick chips (+ "AI sorgusunu kaydet") | **P1** | AI-01 ile birleşik güçlü |
 | F-04 + AI-19* | Mekan karşılaştırma + AI analiz (*v3-ai-first; ≈ v3 AI-15) | **P1** | Profiller hazır → LLM karşılaştırma neredeyse bedava; AI-06(c)'yi de kapatır |
@@ -212,6 +212,17 @@ hissine en ucuz yoldan bu paketle ulaşır. Ayrıntılı spec'ler:
 
 **Paket toplamı ~8-13 gün.** NF-04'ün filtre bacağı (attribute filtresi)
 ayrılıp sonraya bırakılabilir (UI önce).
+
+> **Durum (15.07.2026, S1 keşfi):** Bu tablo yazılırken matris bayattı —
+> NF-01, NF-02 ve NF-03/04/06'nın temel halleri Mayıs'ta page.tsx içinde
+> zaten yapılmıştı. S1-PR1 ✅: veri katmanı düzeltmeleri (current_status
+> yolu, review owner_answer/images/local_guide/votes persist) + 7 bileşene
+> refactor + NF-06 review UI. **S1-PR2 kalanlar:** NF-05 (hiç yok),
+> NF-03 tıkla→filtrele, NF-04 grup/ikon grid, NF-02 canlı rozet,
+> **dinamik "şu an açık"** (DataForSEO `timetable`'ı saklanacak — bugün
+> weekday_text'e çevrilip atılıyor; mekanın YEREL saatinde `isOpenNow`
+> hesabı [tz-lookup ile koordinattan], filtre chip'i + detayda dürüst canlı
+> rozet; ileride AI aramaya hard filtre olarak da bağlanır), parlatma.
 
 ## Tema 2 — "Profil varlığını işlet" (karşılaştırma + AI-06 kapanışı)
 

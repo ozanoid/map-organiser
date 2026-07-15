@@ -2,7 +2,7 @@
 title: DataForSEO Business Data
 type: integration
 domain: integrations
-version: 1.1.1
+version: 1.2.0
 last_updated: 15.07.2026
 status: stable
 sources:
@@ -15,6 +15,8 @@ related:
 ---
 
 # DataForSEO Business Data
+
+> **v1.17.0 (S1-PR1):** `current_status` extraction path fixed (`work_time.work_hours.current_status` — the old top-level read never matched; 0/471 places had it) and `transformReviews` now carries `owner_answer`, `owner_time_ago`, `images` (≤6), `local_guide`, `votes_count` onto stored reviews. Dead `transformExtendedReviews` removed. `open_now` derivation in `opening-hours-adapter.ts` fixed the same way.
 
 The default enrichment provider. Used for **all** bulk imports and as the fallback for single-place parses. Provides rich Google-derived data via a server-side API.
 
@@ -96,10 +98,11 @@ result[].items[].rating
 result[].items[].rating_distribution
 result[].items[].photos
 result[].items[].url             — main photo URL
-result[].items[].work_time       — opening hours
+result[].items[].work_time.work_hours — timetable + current_status
+                                   (current_status is NESTED here — v1.17.0 fix)
 result[].items[].phone, website
 result[].items[].price_level
-result[].items[].is_claimed, current_status, total_photos
+result[].items[].is_claimed, total_photos
 result[].items[].description
 result[].items[].book_online_url
 result[].items[].popular_times

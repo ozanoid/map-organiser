@@ -215,7 +215,10 @@ export function extractExtendedData(
     place_topics: raw.place_topics || undefined,
     attributes: Object.keys(attributes).length > 0 ? attributes : undefined,
     is_claimed: raw.is_claimed ?? undefined,
-    current_status: raw.work_time?.current_status || undefined,
+    // Path verified against DataForSEO docs: current_status is nested in
+    // work_hours (the old `work_time.current_status` read never matched —
+    // 0/471 places had the field before this fix).
+    current_status: raw.work_time?.work_hours?.current_status || undefined,
     total_photos: raw.total_photos || undefined,
     business_description: raw.description || raw.snippet || undefined,
     book_online_url: raw.book_online_url || undefined,
@@ -242,14 +245,30 @@ export function extractExtendedData(
 export function transformReviews(rawReviews: RawReview[]): GoogleReview[] {
   return rawReviews
     .filter((r) => r.review_text || r.original_review_text)
-    .map((r) => ({
-      rating: r.rating?.value ?? 0,
-      text: r.review_text || r.original_review_text || "",
-      author_name: r.profile_name || "Anonymous",
-      author_photo: r.profile_image_url || undefined,
-      relative_time: r.time_ago || "",
-      publish_time: r.timestamp || undefined,
-    }));
+    .map((r) => {
+      // ONLY image_url — it's the direct image file. The `url` field is
+      // the Google Maps viewer PAGE (HTML), which can never render in an
+      // <img>; persisting it would just produce broken thumbnails. Cap
+      // 6/review — google_data size discipline (~120 chars/URL).
+      const images = (r.images ?? [])
+        .map((img) => img.image_url || "")
+        .filter(Boolean)
+        .slice(0, 6);
+      return {
+        rating: r.rating?.value ?? 0,
+        text: r.review_text || r.original_review_text || "",
+        author_name: r.profile_name || "Anonymous",
+        author_photo: r.profile_image_url || undefined,
+        relative_time: r.time_ago || "",
+        publish_time: r.timestamp || undefined,
+        // NF-06 enrichment — omit-when-empty keeps stored JSONB lean.
+        owner_answer: r.owner_answer || undefined,
+        owner_time_ago: r.owner_time_ago || undefined,
+        images: images.length > 0 ? images : undefined,
+        local_guide: r.local_guide || undefined,
+        votes_count: r.rating?.votes_count || undefined,
+      };
+    });
 }
 
 /** First N stored positions form the protected relevance backbone. */
@@ -381,34 +400,7 @@ export function mergeReviews(
   return [...backbone, ...pool];
 }
 
-/**
- * Extract extended review data (DataForSEO exclusive fields).
- * These provide richer review information than Google Places API.
- */
-export function transformExtendedReviews(rawReviews: RawReview[]) {
-  return rawReviews
-    .filter((r) => r.review_text || r.original_review_text)
-    .map((r) => ({
-      review_id: r.review_id,
-      text: r.review_text || r.original_review_text || "",
-      original_text: r.original_review_text || undefined,
-      original_language: r.original_language || undefined,
-      rating: r.rating?.value ?? 0,
-      author_name: r.profile_name || "Anonymous",
-      author_photo: r.profile_image_url || undefined,
-      author_profile_url: r.profile_url || undefined,
-      author_reviews_count: r.reviews_count || undefined,
-      author_photos_count: r.photos_count || undefined,
-      local_guide: r.local_guide || false,
-      relative_time: r.time_ago || "",
-      timestamp: r.timestamp || undefined,
-      images:
-        r.images?.map((img) => img.image_url || img.url || "").filter(Boolean) ||
-        [],
-      owner_answer: r.owner_answer || undefined,
-      original_owner_answer: r.original_owner_answer || undefined,
-      owner_timestamp: r.owner_timestamp || undefined,
-      votes_count: r.rating?.votes_count || 0,
-      review_url: r.review_url || undefined,
-    }));
-}
+// transformExtendedReviews removed (v1.17.0): it was dead code — zero
+// callers since Phase 4. Its useful fields (owner_answer, images,
+// local_guide, votes_count) now live directly on GoogleReview via
+// transformReviews above, so they flow through mergeReviews and persist.

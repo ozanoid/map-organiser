@@ -107,11 +107,16 @@ export interface RawRating {
 
 export interface RawWorkTime {
   work_hours: RawWorkHours | null;
-  current_status: string | null;
 }
 
 export interface RawWorkHours {
   timetable: Record<string, RawTimeSlot[] | null> | null;
+  /** Verified against docs.dataforseo.com (15.07.2026): current_status
+   *  lives INSIDE work_hours — `work_time.work_hours.current_status`.
+   *  The original typing put it on work_time, so extraction read the
+   *  wrong path and 0/471 places ever got the field. Possible values:
+   *  "opened" | "closed" | "temporarily_closed" | "closed_forever". */
+  current_status: string | null;
 }
 
 export interface RawTimeSlot {
