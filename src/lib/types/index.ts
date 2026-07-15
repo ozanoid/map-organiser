@@ -201,7 +201,16 @@ export interface GooglePlaceData {
   business_description?: string;
   book_online_url?: string;
   local_business_links?: Array<{ type: string; url: string; title?: string }>;
-  people_also_search?: Array<{ title: string; cid?: string; rating?: number }>;
+  /** v1.18.0: category + votes_count were previously dropped at
+   *  transform — kept now for the SimilarPlaces cards ("Bakery · ★4.8
+   *  (1.2k)"). Older rows gain them on refresh. */
+  people_also_search?: Array<{
+    title: string;
+    cid?: string;
+    rating?: number;
+    category?: string;
+    votes_count?: number;
+  }>;
   enriched_at?: string;
   /** AI place profile (Phase 4). Carries lite or full completeness. Typed
    *  loosely here to avoid pulling the full Zod schema into client bundles;

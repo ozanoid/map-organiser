@@ -18,10 +18,25 @@ const MAX_SUGGESTIONS = 6;
  * the AddPlaceDialog flow. Suggestions whose CID (or added id) already
  * exists in the library render as "Added ✓" linking to the place.
  */
+/** 1234 → "1.2k" — compact vote counts for the suggestion cards. */
+function compactCount(n: number): string {
+  if (n >= 1000) {
+    const k = n / 1000;
+    return `${k >= 10 ? Math.round(k) : Math.round(k * 10) / 10}k`;
+  }
+  return String(n);
+}
+
 export function SimilarPlaces({
   items,
 }: {
-  items: Array<{ title: string; cid?: string; rating?: number }>;
+  items: Array<{
+    title: string;
+    cid?: string;
+    rating?: number;
+    category?: string;
+    votes_count?: number;
+  }>;
 }) {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -100,11 +115,24 @@ export function SimilarPlaces({
               <p className="text-xs font-medium leading-snug line-clamp-2 min-h-8">
                 {s.title}
               </p>
+              {/* Brief info (v1.18.0): category — previously dropped at
+                  transform; older stored rows gain it on refresh. */}
+              {s.category && (
+                <p className="text-[10px] text-muted-foreground truncate">
+                  {s.category}
+                </p>
+              )}
               <div className="flex items-center justify-between gap-1">
                 {typeof s.rating === "number" ? (
                   <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
                     <Star className="h-3 w-3 fill-orange-400 text-orange-400" />
                     {s.rating}
+                    {typeof s.votes_count === "number" &&
+                      s.votes_count > 0 && (
+                        <span className="text-[10px]">
+                          ({compactCount(s.votes_count)})
+                        </span>
+                      )}
                   </span>
                 ) : (
                   <span />

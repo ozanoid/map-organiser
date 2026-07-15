@@ -15,6 +15,7 @@ import {
   X,
 } from "lucide-react";
 import type { GoogleReview } from "@/lib/types";
+import { reviewMatchesTopic } from "@/lib/places/topic-match";
 
 const REVIEWS_PER_PAGE = 5;
 
@@ -68,13 +69,10 @@ export function ReviewsSection({
   } | null>(null);
   const [lightboxOpen, setLightboxOpen] = useState(false);
 
-  // NF-03 topic filter first, then sort. Page reset on filter change is
-  // handled by the effect-free pattern: the page passes a fresh filter →
-  // computed pages shrink; clamp below keeps the index valid.
+  // NF-03 topic filter first, then sort. SAME matcher as the PlaceTopics
+  // chips (token-AND) — displayed counts always equal filter results.
   const topicFiltered = topicFilter
-    ? reviews.filter((r) =>
-        r.text.toLowerCase().includes(topicFilter.toLowerCase())
-      )
+    ? reviews.filter((r) => reviewMatchesTopic(r.text, topicFilter))
     : reviews;
 
   const sorted = sortByDate

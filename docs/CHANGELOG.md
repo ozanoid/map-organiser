@@ -56,6 +56,15 @@ Second half of sprint S1 (v4 Tema 1) — completes place detail v2.
   refetch bound on the open-now list, 60s badge tick, omitUndefined in
   extractExtendedData (degraded crawl no longer strips stored keys),
   topic-filter page reset, `{}` timetable = unknown not "closed".
+- **Preview-test feedback round (same day):** (a) SimilarPlaces cards
+  now show `category` + compact vote count ("Bakery · ★4.8 (1.2k)") —
+  both fields existed in the raw API and were DROPPED at transform;
+  older rows gain them on refresh. (b) Topic chips: Google's pool-wide
+  counts contradicted the local filter on screen ("scallop ceviche (5)"
+  → 0 results). Chips now show the LOCAL match count using the same
+  token-AND matcher the filter uses (`lib/places/topic-match.ts` —
+  consistent by construction); ordering still follows Google's salience
+  signal; zero-match chips render muted/non-clickable.
 - Deps: `tz-lookup` (+ local d.ts — no bundled types).
 - Docs: api-routes/places.md (add-similar + open_now param),
   components/places.md, components/filters.md, tech-stack, dataforseo,

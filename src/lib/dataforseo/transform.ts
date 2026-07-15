@@ -276,6 +276,9 @@ export function extractExtendedData(
         title: p.title || "",
         cid: p.cid || undefined,
         rating: p.rating?.value,
+        // v1.18.0: previously dropped — the suggestion cards' "brief info".
+        category: p.category || undefined,
+        votes_count: p.rating?.votes_count || undefined,
       })) || undefined,
     enriched_at: new Date().toISOString(),
   });

@@ -569,6 +569,7 @@ export default function PlaceDetailPage() {
           {googleData.place_topics && (
             <PlaceTopics
               topics={googleData.place_topics}
+              reviews={reviews}
               activeTopic={topicFilter}
               onTopicClick={setTopicFilter}
             />
