@@ -59,7 +59,11 @@ export function FilterPanel() {
       </div>
 
       {/* AI natural-language search (hidden when ai_features_enabled = false) */}
-      <AiSearchInput />
+      {/* v1.23.0: AI-01 bar retired from the UI (user decision) — the
+          assistant is the AI entry point now. bannerOnly keeps the
+          active-state banner (query + clear ✕ + broaden) alive for
+          assistant pushes and saved ✨ chip re-runs. */}
+      <AiSearchInput bannerOnly />
 
       {/* Sort — disabled during AI search (sort dictated by rerank score). */}
       <div>

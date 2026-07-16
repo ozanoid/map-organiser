@@ -45,7 +45,13 @@ gap).
   soft-criterion prefiltering; English-intent mandate; lucide MapIcon
   (global Map shadowing); failRerank guards pending-only; parse-result
   staleness guard (in-flight parse can't clobber a fresh push).
-- v4 plan 4.9.0: merger step + retirement criteria recorded.
+- **AI-01 bar visibility retired** (user decision, same day —
+  criteria-based gradual path superseded): FilterPanel mounts
+  `<AiSearchInput bannerOnly />`; no input field renders anywhere.
+  Active-state banner (query + clear ✕), clarification and broaden
+  toggle survive for the two remaining producers (saved ✨ chips,
+  assistant push). Endpoints/pipeline untouched.
+- v4 plan 4.10.0: merger step + visibility retirement executed.
 
 ## 16.07.2026 — v1.22.1 — Mapbox-search ↔ parse-link lite-profile parity
 

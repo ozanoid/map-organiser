@@ -2,7 +2,7 @@
 title: AI Search Flow (LLM-as-judge, Phase 6.5)
 type: flow
 domain: places
-version: 2.7.0
+version: 2.8.0
 last_updated: 16.07.2026
 status: stable
 sources:
@@ -104,7 +104,11 @@ Two entry points (both call the same `useAiSearch` mutation):
 > `requires_semantic_ranking: false` + applyRankings from the
 > `rank_places` tool — see [[ai-chat-flow]]). Everything downstream
 > (banner, sort/hide, why lines, SaveFilterButton) is producer-agnostic.
-> The AI-01 bar itself is untouched; retirement criteria in the v4 plan.
+> **Update (same day):** the user retired the BAR's visibility outright
+> — FilterPanel now mounts `<AiSearchInput bannerOnly />` (no input
+> field; active-state banner/clarification/broaden survive). This flow's
+> pipeline is now driven exclusively by saved ✨ chips and the
+> assistant's `rank_places`/push. Endpoints and functions unchanged.
 
 ## Steps
 
