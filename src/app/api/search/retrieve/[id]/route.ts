@@ -8,6 +8,9 @@ import {
   extractExtendedData,
 } from "@/lib/dataforseo/transform";
 import { trackUsage } from "@/lib/google/track-usage";
+// Same shared builder the paste flow (parse-link) uses, so the Mapbox
+// search preview shows the same subcategory + AI suggestion chips.
+import { buildLiteProfileForResponse } from "@/lib/ai/extract/lite-profile";
 
 function getDataForSEOClient(): DataForSEOClient | null {
   const login = process.env.DATAFORSEO_LOGIN;
@@ -69,17 +72,24 @@ export async function GET(
   const fetchTimeMs = Date.now() - startTime;
 
   if (enriched) {
+    const lite_profile = await buildLiteProfileForResponse(
+      supabase,
+      user.id,
+      enriched.placeData,
+      enriched.extended ?? null
+    );
     return NextResponse.json({
       ...enriched.placeData,
       _provider: "dataforseo",
       _mapbox_id: retrieved.mapbox_id,
       _fetchTimeMs: fetchTimeMs,
       _extended: enriched.extended,
+      lite_profile,
     });
   }
 
   // No DataForSEO match — return minimal Mapbox-only data, same shape.
-  return NextResponse.json({
+  const minimalPlaceData = {
     placeId: "",
     name: retrieved.name,
     address: retrieved.full_address || retrieved.address || "",
@@ -96,9 +106,21 @@ export async function GET(
     phone: typeof retrieved.metadata?.phone === "string" ? retrieved.metadata.phone : null,
     priceLevel: null,
     googleMapsUrl: null,
+  };
+  // Even with no DataForSEO row, name+city+poi types are enough for the
+  // heuristic to suggest existing lists/tags.
+  const lite_profile = await buildLiteProfileForResponse(
+    supabase,
+    user.id,
+    minimalPlaceData,
+    null
+  );
+  return NextResponse.json({
+    ...minimalPlaceData,
     _provider: "mapbox",
     _mapbox_id: retrieved.mapbox_id,
     _fetchTimeMs: fetchTimeMs,
+    lite_profile,
   });
 }
 

@@ -2,8 +2,8 @@
 title: Lite Profile Flow
 type: flow
 domain: places
-version: 1.0.0
-last_updated: 14.05.2026
+version: 1.1.0
+last_updated: 16.07.2026
 status: stable
 sources:
   - src/lib/ai/extract/lite-profile.ts
@@ -11,7 +11,9 @@ sources:
   - src/lib/ai/extract/features-extractor.ts
   - src/lib/ai/extract/suggestions-from-profile.ts
   - src/app/api/places/parse-link/route.ts
+  - src/app/api/search/retrieve/[id]/route.ts
   - src/components/places/add-place-dialog.tsx
+  - src/components/map/search-result-panel.tsx
 related:
   - "[[manual-place-create-flow]]"
   - "[[../02-backend/api-routes/places]]"
@@ -132,8 +134,8 @@ Sub-second overhead. Worst case (~70 user subcategories + 50 attributes + 10 tag
 ## Related code
 
 - **Extractors**: `src/lib/ai/extract/{lite-profile,category-resolver,features-extractor,suggestions-from-profile}.ts`.
-- **Route wiring**: `src/app/api/places/parse-link/route.ts#buildLiteProfileForResponse`.
-- **UI integration**: `src/components/places/add-place-dialog.tsx` — `aiSuggestions` memo + `suggestedSubcategory` memo + the "AI Suggestions" panel.
+- **Route wiring**: `src/lib/ai/extract/lite-profile.ts#buildLiteProfileForResponse` (shared, exported). TWO callers add `lite_profile` to their preview response: `src/app/api/places/parse-link/route.ts` (paste flow → AddPlaceDialog) and `src/app/api/search/retrieve/[id]/route.ts` (Mapbox-search flow → SearchResultPanel). Sharing the builder keeps the two surfaces from drifting (v1.22.1 — they had: the search preview lacked subcategory + AI-suggestion chips entirely).
+- **UI integration**: `src/components/places/add-place-dialog.tsx` AND `src/components/map/search-result-panel.tsx` — each has `aiSuggestions` memo + `suggestedSubcategory` memo + the "AI Suggestions" panel.
 - **POST consumer**: `src/app/api/places/route.ts` and `src/lib/hooks/use-places.ts#CreatePlaceInput` now accept `subcategory_id`.
 
 ## Noise control — `SUPPRESSED_FROM_SUGGESTIONS`

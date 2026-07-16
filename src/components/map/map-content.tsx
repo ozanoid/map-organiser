@@ -543,9 +543,13 @@ export function MapContent({ mapboxToken }: { mapboxToken: string }) {
           </div>
         )}
 
-        {/* Search-result panel (Mapbox Search Box → save) */}
+        {/* Search-result panel (Mapbox Search Box → save).
+            key by place so picking a new result while the panel is open
+            gives a fresh form (category/subcategory/lists/tags/notes all
+            reset) instead of carrying the previous place's state over. */}
         {searchResult && (
           <SearchResultPanel
+            key={searchResult._mapbox_id}
             place={searchResult}
             onClose={() => setSearchResult(null)}
           />

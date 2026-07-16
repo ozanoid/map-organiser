@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { parseMapsUrl } from "@/lib/google/parse-maps-url";
 import { getUserApiKeys } from "@/lib/google/get-user-api-keys";
@@ -13,9 +12,9 @@ import {
 } from "@/lib/dataforseo/transform";
 import { reverseGeocode } from "@/lib/mapbox/search-box";
 import { trackUsage } from "@/lib/google/track-usage";
-import { buildLiteProfile } from "@/lib/ai/extract/lite-profile";
-import type { PlaceProfile } from "@/lib/ai/schemas/place-profile";
-import type { ParsedPlaceData } from "@/lib/types";
+// buildLiteProfileForResponse is shared with /api/search/retrieve so the
+// two preview flows can't drift out of feature parity again.
+import { buildLiteProfileForResponse } from "@/lib/ai/extract/lite-profile";
 
 /**
  * Extract CID from a resolved Google Maps URL's FTid.
@@ -38,59 +37,6 @@ function getDataForSEOClient(): DataForSEOClient | null {
   const password = process.env.DATAFORSEO_PASSWORD;
   if (!login || !password) return null;
   return new DataForSEOClient({ login, password });
-}
-
-/**
- * Build a lite_profile for the parsed place, gated on the user's
- * ai_features_enabled flag. Returns null when AI is disabled or the build
- * throws (fail-soft: never block the parse).
- */
-async function buildLiteProfileForResponse(
-  supabase: SupabaseClient,
-  userId: string,
-  placeData: ParsedPlaceData,
-  extended?: {
-    attributes?: Record<string, boolean>;
-    place_topics?: Record<string, number>;
-    is_claimed?: boolean;
-    total_photos?: number;
-  } | null
-): Promise<PlaceProfile | null> {
-  try {
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("ai_features_enabled")
-      .eq("id", userId)
-      .single();
-    if (!profile?.ai_features_enabled) return null;
-
-    const [{ data: tags }, { data: lists }] = await Promise.all([
-      supabase.from("tags").select("id, name").eq("user_id", userId),
-      supabase.from("lists").select("id, name").eq("user_id", userId),
-    ]);
-
-    return buildLiteProfile(
-      {
-        name: placeData.name,
-        address: placeData.address,
-        city: placeData.city,
-        country: placeData.country,
-        types: placeData.types,
-        price_level: placeData.priceLevel,
-        attributes: extended?.attributes,
-        place_topics: extended?.place_topics,
-        total_photos: extended?.total_photos,
-        is_claimed: extended?.is_claimed,
-      },
-      {
-        tags: (tags ?? []) as Array<{ id: string; name: string }>,
-        lists: (lists ?? []) as Array<{ id: string; name: string }>,
-      }
-    );
-  } catch (e) {
-    console.warn("[parse-link] lite_profile build failed:", e);
-    return null;
-  }
 }
 
 export async function POST(request: NextRequest) {

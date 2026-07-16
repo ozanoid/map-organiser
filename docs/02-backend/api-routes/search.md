@@ -2,13 +2,14 @@
 title: Search routes
 type: route-group
 domain: backend
-version: 1.0.0
-last_updated: 13.05.2026
+version: 1.1.0
+last_updated: 16.07.2026
 status: stable
 sources:
   - src/app/api/search/suggest/route.ts
   - src/app/api/search/retrieve/[id]/route.ts
   - src/lib/mapbox/search-box.ts
+  - src/lib/ai/extract/lite-profile.ts
 related:
   - "[[_README]]"
   - "[[../../04-integrations/mapbox]]"
@@ -69,6 +70,7 @@ Both routes require an authenticated user. The Mapbox session is owned by the **
     _mapbox_id: string,
     _fetchTimeMs: number,
     _extended: Partial<GooglePlaceData>,  // cid, rating_distribution, popular_times, attributes, business_description, ...
+    lite_profile: PlaceProfile | null,  // v1.22.1 — inline rule-based profile via buildLiteProfileForResponse (shared with /api/places/parse-link); gated by profiles.ai_features_enabled, fail-soft null. Drives SearchResultPanel subcategory + AI-suggestion chips.
   }
   ```
 
@@ -85,6 +87,7 @@ Both routes require an authenticated user. The Mapbox session is owned by the **
     _provider: "mapbox",
     _mapbox_id: string,
     _fetchTimeMs: number,
+    lite_profile: PlaceProfile | null,  // v1.22.1 — even here name+city+poi types feed the heuristic list/tag match
   }
   ```
 

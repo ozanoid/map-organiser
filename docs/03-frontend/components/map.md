@@ -2,8 +2,8 @@
 title: Map components
 type: component
 domain: frontend
-version: 1.1.0
-last_updated: 13.05.2026
+version: 1.2.0
+last_updated: 16.07.2026
 status: stable
 sources:
   - src/components/map/map-view.tsx
@@ -129,7 +129,7 @@ Two components. `MapView` is a self-contained Mapbox renderer; `MapContent` is t
     onClose: () => void;
   }
   ```
-- **Hooks:** `useState`, `useEffect`, `useQueryClient`, [[../hooks/use-places|`useCreatePlace`]], [[../hooks/use-categories|`useCategories`]], [[../hooks/use-lists|`useLists`]].
+- **Hooks:** `useState`, `useEffect`, `useMemo`, `useQueryClient`, [[../hooks/use-places|`useCreatePlace`]], [[../hooks/use-categories|`useCategories`]], [[../hooks/use-subcategories|`useSubcategories`]], [[../hooks/use-lists|`useLists`]], [[../hooks/use-tags|`useTags`]].
 - **API:**
   - `POST /api/places` with `source: "mapbox_search"`.
   - **Awaited** `POST /api/places/[id]/enrich?step=info` (DataForSEO business_info refresh + photo, hands back `cid`). Mirrors `AddPlaceDialog`'s two-step pattern to avoid a polling race vs. POST `/api/places`'s async photo-download UPDATE.
@@ -137,6 +137,7 @@ Two components. `MapView` is a self-contained Mapbox renderer; `MapContent` is t
 - **UI:** Right slide-in panel mirroring the place-detail panel; pre-filled photo / address / quick-facts (rating, opening hours, website, phone, city/country), form for category / lists / tags / visit status / rating / notes. Sticky bottom "Save to my places" action.
 - **Behavior:**
   - Auto-resolves category from `place.types` via `resolveCategoryId`; falls back to "Other".
+  - v1.22.1 — mirrors `AddPlaceDialog`'s lite-profile UI: subcategory chips under the selected parent (✨ on the AI-suggested one, auto-selected at confidence ≥0.85), plus an "AI Suggestions" block of matched tags + lists from `place.lite_profile`. Changing the parent category clears the subcategory. `MapContent` keys the panel by `_mapbox_id` so a new result resets the form.
   - On save success: toast, close, await `step=info` → invalidate `["places"]` → kick `step=reviews`.
   - On `step=info` error (e.g. mapbox-only result without `google_place_id`): still invalidates the cache so the new place renders without enrichment.
 - **Used by:** `MapContent`.
