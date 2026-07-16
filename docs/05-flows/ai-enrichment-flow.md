@@ -2,8 +2,8 @@
 title: AI Enrichment Flow
 type: flow
 domain: places
-version: 1.4.0
-last_updated: 15.07.2026
+version: 1.5.0
+last_updated: 16.07.2026
 status: stable
 sources:
   - src/app/api/places/[id]/enrich/route.ts
@@ -114,6 +114,11 @@ dominate cost):
 - **COMPARE — `AI_MONTHLY_COMPARE_CAP = 200` runs** (v1.19.0, S2 F-04).
   One unit per `/api/ai/compare` request (SKU `ai_compare`); deliberate-click
   only from the compare page, never auto-fired.
+- **CHAT — `AI_MONTHLY_CHAT_CAP = 200` turns** (v1.21.0, S3 AI-02, SKU
+  `ai_chat`). One unit per user TURN charged in the chat route's
+  `onFinish` — an approval-continuation POST is free; `stopWhen:
+  stepCountIs(6)` bounds in-turn LLM fan-out. See
+  [[ai-chat-flow]].
 - **PROFILE — `AI_MONTHLY_PROFILE_CAP = 1000` generations.** Covers the
   add-place chain, manual refresh chain, backfill, and the cron sweep
   together. Ceiling ≈ $9.5/month. A full ~470-place backfill fits within

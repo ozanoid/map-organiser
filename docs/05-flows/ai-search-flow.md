@@ -2,10 +2,11 @@
 title: AI Search Flow (LLM-as-judge, Phase 6.5)
 type: flow
 domain: places
-version: 2.5.2
-last_updated: 15.07.2026
+version: 2.6.0
+last_updated: 16.07.2026
 status: stable
 sources:
+  - src/lib/places/query-places.ts
   - src/app/api/ai/parse-query/route.ts
   - src/app/api/ai/rank-results/route.ts
   - src/app/api/places/route.ts
@@ -305,7 +306,7 @@ User with 20 semantic queries/day → ~$10-15/month at current pricing.
 - `src/app/api/ai/rank-results/route.ts` + `src/lib/ai/prompts/rank-results.ts`
 - `src/lib/ai/schemas/parse-query.ts`
 - `src/lib/ai/context-builder.ts`
-- `src/app/api/places/route.ts` (hard filter only, no soft)
+- `src/lib/places/query-places.ts` (hard-filter engine, v1.21.0 extraction; `src/app/api/places/route.ts` is a thin param-mapping shell over it)
 - `src/components/search/ai-search-input.tsx` (banner + chips)
 - `src/lib/hooks/use-ai-search.ts` (orchestrator + broaden + rerank)
 - `src/lib/stores/ai-search-store.ts` (session state + thresholds)

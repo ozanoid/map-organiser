@@ -2,8 +2,8 @@
 title: Layout components
 type: component
 domain: frontend
-version: 1.0.0
-last_updated: 12.05.2026
+version: 1.1.0
+last_updated: 16.07.2026
 status: stable
 sources:
   - src/components/layout/app-header.tsx
@@ -20,6 +20,8 @@ related:
 App chrome. All `"use client"`. Rendered by `src/app/(app)/layout.tsx` (header/sidebar/nav) and `src/app/layout.tsx` (offline banner).
 
 ## `AppHeader`
+
+> **v1.21.0:** gained the assistant ✨ launcher (`AssistantLauncher`, mounted left of Add Place) — see [[assistant]].
 
 - **File:** `src/components/layout/app-header.tsx`
 - **Props:** none.

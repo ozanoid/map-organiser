@@ -12,6 +12,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { AddPlaceDialog } from "@/components/places/add-place-dialog";
+import { AssistantLauncher } from "@/components/assistant/assistant-launcher";
+import { resetAssistantChat } from "@/components/assistant/assistant-panel";
 import { Plus, Search, LogOut, Settings, MapPin, Sun, Moon, Monitor } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
@@ -33,6 +35,9 @@ export function AppHeader() {
 
   async function handleSignOut() {
     await supabase.auth.signOut();
+    // Sign-out is a client-side nav — clear the module-scope assistant
+    // conversation so the next account on this device starts clean.
+    resetAssistantChat();
     router.push("/login");
     router.refresh();
   }
@@ -72,6 +77,8 @@ export function AppHeader() {
             )}
           </button>
         )}
+
+        <AssistantLauncher />
 
         <Button
           variant="outline"

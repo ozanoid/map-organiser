@@ -2,8 +2,8 @@
 title: Repo Structure
 type: overview
 domain: overview
-version: 1.4.0
-last_updated: 15.07.2026
+version: 1.5.0
+last_updated: 16.07.2026
 status: stable
 sources:
   - src/
@@ -90,6 +90,7 @@ src/
 │       ├── user/              api-keys + usage + ai-settings + ai-suggestions (list/accept/reject)
 │       └── share-target/      PWA share_target sink
 ├── components/
+│   ├── assistant/             AssistantLauncher (header ✨, ai-settings gate) + AssistantPanel (useChat Sheet, v1.21.0)
 │   ├── filters/               Category / country-city / list / tag / visit-status / open-now / search filter UIs;
 │   │                          save-filter-button + saved-filter-chips (v1.20.0)
 │   ├── layout/                AppHeader, AppSidebar, MobileNav, OfflineBanner
@@ -101,12 +102,14 @@ src/
 │   └── ui/                    shadcn primitives (avatar, badge, button, card, command, dialog, dropdown-menu, input, input-group, popover, select, separator, sheet, skeleton, sonner, tabs, textarea)
 └── lib/
     ├── ai/                    AI SDK v6 wiring (Gemini 3 Flash). client.ts, context-builder.ts,
-    │                          dedup.ts, normalize.ts, track-usage.ts (budgets), generate-profile.ts;
-    │                          schemas/ (Zod — +compare.ts v1.19.0); prompts/ (place-profile-full.ts, compare.ts); extract/ (lite-profile.ts,
+    │                          dedup.ts, normalize.ts, track-usage.ts (budgets), generate-profile.ts,
+    │                          chat-tools.ts (assistant tool belt, v1.21.0);
+    │                          schemas/ (Zod — +compare.ts v1.19.0); prompts/ (place-profile-full.ts, compare.ts, chat.ts); extract/ (lite-profile.ts,
     │                          category-resolver.ts, features-extractor.ts,
     │                          suggestions-from-profile.ts); apply-suggestions.ts.
     ├── places/                refresh-google-data.ts — service-client-safe full re-lookup + review merge (shared by refresh route + cron);
-    │                          open-now.ts (tz-aware render-time isOpenNow, v1.18.0); attribute-icons.ts (NF-04 group/icon map)
+    │                          open-now.ts (tz-aware render-time isOpenNow, v1.18.0); attribute-icons.ts (NF-04 group/icon map);
+    │                          query-places.ts + user-stats.ts (v1.21.0 — extracted route engines shared with chat tools)
     ├── dataforseo/            DataForSEO client + types + adapters + transform (mergeReviews) + reviews + photo
     ├── google/                Google Places + URL parser + category mapping + Takeout parser + usage tracker + key access
     ├── hooks/                 React Query hooks (16 files): useAiSearch, useAiSuggestions, useBackfillProfiles, useCategories, useDebounce, useFilters, useLists, useMapStyle, usePlaceSearch, usePlaces, useSavedFilters, useSharedLinks, useStats, useSubcategories, useTags, useTrips
@@ -175,7 +178,7 @@ Counts (approximate, as of `last_updated`):
 |---|---|
 | App routes (`src/app/**/page.tsx`) | 12 page files |
 | API route handlers (`src/app/api/**/route.ts`) | ~36 routes (added: 4 subcategories + 5 user/ai-* + step=profile branch + 2 `/api/ai/*` + `/api/cron/refresh-places`) |
-| Feature components (`src/components/{filters,layout,map,places,settings}`) | ~25 |
+| Feature components (`src/components/{assistant,filters,layout,map,places,settings}`) | ~27 |
 | shadcn UI (`src/components/ui/`) | 19 primitives |
 | Custom hooks (`src/lib/hooks/`) | 16 (v1.20.0 added: useSavedFilters) |
 | Supabase clients (`src/lib/supabase/`) | 3 (browser, server, middleware) |

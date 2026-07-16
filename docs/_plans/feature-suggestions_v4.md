@@ -2,8 +2,8 @@
 title: "Feature Suggestions v4"
 type: plan
 domain: overview
-version: 4.6.0
-last_updated: 15.07.2026
+version: 4.7.0
+last_updated: 16.07.2026
 status: stable
 related:
   - "[[../_archive/feature-suggestions_v2]]"
@@ -101,7 +101,7 @@ v4 önerilerini v3'ten daha ucuz kılan, artık VAR olan altyapı:
   `popular_times`, `place_topics`, `attributes`, `people_also_search`,
   `book_online_url`, `owner_answer`, review images. NF-01..06'nın hammaddesi.
 
-## 0.4 Canlı durum (15.07.2026)
+## 0.4 Canlı durum (16.07.2026)
 
 - Production **sağlıklı**. **S0 (v1.15.0), Langfuse (v1.16.0), S1-PR1
   (v1.17.0), S1-PR2 (v1.18.0), S2-PR1 (v1.19.0)** merge edildi —
@@ -113,12 +113,15 @@ v4 önerilerini v3'ten daha ucuz kılan, artık VAR olan altyapı:
   yol fix'i (0/471 doluydu), review prompt bug'ı (tüm profiller kesik
   review'la üretilmişti — fix merge, re-profile ertelendi), NF-05 önizleme
   akışı AddPlaceDialog'u yeniden kullanıyor.
-- 🟡 **S2 (Karşılaştır & Kaydet)** — S2-PR1 (F-04 compare + AI compare,
-  v1.19.0) merge edildi. S2-PR2 (F-03/NF-20/21 saved filters + NF-18 tek
-  mekan paylaşımı, v1.20.0) PR'da — kullanıcı testi bekliyor. Review
-  bulgusu: share-save orijinal okumaları RLS'e takılıyordu (Nisan'dan beri
-  latent) — service-client fix bu PR'da; public place payload whitelist'e
-  çevrildi; deaktive link yeniden paylaşımda reaktive ediliyor.
+- ✅ **S2 (Karşılaştır & Kaydet) kapandı** — S2-PR1 (v1.19.0) + S2-PR2
+  (v1.20.0, 16.07 merge). Kritik review bulgusu: share-save orijinal
+  okumaları RLS'e takılıyordu (Nisan'dan beri latent) — service-client
+  fix + public place payload whitelist + reaktivasyon aynı PR'da.
+- 🟡 **S3 (Asistan, AI-02 v1)** — v1.21.0 PR'da, kullanıcı testi
+  bekliyor: /api/ai/chat (streamText agent loop, İLK streaming route),
+  7 tool (4 read-only + 3 onaylı mutasyon, v6 needsApproval akışı),
+  header ✨ paneli, ai_chat SKU (200 tur/ay, 1 birim/tur), session-only
+  memory. ai@6.0.228 + @ai-sdk/react@3.0.230 lockstep çifti eklendi.
 - Test yok; migrations dashboard-managed. Lint teknik borcu `warn`e çekildi
   (bkz. PART 4 #12). DataForSEO SKU cap borcu (PART 4 #13). Paylaşım linki
   iptal UI'ı yok (PATCH var, çağıran yok — PART 4 #14).
@@ -164,7 +167,7 @@ v4 önerilerini v3'ten daha ucuz kılan, artık VAR olan altyapı:
 | NF-19 | Bulk edit (kategori/tag/status/liste) | **✅ zaten vardı** | `/api/places/bulk` + BulkActionBar (Mayıs) — matris bunu yansıtmıyordu, S2 keşfinde bulundu |
 | F-03 / NF-20 / NF-21 | Kayıtlı filtreler + quick chips (+ "AI sorgusunu kaydet") | **✅ S2-PR2 (15.07.2026)** | `saved_filters` tablosu + panel/sheet'te Save + /places'te chips; ✨ chip AI pipeline'ını yeniden koşturur |
 | F-04 + AI-19* | Mekan karşılaştırma + AI analiz (*v3-ai-first; ≈ v3 AI-15) | **🟡 S2-PR1 ✅ (15.07.2026)** | `/places/compare` + `POST /api/ai/compare` (SKU ai_compare, cap 200/ay) + BulkActionBar girişi. AI-06(c) karşılaştırmalı sentiment kısmen kapandı (tema kazananları). S2-PR2: saved filters + tek mekan paylaşımı |
-| AI-02 | Agentic asistan / chatbot | **P2 (büyük)** | Tool'ların yarısı zaten route olarak var; bkz. PART 2 |
+| AI-02 | Agentic asistan / chatbot | **🟡 S3 v1 PR'da (16.07.2026)** | v1: 7 tool + streaming chat paneli + onay UX + session-only memory (v1.21.0). v2'ye kalan: kalıcı memory (chat_memories), web_search, get_nearby, voice |
 | AI-09 | AI trip planner | **P2 (büyük)** | Mevcut kural-tabanlı auto-plan'ın LLM üstyapısı |
 | NF-07 | Multi-modal routing (walking/driving/cycling) | **P2** | Mapbox zaten destekliyor |
 | NF-08 | Trip budget tracking | **P2** | |
@@ -318,8 +321,8 @@ Karar noktaları:
 |--------|--------|------|-------|
 | **S0 — Bakım** ✅ | PR #61 (superseded) + ESLint 10 fix + legacy `/api/places/import` kaldırıldı (v1.15.0) | 1-2g | ✅ Yeşil CI, temiz lint (0 error) |
 | **S1 — Veriyi Göster** ✅ | Tema 1 (NF-01→06) + dinamik open-now — 2 PR (v1.17.0 + v1.18.0) | ~2 hafta | ✅ Place detail v2 |
-| **S2 — Karşılaştır & Kaydet** ✅ | Tema 2 (F-04 + AI compare, v1.19.0 merge) + Tema 5 (saved filters + place share, v1.20.0 — PR'da, test bekliyor; bulk edit zaten vardı) | 1 gün (2 PR) | ✅ Profilleri işleten 2. feature + QoL paketi |
-| **S3 — Asistan** | Tema 3 (AI-02 v1, session-memory) | ~1.5-2 hafta | Chat ile mekan keşfi/aksiyonu |
+| **S2 — Karşılaştır & Kaydet** ✅ | Tema 2 (F-04 + AI compare, v1.19.0) + Tema 5 (saved filters + place share, v1.20.0 — bulk edit zaten vardı) | 1 gün (2 PR) | ✅ Profilleri işleten 2. feature + QoL paketi |
+| **S3 — Asistan** 🟡 | Tema 3 (AI-02 v1, session-memory) — v1.21.0 PR'da, test bekliyor | 1 gün (1 PR) | Chat ile mekan keşfi/aksiyonu |
 | **S4 — Trip Intelligence** | Tema 4 (AI-09 v1 + NF-07/08) | ~2 hafta | LLM destekli trip planlama |
 | **S5 — Growth & Platform kararı** | NF-16 onboarding + NF-09 templates; **F-23 iOS go/no-go karar dokümanı** | ~2 hafta | Çok-kullanıcıya hazırlık |
 | **Sürekli** | Tema 6 (S2'den itibaren paralel: kalite ajanı, re-profile, eval) | — | Veri sağlığı |

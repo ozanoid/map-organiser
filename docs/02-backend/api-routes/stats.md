@@ -2,10 +2,11 @@
 title: Stats route
 type: route-group
 domain: backend
-version: 1.0.0
-last_updated: 12.05.2026
+version: 1.1.0
+last_updated: 16.07.2026
 status: stable
 sources:
+  - src/lib/places/user-stats.ts
   - src/app/api/stats/route.ts
 related:
   - "[[_README]]"
@@ -27,6 +28,8 @@ A single endpoint that fans out into multiple aggregate queries to populate the 
 ## Per-route detail
 
 ### `GET /api/stats`
+
+> **v1.21.0:** aggregation moved verbatim to `src/lib/places/user-stats.ts` (`computeUserStats(supabase, userId)`) so the assistant's `get_stats` tool shares it. Response shape unchanged.
 
 - **Source:** `src/app/api/stats/route.ts`
 - **Auth:** required.
