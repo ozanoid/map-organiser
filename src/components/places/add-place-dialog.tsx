@@ -431,7 +431,13 @@ export function AddPlaceDialog({ open, onOpenChange, initialUrl, source }: AddPl
                 <div className="relative flex-1">
                   <select
                     value={categoryId}
-                    onChange={(e) => setCategoryId(e.target.value)}
+                    onChange={(e) => {
+                      // Clear the subcategory when the parent changes — else a
+                      // subcategory from the old parent persists and Save writes
+                      // a mismatched category_id/subcategory_id pair.
+                      setCategoryId(e.target.value);
+                      setSubcategoryId(null);
+                    }}
                     className="w-full h-9 px-3 pr-8 text-sm border border-input rounded-md bg-background cursor-pointer appearance-none focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1"
                   >
                     <option value="">Select a category...</option>
