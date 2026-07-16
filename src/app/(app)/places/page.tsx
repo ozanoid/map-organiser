@@ -10,6 +10,7 @@ import { useFilterPersistStore } from "@/lib/stores/filter-persist-store";
 import { AddPlaceDialog } from "@/components/places/add-place-dialog";
 import { BulkActionBar } from "@/components/places/bulk-action-bar";
 import { FilterSheet } from "@/components/filters/filter-sheet";
+import { SavedFilterChips } from "@/components/filters/saved-filter-chips";
 import { FilterPanel } from "@/components/filters/filter-panel";
 import { Button } from "@/components/ui/button";
 import { DebouncedSearchInput } from "@/components/filters/debounced-search-input";
@@ -287,6 +288,11 @@ function PlacesContent() {
           )}
         </div>
       </div>
+
+      {/* Saved-filter quick chips (v1.20.0, NF-20/21) — a filter shortcut
+          row adjacent to the results it mutates. Renders nothing when the
+          user has no saved presets. */}
+      <SavedFilterChips />
 
       {/* Place grid */}
       {isLoading ? (

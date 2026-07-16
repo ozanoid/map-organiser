@@ -10,12 +10,14 @@ export async function POST(request: NextRequest) {
 
   const { resource_type, resource_id } = await request.json();
 
-  if (!resource_type || !resource_id || !["list", "trip"].includes(resource_type)) {
-    return NextResponse.json({ error: "resource_type (list|trip) and resource_id required" }, { status: 400 });
+  if (!resource_type || !resource_id || !["list", "trip", "place"].includes(resource_type)) {
+    return NextResponse.json({ error: "resource_type (list|trip|place) and resource_id required" }, { status: 400 });
   }
 
   // Verify ownership
-  const table = resource_type === "list" ? "lists" : "trips";
+  const table = { list: "lists", trip: "trips", place: "places" }[
+    resource_type as "list" | "trip" | "place"
+  ];
   const { data: resource } = await supabase
     .from(table)
     .select("id")
@@ -37,6 +39,19 @@ export async function POST(request: NextRequest) {
     .maybeSingle();
 
   if (existing) {
+    // Sharing again after a deactivation must yield a WORKING link —
+    // otherwise the copied URL 404s with no hint why.
+    if (!existing.is_active) {
+      const { data: reactivated, error } = await supabase
+        .from("shared_links")
+        .update({ is_active: true })
+        .eq("id", existing.id)
+        .eq("user_id", user.id)
+        .select()
+        .single();
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json(reactivated);
+    }
     return NextResponse.json(existing);
   }
 

@@ -17,7 +17,7 @@ export interface Place {
   visited_at: string | null;
   booked_at: string | null;
   google_data: GooglePlaceData;
-  source: "manual" | "import" | "link" | "mapbox_search";
+  source: "manual" | "import" | "link" | "mapbox_search" | "similar" | "shared";
   created_at: string;
   updated_at: string;
   // Joined
@@ -56,6 +56,19 @@ export interface Tag {
   user_id: string;
   name: string;
   color: string | null;
+  created_at: string;
+}
+
+/** v1.20.0 (S2 F-03/NF-20/21) — saved filter preset / quick chip.
+ *  query_string = filtersToQueryString output; ai_query non-null when
+ *  saved from an AI search (chip re-runs the pipeline). */
+export interface SavedFilter {
+  id: string;
+  user_id: string;
+  name: string;
+  query_string: string;
+  ai_query: string | null;
+  sort_order: number;
   created_at: string;
 }
 

@@ -6,6 +6,7 @@ import { CountryCityFilter } from "./country-city-filter";
 import { CategoryFilter } from "./category-filter";
 import { VisitStatusFilter } from "./visit-status-filter";
 import { OpenNowFilter } from "./open-now-filter";
+import { SaveFilterButton } from "./save-filter-button";
 import { TagFilter } from "./tag-filter";
 import { ListFilter } from "./list-filter";
 import { DebouncedSearchInput } from "./debounced-search-input";
@@ -35,6 +36,7 @@ export function FilterSheet({ open, onOpenChange }: FilterSheetProps) {
         <SheetHeader className="flex flex-row items-center justify-between shrink-0 px-5 pb-0">
           <SheetTitle>Filters</SheetTitle>
           <div className="flex items-center gap-2">
+            <SaveFilterButton />
             {hasActiveFilters && (
               <Button
                 variant="ghost"

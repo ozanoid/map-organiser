@@ -2,8 +2,8 @@
 title: RLS Policies
 type: overview
 domain: backend
-version: 1.0.0
-last_updated: 12.05.2026
+version: 1.2.0
+last_updated: 15.07.2026
 status: stable
 sources:
   - pg_policies (via Supabase MCP)
@@ -34,6 +34,7 @@ Truth source: `pg_policies`, fetched via Supabase MCP `execute_sql`. See per-tab
 | `profiles` | Users can view own profile | authenticated | SELECT | `auth.uid() = id` |
 | `profiles` | Users can update own profile | authenticated | UPDATE | `auth.uid() = id` |
 | `profiles` | Users can insert own profile | authenticated | INSERT | (with_check) `auth.uid() = id` |
+| `saved_filters` | Users manage own saved filters | authenticated | ALL | `auth.uid() = user_id` (v1.20.0 — [[schema/saved_filters]]) |
 | `shared_links` | Anyone can read active shared links | public | SELECT | `is_active = true` |
 | `shared_links` | Users can manage own shared links | public | ALL | `auth.uid() = user_id` |
 | `tags` | Users manage own tags | authenticated | ALL | `auth.uid() = user_id` |

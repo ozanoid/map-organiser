@@ -2,7 +2,7 @@
 title: Repo Structure
 type: overview
 domain: overview
-version: 1.3.0
+version: 1.4.0
 last_updated: 15.07.2026
 status: stable
 sources:
@@ -90,7 +90,8 @@ src/
 │       ├── user/              api-keys + usage + ai-settings + ai-suggestions (list/accept/reject)
 │       └── share-target/      PWA share_target sink
 ├── components/
-│   ├── filters/               Category / country-city / list / tag / visit-status / search filter UIs
+│   ├── filters/               Category / country-city / list / tag / visit-status / open-now / search filter UIs;
+│   │                          save-filter-button + saved-filter-chips (v1.20.0)
 │   ├── layout/                AppHeader, AppSidebar, MobileNav, OfflineBanner
 │   ├── map/                   MapView, MapContent
 │   ├── places/                PlaceCard, AddPlaceDialog (with AI Suggestions panel + sub-cat strip), BulkActionBar, inline creators, VisitStatusToggle, AiSummaryCard,
@@ -108,7 +109,7 @@ src/
     │                          open-now.ts (tz-aware render-time isOpenNow, v1.18.0); attribute-icons.ts (NF-04 group/icon map)
     ├── dataforseo/            DataForSEO client + types + adapters + transform (mergeReviews) + reviews + photo
     ├── google/                Google Places + URL parser + category mapping + Takeout parser + usage tracker + key access
-    ├── hooks/                 React Query hooks: useCategories, useDebounce, useFilters, useLists, useMapStyle, usePlaces, useSharedLinks, useStats, useTags, useTrips, useSubcategories, useAiSuggestions
+    ├── hooks/                 React Query hooks (16 files): useAiSearch, useAiSuggestions, useBackfillProfiles, useCategories, useDebounce, useFilters, useLists, useMapStyle, usePlaceSearch, usePlaces, useSavedFilters, useSharedLinks, useStats, useSubcategories, useTags, useTrips
     ├── stores/                Zustand stores (currently just import-store.ts)
     ├── map/                   category-icons.ts (canvas marker rendering)
     ├── trip/                  auto-plan.ts (k-means clustering), directions.ts (Mapbox wrapper)
@@ -176,6 +177,6 @@ Counts (approximate, as of `last_updated`):
 | API route handlers (`src/app/api/**/route.ts`) | ~36 routes (added: 4 subcategories + 5 user/ai-* + step=profile branch + 2 `/api/ai/*` + `/api/cron/refresh-places`) |
 | Feature components (`src/components/{filters,layout,map,places,settings}`) | ~25 |
 | shadcn UI (`src/components/ui/`) | 19 primitives |
-| Custom hooks (`src/lib/hooks/`) | 12 (added: useSubcategories, useAiSuggestions) |
+| Custom hooks (`src/lib/hooks/`) | 16 (v1.20.0 added: useSavedFilters) |
 | Supabase clients (`src/lib/supabase/`) | 3 (browser, server, middleware) |
 | Vault docs (`docs/**/*.md`, excl. `_archive`) | tracked in [[../CHANGELOG]] |

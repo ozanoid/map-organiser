@@ -71,7 +71,7 @@ Source of truth: `public.places` table + `Place` interface in `src/lib/types/ind
 | `rating` | smallint | no | User's own 1–5 rating. Check constraint `rating >= 1 AND rating <= 5`. |
 | `notes` | text | no | Free-form. |
 | `google_data` | jsonb | no | Rich data from Google Places or DataForSEO (see [[#google_data shape]] below). |
-| `source` | text | no | `manual` / `import` / `link` / `mapbox_search` / `similar` (v1.18.0, NF-05). Default `manual`. DB CHECK constraint `places_source_check` enforces the set. |
+| `source` | text | no | `manual` / `import` / `link` / `mapbox_search` / `similar` (v1.18.0, NF-05) / `shared` (v1.20.0, NF-18 — copies saved from a share link). Default `manual`. DB CHECK constraint `places_source_check` enforces the set. |
 | `visit_status` | text | no | One of `want_to_go` / `booked` / `visited` / `favorite`. Check constraint enforces. |
 | `visited_at` | timestamptz | no | Set when status transitions to `visited`. |
 | `booked_at` | timestamptz | no | Set when status transitions to `booked`. |
@@ -222,4 +222,4 @@ All `/api/places/*` routes live in `src/app/api/places/`. See [[../02-backend/ap
 ## Open questions
 
 - **Photo migration completeness.** `place_photos` has 0 rows but `places.google_data.photo_storage_url` is the canonical photo path. Worth checking whether `place_photos` is dormant or still wired to a flow.
-- **`source` enum.** Text with default `'manual'`; values: `manual`, `import`, `link`, `mapbox_search`, `similar`. Enforced by the `places_source_check` DB constraint (widened 15.07.2026 for NF-05 via MCP migration).
+- **`source` enum.** Text with default `'manual'`; values: `manual`, `import`, `link`, `mapbox_search`, `similar`, `shared`. Enforced by the `places_source_check` DB constraint (widened 15.07.2026 twice via MCP migrations: `similar` for NF-05, `shared` for NF-18 — the latter also unblocked the April-era share-save copiers that had never been able to insert).

@@ -2,7 +2,7 @@
 title: useFilters
 type: hook
 domain: frontend
-version: 1.1.0
+version: 1.2.0
 last_updated: 15.07.2026
 status: stable
 sources:
@@ -15,6 +15,8 @@ related:
 ---
 
 # `useFilters`
+
+> **v1.20.0:** `filtersToQueryString` + `parseUrlToFilters` artık EXPORT — saved-filter kaydetme/uygulama aynı serileştirmeyi paylaşır.
 
 > **v1.18.0:** `open_now` key added — parsed from `?open_now=true`, serialized back, boolean chip (`OpenNowFilter`). Evaluation is server-side at request time; see [[../../02-backend/api-routes/places]].
 

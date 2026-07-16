@@ -2,8 +2,8 @@
 title: Hooks
 type: overview
 domain: frontend
-version: 1.3.0
-last_updated: 18.05.2026
+version: 1.4.0
+last_updated: 15.07.2026
 status: stable
 sources:
   - src/lib/hooks/
@@ -29,6 +29,7 @@ Every custom hook lives in `src/lib/hooks/`. Convention: file `use-x.ts` exports
 | `useLists` + 6 mutations | react-query + mutations | `["lists"]`, `["place-lists", placeId]` | [[use-lists]] |
 | `useMapStyle` | localStorage + theme | — | [[use-map-style]] |
 | `usePlaces` + 4 mutations | react-query + mutations | `["places", filters]` | [[use-places]] |
+| `useSavedFilters` + 2 mutations | react-query + mutations | `["saved-filters"]` | [[use-saved-filters]] |
 | `useSharedLink` + 3 mutations | react-query + mutations | `["shared-link", type, id]` | [[use-shared-links]] |
 | `useStats` | react-query (staleTime 5min) | `["stats"]` | [[use-stats]] |
 | `useTags` + 4 mutations | react-query + mutations | `["tags"]`, `["place-tags", placeId]` | [[use-tags]] |
