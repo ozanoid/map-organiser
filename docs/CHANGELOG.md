@@ -6,6 +6,75 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 16.07.2026 — v1.22.0 — S4: Trip Intelligence (AI-09 v1 + NF-07/08)
+
+Sprint S4 (v4 Tema 4) — single PR. Three live migrations
+(`add_trip_days_routing_profile`, `add_trip_day_places_cost_columns`,
+`add_trips_party_size`).
+
+- **NF-07 multi-modal routing**: `trip_days.routing_profile`
+  (walking/driving/cycling, CHECK + default) threaded through both
+  `getRoute` call sites (trip detail + public shared view); day-header
+  cycle toggle; new `PATCH /api/trips/[id]/days/[dayId]` (zod, two-level
+  ownership). NEW `mapbox_directions` SKU — Directions calls were fully
+  untracked before (public share burns the OWNER's quota, attributed via
+  link.user_id). Day-level route cache remains v2.
+- **NF-08 trip budget**: `trip_day_places.cost_estimate/currency` +
+  `trips.party_size`; per-person defaults from `google_data.price_level`
+  (hardcoded tier table 10/25/50/90 USD, `lib/trip/cost-defaults.ts`;
+  66% coverage — empty-safe). Inline row edit, day totals, trip total ×
+  party-size stepper. Costs now SURVIVE move-between-days and auto-plan
+  rewrites (both were silently dropping row fields).
+  `PATCH /api/trips/[id]` hardened with a zod whitelist (raw body spread
+  made every column client-writable). Public shared-trip payload strips
+  cost/currency/party_size.
+- **AI-09 v1 AI trip plan**: `POST /api/ai/trip-plan` — candidates =
+  in-trip places + opt-in want_to_go pool per city (max 40, compact
+  ~350-token projections, day-granular open flags via new
+  `isOpenOnDate`); idx-referenced `TripPlanSchema` (clamp/parseInt
+  idioms); **delete-after-validate** write (LLM failure burns the unit
+  but never empties the trip); per-stop `time_slot`+note, day
+  `theme — rationale` → `trip_days.notes` (first consumers of those
+  columns). SKU `ai_trip_plan` costPer1k 12.0, cap
+  `AI_MONTHLY_TRIP_PLAN_CAP = 50`. Trip-header **AI Plan** dialog
+  (ai-settings gated).
+- **Review fixes (30/30 adversarial findings addressed), highlights:**
+  - **HIGH:** a trip with >40 places would have every place beyond the
+    LLM cap silently DELETED by AI Plan — now a 400 guard before any
+    spend, plus the destructive delete is scoped to candidate places
+    only (non-candidates always survive).
+  - **HIGH (cross-user exfiltration):** a foreign place UUID (learned
+    from any public share) could be attached to one's own trip —
+    trip_day_places RLS only checks the day — and the public trip share
+    (service client, full `places(*)` passthrough) then leaked the
+    victim's ENTIRE row, bypassing the v1.20.0 whitelist. Fixed on both
+    ends: place-ownership gates on every attach path (add-to-day, move,
+    trip-create place_ids) AND all publicly embedded places (list +
+    trip shares) now go through the same whitelist projection as the
+    single-place share.
+  - **HIGH:** trip-plan write phase checked no supabase errors
+    (supabase-js returns, never throws) — a failed insert after the
+    delete quietly emptied days behind success:true. Now: delete error →
+    500 before harm; insert/notes errors collected → honest 500;
+    TOCTOU carry re-read after the LLM call; stale day notes cleared.
+  - Move-place is now a single atomic UPDATE (was delete+insert — a
+    mid-move failure lost the row and its fields); day-scoped writes
+    verify the day belongs to the URL's trip; date fields validated as
+    ISO dates; LLM day_number duplicates deduped; 14-day and tldr-length
+    caps; `include_pool` requires `city`; `output` accessor.
+  - UI: cost/party edits no longer trigger full trip refetches (each one
+    re-purchased a Mapbox Directions call per day) — targeted cache
+    patches instead; route-mode cycle holds pending through the refetch;
+    comma-decimal costs accepted; all new mutations toast on error.
+  - Public-share Directions denial-of-wallet recorded as debt (PART 4
+    #15 — day-level route cache, S5).
+- Docs: new `05-flows/ai-trip-plan-flow.md`; schema docs (trips,
+  trip_days, trip_day_places), api-routes trips/ai/_README/shared,
+  mapbox.md (+directions SKU), gemini.md (caller table + budgets),
+  ai-enrichment-flow (cost cap), use-trips.md, trip-planning-flow,
+  domain trips/sharing, repo-structure, frontmatter-schema (+`ai`
+  domain), v4 plan (4.8.0 + debt #15).
+
 ## 16.07.2026 — v1.21.0 — S3: AI chat assistant (AI-02 v1)
 
 Sprint S3 (v4 Tema 3) — single PR. Chat-based discovery and action over

@@ -2,8 +2,8 @@
 title: Shared routes
 type: route-group
 domain: backend
-version: 1.2.0
-last_updated: 15.07.2026
+version: 1.3.0
+last_updated: 16.07.2026
 status: stable
 sources:
   - src/app/api/shared/route.ts
@@ -20,6 +20,8 @@ related:
 # Shared routes
 
 > **v1.20.0 (NF-18):** all three routes gained a `place` branch — create validates `resource_type` ∈ list|trip|place (ownership via the places table); public read returns `{type:'place', place}` as a **whitelist** of rendered fields only; save copies the single place with `source:'shared'` + google_place_id dedupe. Two fixes shipped alongside: the save route now reads ORIGINAL content with the service client (owner-scoped RLS had 404'd every cross-user save since April), and re-sharing a deactivated resource reactivates the existing link instead of returning a dead URL.
+
+> **v1.22.0 (NF-07/NF-08):** the trip branch of the public read now (a) **strips the owner's budget fields** — `cost_estimate`/`currency` off every `trip_day_places` row and `party_size` off the trip (same whitelist posture as the v1.20.0 place fix), and (b) honours each day's `routing_profile` in the Mapbox call, tracking it as `mapbox_directions` attributed to the link **owner** (`link.user_id` — their share, their quota).
 
 Three route handlers for the public-sharing surface. **This is the only group with a public-facing endpoint** — `GET /api/shared/[slug]` uses the service-role client to bypass RLS.
 
@@ -65,10 +67,10 @@ The `/api/shared/*` prefix is explicitly exempt from the auth-required middlewar
   - **List path:** `lists` SELECT + `list_places` SELECT + `places` SELECT joined with `categories`.
   - **Trip path:** `trips` SELECT + `trip_days` SELECT + `trip_day_places` SELECT joined with `places` + `categories`.
   - **Place path (v1.20.0):** single `places` SELECT joined with `categories(name, color)`.
-- **External:** `getRoute` (Mapbox Directions) — one per day with ≥ 2 places (trip path only).
+- **External:** `getRoute(coords, day.routing_profile)` (Mapbox Directions) — one per day with ≥ 2 places (trip path only), tracked as `mapbox_directions` against the link owner (v1.22.0).
 - **Response shape:**
   - `{ type: "list", slug, ownerName, list, places }` (places ordered by `list_places.sort_order`).
-  - `{ type: "trip", slug, ownerName, trip, days }` (each day with `places` + `route`).
+  - `{ type: "trip", slug, ownerName, trip }` — trip carries `days[]` (each day with `places` + `route`), `day_count`, `place_count`. **v1.22.0:** `cost_estimate`/`currency` are removed from every day-place row and `party_size` from the trip before responding — owner-private budget planning never leaves the server on this unauthenticated URL.
   - `{ type: "place", slug, ownerName, place }` — place is a **whitelist**: `id, name, address, city, country, notes, category {name, color}, location {lat, lng}`, and `google_data` limited to `photo_storage_url, rating, user_ratings_total, opening_hours, website, url`. Owner-personal fields (user_id, rating, visit_status, booked_at/visited_at, source, timestamps) and heavy/private google_data (reviews, place_profile, work_timetable, attributes, topics) never leave the server.
 - **Status:** `200`; `400` on unknown resource_type; `404` if link not found or `is_active = false`.
 - **Side effects:** **Fire-and-forget** `view_count++` (the response doesn't wait for it).

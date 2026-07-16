@@ -32,6 +32,14 @@ export const SKU_CONFIG = {
     costPer1k: 11.5,
     freeMonthly: 500,
   },
+  // v1.22.0 (NF-07): Directions calls were previously fully untracked —
+  // one call per multi-place day per trip-detail/shared view, recomputed
+  // every GET (no cache yet). Mapbox pricing: 100k free, then $2/1k.
+  mapbox_directions: {
+    name: "Mapbox Directions",
+    costPer1k: 2.0,
+    freeMonthly: 100000,
+  },
 } as const;
 
 export type SkuType = keyof typeof SKU_CONFIG;

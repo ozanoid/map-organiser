@@ -2,9 +2,11 @@
 
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { useQueryClient, useMutation } from "@tanstack/react-query";
 import {
   useTrip, useAutoPlan, useReorderTripDayPlaces,
   useRemoveTripPlace, useAddTripPlace, useMoveTripPlace, useSwapTripDays,
+  useUpdateTripDay, useUpdateTripDayPlace, useUpdateTrip,
 } from "@/lib/hooks/use-trips";
 import { usePlaces } from "@/lib/hooks/use-places";
 import { useCategories } from "@/lib/hooks/use-categories";
@@ -22,9 +24,10 @@ import { Input } from "@/components/ui/input";
 import {
   ArrowLeft, Wand2, Map, LayoutList, Calendar, MapPin, GripVertical,
   Loader2, Share2, X, Plus, ChevronUp, ChevronDown, ArrowRightLeft, Search,
+  Footprints, Car, Bike, Sparkles, Users, Minus,
 } from "lucide-react";
 import { toast } from "sonner";
-import type { Place, TripDay, TripDayPlace } from "@/lib/types";
+import type { Place, RoutingProfile, TripDay, TripDayPlace } from "@/lib/types";
 import {
   DndContext, closestCenter, PointerSensor, TouchSensor,
   useSensor, useSensors, type DragEndEvent,
@@ -77,9 +80,21 @@ function SortableTripPlace({
       <div className="flex-1 min-w-0 flex items-center gap-2 py-1.5">
         <span className="h-5 w-5 rounded-full shrink-0" style={{ backgroundColor: place.category?.color || "#6B7280" }} />
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium truncate">{place.name}</p>
-          {place.address && <p className="text-[10px] text-muted-foreground truncate">{place.address}</p>}
+          <p className="text-sm font-medium truncate flex items-center gap-1.5">
+            <span className="truncate">{place.name}</span>
+            {dayPlace.time_slot && (
+              <span className="text-[9px] font-normal text-muted-foreground border rounded px-1 py-px shrink-0">
+                {dayPlace.time_slot}
+              </span>
+            )}
+          </p>
+          {dayPlace.notes ? (
+            <p className="text-[10px] text-emerald-700 dark:text-emerald-400 truncate italic">{dayPlace.notes}</p>
+          ) : place.address ? (
+            <p className="text-[10px] text-muted-foreground truncate">{place.address}</p>
+          ) : null}
         </div>
+        <CostBadge dayPlace={dayPlace} tripId={tripId} dayId={dayId} />
       </div>
 
       {/* Actions — visible on hover */}
@@ -133,6 +148,74 @@ function SortableTripPlace({
   );
 }
 
+// NF-08 (v1.22.0): inline-editable per-person cost — "$25" chip, click
+// to edit, Enter/blur saves, empty clears. Defaults are seeded server-
+// side from price_level; 34% of places have none, so empty renders "$+".
+function CostBadge({
+  dayPlace, tripId, dayId,
+}: {
+  dayPlace: TripDayPlace; tripId: string; dayId: string;
+}) {
+  const updatePlace = useUpdateTripDayPlace();
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+
+  function save() {
+    // Validate BEFORE closing the editor; normalize comma decimals
+    // ("12,50") so legit input isn't silently dropped; mirror the
+    // server's 0..100000 bounds.
+    const trimmed = draft.trim().replace(",", ".");
+    const value = trimmed === "" ? null : Number(trimmed);
+    if (value !== null && (Number.isNaN(value) || value < 0 || value > 100000)) {
+      toast.error("Enter a valid cost (0–100000)");
+      return;
+    }
+    setEditing(false);
+    if (value === dayPlace.cost_estimate) return;
+    updatePlace.mutate(
+      { tripId, dayId, placeId: dayPlace.place_id, cost_estimate: value },
+      { onError: () => toast.error("Couldn't save cost — try again") }
+    );
+  }
+
+  if (editing) {
+    return (
+      <input
+        autoFocus
+        inputMode="decimal"
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={save}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") save();
+          if (e.key === "Escape") setEditing(false);
+        }}
+        className="w-14 h-5 text-[10px] text-right border rounded px-1 bg-transparent shrink-0"
+        placeholder="$"
+      />
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        setDraft(dayPlace.cost_estimate != null ? String(dayPlace.cost_estimate) : "");
+        setEditing(true);
+      }}
+      className={`text-[10px] shrink-0 cursor-pointer hover:text-foreground transition-colors ${
+        dayPlace.cost_estimate != null ? "text-muted-foreground" : "text-muted-foreground/40"
+      }`}
+      title="Per-person cost estimate"
+    >
+      {dayPlace.cost_estimate != null ? `$${dayPlace.cost_estimate}` : "$+"}
+    </button>
+  );
+}
+
+const PROFILE_CYCLE: RoutingProfile[] = ["walking", "driving", "cycling"];
+const PROFILE_ICONS = { walking: Footprints, driving: Car, cycling: Bike } as const;
+
 function DayTimeline({
   day, dayIndex, tripId, days, totalDays,
   color, onSwapDay,
@@ -185,6 +268,22 @@ function DayTimeline({
     weekday: "short", day: "numeric", month: "short",
   });
 
+  // NF-08: per-day total (per person) from the rows currently shown.
+  const dayCost = localPlaces.reduce((s, dp) => s + (dp.cost_estimate ?? 0), 0);
+
+  // NF-07: cycle walking → driving → cycling; server refetch redraws the
+  // route line automatically via ["trip", tripId] invalidation.
+  const updateDay = useUpdateTripDay();
+  const profile: RoutingProfile = day.routing_profile ?? "walking";
+  const ProfileIcon = PROFILE_ICONS[profile];
+  function cycleProfile() {
+    const next = PROFILE_CYCLE[(PROFILE_CYCLE.indexOf(profile) + 1) % PROFILE_CYCLE.length];
+    updateDay.mutate(
+      { tripId, dayId: day.id, routing_profile: next },
+      { onError: () => toast.error("Couldn't change route mode") }
+    );
+  }
+
   return (
     <div className="mb-5">
       {/* Day header */}
@@ -199,6 +298,26 @@ function DayTimeline({
           <p className="text-sm font-semibold">Day {dayIndex + 1}</p>
           <p className="text-[10px] text-muted-foreground">{dateStr}</p>
         </div>
+        {dayCost > 0 && (
+          <span className="text-[10px] text-muted-foreground shrink-0" title="Day total (per person)">
+            ${Math.round(dayCost)}
+          </span>
+        )}
+        {localPlaces.length >= 2 && (
+          <button
+            type="button"
+            onClick={cycleProfile}
+            disabled={updateDay.isPending}
+            className="h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-accent cursor-pointer shrink-0 transition-colors"
+            title={`Route mode: ${profile} — click to change`}
+          >
+            {updateDay.isPending ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : (
+              <ProfileIcon className="h-3.5 w-3.5" />
+            )}
+          </button>
+        )}
         {route && (
           <div className="text-[10px] text-muted-foreground text-right shrink-0 mr-1">
             <p>{route.distance_km} km · {route.duration_min} min</p>
@@ -224,6 +343,11 @@ function DayTimeline({
           </button>
         </div>
       </div>
+
+      {/* AI-09: day theme + rationale (trip_days.notes, written by AI Plan) */}
+      {day.notes && (
+        <p className="text-[11px] text-muted-foreground italic pl-8 -mt-1 mb-1.5">{day.notes}</p>
+      )}
 
       {/* Places */}
       {localPlaces.length === 0 ? (
@@ -273,6 +397,209 @@ function DayTimeline({
         />
       )}
     </div>
+  );
+}
+
+// NF-08 (v1.22.0): party-size stepper — budget totals multiply by this.
+function PartySizeControl({ tripId, partySize }: { tripId: string; partySize: number }) {
+  const updateTrip = useUpdateTrip();
+
+  function step(delta: number) {
+    const next = Math.min(50, Math.max(1, partySize + delta));
+    if (next !== partySize)
+      updateTrip.mutate(
+        { tripId, party_size: next },
+        { onError: () => toast.error("Couldn't update party size") }
+      );
+  }
+
+  return (
+    <span className="inline-flex items-center gap-0.5 ml-1" title="Party size">
+      <button
+        type="button"
+        onClick={() => step(-1)}
+        disabled={partySize <= 1 || updateTrip.isPending}
+        className="h-3.5 w-3.5 flex items-center justify-center rounded text-muted-foreground hover:text-foreground disabled:opacity-20 cursor-pointer disabled:cursor-default"
+      >
+        <Minus className="h-2.5 w-2.5" />
+      </button>
+      <span className="inline-flex items-center gap-0.5">
+        <Users className="h-3 w-3" />
+        {partySize}
+      </span>
+      <button
+        type="button"
+        onClick={() => step(1)}
+        disabled={partySize >= 50 || updateTrip.isPending}
+        className="h-3.5 w-3.5 flex items-center justify-center rounded text-muted-foreground hover:text-foreground disabled:opacity-20 cursor-pointer disabled:cursor-default"
+      >
+        <Plus className="h-2.5 w-2.5" />
+      </button>
+    </span>
+  );
+}
+
+// AI-09 (v1.22.0): AI Plan entry — gated on ai-settings like every other
+// AI surface (hidden until enabled AND available).
+function AiPlanButton({
+  tripId, totalPlaces, days,
+}: {
+  tripId: string; totalPlaces: number; days: TripDay[];
+}) {
+  const [open, setOpen] = useState(false);
+  const [aiSettings, setAiSettings] = useState<{ enabled: boolean; available: boolean } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch("/api/user/ai-settings");
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled) setAiSettings(data);
+      } catch {
+        // Silent fail — the button just stays hidden.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  if (!aiSettings?.enabled || !aiSettings.available) return null;
+
+  return (
+    <>
+      <Button
+        variant="outline"
+        size="sm"
+        className="cursor-pointer text-xs border-emerald-200 dark:border-emerald-900 text-emerald-700 dark:text-emerald-400"
+        onClick={() => setOpen(true)}
+      >
+        <Sparkles className="h-3.5 w-3.5 mr-1" />
+        AI Plan
+      </Button>
+      {open && (
+        <AiPlanDialog tripId={tripId} totalPlaces={totalPlaces} days={days} open={open} onOpenChange={setOpen} />
+      )}
+    </>
+  );
+}
+
+function AiPlanDialog({
+  tripId, totalPlaces, days, open, onOpenChange,
+}: {
+  tripId: string; totalPlaces: number; days: TripDay[];
+  open: boolean; onOpenChange: (v: boolean) => void;
+}) {
+  const queryClient = useQueryClient();
+  const [includePool, setIncludePool] = useState(totalPlaces === 0);
+  // Prefill with the most common city among places already in the trip.
+  // (Plain object — `Map` is shadowed by the lucide icon import here.)
+  const defaultCity = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const d of days) {
+      for (const dp of d.places ?? []) {
+        const c = dp.place?.city;
+        if (c) counts[c] = (counts[c] ?? 0) + 1;
+      }
+    }
+    return Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "";
+  }, [days]);
+  const [city, setCity] = useState(defaultCity);
+
+  const plan = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/ai/trip-plan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          trip_id: tripId,
+          include_pool: includePool,
+          city: includePool && city.trim() ? city.trim() : undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "AI plan failed");
+      return data as { days: { day_number: number; theme: string; place_count: number }[]; placed: number; left_out: number };
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["trip", tripId] });
+      toast.success(`Planned ${data.days.length} days · ${data.placed} places${data.left_out ? ` (${data.left_out} left out)` : ""}`);
+      onOpenChange(false);
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const candidateNote = includePool
+    ? "Places already in the trip + your want-to-go places in the city below."
+    : "Only the places already in this trip.";
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-emerald-600" />
+            AI Plan
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 text-sm">
+          <p className="text-xs text-muted-foreground">
+            Distributes places across your {days.length} days by geography, theme and
+            opening days — with time slots and a short rationale per day.
+            Rewrites ALL day assignments (costs are kept). Uses 1 AI plan unit
+            (50/month).
+          </p>
+
+          <label className="flex items-start gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={includePool}
+              onChange={(e) => setIncludePool(e.target.checked)}
+              className="mt-0.5 accent-emerald-600"
+            />
+            <span className="text-xs">
+              Also pull from my <b>want-to-go</b> places
+              <span className="block text-muted-foreground mt-0.5">{candidateNote}</span>
+            </span>
+          </label>
+
+          {includePool && (
+            <Input
+              placeholder="City (e.g. Amsterdam)"
+              value={city}
+              onChange={(e) => setCity(e.target.value)}
+              className="h-9 text-sm"
+            />
+          )}
+
+          <div className="flex justify-end gap-2 pt-1">
+            <Button variant="outline" size="sm" className="cursor-pointer" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              className="cursor-pointer"
+              onClick={() => plan.mutate()}
+              disabled={plan.isPending || (includePool && !city.trim()) || (!includePool && totalPlaces < 2)}
+            >
+              {plan.isPending ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                  Planning…
+                </>
+              ) : (
+                "Generate plan"
+              )}
+            </Button>
+          </div>
+          {!includePool && totalPlaces < 2 && (
+            <p className="text-[11px] text-muted-foreground">
+              This trip has fewer than 2 places — enable the want-to-go pool or add places first.
+            </p>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -421,6 +748,12 @@ export default function TripDetailPage() {
 
   const days = trip.days || [];
   const totalPlaces = days.reduce((s, d) => s + (d.places?.length || 0), 0);
+  // NF-08: trip total = Σ per-person costs × party_size.
+  const perPersonTotal = days.reduce(
+    (s, d) => s + (d.places ?? []).reduce((ds, dp) => ds + (dp.cost_estimate ?? 0), 0),
+    0
+  );
+  const partySize = trip.party_size ?? 1;
 
   return (
     <div className="flex flex-col h-full">
@@ -438,6 +771,15 @@ export default function TripDetailPage() {
               <span className="mx-0.5">·</span>
               <MapPin className="h-3 w-3" />
               {totalPlaces}
+              {perPersonTotal > 0 && (
+                <>
+                  <span className="mx-0.5">·</span>
+                  <span title={`$${Math.round(perPersonTotal)}/person × ${partySize}`}>
+                    ≈ ${Math.round(perPersonTotal * partySize)}
+                  </span>
+                </>
+              )}
+              <PartySizeControl tripId={tripId} partySize={partySize} />
             </p>
           </div>
         </div>
@@ -446,6 +788,7 @@ export default function TripDetailPage() {
             disabled={createSharedLink.isPending} title="Share trip">
             {createSharedLink.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Share2 className="h-4 w-4" />}
           </Button>
+          <AiPlanButton tripId={tripId} totalPlaces={totalPlaces} days={days} />
           {totalPlaces > 0 && (
             <Button variant="outline" size="sm" className="cursor-pointer text-xs" onClick={handleAutoPlan} disabled={autoPlan.isPending}>
               {autoPlan.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Wand2 className="h-3.5 w-3.5 mr-1" />}

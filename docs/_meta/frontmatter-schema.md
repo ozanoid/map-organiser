@@ -2,8 +2,8 @@
 title: Frontmatter Schema
 type: meta
 domain: meta
-version: 1.0.0
-last_updated: 12.05.2026
+version: 1.1.0
+last_updated: 16.07.2026
 status: stable
 related:
   - "[[vault-guide]]"
@@ -63,6 +63,7 @@ The `domain` value answers "what area of the app does this concern":
 - `agent` — coding agent guidance
 - `overview` — system-wide
 - `places`, `trips`, `lists`, `sharing`, `users`, `geo` — domain areas
+- `ai` — AI features spanning domains (chat assistant, trip planner) — v1.22.0
 - `auth` — authentication
 - `backend` — Supabase, API routes, anything server-side
 - `frontend` — Next.js client

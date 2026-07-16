@@ -2,8 +2,8 @@
 title: Share Flow
 type: flow
 domain: sharing
-version: 1.2.0
-last_updated: 15.07.2026
+version: 1.3.0
+last_updated: 16.07.2026
 status: stable
 sources:
   - src/app/api/shared/route.ts
@@ -62,7 +62,11 @@ Owner clicks "Share" on a list, trip, or place detail page.
        │  • Branch by resource_type:
        │      — list: SELECT lists, list_places, places + categories
        │      — trip: SELECT trip, trip_days, trip_day_places, places + categories
-       │              + Mapbox getRoute per multi-stop day
+       │              + Mapbox getRoute per multi-stop day, using each day's
+       │                routing_profile (v1.22.0) — tracked as mapbox_directions
+       │                attributed to the link OWNER (their share, their quota)
+       │              payload strips cost_estimate/currency (per row) and
+       │                party_size (trip) — owner-private budget data (v1.22.0)
        │      — place (v1.20.0): SELECT single place + categories(name, color)
        │              payload is a WHITELIST of rendered fields only
        │              (no user_id / rating / visit_status / dates / source;
@@ -138,6 +142,7 @@ Same payload either way (step 5). The **Save** action requires auth — anonymou
 ## Privacy notes
 
 - The owner's `user_id`, email, and other profile fields are **not** in the response. Only `full_name` (as `ownerName`).
+- Trip budget data is owner-private (v1.22.0): `cost_estimate`/`currency` per stop and `party_size` are stripped from the public trip payload.
 - Save inserts new rows owned by the viewer — the owner's data is unchanged.
 - If the user disables the link, anyone with a cached URL gets 404 — but server logs may still show the access attempt.
 

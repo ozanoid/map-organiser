@@ -1,6 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
+import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { getRoute } from "@/lib/trip/directions";
+import { trackUsage } from "@/lib/google/track-usage";
 import { parsePostgisPoint } from "@/lib/geo";
 
 // GET /api/trips/[id] — trip detail with days, places, and route data
@@ -54,7 +56,13 @@ export async function GET(
 
       let route = null;
       if (placeCoords.length >= 2) {
-        route = await getRoute(placeCoords, "walking");
+        // NF-07 (v1.22.0): profile comes from trip_days.routing_profile.
+        route = await getRoute(placeCoords, day.routing_profile ?? "walking");
+        // after(): survive the serverless freeze that can drop a loose
+        // fire-and-forget increment.
+        after(() =>
+          trackUsage(user.id, "mapbox_directions", supabase).catch(() => {})
+        );
       }
 
       return { ...day, places, route };
@@ -72,6 +80,26 @@ export async function GET(
 }
 
 // PATCH /api/trips/[id] — update trip
+//
+// v1.22.0: the raw-body spread made every trips column client-writable
+// (user_id included); NF-08's party_size would have ridden the same
+// unvalidated path. Zod-whitelist per conventions.
+const TripPatchSchema = z
+  .object({
+    name: z.string().min(1).max(120).optional(),
+    start_date: z.iso.date().optional(),
+    end_date: z.iso.date().optional(),
+    color: z.string().max(20).optional(),
+    notes: z.string().max(5000).nullable().optional(),
+    party_size: z.number().int().min(1).max(50).optional(),
+    list_id: z.string().uuid().nullable().optional(),
+  })
+  .refine((b) => Object.keys(b).length > 0, { message: "Empty body" })
+  .refine(
+    (b) => !b.start_date || !b.end_date || b.end_date >= b.start_date,
+    { message: "end_date must not precede start_date" }
+  );
+
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -81,11 +109,14 @@ export async function PATCH(
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await params;
-  const body = await request.json();
+  const parsed = TripPatchSchema.safeParse(await request.json().catch(() => ({})));
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Invalid body" }, { status: 400 });
+  }
 
   const { data, error } = await supabase
     .from("trips")
-    .update({ ...body, updated_at: new Date().toISOString() })
+    .update({ ...parsed.data, updated_at: new Date().toISOString() })
     .eq("id", id)
     .eq("user_id", user.id)
     .select()

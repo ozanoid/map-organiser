@@ -2,8 +2,8 @@
 title: Mapbox
 type: integration
 domain: integrations
-version: 1.1.0
-last_updated: 13.05.2026
+version: 1.2.0
+last_updated: 16.07.2026
 status: stable
 sources:
   - src/components/map/map-view.tsx
@@ -62,20 +62,21 @@ Custom marker icons are rendered to canvas in `src/lib/map/category-icons.ts` an
 
 ### Directions API (server)
 
-`src/lib/trip/directions.ts` exports `getRoute(coords, profile)` — a thin wrapper around:
+`src/lib/trip/directions.ts` exports `getRoute(coords, profile, token?)` — a thin wrapper around:
 
 ```
 GET https://api.mapbox.com/directions/v5/mapbox/{profile}/{coords}
 ```
 
-- Default profile: walking (verify).
-- Returns: `{ distance, duration, geometry, legs }` (distance in meters, duration in seconds).
-- App converts to km/min and assigns to `TripDay.route`.
+- **Profile (NF-07, v1.22.0):** `RoutingProfile = "walking" | "driving" | "cycling"` — comes from `trip_days.routing_profile` (DB default `'walking'`; the union and the DB CHECK must stay in sync). The trip UI cycles it per day via `PATCH /api/trips/[id]/days/[dayId]`; the signature default is `"walking"`.
+- Max 25 waypoints (coords sliced).
+- Returns: `{ distance_km, duration_min, geometry: LineString, legs[] }` — already converted to km (1 decimal) / whole minutes inside the wrapper; assigned to `TripDay.route`.
+- Fail-soft: returns `null` on missing token, <2 coords, non-OK response, or fetch error.
 
-Called from:
+Called from (both pass `day.routing_profile ?? "walking"` and track usage):
 
-- `GET /api/trips/[id]` — once per trip day with ≥ 2 places.
-- `GET /api/shared/[slug]` when `resource_type = 'trip'` — same.
+- `GET /api/trips/[id]` — once per trip day with ≥ 2 places; `trackUsage(user.id, "mapbox_directions")`.
+- `GET /api/shared/[slug]` when `resource_type = 'trip'` — same, but the anonymous call is attributed to the link **owner** (`trackUsage(link.user_id, …)` — their share, their quota).
 
 ### Search Box API (server)
 
@@ -102,7 +103,7 @@ Mapbox public-key free tier:
 - **Search Box API (sessions):** 500 sessions / month free. Standard rate $11.50 / 1000 above the free tier.
 - **Search Box API (per-request `/reverse`):** 50,000 / month free. `/category` not used today.
 
-Directions calls are **not tracked** in `api_usage` (Mapbox dashboard only). **Search Box `retrieve` IS tracked** as `mapbox_search_session` for per-user cost visibility.
+**Directions calls ARE tracked since v1.22.0** — SKU `mapbox_directions` in `SKU_CONFIG` (`src/lib/google/track-usage.ts`: costPer1k **$2.00**, freeMonthly **100,000**), incremented at both `getRoute` call sites (shared-view calls attributed to the link owner). They were previously fully untracked: one call per multi-place day per trip-detail/shared view, recomputed on every GET — still no cache (v2). **Search Box `retrieve` is tracked** as `mapbox_search_session` for per-user cost visibility. (`mapbox_load` exists in `SKU_CONFIG` but has no `trackUsage` call site — GL JS loads are client-side; Mapbox dashboard only.)
 
 ## Failure modes
 

@@ -2,7 +2,7 @@
 title: "Feature Suggestions v4"
 type: plan
 domain: overview
-version: 4.7.0
+version: 4.8.0
 last_updated: 16.07.2026
 status: stable
 related:
@@ -103,9 +103,8 @@ v4 önerilerini v3'ten daha ucuz kılan, artık VAR olan altyapı:
 
 ## 0.4 Canlı durum (16.07.2026)
 
-- Production **sağlıklı**. **S0 (v1.15.0), Langfuse (v1.16.0), S1-PR1
-  (v1.17.0), S1-PR2 (v1.18.0), S2-PR1 (v1.19.0)** merge edildi —
-  `origin/main` = v1.19.0.
+- Production **sağlıklı**. **S0 (v1.15.0) → S3 (v1.21.0)** zinciri merge
+  edildi — `origin/main` = v1.21.0.
 - ✅ **S0 bakım** kapandı: PR #61 superseded, ESLint 10 fix, legacy
   `/api/places/import` kaldırıldı. `npm run lint` **0 error**.
 - ✅ **S1 (Tema 1 place detail v2) tamamlandı** — NF-01..06 hepsi + bonus
@@ -117,11 +116,17 @@ v4 önerilerini v3'ten daha ucuz kılan, artık VAR olan altyapı:
   (v1.20.0, 16.07 merge). Kritik review bulgusu: share-save orijinal
   okumaları RLS'e takılıyordu (Nisan'dan beri latent) — service-client
   fix + public place payload whitelist + reaktivasyon aynı PR'da.
-- 🟡 **S3 (Asistan, AI-02 v1)** — v1.21.0 PR'da, kullanıcı testi
-  bekliyor: /api/ai/chat (streamText agent loop, İLK streaming route),
-  7 tool (4 read-only + 3 onaylı mutasyon, v6 needsApproval akışı),
-  header ✨ paneli, ai_chat SKU (200 tur/ay, 1 birim/tur), session-only
-  memory. ai@6.0.228 + @ai-sdk/react@3.0.230 lockstep çifti eklendi.
+- ✅ **S3 (Asistan, AI-02 v1) kapandı** (v1.21.0, 16.07 merge):
+  /api/ai/chat (streamText agent loop, İLK streaming route), 7 tool
+  (4 read-only + 3 onaylı mutasyon, v6 needsApproval akışı), header ✨
+  paneli, ai_chat SKU (200 tur/ay, 1 birim/tur), session-only memory.
+  ai@6.0.228 + @ai-sdk/react@3.0.230 lockstep çifti eklendi.
+- 🟡 **S4 (Trip Intelligence)** — v1.22.0 PR'da, kullanıcı testi
+  bekliyor: NF-07 rota modu (routing_profile + gün başlığı toggle +
+  mapbox_directions SKU takibi), NF-08 bütçe (cost_estimate/currency +
+  party_size, inline edit + gün/trip toplamları, price_level tier
+  default'ları), AI-09 v1 (/api/ai/trip-plan — idx şema,
+  delete-after-validate, ai_trip_plan SKU 50/ay). 3 canlı migration.
 - Test yok; migrations dashboard-managed. Lint teknik borcu `warn`e çekildi
   (bkz. PART 4 #12). DataForSEO SKU cap borcu (PART 4 #13). Paylaşım linki
   iptal UI'ı yok (PATCH var, çağıran yok — PART 4 #14).
@@ -322,8 +327,8 @@ Karar noktaları:
 | **S0 — Bakım** ✅ | PR #61 (superseded) + ESLint 10 fix + legacy `/api/places/import` kaldırıldı (v1.15.0) | 1-2g | ✅ Yeşil CI, temiz lint (0 error) |
 | **S1 — Veriyi Göster** ✅ | Tema 1 (NF-01→06) + dinamik open-now — 2 PR (v1.17.0 + v1.18.0) | ~2 hafta | ✅ Place detail v2 |
 | **S2 — Karşılaştır & Kaydet** ✅ | Tema 2 (F-04 + AI compare, v1.19.0) + Tema 5 (saved filters + place share, v1.20.0 — bulk edit zaten vardı) | 1 gün (2 PR) | ✅ Profilleri işleten 2. feature + QoL paketi |
-| **S3 — Asistan** 🟡 | Tema 3 (AI-02 v1, session-memory) — v1.21.0 PR'da, test bekliyor | 1 gün (1 PR) | Chat ile mekan keşfi/aksiyonu |
-| **S4 — Trip Intelligence** | Tema 4 (AI-09 v1 + NF-07/08) | ~2 hafta | LLM destekli trip planlama |
+| **S3 — Asistan** ✅ | Tema 3 (AI-02 v1, session-memory, v1.21.0 merge) | 1 gün (1 PR) | ✅ Chat ile mekan keşfi/aksiyonu |
+| **S4 — Trip Intelligence** 🟡 | Tema 4 (AI-09 v1 + NF-07/08, v1.22.0 — PR'da, test bekliyor) | 1 gün (tek PR) | LLM destekli trip planlama + rota modu + bütçe |
 | **S5 — Growth & Platform kararı** | NF-16 onboarding + NF-09 templates; **F-23 iOS go/no-go karar dokümanı** | ~2 hafta | Çok-kullanıcıya hazırlık |
 | **Sürekli** | Tema 6 (S2'den itibaren paralel: kalite ajanı, re-profile, eval) | — | Veri sağlığı |
 
@@ -360,6 +365,7 @@ Effort/impact özeti (v3 matrisinin v4 revizyonu — sadece P1/P2):
 | 11 | **Review'lar tek seferlik** — refresh sonrası profil yenilenmiyor (manuel akış) | 🟡 | `refresh-google-data` → profile chain (grandfather planının 1. maddesi) |
 | 12 | **Lint teknik borcu** — 49 `@typescript-eslint/no-explicit-any` (eskiden ESLint crash'inin ardında gizliydi) + 28 `react-hooks/*` (eslint-plugin-react-hooks@7 React-Compiler kuralları: `set-state-in-effect`, `preserve-manual-memoization`, `refs`, `use-memo`, `purity`) | 🟡 `warn`e çekildi (v1.15.0) | Kademeli tüket; **yeni kod bu kurallara error gibi uymalı**. Downgrade `eslint.config.mjs` rules bloğunda, geri açılacak |
 | 14 | **Paylaşım linki iptal UI'ı yok** — `PATCH /api/shared` + `useToggleSharedLink` mevcut ama hiçbir yüzey çağırmıyor; deaktivasyon yalnız doğrudan API ile mümkün. Hafifletme (v1.20.0): yeniden paylaşım deaktive linki reaktive ediyor | 🟡 | Place/list/trip detayına "Sharing on/off" toggle'ı (küçük popover) — S3 veya ilk uygun PR |
+| 15 | **Public shared trip → canlı Directions** — her anonim GET, çok-mekanlı gün başına 1 Mapbox Directions çağrısı tetikler (cache yok, rate limit yok; v1.22.0 ile en azından SKU takibi var ve sahibine atfedilir). Bot döngüsü 100k/ay ücretsiz katmanı eritebilir | 🟡 | Gün-bazlı rota cache'i (örn. trip_days.route jsonb, mutasyonda hesapla) — S5 veya ilk uygun PR |
 
 ---
 

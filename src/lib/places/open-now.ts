@@ -130,3 +130,22 @@ export function isOpenNow(
 ): boolean | null {
   return openStatus(timetable, tz, now)?.open ?? null;
 }
+
+/**
+ * v1.22.0 (AI-09): is the place open AT ALL on the given calendar date?
+ * Day-granular (not point-in-time) — used to precompute per-trip-day
+ * open flags for the AI planner. The weekday comes straight from the ISO
+ * date (calendar day, tz-independent); {} / missing timetable → null
+ * (unknown ≠ closed), a listed-but-empty day → false.
+ */
+export function isOpenOnDate(
+  timetable: Timetable | undefined,
+  isoDate: string
+): boolean | null {
+  if (!timetable || Object.keys(timetable).length === 0) return null;
+  const d = new Date(`${isoDate}T12:00:00Z`);
+  if (Number.isNaN(d.getTime())) return null;
+  const key = DAY_KEYS[d.getUTCDay()];
+  const slots = timetable[key];
+  return Array.isArray(slots) && slots.length > 0;
+}
