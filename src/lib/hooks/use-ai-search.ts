@@ -149,9 +149,22 @@ export function useAiSearch() {
         const body = (await res.json().catch(() => ({}))) as { error?: string };
         throw new Error(body.error ?? "Failed to parse query");
       }
-      return (await res.json()) as ParseQueryOutput;
+      // Carry the minted trace id so onSuccess can detect staleness.
+      const out = (await res.json()) as ParseQueryOutput;
+      return { ...out, _tp: traceparent } as ParseQueryOutput & { _tp: string };
     },
     onSuccess: (data, query) => {
+      // Staleness guard (v1.23.0): if something replaced or cleared the
+      // trace context while this parse was in flight — a newer search,
+      // or an assistant push writing the store — this result belongs to
+      // an abandoned pipeline. Applying it would clobber the newer view.
+      if (
+        useAiSearchStore.getState().traceparent !==
+        (data as ParseQueryOutput & { _tp: string })._tp
+      ) {
+        orchLog("parse", "stale-result-skipped", { query });
+        return;
+      }
       orchLog("parse", "received", {
         query,
         hard: data.hard,

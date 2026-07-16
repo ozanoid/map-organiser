@@ -2,7 +2,7 @@
 title: Repo Structure
 type: overview
 domain: overview
-version: 1.6.0
+version: 1.7.0
 last_updated: 16.07.2026
 status: stable
 sources:
@@ -104,7 +104,7 @@ src/
 └── lib/
     ├── ai/                    AI SDK v6 wiring (Gemini 3 Flash). client.ts, context-builder.ts,
     │                          dedup.ts, normalize.ts, track-usage.ts (budgets), generate-profile.ts,
-    │                          chat-tools.ts (assistant tool belt, v1.21.0);
+    │                          chat-tools.ts (assistant tool belt, v1.21.0; +rank_places v1.23.0); rank-engine.ts (server-side LLM-as-judge twin, v1.23.0);
     │                          schemas/ (Zod — +compare.ts v1.19.0, +trip-plan.ts v1.22.0); prompts/ (place-profile-full.ts, compare.ts, chat.ts,
     │                          trip-plan.ts v1.22.0); extract/ (lite-profile.ts,
     │                          category-resolver.ts, features-extractor.ts,

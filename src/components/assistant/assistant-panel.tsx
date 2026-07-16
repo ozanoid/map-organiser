@@ -2,7 +2,12 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
+import { useAiSearchStore, HIDE_BELOW_SCORE } from "@/lib/stores/ai-search-store";
+import { filtersToQueryString } from "@/lib/hooks/use-filters";
+import type { PlaceFilters, VisitStatus } from "@/lib/types";
+import type { AppliedFilters } from "@/lib/ai/chat-tools";
 import { useChat, Chat } from "@ai-sdk/react";
 import {
   DefaultChatTransport,
@@ -35,6 +40,8 @@ import {
   Check,
   X,
   Star,
+  MapIcon,
+  LayoutList,
 } from "lucide-react";
 import type { ChatPlaceHit } from "@/lib/ai/chat-tools";
 
@@ -109,6 +116,7 @@ const MUTATION_INVALIDATIONS: Record<string, string[][]> = {
 
 const TOOL_LABELS: Record<string, { icon: typeof Search; label: string }> = {
   "tool-search_places": { icon: Search, label: "Searching your places" },
+  "tool-rank_places": { icon: Sparkles, label: "Judging matches semantically" },
   "tool-get_place_details": { icon: BookOpen, label: "Reading details" },
   "tool-compare_places": { icon: Scale, label: "Comparing places" },
   "tool-get_stats": { icon: BarChart3, label: "Crunching your stats" },
@@ -143,6 +151,7 @@ export function AssistantPanel({
     useChat({ chat });
   const [input, setInput] = useState("");
   const queryClient = useQueryClient();
+  const router = useRouter();
   const scrollRef = useRef<HTMLDivElement>(null);
   const invalidatedRef = useRef(new Set<string>());
 
@@ -195,6 +204,50 @@ export function AssistantPanel({
     sharedChat = null;
     invalidatedRef.current.clear();
     setChat(getSharedChat(userId));
+  }
+
+  /**
+   * v1.23.0 parity: push a tool result's full match set into the map or
+   * places view. Writes through the SAME ai-search-store the AI search
+   * bar uses, so the banner ("query + clear ✕"), card sort/hide, why
+   * lines and SaveFilterButton all work unchanged. requires_semantic_
+   * ranking is FALSE — rankings (when present) come from the rank tool,
+   * so the orchestrator must not fire a second rerank.
+   */
+  function pushToView(
+    target: "map" | "places",
+    applied: AppliedFilters,
+    opts?: { intent?: string; allRanked?: { id: string; score: number; why: string }[] }
+  ) {
+    const filters: PlaceFilters = {
+      city: applied.city ?? undefined,
+      country: applied.country ?? undefined,
+      category_ids: applied.category_ids ?? undefined,
+      tag_ids: applied.tag_ids ?? undefined,
+      list_id: applied.list_id ?? undefined,
+      visit_status: (applied.visit_status ?? undefined) as VisitStatus | undefined,
+      google_rating_min: applied.google_rating_min ?? undefined,
+      open_now: applied.open_now ?? undefined,
+      search: applied.search ?? undefined,
+      sort: "google_rating_desc",
+    };
+    const store = useAiSearchStore.getState();
+    if (opts?.allRanked?.length && opts.intent) {
+      store.applyParse({
+        semantic_intent: opts.intent,
+        requires_semantic_ranking: false,
+        needs_clarification: null,
+        query: opts.intent,
+        targetFilters: filters,
+      });
+      store.applyRankings(opts.allRanked);
+    } else {
+      // Hard-filter push: clear any stale AI-search state so old
+      // rankings don't reorder/hide the fresh result set.
+      store.reset();
+    }
+    router.push(`/${target}?${filtersToQueryString(filters)}`);
+    onOpenChange(false);
   }
 
   return (
@@ -252,6 +305,7 @@ export function AssistantPanel({
               key={message.id}
               message={message}
               addToolApprovalResponse={addToolApprovalResponse}
+              onPushView={pushToView}
             />
           ))}
 
@@ -322,12 +376,20 @@ export function AssistantPanel({
 
 type AnyPart = UIMessagePart<UIDataTypes, UITools>;
 
+type PushViewFn = (
+  target: "map" | "places",
+  applied: AppliedFilters,
+  opts?: { intent?: string; allRanked?: { id: string; score: number; why: string }[] }
+) => void;
+
 function MessageView({
   message,
   addToolApprovalResponse,
+  onPushView,
 }: {
   message: UIMessage;
   addToolApprovalResponse: (r: { id: string; approved: boolean }) => void;
+  onPushView: PushViewFn;
 }) {
   if (message.role === "user") {
     const text = message.parts
@@ -350,6 +412,7 @@ function MessageView({
           key={i}
           part={part}
           addToolApprovalResponse={addToolApprovalResponse}
+          onPushView={onPushView}
         />
       ))}
     </div>
@@ -359,9 +422,11 @@ function MessageView({
 function PartView({
   part,
   addToolApprovalResponse,
+  onPushView,
 }: {
   part: AnyPart;
   addToolApprovalResponse: (r: { id: string; approved: boolean }) => void;
+  onPushView: PushViewFn;
 }) {
   if (part.type === "text") {
     if (!part.text.trim()) return null;
@@ -430,7 +495,7 @@ function PartView({
     }
 
     case "output-available":
-      return <ToolResult type={part.type} output={part.output} />;
+      return <ToolResult type={part.type} output={part.output} onPushView={onPushView} />;
 
     case "output-denied":
       return (
@@ -451,7 +516,75 @@ function PartView({
   }
 }
 
-function ToolResult({ type, output }: { type: string; output: unknown }) {
+/** "Show all on map / as list" row under search/rank results. */
+function PushRow({
+  count,
+  onPush,
+}: {
+  count: number;
+  onPush: (target: "map" | "places") => void;
+}) {
+  if (count === 0) return null;
+  return (
+    <div className="flex gap-1.5 px-2 py-1.5 border-t bg-muted/30">
+      <button
+        type="button"
+        onClick={() => onPush("map")}
+        className="flex-1 inline-flex items-center justify-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 cursor-pointer transition-colors"
+      >
+        <MapIcon className="h-3 w-3" />
+        Show all on map ({count})
+      </button>
+      <button
+        type="button"
+        onClick={() => onPush("places")}
+        className="flex-1 inline-flex items-center justify-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 cursor-pointer transition-colors"
+      >
+        <LayoutList className="h-3 w-3" />
+        Show as list ({count})
+      </button>
+    </div>
+  );
+}
+
+function PlaceHitRows({ hits, showWhy }: { hits: (ChatPlaceHit & { why?: string })[]; showWhy?: boolean }) {
+  return (
+    <>
+      {hits.slice(0, 6).map((p) => (
+        <Link
+          key={p.id}
+          href={`/places/${p.id}`}
+          className="flex items-center gap-2 px-3 py-2 hover:bg-accent transition-colors"
+        >
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-medium truncate">{p.name}</p>
+            <p className="text-[10px] text-muted-foreground truncate">
+              {showWhy && p.why
+                ? p.why
+                : [p.category, p.city].filter(Boolean).join(" · ")}
+            </p>
+          </div>
+          {p.google_rating != null && (
+            <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground shrink-0">
+              <Star className="h-2.5 w-2.5 fill-amber-400 text-amber-400" />
+              {p.google_rating}
+            </span>
+          )}
+        </Link>
+      ))}
+    </>
+  );
+}
+
+function ToolResult({
+  type,
+  output,
+  onPushView,
+}: {
+  type: string;
+  output: unknown;
+  onPushView: PushViewFn;
+}) {
   const out = output as any;
 
   if (out && typeof out === "object" && "error" in out && out.error) {
@@ -465,30 +598,58 @@ function ToolResult({ type, output }: { type: string; output: unknown }) {
     if (hits.length === 0) return null;
     return (
       <div className="rounded-xl border divide-y overflow-hidden">
-        {hits.slice(0, 6).map((p) => (
-          <Link
-            key={p.id}
-            href={`/places/${p.id}`}
-            className="flex items-center gap-2 px-3 py-2 hover:bg-accent transition-colors"
-          >
-            <div className="min-w-0 flex-1">
-              <p className="text-xs font-medium truncate">{p.name}</p>
-              <p className="text-[10px] text-muted-foreground truncate">
-                {[p.category, p.city].filter(Boolean).join(" · ")}
-              </p>
-            </div>
-            {p.google_rating != null && (
-              <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground shrink-0">
-                <Star className="h-2.5 w-2.5 fill-amber-400 text-amber-400" />
-                {p.google_rating}
-              </span>
-            )}
-          </Link>
-        ))}
+        <PlaceHitRows hits={hits} />
         {(out?.total_matches ?? 0) > 6 && (
           <p className="px-3 py-1.5 text-[10px] text-muted-foreground">
             +{out.total_matches - 6} more
           </p>
+        )}
+        {out?.applied_filters && (
+          <PushRow
+            count={out.total_matches ?? hits.length}
+            onPush={(target) => onPushView(target, out.applied_filters)}
+          />
+        )}
+      </div>
+    );
+  }
+
+  // v1.23.0 parity: semantically ranked results — why-lines inline, and
+  // the push carries the FULL scored list so map/grid sort/hide/why all
+  // match what the AI search bar would have produced. `notice` marks a
+  // degraded (rating-order) result: rows + push still render.
+  if (type === "tool-rank_places") {
+    const hits: (ChatPlaceHit & { why?: string })[] = out?.places ?? [];
+    if (hits.length === 0 && !out?.notice) return null;
+    const ranked: { score: number }[] | undefined = out?.all_ranked;
+    // The pushed view hides judge-scored rows below the threshold —
+    // promise the count that will actually be visible.
+    const visibleCount = ranked
+      ? ranked.filter((r) => r.score >= HIDE_BELOW_SCORE).length
+      : out?.total_matches ?? hits.length;
+    return (
+      <div className="rounded-xl border divide-y overflow-hidden">
+        {out?.notice && (
+          <p className="px-3 py-1.5 text-[10px] text-muted-foreground italic">
+            {out.notice}
+          </p>
+        )}
+        <PlaceHitRows hits={hits} showWhy />
+        {visibleCount > 6 && (
+          <p className="px-3 py-1.5 text-[10px] text-muted-foreground">
+            +{visibleCount - 6} more · ranked semantically
+          </p>
+        )}
+        {out?.applied_filters && (
+          <PushRow
+            count={visibleCount}
+            onPush={(target) =>
+              onPushView(target, out.applied_filters, {
+                intent: out.semantic_intent,
+                allRanked: out.all_ranked,
+              })
+            }
+          />
         )}
       </div>
     );
