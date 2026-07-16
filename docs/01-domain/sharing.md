@@ -2,8 +2,8 @@
 title: Shared Link
 type: entity
 domain: sharing
-version: 1.1.0
-last_updated: 15.07.2026
+version: 1.2.0
+last_updated: 16.07.2026
 status: stable
 sources:
   - src/lib/hooks/use-shared-links.ts
@@ -25,6 +25,8 @@ related:
 # Shared Link
 
 > **v1.20.0 (NF-18):** `resource_type` widened to include `'place'` — single places are now shareable from the place detail header. The public place payload is a whitelist of rendered fields (no owner-personal data). Save-side fix: original content reads moved to the service client (owner-scoped RLS had blocked every cross-user save since April); re-sharing a deactivated resource reactivates the existing link.
+
+> **v1.22.0 (NF-07/NF-08):** the public trip payload now strips the owner's budget fields (`cost_estimate`/`currency` per stop, `party_size` on the trip), and per-day routes honour `trip_days.routing_profile`; the anonymous Directions call is tracked to the link owner's quota. See [[../02-backend/api-routes/shared]].
 
 A public, read-only slug URL pointing at one of the user's Lists, Trips, or single Places. The mechanism for sharing curated content without exposing the user's account. When viewed by a logged-in user, the page offers a "Save to my account" CTA that copies the resource into the viewer's data — the viral loop.
 

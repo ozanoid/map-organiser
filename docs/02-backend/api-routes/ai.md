@@ -2,7 +2,7 @@
 title: AI routes
 type: route-group
 domain: backend
-version: 1.6.0
+version: 1.7.0
 last_updated: 16.07.2026
 status: stable
 sources:
@@ -18,11 +18,16 @@ sources:
   - src/app/api/ai/chat/route.ts
   - src/lib/ai/chat-tools.ts
   - src/lib/ai/prompts/chat.ts
+  - src/app/api/ai/trip-plan/route.ts
+  - src/lib/ai/schemas/trip-plan.ts
+  - src/lib/ai/prompts/trip-plan.ts
 related:
   - "[[_README]]"
   - "[[../../01-domain/places]]"
+  - "[[../../01-domain/trips]]"
   - "[[../../04-integrations/gemini]]"
   - "[[../../05-flows/ai-search-flow]]"
+  - "[[../../05-flows/ai-trip-plan-flow]]"
   - "[[user]]"
 ---
 
@@ -35,9 +40,11 @@ the enrich background chain). Shipped in Phase 6 to support the AI-01
 natural-language filtering feature.
 
 A separate route group from `places/[id]/enrich?step=profile` (the Phase
-4 chained call) because these are **user-initiated, latency-sensitive,
-read-only** calls — they don't write to the DB, they don't fan out
-into background jobs.
+4 chained call) because these are **user-initiated, latency-sensitive**
+calls — they don't fan out into background jobs. Historically all
+read-only; since v1.22.0 `trip-plan` is the one writing exception
+(delete-after-validate rewrite of `trip_day_places` + `trip_days.notes`),
+and `chat`'s approval-gated tools also mutate.
 
 ## Routes
 
@@ -47,6 +54,7 @@ into background jobs.
 | `POST` | `/api/ai/rank-results` | LLM-as-judge rerank for queries with fuzzy semantic intent |
 | `POST` | `/api/ai/compare` | S2 F-04 (v1.19.0): per-theme winners + occasion picks for 2-4 places from stored profiles |
 | `POST` | `/api/ai/chat` | S3 AI-02 (v1.21.0): assistant agent loop — streamText + 7 tools, streaming UIMessage response |
+| `POST` | `/api/ai/trip-plan` | S4 AI-09 (v1.22.0): distribute candidate places across a trip's days — geo/theme grouping, time slots, per-day theme + rationale. The group's only WRITING route. |
 
 ## Shared gating
 
@@ -55,7 +63,7 @@ Every route in this group enforces four gates in order:
 1. **Auth.** `supabase.auth.getUser()` must return a user. Otherwise 401.
 2. **`profiles.ai_features_enabled = true`.** The master toggle. Otherwise 403.
 3. **`GOOGLE_GENERATIVE_AI_API_KEY` env var set.** Otherwise 503.
-4. **Monthly budget (kind varies per route: `search` for parse-query, `rank_backstop` for rank-results, `compare` for compare, `chat` for chat).** `checkAiBudget("search")`
+4. **Monthly budget (kind varies per route: `search` for parse-query, `rank_backstop` for rank-results, `compare` for compare, `chat` for chat, `trip_plan` for trip-plan).** `checkAiBudget("search")`
    (`src/lib/ai/track-usage.ts`) — 500 searches per calendar month, ONE
    budget unit per search: charged at `parse-query` (every search runs
    exactly one parse). `rank-results` is not budgeted separately — it
@@ -217,6 +225,20 @@ S3 AI-02 v1 (v1.21.0). The assistant agent loop — the group's only STREAMING r
 - **Response:** `result.toUIMessageStreamResponse()` — UIMessage stream consumed by `useChat`.
 - **Telemetry:** `propagateAttributes({traceName: "ai-chat", sessionId})` + functionId `ai.chat`; `sessionId` groups a conversation's turn traces in Langfuse. `export const maxDuration = 120` (multi-step turns; also bounds the flush).
 - **Consumer:** `AssistantPanel` (header ✨ launcher) — see [[../../05-flows/ai-chat-flow]].
+
+## `POST /api/ai/trip-plan`
+
+S4 AI-09 v1 (v1.22.0). Distributes candidate places across a trip's existing days with the LLM: geography-first grouping, per-stop `time_slot` (morning/afternoon/evening/night) + optional note, per-day theme + rationale persisted to `trip_days.notes`. **Augments** the k-means auto-plan, does not replace it — same trip entity, same days, richer ordering + persisted reasoning. End-to-end flow: [[../../05-flows/ai-trip-plan-flow]].
+
+- **Body:** `{ trip_id: uuid, include_pool?: boolean (default false), city?: string }` (Zod).
+- **Gates:** standard 4-gate skeleton (auth → `after(flushLangfuse)` → `ai_features_enabled` → client → **budget `trip_plan`**: SKU `ai_trip_plan`, cap `AI_MONTHLY_TRIP_PLAN_CAP = 50`/month → 429).
+- **Candidates:** places already in the trip, plus (when `include_pool && city`) the user's `want_to_go` pool for that city via the shared `queryPlaces()` engine, sorted `google_rating_desc`. Deduped by place id, **capped at `MAX_CANDIDATES = 40`** (in-trip places take priority). `400` if fewer than 2 candidates or the trip has no days.
+- **Input to the LLM:** a compact projection per candidate (~350 tokens — name, category, coords, rating, price_level, tldr, occasions/atmosphere tags, `in_trip` flag), never full profiles or raw `popular_times`. Open/closed per trip day is **precomputed server-side** via the new `isOpenOnDate(work_timetable, isoDate)` helper (`src/lib/places/open-now.ts`, day-granular, unknown ≠ closed) — the LLM sees ready ✓/✗/? flags instead of raw timetables.
+- **Output schema:** `TripPlanSchema` (`src/lib/ai/schemas/trip-plan.ts`) — candidates referenced by **idx** into the request array (the v1.8.5 lesson: LLMs echo indices reliably, hallucinate UUIDs). Same resilience idioms as compare: arrays CLAMP via preprocess (days ≤ 14, stops ≤ 12/day, tips ≤ 3 — the Google provider strips minItems/maxItems), `idx` uses parseInt+NaN-guard. Post-parse sanitize: invalid day_numbers dropped, out-of-range/duplicate idx dropped (first occurrence wins — a place lands in ONE day), empty days dropped.
+- **Write safety (delete-after-validate):** nothing is deleted until the LLM output is parsed AND sanitized. LLM failure or an all-empty plan → 502 with "your trip was not modified" — the unit still burns (compare precedent) but the trip is untouched. Then: DELETE all `trip_day_places` for the trip, INSERT per plan day. `cost_estimate`/`currency` carried by `place_id` for rows that already lived in the trip; pool entrants get `defaultCostEstimate` price_level defaults. `trip_days.notes` set to `"{theme} — {rationale}"`.
+- **Response:** `{ success: true, days: [{ day_number, theme, place_count }], placed, left_out, tips }`.
+- **Telemetry:** `propagateAttributes({traceName: "ai-trip-plan"})` + functionId `ai.trip-plan` (tripId/candidates/days/includePool metadata); events `ai.trip-plan` / `ai.trip-plan failed`.
+- **Consumer:** `AiPlanButton` + `AiPlanDialog` in the trip header (`src/app/(app)/trips/[id]/page.tsx`) — gated on `/api/user/ai-settings` (hidden unless enabled AND available), deliberate-click only; dialog pre-fills the pool city from the trip's most common place city.
 
 ## Common helpers
 

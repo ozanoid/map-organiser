@@ -1,7 +1,44 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { parsePostgisPoint } from "@/lib/geo";
 import { getRoute } from "@/lib/trip/directions";
+import { trackUsage } from "@/lib/google/track-usage";
+
+/**
+ * v1.22.0: EVERY place embedded in a public payload goes through this
+ * whitelist — not just the single-place share. The service client
+ * bypasses RLS, and a full `places(*)` passthrough leaks owner-personal
+ * fields (user_id, visit_status, timestamps, source) plus the sensitive
+ * google_data bulk (reviews, place_profile, work_timetable). Worse, a
+ * foreign place attached to a trip (place-ownership gaps) would leak the
+ * VICTIM's row. Keep in sync with what SharedListView/SharedTripView/
+ * SharedPlaceView actually render.
+ */
+function publicPlaceProjection(p: any) {
+  if (!p) return null;
+  const gd = p.google_data ?? {};
+  return {
+    id: p.id,
+    name: p.name,
+    address: p.address ?? null,
+    city: p.city ?? null,
+    country: p.country ?? null,
+    notes: p.notes ?? null,
+    rating: p.rating ?? null,
+    category: p.category
+      ? { name: p.category.name, color: p.category.color }
+      : null,
+    location: p.location ? parsePostgisPoint(p.location) : { lat: 0, lng: 0 },
+    google_data: {
+      photo_storage_url: gd.photo_storage_url ?? null,
+      rating: gd.rating ?? null,
+      user_ratings_total: gd.user_ratings_total ?? null,
+      opening_hours: gd.opening_hours ?? null,
+      website: gd.website ?? null,
+      url: gd.url ?? null,
+    },
+  };
+}
 
 // GET /api/shared/[slug] — public, no auth required
 export async function GET(
@@ -128,13 +165,10 @@ async function handleListShare(supabase: any, link: any, ownerName: string) {
       .in("id", placeIds);
 
     if (rawPlaces) {
-      // Sort by list order and parse PostGIS
+      // Sort by list order; project through the public whitelist.
       const orderMap = new Map<string, number>(listPlaces.map((lp: any) => [lp.place_id, lp.sort_order ?? 0]));
       places = rawPlaces
-        .map((p: any) => ({
-          ...p,
-          location: p.location ? parsePostgisPoint(p.location) : { lat: 0, lng: 0 },
-        }))
+        .map((p: any) => publicPlaceProjection(p))
         .sort((a: any, b: any) => (orderMap.get(a.id) ?? 0) - (orderMap.get(b.id) ?? 0));
     }
   }
@@ -176,12 +210,16 @@ async function handleTripShare(supabase: any, link: any, ownerName: string) {
         .eq("trip_day_id", day.id)
         .order("sort_order", { ascending: true });
 
-      const places = (dayPlaces || []).map((dp: any) => ({
-        ...dp,
-        place: dp.place
-          ? { ...dp.place, location: dp.place.location ? parsePostgisPoint(dp.place.location) : { lat: 0, lng: 0 } }
-          : null,
-      }));
+      // NF-08 (v1.22.0): cost_estimate/currency are the owner's private
+      // budget planning — never in the public payload; and the embedded
+      // place row goes through the same whitelist as every public place.
+      const places = (dayPlaces || []).map((dp: any) => {
+        const { cost_estimate: _c, currency: _cur, ...rest } = dp;
+        return {
+          ...rest,
+          place: publicPlaceProjection(dp.place),
+        };
+      });
 
       // Get route
       const coords = places
@@ -190,19 +228,30 @@ async function handleTripShare(supabase: any, link: any, ownerName: string) {
 
       let route = null;
       if (coords.length >= 2) {
-        route = await getRoute(coords, "walking");
+        // NF-07 (v1.22.0): honour the day's routing_profile on the public
+        // view too; the anonymous Directions call is attributed to the
+        // link OWNER (their share, their quota).
+        route = await getRoute(coords, day.routing_profile ?? "walking");
+        // after(): a loose fire-and-forget can be frozen with the
+        // serverless instance before the RPC settles.
+        after(() =>
+          trackUsage(link.user_id, "mapbox_directions", supabase).catch(() => {})
+        );
       }
 
       return { ...day, places, route };
     })
   );
 
+  // party_size is owner-private budget context — strip from public view.
+  const { party_size: _ps, ...publicTrip } = trip;
+
   return NextResponse.json({
     type: "trip",
     slug: link.slug,
     ownerName,
     trip: {
-      ...trip,
+      ...publicTrip,
       days: enrichedDays,
       day_count: enrichedDays.length,
       place_count: enrichedDays.reduce((s: number, d: any) => s + (d.places?.length || 0), 0),

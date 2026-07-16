@@ -61,6 +61,15 @@ export async function POST(
   // Run auto-plan algorithm
   const planned = autoPlanTrip(places, days.length);
 
+  // NF-08 (v1.22.0): the rewrite below is delete+insert — snapshot each
+  // place's row fields first so user-entered costs/time slots/notes
+  // survive re-planning (they were silently destroyed before).
+  const { data: oldRows } = await supabase
+    .from("trip_day_places")
+    .select("place_id, cost_estimate, currency, time_slot, notes")
+    .in("trip_day_id", dayIds);
+  const carryByPlace = new Map((oldRows ?? []).map((r) => [r.place_id, r]));
+
   // Clear existing placements
   await supabase.from("trip_day_places").delete().in("trip_day_id", dayIds);
 
@@ -70,11 +79,18 @@ export async function POST(
     if (!day || plan.places.length === 0) continue;
 
     await supabase.from("trip_day_places").insert(
-      plan.places.map((place, i) => ({
-        trip_day_id: day.id,
-        place_id: place.id,
-        sort_order: i,
-      }))
+      plan.places.map((place, i) => {
+        const carry = carryByPlace.get(place.id);
+        return {
+          trip_day_id: day.id,
+          place_id: place.id,
+          sort_order: i,
+          cost_estimate: carry?.cost_estimate ?? null,
+          currency: carry?.currency ?? "USD",
+          time_slot: carry?.time_slot ?? null,
+          notes: carry?.notes ?? null,
+        };
+      })
     );
   }
 

@@ -2,7 +2,7 @@
 title: Repo Structure
 type: overview
 domain: overview
-version: 1.5.0
+version: 1.6.0
 last_updated: 16.07.2026
 status: stable
 sources:
@@ -81,8 +81,9 @@ src/
 │   ├── offline/page.tsx       PWA offline fallback
 │   └── api/                   Route handlers (see [[../02-backend/api-routes/_README]])
 │       ├── places/            CRUD + bulk + enrich (info/reviews/profile) + refresh-google-data (merge + profile chain) + import + parse-link (returns lite_profile) + migrate-photos
+│       ├── ai/                parse-query + rank-results (Phase 6) + compare (v1.19.0) + chat (v1.21.0, streaming) + trip-plan (v1.22.0, writes trip tables)
 │       ├── cron/              refresh-places — daily periodic-refresh sweep (CRON_SECRET, service-role, opt-in per user)
-│       ├── trips/             CRUD + auto-plan + day reorder + day places + swap-days
+│       ├── trips/             CRUD + auto-plan + day PATCH (routing_profile/notes, v1.22.0) + day reorder + day places (move/update shapes) + swap-days
 │       ├── lists/[id]/reorder
 │       ├── subcategories/     CRUD (per-user; default seed via signup trigger)
 │       ├── shared/            Create + public-read + save-to-account
@@ -104,18 +105,21 @@ src/
     ├── ai/                    AI SDK v6 wiring (Gemini 3 Flash). client.ts, context-builder.ts,
     │                          dedup.ts, normalize.ts, track-usage.ts (budgets), generate-profile.ts,
     │                          chat-tools.ts (assistant tool belt, v1.21.0);
-    │                          schemas/ (Zod — +compare.ts v1.19.0); prompts/ (place-profile-full.ts, compare.ts, chat.ts); extract/ (lite-profile.ts,
+    │                          schemas/ (Zod — +compare.ts v1.19.0, +trip-plan.ts v1.22.0); prompts/ (place-profile-full.ts, compare.ts, chat.ts,
+    │                          trip-plan.ts v1.22.0); extract/ (lite-profile.ts,
     │                          category-resolver.ts, features-extractor.ts,
     │                          suggestions-from-profile.ts); apply-suggestions.ts.
     ├── places/                refresh-google-data.ts — service-client-safe full re-lookup + review merge (shared by refresh route + cron);
-    │                          open-now.ts (tz-aware render-time isOpenNow, v1.18.0); attribute-icons.ts (NF-04 group/icon map);
+    │                          open-now.ts (tz-aware render-time isOpenNow, v1.18.0; +day-granular isOpenOnDate for the AI trip planner, v1.22.0);
+    │                          attribute-icons.ts (NF-04 group/icon map);
     │                          query-places.ts + user-stats.ts (v1.21.0 — extracted route engines shared with chat tools)
     ├── dataforseo/            DataForSEO client + types + adapters + transform (mergeReviews) + reviews + photo
     ├── google/                Google Places + URL parser + category mapping + Takeout parser + usage tracker + key access
     ├── hooks/                 React Query hooks (16 files): useAiSearch, useAiSuggestions, useBackfillProfiles, useCategories, useDebounce, useFilters, useLists, useMapStyle, usePlaceSearch, usePlaces, useSavedFilters, useSharedLinks, useStats, useSubcategories, useTags, useTrips
     ├── stores/                Zustand stores (currently just import-store.ts)
     ├── map/                   category-icons.ts (canvas marker rendering)
-    ├── trip/                  auto-plan.ts (k-means clustering), directions.ts (Mapbox wrapper)
+    ├── trip/                  auto-plan.ts (k-means clustering), directions.ts (Mapbox wrapper, RoutingProfile param v1.22.0),
+    │                          cost-defaults.ts (price_level → per-person USD defaults, v1.22.0)
     ├── supabase/              client.ts (browser), server.ts (+ createServiceClient), middleware.ts (updateSession)
     ├── telemetry/             logger.ts (dual-write log.*), trace-context.ts (W3C traceparent mint),
     │                          langfuse.ts (LangfuseSpanProcessor singleton + flushLangfuse) — see [[../05-flows/observability-flow]]
@@ -177,7 +181,7 @@ Counts (approximate, as of `last_updated`):
 | Area | Files |
 |---|---|
 | App routes (`src/app/**/page.tsx`) | 12 page files |
-| API route handlers (`src/app/api/**/route.ts`) | ~36 routes (added: 4 subcategories + 5 user/ai-* + step=profile branch + 2 `/api/ai/*` + `/api/cron/refresh-places`) |
+| API route handlers (`src/app/api/**/route.ts`) | 40 routes (v1.22.0 added `/api/ai/trip-plan` + `/api/trips/[id]/days/[dayId]`) |
 | Feature components (`src/components/{assistant,filters,layout,map,places,settings}`) | ~27 |
 | shadcn UI (`src/components/ui/`) | 19 primitives |
 | Custom hooks (`src/lib/hooks/`) | 16 (v1.20.0 added: useSavedFilters) |

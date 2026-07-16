@@ -2,7 +2,7 @@
 title: AI Enrichment Flow
 type: flow
 domain: places
-version: 1.5.0
+version: 1.6.0
 last_updated: 16.07.2026
 status: stable
 sources:
@@ -100,11 +100,12 @@ lite profile at save time, full profile in the background minutes later.
 
 ## Cost cap
 
-`step=profile` — and the AI-search routes `parse-query` / `rank-results` —
-are gated by TWO per-user monthly budgets (`checkAiBudget` in
+`step=profile` — and every interactive `/api/ai/*` route — is gated by
+a per-user monthly budget (`checkAiBudget` in
 `src/lib/ai/track-usage.ts`; calendar month UTC, resets on the 1st;
-introduced 15.07.2026 after the Gemini 3 price verification — searches
-dominate cost):
+the search/profile pair introduced 15.07.2026 after the Gemini 3 price
+verification — searches dominate cost — with compare/chat/trip_plan
+buckets added as those features shipped):
 
 - **SEARCH — `AI_MONTHLY_SEARCH_CAP = 500` searches.** One search burns
   ONE budget unit regardless of LLM call count: the unit is charged at
@@ -119,12 +120,18 @@ dominate cost):
   `onFinish` — an approval-continuation POST is free; `stopWhen:
   stepCountIs(6)` bounds in-turn LLM fan-out. See
   [[ai-chat-flow]].
+- **TRIP PLAN — `AI_MONTHLY_TRIP_PLAN_CAP = 50` generations** (v1.22.0,
+  S4 AI-09, SKU `ai_trip_plan`). One unit per `/api/ai/trip-plan`
+  generation; deliberate-click only from the trip page's AI Plan dialog.
+  A failed/unusable LLM output still burns the unit (compare precedent)
+  but the delete-after-validate write order leaves the trip untouched.
+  See [[ai-trip-plan-flow]].
 - **PROFILE — `AI_MONTHLY_PROFILE_CAP = 1000` generations.** Covers the
   add-place chain, manual refresh chain, backfill, and the cron sweep
   together. Ceiling ≈ $9.5/month. A full ~470-place backfill fits within
   a single month alongside normal usage.
 
-Both fail open (a tracking outage must never 429 a legitimate request).
+All buckets fail open (a tracking outage must never 429 a legitimate request).
 - It **fails open**: if the cap check itself errors, the request proceeds.
   A tracking-table outage must never 429 a legitimate request.
 - `step=info` / `step=reviews` are **not** capped — they are DataForSEO,

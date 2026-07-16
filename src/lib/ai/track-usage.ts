@@ -57,6 +57,14 @@ export const AI_SKU_CONFIG = {
     costPer1k: 15.0,
     freeMonthly: 0,
   },
+  // v1.22.0 (S4 AI-09): one unit = one trip-plan generation. Input is a
+  // compact projection of up to ~40 candidates (~350 tok each) + trip
+  // frame ≈ 15-20k tokens ≈ $0.012/plan.
+  ai_trip_plan: {
+    name: "AI Trip Plan",
+    costPer1k: 12.0,
+    freeMonthly: 0,
+  },
 } as const;
 
 export type AiSku = keyof typeof AI_SKU_CONFIG;
@@ -113,13 +121,17 @@ export const AI_MONTHLY_COMPARE_CAP = 200;
  *  onFinish; an approval-continuation POST does NOT burn a second unit).
  *  The stopWhen step ceiling in the chat route bounds per-turn fan-out. */
 export const AI_MONTHLY_CHAT_CAP = 200;
+/** v1.22.0 (S4 AI-09) — one unit per plan generation; deliberate-click
+ *  only from the trip page's AI Plan dialog. */
+export const AI_MONTHLY_TRIP_PLAN_CAP = 50;
 
 export type AiBudgetKind =
   | "search"
   | "profile"
   | "rank_backstop"
   | "compare"
-  | "chat";
+  | "chat"
+  | "trip_plan";
 
 const BUDGETS: Record<AiBudgetKind, { sku: AiSku; cap: number }> = {
   search: { sku: "ai_parse_query", cap: AI_MONTHLY_SEARCH_CAP },
@@ -127,6 +139,7 @@ const BUDGETS: Record<AiBudgetKind, { sku: AiSku; cap: number }> = {
   rank_backstop: { sku: "ai_rank_results", cap: AI_MONTHLY_RANK_BACKSTOP },
   compare: { sku: "ai_compare", cap: AI_MONTHLY_COMPARE_CAP },
   chat: { sku: "ai_chat", cap: AI_MONTHLY_CHAT_CAP },
+  trip_plan: { sku: "ai_trip_plan", cap: AI_MONTHLY_TRIP_PLAN_CAP },
 };
 
 export interface AiCapStatus {

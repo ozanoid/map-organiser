@@ -2,7 +2,7 @@
 title: Google Gemini (LLM)
 type: integration
 domain: integrations
-version: 1.7.0
+version: 1.8.0
 last_updated: 16.07.2026
 status: stable
 sources:
@@ -107,6 +107,7 @@ The output is Zod-validated at the SDK boundary, so route code can treat it as a
 | `POST /api/ai/compare` (S2 F-04, v1.19.0) | Per-theme winners + occasion picks for 2-4 places from stored profiles. | Deliberate click on /places/compare | ~2-5 s | `ai_compare` |
 | `POST /api/ai/rank-results` (Phase 6) | LLM-as-judge rerank against `place_profile.searchable_summary` when `requires_semantic_ranking` is set. | Conditional — only when the query has fuzzy intent | ~1–2 s | `ai_rank_results` |
 | `POST /api/ai/chat` (S3 AI-02, v1.21.0) | Assistant agent loop: `streamText` + 7 tools (search/details/compare/stats + approval-gated add_to_list/create_list/set_visit_status), `stopWhen: stepCountIs(6)`. | Per chat turn (assistant panel) | streaming; 2-15 s/turn | `ai_chat` (1 unit per TURN, charged in onFinish; approval continuations free) |
+| `POST /api/ai/trip-plan` (S4 AI-09, v1.22.0) | AI trip planner: distributes ≤40 candidate places across trip days (idx-referenced `TripPlanSchema`, delete-after-validate write). Input ≈ 15-20k tokens (compact ~350-tok/candidate projection + trip frame). | Deliberate click on the trip page's AI Plan dialog | ~3-8 s | `ai_trip_plan` (1 unit per generation, burned even on LLM failure — but the trip stays untouched) |
 
 Phase 6 splits AI calls into two groups by behaviour: **background** (`enrich?step=profile` — fire-and-forget, latency-tolerant) and **interactive** (`/api/ai/*` — user is waiting). All share `getAiClient()` / `FLASH_MODEL`; structured calls use Output.object, the chat route streams. They differ only in error handling and observability expectations.
 
@@ -121,11 +122,21 @@ Gemini 3 Flash Preview pricing (verified 15.07.2026, ai.google.dev, standard tie
 
 - Input: ~7–14K tokens (user context + ≤50 reviews × ≤1000 chars + system prompt) → ~\$0.004–0.007
 - Output: ~1–2K tokens (PlaceProfile JSON) → ~\$0.003–0.006
-- **Total: ~\$0.008–0.012 per place_profile.** `AI_SKU_CONFIG` values updated accordingly (profile \$9.5/1k, rank \$20/1k, parse \$0.70/1k, compare \$9.5/1k, chat \$15/1k — a fixed average-turn estimate since increment_api_usage freezes cost_per_1k at the first daily insert).
+- **Total: ~\$0.008–0.012 per place_profile.** `AI_SKU_CONFIG` values updated accordingly (profile \$9.5/1k, rank \$20/1k, parse \$0.70/1k, compare \$9.5/1k, chat \$15/1k — a fixed average-turn estimate since increment_api_usage freezes cost_per_1k at the first daily insert — and trip_plan \$12/1k, v1.22.0: ~15-20k input tokens ≈ \$0.012/plan).
 
 Free tier: 15 RPM / 1M TPM (verify in AI Studio). Beyond that, paid quota. At our usage scale (a few hundred profiles + occasional regenerations), the monthly cost stays under \$2.
 
-**Per-user monthly budgets** (`checkAiBudget`, `src/lib/ai/track-usage.ts`): **search** = 500 searches/month (one unit per search, charged at `parse-query`; `rank-results` rides free behind a 3× runaway backstop) ≈ \$10.5/month ceiling; **compare** = 200 runs/month (v1.19.0, one unit per /api/ai/compare); **chat** = 200 turns/month (v1.21.0, `AI_MONTHLY_CHAT_CAP` — one unit per TURN charged in onFinish, approval continuations free, `stopWhen: stepCountIs(6)` bounds in-turn fan-out); **profile** = 1000 generations/month across the add-chain, refresh, backfill, and cron ≈ \$9.5/month ceiling (a full ~470-place backfill fits in one month). Over budget the route returns **429** before calling Gemini; resets on the 1st (UTC). Fails open; unrelated to Gemini's own RPM quota. See [[../05-flows/ai-enrichment-flow#cost-cap]].
+**Per-user monthly budgets** (`checkAiBudget`, `src/lib/ai/track-usage.ts`): **search** = 500 searches/month (one unit per search, charged at `parse-query`; `rank-results` rides free behind a 3× runaway backstop) ≈ \$10.5/month ceiling; **compare** = 200 runs/month (v1.19.0, one unit per /api/ai/compare); **chat** = 200 turns/month (v1.21.0, `AI_MONTHLY_CHAT_CAP` — one unit per TURN charged in onFinish, approval continuations free, `stopWhen: stepCountIs(6)` bounds in-turn fan-out); **trip_plan** = 50 generations/month (v1.22.0, `AI_MONTHLY_TRIP_PLAN_CAP` — one unit per plan, deliberate-click only from the trip page's AI Plan dialog; a failed generation still burns the unit but never touches the trip) ≈ \$0.6/month ceiling; **profile** = 1000 generations/month across the add-chain, refresh, backfill, and cron ≈ \$9.5/month ceiling (a full ~470-place backfill fits in one month). Over budget the route returns **429** before calling Gemini; resets on the 1st (UTC). Fails open; unrelated to Gemini's own RPM quota.
+
+> **⚠️ Thinking-mode pathology (16.07.2026, empirically verified):** on
+> `gemini-3-flash-preview`, the trip-plan call degenerated with DEFAULT
+> settings — responseSchema + thinking produced repetition loops (60k-token
+> runaways); schema-less + thinking produced broken JSON on 2/3 runs.
+> `structuredOutputs: false` + `thinkingConfig: { thinkingBudget: 0 }`
+> yields 4/4 clean runs at ~4s / ~640 output tokens (prompt carries a JSON
+> template; zod validates server-side). If another nested-schema call
+> misbehaves, run the same 4-variant matrix before blaming the schema —
+> see `api/ai/trip-plan/route.ts` TRIP_PLAN_PROVIDER_OPTIONS. See [[../05-flows/ai-enrichment-flow#cost-cap]].
 
 ## Prompt strategy
 
@@ -152,7 +163,7 @@ If we ever add a second provider (Claude/OpenAI for ranking, vision, etc.), revi
 | Symptom | Cause | Recovery |
 |---|---|---|
 | Route returns `{ ok: false, reason: "ai_disabled" }` 503 | `GOOGLE_GENERATIVE_AI_API_KEY` not set | Add the env var in Vercel → redeploy. Settings AI tab also shows the "not configured" banner. |
-| Route returns 429 | User spent a monthly AI budget (search 500 / profile 1000) | Expected — resets on the 1st (UTC). An app-level guard, not a Gemini rate limit. |
+| Route returns 429 | User spent a monthly AI budget (search 500 / profile 1000 / compare 200 / chat 200 / trip_plan 50) | Expected — resets on the 1st (UTC). An app-level guard, not a Gemini rate limit. |
 | Route returns 500 with "LLM generation failed" | Provider 5xx, rate limit, or schema validation failure | Retry from `AiSummaryCard` refresh button. Persistent failure → check Vercel logs for the underlying error. |
 | AI Summary card stays in skeleton state | Reviews not yet present OR profile hasn't been generated (pre-Phase-4 place) | If reviews exist, click "Generate" in the skeleton header. If not, wait for `step=reviews` to finish (~30 s on a fresh paste). |
 | Profile generated but tags/sub-cats not applied | `ai_features_enabled = false` on the profile, OR LLM proposed entities outside the 4-band threshold | Toggle AI on in Settings → AI; pending proposals queue up. |

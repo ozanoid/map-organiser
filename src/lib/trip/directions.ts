@@ -1,3 +1,5 @@
+import type { RoutingProfile } from "@/lib/types";
+
 interface RouteResult {
   distance_km: number;
   duration_min: number;
@@ -6,12 +8,14 @@ interface RouteResult {
 }
 
 /**
- * Get walking/driving route between ordered coordinates via Mapbox Directions API.
- * Requires at least 2 coordinates.
+ * Get walking/driving/cycling route between ordered coordinates via
+ * Mapbox Directions API. Requires at least 2 coordinates. Profile comes
+ * from trip_days.routing_profile (NF-07, v1.22.0) — DB CHECK and this
+ * union must stay in sync.
  */
 export async function getRoute(
   coordinates: [number, number][], // [lng, lat] pairs
-  profile: "walking" | "driving" = "walking",
+  profile: RoutingProfile = "walking",
   token?: string
 ): Promise<RouteResult | null> {
   if (coordinates.length < 2) return null;

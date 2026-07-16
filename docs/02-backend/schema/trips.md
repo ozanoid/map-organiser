@@ -2,8 +2,8 @@
 title: trips
 type: table
 domain: backend
-version: 1.0.0
-last_updated: 12.05.2026
+version: 1.1.0
+last_updated: 16.07.2026
 status: stable
 sources:
   - Supabase project hukppmaevcapvbrvxtph (live)
@@ -16,6 +16,8 @@ related:
 ---
 
 # `trips`
+
+> **v1.22.0 (NF-08):** new `party_size` column (migration `add_trips_party_size`) — the trip header's budget total is `Σ per-person cost_estimate × party_size`, adjustable via a stepper in the UI. Stripped from the public share payload (owner-private). Alongside it, `PATCH /api/trips/[id]` switched from a raw-body spread (every column client-writable, `user_id` included) to a Zod whitelist.
 
 Multi-day trip plans. 5 rows in snapshot. Each trip materializes one `trip_days` row per calendar date.
 
@@ -31,6 +33,7 @@ Multi-day trip plans. 5 rows in snapshot. Each trip materializes one `trip_days`
 | `end_date` | date | no | — | Inclusive. Day count = `end_date - start_date + 1`. |
 | `color` | text | yes | `'#059669'` | Hex; default emerald. Trip badge color. |
 | `notes` | text | yes | — | Free-form. |
+| `party_size` | int | no | `1` | v1.22.0 (NF-08). CHECK: 1–50. Multiplier for the trip budget total (costs are per-person). Not exposed in the public share payload. |
 | `created_at` | timestamptz | yes | `now()` | — |
 | `updated_at` | timestamptz | yes | `now()` | App-managed. |
 
@@ -67,10 +70,11 @@ No `idx_trips_user`. Sequential scan is fine at 5 rows but worth adding before t
 
 ## Notes
 
-- **Migration.** `create_trips_table` (2026-04-15).
+- **Migration.** `create_trips_table` (2026-04-15), `add_trips_party_size` (2026-07-16, v1.22.0).
 - **Day materialization on create.** `POST /api/trips` calculates `end_date - start_date + 1` days and INSERTs that many `trip_days` rows in one go.
 - **Day-count + place-count are computed, not stored.** Both come back as derived fields from the API joins.
-- Consumed by: every `/api/trips/*` route, `/api/shared/[slug]` (when `resource_type = 'trip'`), `/api/places/bulk` `check_trips` action (to warn before bulk-delete).
+- **PATCH is Zod-whitelisted (v1.22.0).** Writable columns: `name`, `start_date`, `end_date`, `color`, `notes`, `party_size`, `list_id`. The pre-v1.22.0 handler spread the raw body into the UPDATE — any column was client-writable.
+- Consumed by: every `/api/trips/*` route, `/api/ai/trip-plan` (ownership check + day frame), `/api/shared/[slug]` (when `resource_type = 'trip'`; `party_size` stripped from the payload), `/api/places/bulk` `check_trips` action (to warn before bulk-delete).
 
 ## Open questions
 

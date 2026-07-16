@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { defaultCostEstimate } from "@/lib/trip/cost-defaults";
 
 // GET /api/trips — list user's trips
 export async function GET() {
@@ -98,13 +99,30 @@ export async function POST(request: NextRequest) {
     // Put all places in day 1 initially — auto-plan will redistribute
     const firstDayId = createdDays.find((d) => d.day_number === 1)?.id;
     if (firstDayId) {
-      await supabase.from("trip_day_places").insert(
-        initialPlaceIds.map((placeId, i) => ({
-          trip_day_id: firstDayId,
-          place_id: placeId,
-          sort_order: i,
-        }))
+      // NF-08 (v1.22.0): seed per-person cost defaults from price_level.
+      // The user-scoped fetch doubles as the OWNERSHIP filter — a foreign
+      // place UUID in place_ids must never attach to the trip (the public
+      // trip share would leak its full row via the service client).
+      const { data: placeRows } = await supabase
+        .from("places")
+        .select("id, google_data")
+        .eq("user_id", user.id)
+        .in("id", initialPlaceIds);
+      const costByPlace = new Map(
+        (placeRows ?? []).map((p) => [p.id, defaultCostEstimate(p.google_data)])
       );
+      const ownedIds = initialPlaceIds.filter((id) => costByPlace.has(id));
+      if (ownedIds.length > 0) {
+        await supabase.from("trip_day_places").insert(
+          ownedIds.map((placeId, i) => ({
+            trip_day_id: firstDayId,
+            place_id: placeId,
+            sort_order: i,
+            cost_estimate: costByPlace.get(placeId) ?? null,
+          }))
+        );
+      }
+      initialPlaceIds = ownedIds;
     }
   }
 

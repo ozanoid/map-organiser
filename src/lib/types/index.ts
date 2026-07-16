@@ -83,6 +83,8 @@ export interface PlaceList {
   place_count?: number;
 }
 
+export type RoutingProfile = "walking" | "driving" | "cycling";
+
 export interface Trip {
   id: string;
   user_id: string;
@@ -92,6 +94,8 @@ export interface Trip {
   end_date: string;
   color: string;
   notes: string | null;
+  /** v1.22.0 (NF-08): budget totals multiply by this. CHECK 1-50. */
+  party_size: number;
   created_at: string;
   updated_at: string;
   // Joined
@@ -106,6 +110,8 @@ export interface TripDay {
   day_number: number;
   date: string;
   notes: string | null;
+  /** v1.22.0 (NF-07): Mapbox Directions profile for this day's route. */
+  routing_profile: RoutingProfile;
   created_at: string;
   // Joined
   places?: TripDayPlace[];
@@ -124,6 +130,10 @@ export interface TripDayPlace {
   sort_order: number;
   time_slot: string | null;
   notes: string | null;
+  /** v1.22.0 (NF-08): per-person estimate; defaulted from
+   *  google_data.price_level tier when present, inline-editable. */
+  cost_estimate: number | null;
+  currency: string | null;
   created_at: string;
   // Joined
   place?: Place;
