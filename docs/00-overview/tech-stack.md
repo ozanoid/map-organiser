@@ -2,8 +2,8 @@
 title: Tech Stack
 type: overview
 domain: overview
-version: 1.4.0
-last_updated: 15.07.2026
+version: 1.5.0
+last_updated: 16.07.2026
 status: stable
 sources:
   - package.json
@@ -65,7 +65,8 @@ Every runtime, library, and tool the repo currently depends on. Pin sources are 
 
 | Lib | Version | Role | Notes |
 |---|---|---|---|
-| `ai` | `^6.0.184` | AI SDK v6 — model-agnostic call layer (`generateText` + `Output.object`) | Used by Phase 4 `step=profile` enrich branch. Direct provider wiring (not AI Gateway) — see [[../04-integrations/gemini]] for the explicit choice. |
+| `ai` | `^6.0.228` | AI SDK v6 — model-agnostic call layer (`generateText` + `Output.object`; `streamText` for the chat assistant, v1.21.0) | Used by Phase 4 `step=profile` enrich branch + `/api/ai/*`. Direct provider wiring (not AI Gateway) — see [[../04-integrations/gemini]] for the explicit choice. |
+| `@ai-sdk/react` | `3.0.230` | `useChat` for the assistant panel (v1.21.0) | ⚠️ version-lockstep with `ai@6` — see [[../04-integrations/gemini#npm-packages]]. |
 | `@ai-sdk/google` | `^3.0.75` | Google provider for AI SDK | `createGoogleGenerativeAI({ apiKey: GOOGLE_GENERATIVE_AI_API_KEY })`. Model: `gemini-3-flash-preview` (since 15.07.2026). |
 
 ## Observability

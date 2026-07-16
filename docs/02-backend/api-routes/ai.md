@@ -2,8 +2,8 @@
 title: AI routes
 type: route-group
 domain: backend
-version: 1.5.0
-last_updated: 15.07.2026
+version: 1.6.0
+last_updated: 16.07.2026
 status: stable
 sources:
   - src/app/api/ai/parse-query/route.ts
@@ -15,6 +15,9 @@ sources:
   - src/app/api/ai/compare/route.ts
   - src/lib/ai/schemas/compare.ts
   - src/lib/ai/prompts/compare.ts
+  - src/app/api/ai/chat/route.ts
+  - src/lib/ai/chat-tools.ts
+  - src/lib/ai/prompts/chat.ts
 related:
   - "[[_README]]"
   - "[[../../01-domain/places]]"
@@ -43,6 +46,7 @@ into background jobs.
 | `POST` | `/api/ai/parse-query` | Parse a free-form NL query into structured filters + semantic intent |
 | `POST` | `/api/ai/rank-results` | LLM-as-judge rerank for queries with fuzzy semantic intent |
 | `POST` | `/api/ai/compare` | S2 F-04 (v1.19.0): per-theme winners + occasion picks for 2-4 places from stored profiles |
+| `POST` | `/api/ai/chat` | S3 AI-02 (v1.21.0): assistant agent loop — streamText + 7 tools, streaming UIMessage response |
 
 ## Shared gating
 
@@ -51,7 +55,7 @@ Every route in this group enforces four gates in order:
 1. **Auth.** `supabase.auth.getUser()` must return a user. Otherwise 401.
 2. **`profiles.ai_features_enabled = true`.** The master toggle. Otherwise 403.
 3. **`GOOGLE_GENERATIVE_AI_API_KEY` env var set.** Otherwise 503.
-4. **Monthly budget (kind varies per route: `search` for parse-query, `rank_backstop` for rank-results, `compare` for compare).** `checkAiBudget("search")`
+4. **Monthly budget (kind varies per route: `search` for parse-query, `rank_backstop` for rank-results, `compare` for compare, `chat` for chat).** `checkAiBudget("search")`
    (`src/lib/ai/track-usage.ts`) — 500 searches per calendar month, ONE
    budget unit per search: charged at `parse-query` (every search runs
    exactly one parse). `rank-results` is not budgeted separately — it
@@ -198,6 +202,21 @@ S2 F-04 (v1.19.0). Side-by-side AI comparison of 2-4 saved places.
 - **Failure:** LLM error → 502 (budget unit still burned — the call was made).
 - **Telemetry:** `propagateAttributes({traceName: "ai-compare"})` + `experimental_telemetry` functionId `ai.compare`; events `ai.compare` / `ai.compare.llm_failed`.
 - **Consumer:** `AiCompareCard` on `/places/compare` — deliberate-click only (never auto-fires on page load; each run costs a budget unit).
+
+## `POST /api/ai/chat`
+
+S3 AI-02 v1 (v1.21.0). The assistant agent loop — the group's only STREAMING route (deliberate exception to the "never streamText" rule, amended in [[../../04-integrations/gemini]]).
+
+- **Body:** `{ messages: UIMessage[], sessionId?: string }`. History is client-held (session-only memory — no DB table in v1); the server additionally trims to the last 30 messages.
+- **Gates:** same four gates BEFORE the stream starts (auth → `after(flushLangfuse)` → `ai_features_enabled` → client → **budget `chat`**: SKU `ai_chat`, cap `AI_MONTHLY_CHAT_CAP = 200`/month → 429). Mid-stream LLM failures surface as stream error parts, not HTTP statuses.
+- **Agent loop:** `streamText` + `stopWhen: stepCountIs(6)` + 7 tools from `src/lib/ai/chat-tools.ts`, all executing under the request's cookie client (RLS = ownership boundary):
+  - read-only: `search_places` (shared `queryPlaces()` engine — same JS post-filters as GET /api/places), `get_place_details`, `compare_places` (data-only; the CHAT model verbalises — no nested ai_compare LLM call/unit), `get_stats` (shared `computeUserStats()`).
+  - mutating, `needsApproval: true` (v6 built-in approval flow — loop pauses, UI confirm card, `addToolApprovalResponse` resubmits): `add_to_list`, `create_list`, `set_visit_status`.
+  - Tool outputs are compact projections (id/name/city/rating/tldr…), never full google_data rows.
+- **Budget unit = one user TURN**, charged in `onFinish` only when the last inbound message is a `user` message — an approval-continuation POST (assistant message last) does not burn a second unit. `stopWhen` is the in-turn runaway guard.
+- **Response:** `result.toUIMessageStreamResponse()` — UIMessage stream consumed by `useChat`.
+- **Telemetry:** `propagateAttributes({traceName: "ai-chat", sessionId})` + functionId `ai.chat`; `sessionId` groups a conversation's turn traces in Langfuse. `export const maxDuration = 120` (multi-step turns; also bounds the flush).
+- **Consumer:** `AssistantPanel` (header ✨ launcher) — see [[../../05-flows/ai-chat-flow]].
 
 ## Common helpers
 

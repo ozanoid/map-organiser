@@ -2,8 +2,8 @@
 title: Components
 type: overview
 domain: frontend
-version: 1.2.1
-last_updated: 18.05.2026
+version: 1.3.0
+last_updated: 16.07.2026
 status: stable
 sources:
   - src/components/
@@ -20,6 +20,7 @@ Feature components organized by area. shadcn primitives live separately in `src/
 
 | Folder | Purpose | Doc |
 |---|---|---|
+| `assistant/` | AI chat assistant panel + header launcher (v1.21.0, S3 AI-02) | [[assistant]] |
 | `filters/` | All filter UI (category w/ sub-cat cascade, country/city, list, tag, visit-status, search, panel + sheet) | [[filters]] |
 | `layout/` | App chrome (header, sidebar, mobile nav, offline banner) | [[layout]] |
 | `map/` | Mapbox view + the page-level map container | [[map]] |

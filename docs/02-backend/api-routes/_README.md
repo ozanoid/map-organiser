@@ -2,8 +2,8 @@
 title: API Routes
 type: overview
 domain: backend
-version: 1.4.0
-last_updated: 15.07.2026
+version: 1.5.0
+last_updated: 16.07.2026
 status: stable
 sources:
   - src/app/api/
@@ -30,7 +30,7 @@ All Next.js route handlers grouped by area. Each linked doc is the canonical ref
 | Shared | `/api/shared/*` | **Mixed** — GET `/[slug]` public via service role | [[shared]] |
 | Stats | `/api/stats` | Required | [[stats]] |
 | User | `/api/user/*` — includes `ai-settings` (Phase 1) and `ai-suggestions/*` (Phase 5 moderation queue: list, accept, reject) | Required | [[user]] |
-| AI | `/api/ai/*` (Phase 6) — `parse-query`, `rank-results` for NL filtering | Required | [[ai]] |
+| AI | `/api/ai/*` — `parse-query`, `rank-results` (Phase 6 NL filtering), `compare` (v1.19.0), `chat` (v1.21.0 assistant, streaming) | Required | [[ai]] |
 | Search | `/api/search/*` (Mapbox geocoder proxy) | Required | [[search]] |
 | Cron | `/api/cron/refresh-places` (15.07.2026) — daily periodic-refresh sweep | **`CRON_SECRET` bearer** (service-role) | [[../../06-ops/runbooks/periodic-refresh]] |
 | Share target | `/api/share-target` | **None** (PWA inbound) | [[share-target]] |
@@ -40,7 +40,7 @@ All Next.js route handlers grouped by area. Each linked doc is the canonical ref
 
 ## Counts
 
-- ~36 route handler files (`src/app/api/**/route.ts` + `src/app/auth/callback/route.ts`) — Phase 6 added `/api/ai/parse-query` + `/api/ai/rank-results`; 15.07.2026 added `/api/cron/refresh-places`. (NF-05 similar-adds reuse `POST /api/places` via the AddPlaceDialog preview — no dedicated route.)
+- ~37 route handler files (`src/app/api/**/route.ts` + `src/app/auth/callback/route.ts`) — Phase 6 added `/api/ai/parse-query` + `/api/ai/rank-results`; 15.07.2026 added `/api/cron/refresh-places`; v1.21.0 added `/api/ai/chat` (assistant). (NF-05 similar-adds reuse `POST /api/places` via the AddPlaceDialog preview — no dedicated route.)
 - ~58 HTTP method exports across them
 
 ## Cross-route conventions

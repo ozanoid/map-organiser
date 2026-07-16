@@ -6,6 +6,79 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 16.07.2026 — v1.21.0 — S3: AI chat assistant (AI-02 v1)
+
+Sprint S3 (v4 Tema 3) — single PR. Chat-based discovery and action over
+the saved-place library.
+
+- **`POST /api/ai/chat`** — the repo's first STREAMING AI route:
+  `streamText` + `stopWhen: stepCountIs(6)` agent loop,
+  `toUIMessageStreamResponse()`. Standard 4-gate skeleton runs before
+  the stream (auth → flag → client → budget → 429/403/503 survive as
+  HTTP). `export const maxDuration = 120`. **Deliberate amendment** of
+  gemini.md's "never streamText" rule — chat is the one surface where
+  progressive output is the product; structured calls stay on
+  generateText + Output.object.
+- **7 tools** (`src/lib/ai/chat-tools.ts`), all under the request's
+  cookie client (RLS = ownership boundary; hallucinated ids → honest
+  not-found, no cross-user leak):
+  - read-only: `search_places`, `get_place_details`, `compare_places`
+    (data-only — the chat model verbalises; no nested ai_compare call),
+    `get_stats`. Outputs are compact projections, never full
+    google_data rows.
+  - mutating with **v6 built-in approval** (`needsApproval: true` →
+    confirm card → `addToolApprovalResponse`): `add_to_list`,
+    `create_list`, `set_visit_status`.
+- **Shared engines extracted** (verbatim, no behaviour change):
+  GET /api/places query logic → `src/lib/places/query-places.ts`;
+  GET /api/stats aggregation → `src/lib/places/user-stats.ts`. Routes
+  are now thin shells over the same functions the tools call.
+- **`ai_chat` SKU** — cap 200 turns/month (`AI_MONTHLY_CHAT_CAP`, code
+  constant), costPer1k $15 (fixed average-turn estimate). ONE unit per
+  user TURN charged in onFinish; an approval-continuation POST does not
+  burn a second unit; stopWhen bounds in-turn fan-out. CostTracker picks
+  the SKU up automatically.
+- **UI**: `AssistantLauncher` (header ✨, ai-settings gate — hidden when
+  AI off/unconfigured) + `AssistantPanel` (right Sheet, max-w-md
+  override; full-width mobile). `useChat({chat})` with a module-scope
+  Chat instance = session-only memory (survives panel close + client
+  nav; "New chat" resets; nothing persisted — chat_memories is v2).
+  Mutation outputs invalidate ["lists"]/["places"]/["stats"] since
+  chat bypasses the TanStack mutation hooks.
+- **Deps**: ai 6.0.184→6.0.228 + NEW @ai-sdk/react 3.0.230 —
+  ⚠️ version-lockstep pair (plain `npm i @ai-sdk/react` would pull the
+  4.x line and a nested ai@7 duplicate; always bump together).
+- Langfuse: `propagateAttributes` now carries `sessionId` so a
+  conversation's turns group into one session view; umbrella-span
+  filter already covered streamText.
+- **Review fixes (25/25 adversarial findings addressed):**
+  - **HIGH:** the approval flow was DEAD — `sendAutomaticallyWhen`
+    passed to `useChat()` is silently ignored when a prebuilt `chat`
+    instance is supplied; moved into the `new Chat({...})` init. Also:
+    composer now locks while an approval is pending (a typed message
+    would poison history with a dangling approval-requested part and
+    wedge the session), and the route passes
+    `ignoreIncompleteToolCalls: true` for the Stop-mid-tool case.
+  - `queryPlaces` with an ids-filter where no id survives UUID
+    validation now returns EMPTY instead of the entire library
+    (compare_places tool could dump all places into the loop).
+  - Module-scope chat now binds to the auth user + resets on sign-out
+    (shared-device cross-account history leak).
+  - Budget: gate + charge only genuine new turns (crafted
+    assistant-last histories can't ride the free continuation path;
+    approval continuations no longer 429 at the cap boundary); onFinish
+    logs `totalUsage` (all steps), not the final step's usage.
+  - add_to_list/create_list pre-filter place ids by ownership
+    (list_places RLS checks only list ownership — foreign ids inserted
+    junk rows with dishonest counts); friendlyError matches response
+    BODY (the 403 branch was dead code).
+- Docs: new `05-flows/ai-chat-flow.md` + `components/assistant.md`;
+  gemini.md (packages lockstep warning, caller table, streamText
+  amendment, budgets paragraph), api-routes/ai.md (+chat section) +
+  _README, places.md / stats.md extraction notes + sources,
+  tech-stack.md, ai-search-flow.md + ai-enrichment-flow.md (cost cap),
+  components/layout.md + _README, repo-structure, v4 plan (S3 row).
+
 ## 15.07.2026 — v1.20.0 — S2-PR2: saved filters + quick chips (F-03/NF-20/21) + single-place share (NF-18)
 
 Closes sprint S2 (v4 Tema 2 + Tema 5'in kalanı).

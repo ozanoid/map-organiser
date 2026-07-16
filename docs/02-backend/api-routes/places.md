@@ -2,10 +2,11 @@
 title: Places routes
 type: route-group
 domain: backend
-version: 1.4.0
-last_updated: 15.07.2026
+version: 1.5.0
+last_updated: 16.07.2026
 status: stable
 sources:
+  - src/lib/places/query-places.ts
   - src/app/api/places/route.ts
   - src/app/api/places/[id]/route.ts
   - src/app/api/places/[id]/enrich/route.ts
@@ -55,6 +56,8 @@ All require auth.
 ## Per-route detail
 
 ### `GET /api/places`
+
+> **v1.21.0:** the query engine moved verbatim to `src/lib/places/query-places.ts` (`queryPlaces(supabase, userId, filters)`) so the assistant's `search_places` tool shares it; this handler is now a thin param-mapping shell. Everything below still describes the behaviour — it just lives in the lib file.
 
 - **Source:** `src/app/api/places/route.ts`
 - **Auth:** required.
