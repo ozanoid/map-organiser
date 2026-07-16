@@ -40,6 +40,9 @@ import { flushLangfuse } from "@/lib/telemetry/langfuse";
  * rows are carried by place_id, pool entrants get price_level defaults.
  */
 
+// Multi-attempt Gemini call + serverless Langfuse flush headroom.
+export const maxDuration = 120;
+
 const BodySchema = z
   .object({
     trip_id: z.string().uuid(),
@@ -55,6 +58,27 @@ const BodySchema = z
 const MAX_CANDIDATES = 40;
 const MAX_PLAN_DAYS = 14; // TripPlanSchema clamps days at 14 — reject longer trips up front
 const TLDR_CHAR_CAP = 400; // rank-results precedent; stored tldr is unbounded
+/** HARD output ceiling. Field-tested necessity (16.07.2026, preview): a
+ *  6-place London trip sent Gemini into a repetition loop — 830 input
+ *  tokens ballooned to 60,684 OUTPUT tokens over 237s before the JSON
+ *  failed to parse (responseSchema maxLength is stripped by the Google
+ *  provider, so nothing else bounds a degenerate run). A real 14-day
+ *  plan fits in ~3k tokens; 5k caps a runaway at ~$0.015 and seconds,
+ *  not minutes. */
+const MAX_PLAN_OUTPUT_TOKENS = 5000;
+/** Degeneration is stochastic (default temperature) — one bounded retry
+ *  usually lands a clean generation. Both attempts together still burn
+ *  ONE budget unit. */
+const MAX_LLM_ATTEMPTS = 2;
+
+function describeError(e: unknown): string {
+  if (e instanceof Error) return e.message;
+  try {
+    return JSON.stringify(e).slice(0, 500);
+  } catch {
+    return String(e);
+  }
+}
 
 const WEEKDAYS = [
   "Sunday",
@@ -216,39 +240,55 @@ export async function POST(request: NextRequest) {
     };
   });
 
-  // ── LLM call ────────────────────────────────────────────────────
-  let plan: TripPlanOutput;
-  try {
-    const result = await propagateAttributes(
-      {
-        traceName: "ai-trip-plan",
-        userId: user.id,
-        tags: ["trip-plan"],
-      },
-      () =>
-        generateText({
-          model: aiClient(FLASH_MODEL),
-          output: Output.object({ schema: TripPlanSchema }),
-          system: buildTripPlanSystemPrompt(),
-          prompt: buildTripPlanPrompt(trip.name, dayFrames, candidates),
-          experimental_telemetry: {
-            isEnabled: true,
-            functionId: "ai.trip-plan",
-            metadata: {
-              tripId: trip_id,
-              candidates: candidates.length,
-              days: days.length,
-              includePool: include_pool,
+  // ── LLM call (bounded output + one retry on degeneration) ───────
+  let plan: TripPlanOutput | null = null;
+  let lastError: unknown = null;
+  for (let attempt = 1; attempt <= MAX_LLM_ATTEMPTS && !plan; attempt++) {
+    try {
+      const result = await propagateAttributes(
+        {
+          traceName: "ai-trip-plan",
+          userId: user.id,
+          tags: ["trip-plan"],
+        },
+        () =>
+          generateText({
+            model: aiClient(FLASH_MODEL),
+            output: Output.object({ schema: TripPlanSchema }),
+            system: buildTripPlanSystemPrompt(),
+            prompt: buildTripPlanPrompt(trip.name, dayFrames, candidates),
+            maxOutputTokens: MAX_PLAN_OUTPUT_TOKENS,
+            experimental_telemetry: {
+              isEnabled: true,
+              functionId: "ai.trip-plan",
+              metadata: {
+                tripId: trip_id,
+                candidates: candidates.length,
+                days: days.length,
+                includePool: include_pool,
+                attempt,
+              },
             },
-          },
-        })
-    );
-    plan = result.output;
-  } catch (e) {
+          })
+      );
+      plan = result.output;
+    } catch (e) {
+      lastError = e;
+      log.warn("ai.trip-plan attempt failed", {
+        userId: user.id,
+        tripId: trip_id,
+        attempt,
+        error: describeError(e),
+      });
+    }
+  }
+
+  if (!plan) {
     log.error("ai.trip-plan failed", {
       userId: user.id,
       tripId: trip_id,
-      error: e instanceof Error ? e.message : String(e),
+      attempts: MAX_LLM_ATTEMPTS,
+      error: describeError(lastError),
     });
     // Unit burns on LLM failure (compare precedent) — but the trip is
     // untouched: nothing was deleted yet.

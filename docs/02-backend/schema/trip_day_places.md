@@ -17,7 +17,7 @@ related:
 
 # `trip_day_places`
 
-> **v1.22.0 (NF-08/AI-09):** new `cost_estimate` + `currency` columns (migration `add_trip_day_places_cost_columns`) — per-person budget estimates, seeded from `google_data.price_level` on insert and inline-editable in the trip UI. `time_slot` and `notes` gained their first UI render + a structured writer: the AI trip planner (`POST /api/ai/trip-plan`) sets `time_slot` (morning/afternoon/evening/night) and an optional per-stop note. All delete+insert rewrite paths (move, auto-plan, AI plan) now carry these row fields — before v1.22.0 they were silently destroyed.
+> **v1.22.0 (NF-08/AI-09):** new `cost_estimate` + `currency` columns (migration `add_trip_day_places_cost_columns` + `backfill_trip_day_places_cost_from_price_level`) — per-person budget estimates, seeded from `google_data.price_level` on insert and inline-editable in the trip UI. `time_slot` and `notes` gained their first UI render + a structured writer: the AI trip planner (`POST /api/ai/trip-plan`) sets `time_slot` (morning/afternoon/evening/night) and an optional per-stop note. All delete+insert rewrite paths (move, auto-plan, AI plan) now carry these row fields — before v1.22.0 they were silently destroyed.
 
 Places placed within a trip day, ordered. The most active row count in the trip-planning model (102 rows in snapshot).
 

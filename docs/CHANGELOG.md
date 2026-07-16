@@ -38,6 +38,17 @@ Sprint S4 (v4 Tema 4) — single PR. Three live migrations
   columns). SKU `ai_trip_plan` costPer1k 12.0, cap
   `AI_MONTHLY_TRIP_PLAN_CAP = 50`. Trip-header **AI Plan** dialog
   (ai-settings gated).
+- **Preview-test hotfix (16.07, Langfuse-diagnosed):** a 6-place trip
+  sent Gemini into a repetition loop — 830 input tokens ballooned to
+  60,684 OUTPUT tokens over 237s (nothing bounded a degenerate run:
+  the provider strips responseSchema maxLength), then the JSON failed
+  to parse and the client sat on "Planning…" for ~4 minutes. Fixes:
+  `maxOutputTokens: 5000` hard ceiling, ONE bounded retry (still one
+  budget unit), explicit numeric brevity limits + no-repetition rule in
+  the system prompt, `maxDuration = 120`, and real error serialization
+  (the log said "[object Object]"). Plus `backfill_trip_day_places_
+  cost_from_price_level` migration: pre-existing trip rows now get
+  cost defaults where the place has a price_level.
 - **Review fixes (30/30 adversarial findings addressed), highlights:**
   - **HIGH:** a trip with >40 places would have every place beyond the
     LLM cap silently DELETED by AI Plan — now a 400 guard before any

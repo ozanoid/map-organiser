@@ -45,7 +45,8 @@ Rules:
 - Order stops within a day by a sensible daily rhythm: cafés/breakfast → sights/museums/parks → restaurants → bars/nightlife. Assign each stop a time_slot (morning/afternoon/evening/night).
 - 3-6 stops per day is ideal. It is FINE to leave places out — quality over cramming. Do not pad.
 - day_number must be one of the provided trip days.
-- theme: a short label. rationale: 1-2 sentences on why the grouping works. Optional per-stop note only when genuinely useful.
+- theme: a label of AT MOST 8 words. rationale: AT MOST 2 sentences (~40 words) on why the grouping works. note: AT MOST 15 words, only when genuinely useful.
+- Never repeat a sentence or phrase you have already written. Keep the entire response compact.
 - Write themes/rationales/notes in English.`;
 }
 
