@@ -10,7 +10,9 @@
  * path (ParsedPlaceData shape) and any future preview-card flow.
  */
 
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type { PlaceProfile } from "@/lib/ai/schemas/place-profile";
+import type { ParsedPlaceData } from "@/lib/types";
 import {
   extractFeaturesLite,
   type RawPlaceData,
@@ -103,4 +105,60 @@ export function buildLiteProfile(
     generated_at: new Date().toISOString(),
     model_version: "rule-based-v1",
   };
+}
+
+/**
+ * Fetch the user's tags + lists and build a lite_profile for a parsed
+ * place, gated on the user's `ai_features_enabled` flag. Returns null
+ * when AI is disabled or the build throws (fail-soft: never block the
+ * preview). Shared by BOTH place-preview entry points so they can't
+ * drift again — /api/places/parse-link (paste flow) and
+ * /api/search/retrieve/[id] (Mapbox-search flow).
+ */
+export async function buildLiteProfileForResponse(
+  supabase: SupabaseClient,
+  userId: string,
+  placeData: ParsedPlaceData,
+  extended?: {
+    attributes?: Record<string, boolean>;
+    place_topics?: Record<string, number>;
+    is_claimed?: boolean;
+    total_photos?: number;
+  } | null
+): Promise<PlaceProfile | null> {
+  try {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("ai_features_enabled")
+      .eq("id", userId)
+      .single();
+    if (!profile?.ai_features_enabled) return null;
+
+    const [{ data: tags }, { data: lists }] = await Promise.all([
+      supabase.from("tags").select("id, name").eq("user_id", userId),
+      supabase.from("lists").select("id, name").eq("user_id", userId),
+    ]);
+
+    return buildLiteProfile(
+      {
+        name: placeData.name,
+        address: placeData.address,
+        city: placeData.city,
+        country: placeData.country,
+        types: placeData.types,
+        price_level: placeData.priceLevel,
+        attributes: extended?.attributes,
+        place_topics: extended?.place_topics,
+        total_photos: extended?.total_photos,
+        is_claimed: extended?.is_claimed,
+      },
+      {
+        tags: (tags ?? []) as Array<{ id: string; name: string }>,
+        lists: (lists ?? []) as Array<{ id: string; name: string }>,
+      }
+    );
+  } catch (e) {
+    console.warn("[lite_profile] build failed:", e);
+    return null;
+  }
 }

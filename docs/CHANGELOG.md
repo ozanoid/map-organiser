@@ -6,6 +6,28 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 16.07.2026 — v1.22.1 — Mapbox-search ↔ parse-link lite-profile parity
+
+Bugfix (user-reported on mobile PWA): adding a place via **Mapbox search →
+place summary** showed no subcategory chips and no AI suggestions, while
+**Add Place (paste)** did. Root cause: the two preview entry points had
+drifted — S1 added the `lite_profile` enrichment only to the paste flow.
+
+- `buildLiteProfileForResponse` extracted from `parse-link/route.ts` to the
+  shared `src/lib/ai/extract/lite-profile.ts` (so the two flows can't drift
+  again); `parse-link` imports it.
+- `GET /api/search/retrieve/[id]` now builds `lite_profile` in BOTH response
+  bodies (DataForSEO match + Mapbox-only); `RetrievedPlaceData` gained the
+  field.
+- `SearchResultPanel` gained the subcategory chips + AI Suggestions block +
+  ≥0.85 auto-subcategory + `subcategory_id` in save (copied from
+  `AddPlaceDialog`, which was deliberately left untouched). Changing the
+  parent category clears the subcategory; `MapContent` keys the panel by
+  `_mapbox_id` so a new result resets the form.
+- Docs: lite-profile-flow.md (route wiring repoint + second surface),
+  api-routes/search.md (lite_profile in both shapes), hooks/use-place-search.md
+  (interface field), components/map.md (panel behavior).
+
 ## 16.07.2026 — v1.22.0 — S4: Trip Intelligence (AI-09 v1 + NF-07/08)
 
 Sprint S4 (v4 Tema 4) — single PR. Three live migrations

@@ -2,8 +2,8 @@
 title: usePlaceSearch
 type: hook
 domain: frontend
-version: 1.0.0
-last_updated: 13.05.2026
+version: 1.1.0
+last_updated: 16.07.2026
 status: stable
 sources:
   - src/lib/hooks/use-place-search.ts
@@ -40,6 +40,7 @@ export interface RetrievedPlaceData extends ParsedPlaceData {
   _mapbox_id: string;
   _fetchTimeMs: number;
   _extended?: Partial<GooglePlaceData>;
+  lite_profile?: PlaceProfile | null;  // v1.22.1 — heuristic AI suggestions
 }
 ```
 

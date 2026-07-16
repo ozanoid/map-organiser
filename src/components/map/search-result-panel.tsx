@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCreatePlace } from "@/lib/hooks/use-places";
 import { useCategories } from "@/lib/hooks/use-categories";
+import { useSubcategories } from "@/lib/hooks/use-subcategories";
 import { useLists } from "@/lib/hooks/use-lists";
+import { useTags } from "@/lib/hooks/use-tags";
 import { resolveCategoryId } from "@/lib/google/category-mapping";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -24,6 +26,7 @@ import {
   MapPin,
   Database,
   Zap,
+  Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { VisitStatus } from "@/lib/types";
@@ -40,6 +43,7 @@ interface SearchResultPanelProps {
  */
 export function SearchResultPanel({ place, onClose }: SearchResultPanelProps) {
   const [categoryId, setCategoryId] = useState<string>("");
+  const [subcategoryId, setSubcategoryId] = useState<string | null>(null);
   const [notes, setNotes] = useState("");
   const [rating, setRating] = useState<number>(0);
   const [selectedListIds, setSelectedListIds] = useState<string[]>([]);
@@ -49,7 +53,37 @@ export function SearchResultPanel({ place, onClose }: SearchResultPanelProps) {
   const queryClient = useQueryClient();
   const createPlace = useCreatePlace();
   const { data: categories = [] } = useCategories();
+  const { data: subcategories = [] } = useSubcategories();
   const { data: lists = [] } = useLists();
+  const { data: tags = [] } = useTags();
+
+  // lite_profile ships with the retrieve response (same shape parse-link
+  // returns). Resolve its heuristic suggestions into UI-friendly shapes.
+  const liteProfile = place.lite_profile ?? null;
+  const aiSuggestions = useMemo(() => {
+    if (!liteProfile) return null;
+    const suggestedTagObjects = liteProfile.suggested_tags.matched_existing
+      .map((id) => tags.find((t) => t.id === id))
+      .filter((t): t is NonNullable<typeof t> => Boolean(t));
+    const suggestedListObjects = liteProfile.suggested_lists
+      .map((id) => lists.find((l) => l.id === id))
+      .filter((l): l is NonNullable<typeof l> => Boolean(l));
+    return {
+      suggestedTags: suggestedTagObjects,
+      suggestedLists: suggestedListObjects,
+      subCategorySlug: liteProfile.category_signals.sub_category,
+      subCategoryConfidence: liteProfile.category_signals.sub_category_confidence,
+    };
+  }, [liteProfile, tags, lists]);
+
+  const suggestedSubcategory = useMemo(() => {
+    if (!aiSuggestions?.subCategorySlug || !categoryId) return null;
+    return subcategories.find(
+      (s) =>
+        s.slug === aiSuggestions.subCategorySlug &&
+        s.parent_category_id === categoryId
+    );
+  }, [aiSuggestions, categoryId, subcategories]);
 
   // Auto-resolve category from poi types when categories load
   useEffect(() => {
@@ -65,11 +99,28 @@ export function SearchResultPanel({ place, onClose }: SearchResultPanelProps) {
     }
   }, [place, categories, categoryId]);
 
+  // Auto-pre-select the AI-suggested sub-category on high confidence
+  // (mirrors AddPlaceDialog; tags & lists stay opt-in).
+  useEffect(() => {
+    if (!suggestedSubcategory || subcategoryId) return;
+    if ((aiSuggestions?.subCategoryConfidence ?? 0) >= 0.85) {
+      setSubcategoryId(suggestedSubcategory.id);
+    }
+  }, [suggestedSubcategory, aiSuggestions, subcategoryId]);
+
   function toggleList(listId: string) {
     setSelectedListIds((prev) =>
       prev.includes(listId)
         ? prev.filter((id) => id !== listId)
         : [...prev, listId]
+    );
+  }
+
+  function toggleTag(tagId: string) {
+    setSelectedTagIds((prev) =>
+      prev.includes(tagId)
+        ? prev.filter((id) => id !== tagId)
+        : [...prev, tagId]
     );
   }
 
@@ -83,6 +134,7 @@ export function SearchResultPanel({ place, onClose }: SearchResultPanelProps) {
         lat: place.lat,
         lng: place.lng,
         category_id: categoryId || undefined,
+        subcategory_id: subcategoryId || undefined,
         rating: rating || undefined,
         notes: notes || undefined,
         google_place_id: place.placeId || undefined,
@@ -245,7 +297,13 @@ export function SearchResultPanel({ place, onClose }: SearchResultPanelProps) {
             <div className="relative flex-1">
               <select
                 value={categoryId}
-                onChange={(e) => setCategoryId(e.target.value)}
+                onChange={(e) => {
+                  // Clear the subcategory when the parent changes — else a
+                  // subcategory from the old parent persists and Save writes
+                  // a mismatched category_id/subcategory_id pair.
+                  setCategoryId(e.target.value);
+                  setSubcategoryId(null);
+                }}
                 className="w-full h-9 px-3 pr-8 text-sm border border-input rounded-md bg-background cursor-pointer appearance-none focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1"
               >
                 <option value="">Select a category...</option>
@@ -267,7 +325,109 @@ export function SearchResultPanel({ place, onClose }: SearchResultPanelProps) {
             </div>
             <InlineCategoryCreator onCreated={(id) => setCategoryId(id)} />
           </div>
+
+          {/* Sub-category chips (under selected parent) */}
+          {categoryId && (() => {
+            const parentSubs = subcategories.filter(
+              (s) => s.parent_category_id === categoryId
+            );
+            if (parentSubs.length === 0) return null;
+            return (
+              <div className="flex flex-wrap gap-1 mt-2">
+                {parentSubs.map((sub) => {
+                  const isActive = subcategoryId === sub.id;
+                  const isSuggested = suggestedSubcategory?.id === sub.id;
+                  return (
+                    <button
+                      key={sub.id}
+                      type="button"
+                      onClick={() => setSubcategoryId(isActive ? null : sub.id)}
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium cursor-pointer transition-colors ${
+                        isActive
+                          ? "bg-emerald-600 text-white"
+                          : "bg-gray-50 text-gray-600 hover:bg-gray-100 dark:bg-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 border border-gray-200 dark:border-gray-700"
+                      }`}
+                    >
+                      {isSuggested && <Sparkles className="h-2.5 w-2.5" />}
+                      {sub.name}
+                    </button>
+                  );
+                })}
+              </div>
+            );
+          })()}
         </div>
+
+        {/* AI suggestion chips (tags + lists from lite_profile) */}
+        {aiSuggestions &&
+          (aiSuggestions.suggestedTags.length > 0 ||
+            aiSuggestions.suggestedLists.length > 0) && (
+            <div className="rounded-lg border border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/50 dark:bg-emerald-950/20 p-3 space-y-2">
+              <p className="text-[11px] font-medium text-emerald-700 dark:text-emerald-400 flex items-center gap-1">
+                <Sparkles className="h-3 w-3" /> AI Suggestions
+              </p>
+
+              {aiSuggestions.suggestedTags.length > 0 && (
+                <div>
+                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">
+                    Tags
+                  </p>
+                  <div className="flex flex-wrap gap-1">
+                    {aiSuggestions.suggestedTags.map((tag) => {
+                      const isSelected = selectedTagIds.includes(tag.id);
+                      return (
+                        <button
+                          key={tag.id}
+                          type="button"
+                          onClick={() => toggleTag(tag.id)}
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium cursor-pointer transition-colors ${
+                            isSelected
+                              ? "bg-emerald-600 text-white"
+                              : "bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 border border-emerald-200 dark:border-emerald-900 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+                          }`}
+                        >
+                          {tag.name}
+                          {isSelected && <Check className="h-2.5 w-2.5" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {aiSuggestions.suggestedLists.length > 0 && (
+                <div>
+                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">
+                    Lists
+                  </p>
+                  <div className="flex flex-wrap gap-1">
+                    {aiSuggestions.suggestedLists.map((list) => {
+                      const isSelected = selectedListIds.includes(list.id);
+                      return (
+                        <button
+                          key={list.id}
+                          type="button"
+                          onClick={() => toggleList(list.id)}
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium cursor-pointer transition-colors ${
+                            isSelected
+                              ? "bg-emerald-600 text-white"
+                              : "bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 border border-emerald-200 dark:border-emerald-900 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+                          }`}
+                        >
+                          <span
+                            className="w-1.5 h-1.5 rounded-full"
+                            style={{ backgroundColor: list.color }}
+                          />
+                          {list.name}
+                          {isSelected && <Check className="h-2.5 w-2.5" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
         {/* Lists */}
         <div>

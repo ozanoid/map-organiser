@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import type { SearchSuggestion } from "@/lib/mapbox/search-box";
 import type { ParsedPlaceData, GooglePlaceData } from "@/lib/types";
+import type { PlaceProfile } from "@/lib/ai/schemas/place-profile";
 import { useDebouncedCallback } from "@/lib/hooks/use-debounce";
 
 const SESSION_INACTIVITY_MS = 180_000; // 180s — Mapbox session expiry
@@ -130,6 +131,9 @@ export interface RetrievedPlaceData extends ParsedPlaceData {
   _mapbox_id: string;
   _fetchTimeMs: number;
   _extended?: Partial<GooglePlaceData>;
+  /** v1.22.1 — heuristic AI suggestions (subcategory + tags + lists),
+   *  same shape parse-link returns; null when AI is disabled. */
+  lite_profile?: PlaceProfile | null;
 }
 
 /**
