@@ -3,13 +3,18 @@ import { z } from "zod";
 /**
  * v1.22.0 (S4 AI-09) — AI trip-plan output schema.
  *
+ * ⚠️ NOT sent to Gemini as responseSchema (hotfix 2, 16.07.2026):
+ * constrained decoding on this nested shape degenerated into repetition
+ * loops (3 verified runs, all wedged in the first free-text field —
+ * 60k-token runaway). The model now emits plain JSON per the prompt's
+ * template; this schema validates SERVER-SIDE after JSON.parse.
+ *
  * Candidates are referenced by INDEX into the request's candidate array
  * (v1.8.5 lesson — LLMs echo indices reliably, hallucinate UUIDs). The
  * route sanitizes out-of-range/duplicate indices after parse: first
  * occurrence wins, a place can appear in ONE day only.
  *
- * Same resilience idioms as compare.ts: the Google provider strips
- * minItems/maxItems from responseSchema, so arrays CLAMP via preprocess
+ * Same resilience idioms as compare.ts: arrays CLAMP via preprocess
  * (salvage over 502 — a failed parse still burns the budget unit), and
  * idx uses parseInt+NaN-guard (Number("") === 0 pitfall).
  */
@@ -43,8 +48,9 @@ export const TripPlanSchema = z.object({
         day_number: idx,
         /** Short day theme, e.g. "Old town & museums". */
         theme: shortText(80),
-        /** Why this grouping works (geo/theme/hours) — 1-2 sentences. */
-        rationale: shortText(300),
+        /** 3-5 flowing sentences walking the traveller through the day
+         *  in visit order ("Start your morning at X…, then…"). */
+        narrative: shortText(900),
         stops: z.preprocess(
           clampArray(12),
           z.array(

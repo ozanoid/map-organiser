@@ -126,7 +126,17 @@ Gemini 3 Flash Preview pricing (verified 15.07.2026, ai.google.dev, standard tie
 
 Free tier: 15 RPM / 1M TPM (verify in AI Studio). Beyond that, paid quota. At our usage scale (a few hundred profiles + occasional regenerations), the monthly cost stays under \$2.
 
-**Per-user monthly budgets** (`checkAiBudget`, `src/lib/ai/track-usage.ts`): **search** = 500 searches/month (one unit per search, charged at `parse-query`; `rank-results` rides free behind a 3× runaway backstop) ≈ \$10.5/month ceiling; **compare** = 200 runs/month (v1.19.0, one unit per /api/ai/compare); **chat** = 200 turns/month (v1.21.0, `AI_MONTHLY_CHAT_CAP` — one unit per TURN charged in onFinish, approval continuations free, `stopWhen: stepCountIs(6)` bounds in-turn fan-out); **trip_plan** = 50 generations/month (v1.22.0, `AI_MONTHLY_TRIP_PLAN_CAP` — one unit per plan, deliberate-click only from the trip page's AI Plan dialog; a failed generation still burns the unit but never touches the trip) ≈ \$0.6/month ceiling; **profile** = 1000 generations/month across the add-chain, refresh, backfill, and cron ≈ \$9.5/month ceiling (a full ~470-place backfill fits in one month). Over budget the route returns **429** before calling Gemini; resets on the 1st (UTC). Fails open; unrelated to Gemini's own RPM quota. See [[../05-flows/ai-enrichment-flow#cost-cap]].
+**Per-user monthly budgets** (`checkAiBudget`, `src/lib/ai/track-usage.ts`): **search** = 500 searches/month (one unit per search, charged at `parse-query`; `rank-results` rides free behind a 3× runaway backstop) ≈ \$10.5/month ceiling; **compare** = 200 runs/month (v1.19.0, one unit per /api/ai/compare); **chat** = 200 turns/month (v1.21.0, `AI_MONTHLY_CHAT_CAP` — one unit per TURN charged in onFinish, approval continuations free, `stopWhen: stepCountIs(6)` bounds in-turn fan-out); **trip_plan** = 50 generations/month (v1.22.0, `AI_MONTHLY_TRIP_PLAN_CAP` — one unit per plan, deliberate-click only from the trip page's AI Plan dialog; a failed generation still burns the unit but never touches the trip) ≈ \$0.6/month ceiling; **profile** = 1000 generations/month across the add-chain, refresh, backfill, and cron ≈ \$9.5/month ceiling (a full ~470-place backfill fits in one month). Over budget the route returns **429** before calling Gemini; resets on the 1st (UTC). Fails open; unrelated to Gemini's own RPM quota.
+
+> **⚠️ Thinking-mode pathology (16.07.2026, empirically verified):** on
+> `gemini-3-flash-preview`, the trip-plan call degenerated with DEFAULT
+> settings — responseSchema + thinking produced repetition loops (60k-token
+> runaways); schema-less + thinking produced broken JSON on 2/3 runs.
+> `structuredOutputs: false` + `thinkingConfig: { thinkingBudget: 0 }`
+> yields 4/4 clean runs at ~4s / ~640 output tokens (prompt carries a JSON
+> template; zod validates server-side). If another nested-schema call
+> misbehaves, run the same 4-variant matrix before blaming the schema —
+> see `api/ai/trip-plan/route.ts` TRIP_PLAN_PROVIDER_OPTIONS. See [[../05-flows/ai-enrichment-flow#cost-cap]].
 
 ## Prompt strategy
 

@@ -80,6 +80,25 @@ function describeError(e: unknown): string {
   }
 }
 
+/** Hotfix 2 provider config — every knob here is EMPIRICAL (16.07.2026,
+ *  4-variant matrix on the real failing input, 3-4 runs each):
+ *  - default (responseSchema + thinking): repetition-loop degeneration,
+ *    60k-token runaways, 0-1/3 usable.
+ *  - no schema, thinking on: degeneration gone, but 2/3 runs emit
+ *    syntactically broken JSON (missing commas) on high-thinking runs.
+ *  - structuredOutputs:false + thinkingBudget:0 → 4/4 clean, ~4s,
+ *    ~640 output tokens. Thinking mode is the pathological factor for
+ *    this task on gemini-3-flash-preview; the prompt's JSON template
+ *    carries the shape, Output.object still zod-validates server-side.
+ *  Do not "simplify" by removing either option without re-running the
+ *  matrix. */
+const TRIP_PLAN_PROVIDER_OPTIONS = {
+  google: {
+    structuredOutputs: false,
+    thinkingConfig: { thinkingBudget: 0 },
+  },
+} as const;
+
 const WEEKDAYS = [
   "Sunday",
   "Monday",
@@ -255,6 +274,7 @@ export async function POST(request: NextRequest) {
           generateText({
             model: aiClient(FLASH_MODEL),
             output: Output.object({ schema: TripPlanSchema }),
+            providerOptions: TRIP_PLAN_PROVIDER_OPTIONS,
             system: buildTripPlanSystemPrompt(),
             prompt: buildTripPlanPrompt(trip.name, dayFrames, candidates),
             maxOutputTokens: MAX_PLAN_OUTPUT_TOKENS,
@@ -395,10 +415,11 @@ export async function POST(request: NextRequest) {
       writeErrors.push(`day ${planDay.day_number}: ${insError.message}`);
       continue;
     }
-    // Day theme + rationale → trip_days.notes (rendered in the day header).
+    // Day theme + flowing narrative → trip_days.notes (rendered under
+    // the day header): "Start your morning at X…, then…".
     const { error: noteError } = await supabase
       .from("trip_days")
-      .update({ notes: `${planDay.theme} — ${planDay.rationale}` })
+      .update({ notes: `${planDay.theme} — ${planDay.narrative}` })
       .eq("id", day.id);
     if (noteError) writeErrors.push(`day ${planDay.day_number} notes: ${noteError.message}`);
   }

@@ -38,6 +38,15 @@ Sprint S4 (v4 Tema 4) — single PR. Three live migrations
   columns). SKU `ai_trip_plan` costPer1k 12.0, cap
   `AI_MONTHLY_TRIP_PLAN_CAP = 50`. Trip-header **AI Plan** dialog
   (ai-settings gated).
+- **Preview-test hotfix 2 (16.07):** retry didn't save it — degeneration
+  was SYSTEMATIC, and a 4-variant matrix pinned the real culprit:
+  gemini-3-flash-preview's THINKING mode (with responseSchema →
+  repetition loops; without → broken JSON on high-thinking runs).
+  Fix: `structuredOutputs: false` + `thinkingBudget: 0` — 4/4 clean
+  runs, ~4s, ~640 output tokens; the prompt now carries a JSON template
+  and zod validates server-side. Also per user feedback: each day now
+  gets a flowing `narrative` ("Start your morning at X, then…") persisted
+  to trip_days.notes alongside the theme.
 - **Preview-test hotfix (16.07, Langfuse-diagnosed):** a 6-place trip
   sent Gemini into a repetition loop — 830 input tokens ballooned to
   60,684 OUTPUT tokens over 237s (nothing bounded a degenerate run:
