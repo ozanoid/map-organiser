@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import type { Place, TripDay } from "@/lib/types";
+import { googleMapsPlaceUrl } from "@/lib/google/maps-url";
 
 const DAY_COLORS = ["#3B82F6", "#F97316", "#8B5CF6", "#22C55E", "#EC4899", "#06B6D4", "#F59E0B"];
 
@@ -296,7 +297,13 @@ function SharedTripView({
 }
 
 function PlaceRow({ place, index }: { place: Place; index: number }) {
-  const googleUrl = place.google_data?.url;
+  // Cross-platform Maps link (mobile app can't resolve the stored url).
+  // Public payload strips google_place_id → name-search fallback.
+  const googleUrl = googleMapsPlaceUrl(
+    place.name,
+    place.google_place_id,
+    place.google_data?.url
+  );
 
   return (
     <div className="flex items-center gap-2.5 py-2">
@@ -356,7 +363,11 @@ function SharedPlaceView({
   const hours = (gd.opening_hours as { weekday_text?: string[] } | undefined)
     ?.weekday_text;
   const website = gd.website as string | undefined;
-  const mapsUrl = gd.url as string | undefined;
+  const mapsUrl = googleMapsPlaceUrl(
+    place.name,
+    place.google_place_id,
+    gd.url as string | undefined
+  );
 
   return (
     <div className="flex flex-col min-h-dvh">

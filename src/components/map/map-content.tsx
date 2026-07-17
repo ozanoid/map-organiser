@@ -10,6 +10,7 @@ import { SearchResultPanel } from "@/components/map/search-result-panel";
 import type { RetrievedPlaceData } from "@/lib/hooks/use-place-search";
 import { FilterSheet } from "@/components/filters/filter-sheet";
 import { ClearFiltersChip } from "@/components/filters/clear-filters-chip";
+import { googleMapsPlaceUrl } from "@/lib/google/maps-url";
 import { FilterPanel } from "@/components/filters/filter-panel";
 import { VisitStatusToggle, VisitStatusBadge } from "@/components/places/visit-status-toggle";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -180,6 +181,10 @@ export function MapContent({ mapboxToken }: { mapboxToken: string }) {
   }
 
   const googleData = detailData?.google_data || {};
+  // Cross-platform Maps link (mobile app can't resolve the stored url).
+  const mapsUrl = detailData
+    ? googleMapsPlaceUrl(detailData.name, detailData.google_place_id, googleData.url)
+    : null;
   const photoUrl = googleData.photo_storage_url || googleData.photos?.[0] || null;
   const reviews = googleData.reviews || [];
 
@@ -518,9 +523,9 @@ export function MapContent({ mapboxToken }: { mapboxToken: string }) {
 
                 {/* Actions */}
                 <div className="flex gap-2 pt-2">
-                  {googleData.url && (
+                  {mapsUrl && (
                     <a
-                      href={googleData.url}
+                      href={mapsUrl}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="flex-1"

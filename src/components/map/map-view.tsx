@@ -6,6 +6,7 @@ import "mapbox-gl/dist/mapbox-gl.css";
 import type { FeatureCollection } from "geojson";
 import type { Place, Category } from "@/lib/types";
 import { registerCategoryIcons } from "@/lib/map/category-icons";
+import { googleMapsPlaceUrl } from "@/lib/google/maps-url";
 
 export interface RouteLine {
   id: string;
@@ -106,7 +107,13 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
         categoryColor: place.category?.color || CATEGORY_COLORS.default,
         categoryIcon: place.category?.icon || "map-pin",
         visitStatus: place.visit_status || "",
-        googleUrl: place.google_data?.url || "",
+        // Cross-platform Maps link (mobile app can't resolve stored url).
+        googleUrl:
+          googleMapsPlaceUrl(
+            place.name,
+            place.google_place_id,
+            place.google_data?.url
+          ) || "",
       },
     })),
   }), []);
