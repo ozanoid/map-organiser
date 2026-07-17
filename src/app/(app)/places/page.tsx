@@ -17,6 +17,13 @@ import { Button } from "@/components/ui/button";
 import { DebouncedSearchInput } from "@/components/filters/debounced-search-input";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   MapPin,
   Plus,
   SlidersHorizontal,
@@ -259,36 +266,26 @@ function PlacesContent() {
               AI Ranked
             </div>
           ) : (
-            <>
-              <select
-                value={filters.sort || "newest"}
-                onChange={(e) =>
-                  setFilters({
-                    sort:
-                      e.target.value === "newest"
-                        ? undefined
-                        : e.target.value,
-                  })
-                }
-                className="h-9 pl-8 pr-7 text-sm border border-input rounded-md bg-background cursor-pointer appearance-none focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1 transition-colors duration-200"
-                aria-label="Sort places"
-              >
+            <Select
+              items={SORT_OPTIONS}
+              value={filters.sort || "newest"}
+              onValueChange={(v) =>
+                setFilters({
+                  sort: v === "newest" ? undefined : (v as string),
+                })
+              }
+            >
+              <SelectTrigger className="h-9 pl-8" aria-label="Sort places">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
                 {SORT_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
+                  <SelectItem key={opt.value} value={opt.value}>
                     {opt.label}
-                  </option>
+                  </SelectItem>
                 ))}
-              </select>
-              <svg
-                className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={2}
-              >
-                <path d="m6 9 6 6 6-6" />
-              </svg>
-            </>
+              </SelectContent>
+            </Select>
           )}
         </div>
       </div>

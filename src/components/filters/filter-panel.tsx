@@ -9,6 +9,13 @@ import { SaveFilterButton } from "./save-filter-button";
 import { TagFilter } from "./tag-filter";
 import { ListFilter } from "./list-filter";
 import { DebouncedSearchInput } from "./debounced-search-input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { AiSearchInput } from "@/components/search/ai-search-input";
 import { useFilters } from "@/lib/hooks/use-filters";
 import { useAiSearchStore } from "@/lib/stores/ai-search-store";
@@ -70,7 +77,7 @@ export function FilterPanel() {
         <label className="text-xs font-medium mb-1.5 block text-muted-foreground">
           Sort by
         </label>
-        <div className="relative">
+        <div>
           {aiSearchActive ? (
             <div
               className="w-full h-9 px-3 text-sm border border-input rounded-md bg-muted/40 inline-flex items-center text-muted-foreground cursor-not-allowed select-none"
@@ -80,30 +87,24 @@ export function FilterPanel() {
               AI Ranked
             </div>
           ) : (
-            <>
-          <select
-            value={filters.sort || "newest"}
-            onChange={(e) =>
-              setFilters({ sort: e.target.value === "newest" ? undefined : e.target.value })
-            }
-            className="w-full h-9 px-3 pr-8 text-sm border border-input rounded-md bg-background cursor-pointer appearance-none focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1 transition-colors duration-200"
-          >
-            {SORT_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
-          <svg
-            className="absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={2}
-          >
-            <path d="m6 9 6 6 6-6" />
-          </svg>
-            </>
+            <Select
+              items={SORT_OPTIONS}
+              value={filters.sort || "newest"}
+              onValueChange={(v) =>
+                setFilters({ sort: v === "newest" ? undefined : (v as string) })
+              }
+            >
+              <SelectTrigger className="w-full h-9">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {SORT_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           )}
         </div>
       </div>

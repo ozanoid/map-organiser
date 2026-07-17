@@ -7,6 +7,13 @@ import { useCategories } from "@/lib/hooks/use-categories";
 import { useTags } from "@/lib/hooks/use-tags";
 import { useLists } from "@/lib/hooks/use-lists";
 import { toast } from "sonner";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Scale, Trash2, X } from "lucide-react";
 
 interface BulkActionBarProps {
@@ -53,7 +60,6 @@ export function BulkActionBar({
   async function runAction(
     label: string,
     body: Record<string, unknown>,
-    selectEl?: HTMLSelectElement
   ) {
     setLoading(true);
     try {
@@ -68,7 +74,6 @@ export function BulkActionBar({
       toast.error(err instanceof Error ? err.message : "Action failed");
     } finally {
       setLoading(false);
-      if (selectEl) selectEl.value = "";
     }
   }
 
@@ -145,107 +150,111 @@ export function BulkActionBar({
         {/* Row 2: action selects — scrollable on mobile, inline on desktop */}
         <div className="flex gap-2 overflow-x-auto lg:overflow-visible pb-1 lg:pb-0 -mx-1 px-1 lg:mx-0 lg:px-0">
           <div className="relative shrink-0">
-            <select
+            <Select
+              items={categories.map((c) => ({ value: c.id, label: c.name }))}
               disabled={loading}
-              className="h-9 text-sm border rounded-md px-3 pr-7 bg-white dark:bg-gray-900 cursor-pointer disabled:opacity-50 appearance-none"
-              defaultValue=""
-              onChange={(e) => {
-                const val = e.target.value;
+              value=""
+              onValueChange={(v) => {
+                const val = v as string;
                 if (!val) return;
                 runAction("Category updated", {
                   action: "update_category",
                   category_id: val,
-                }, e.target);
+                });
               }}
             >
-              <option value="" disabled>
-                Category
-              </option>
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-            <svg className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="m6 9 6 6 6-6" /></svg>
+              <SelectTrigger className="h-9 text-sm">
+                <SelectValue placeholder="Category" />
+              </SelectTrigger>
+              <SelectContent>
+                {categories.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="relative shrink-0">
-            <select
+            <Select
+              items={tags.map((t) => ({ value: t.id, label: t.name }))}
               disabled={loading}
-              className="h-9 text-sm border rounded-md px-3 pr-7 bg-white dark:bg-gray-900 cursor-pointer disabled:opacity-50 appearance-none"
-              defaultValue=""
-              onChange={(e) => {
-                const val = e.target.value;
+              value=""
+              onValueChange={(v) => {
+                const val = v as string;
                 if (!val) return;
                 runAction("Tag added", {
                   action: "add_tags",
                   tag_ids: [val],
-                }, e.target);
+                });
               }}
             >
-              <option value="" disabled>
-                Tag
-              </option>
-              {tags.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))}
-            </select>
-            <svg className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="m6 9 6 6 6-6" /></svg>
+              <SelectTrigger className="h-9 text-sm">
+                <SelectValue placeholder="Tag" />
+              </SelectTrigger>
+              <SelectContent>
+                {tags.map((t) => (
+                  <SelectItem key={t.id} value={t.id}>
+                    {t.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="relative shrink-0">
-            <select
+            <Select
+              items={lists.map((l) => ({ value: l.id, label: l.name }))}
               disabled={loading}
-              className="h-9 text-sm border rounded-md px-3 pr-7 bg-white dark:bg-gray-900 cursor-pointer disabled:opacity-50 appearance-none"
-              defaultValue=""
-              onChange={(e) => {
-                const val = e.target.value;
+              value=""
+              onValueChange={(v) => {
+                const val = v as string;
                 if (!val) return;
                 runAction("Added to list", {
                   action: "add_to_list",
                   list_id: val,
-                }, e.target);
+                });
               }}
             >
-              <option value="" disabled>
-                List
-              </option>
-              {lists.map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.name}
-                </option>
-              ))}
-            </select>
-            <svg className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="m6 9 6 6 6-6" /></svg>
+              <SelectTrigger className="h-9 text-sm">
+                <SelectValue placeholder="List" />
+              </SelectTrigger>
+              <SelectContent>
+                {lists.map((l) => (
+                  <SelectItem key={l.id} value={l.id}>
+                    {l.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="relative shrink-0">
-            <select
+            <Select
+              items={STATUS_OPTIONS}
               disabled={loading}
-              className="h-9 text-sm border rounded-md px-3 pr-7 bg-white dark:bg-gray-900 cursor-pointer disabled:opacity-50 appearance-none"
-              defaultValue=""
-              onChange={(e) => {
-                const val = e.target.value;
+              value=""
+              onValueChange={(v) => {
+                const val = v as string;
                 if (!val) return;
                 runAction("Status updated", {
                   action: "update_status",
                   visit_status: val,
-                }, e.target);
+                });
               }}
             >
-              <option value="" disabled>
-                Status
-              </option>
-              {STATUS_OPTIONS.map((s) => (
-                <option key={s.value} value={s.value}>
-                  {s.label}
-                </option>
-              ))}
-            </select>
-            <svg className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="m6 9 6 6 6-6" /></svg>
+              <SelectTrigger className="h-9 text-sm">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                {STATUS_OPTIONS.map((s) => (
+                  <SelectItem key={s.value} value={s.value}>
+                    {s.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
       </div>
