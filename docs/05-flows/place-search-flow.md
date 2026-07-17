@@ -61,7 +61,7 @@ User focuses the search input that sits on top of the map view (top-left, beside
        │  Temporary marker rendered on MapView via searchMarker prop
        │  Detail panel (if any) closes; FAB/visible-place badge hide
        ▼
-6. SearchResultPanel renders (right slide-in)
+6. SearchResultPanel renders (desktop: right slide-in; mobile: half-height bottom sheet)
        │  Auto-resolves category from poi types (resolveCategoryId)
        │  User can override: category, lists, tags, visit status, rating, notes
        ▼

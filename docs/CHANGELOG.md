@@ -10,15 +10,29 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 - New `src/components/ui/drawer.tsx` — a draggable, snap-point bottom
   sheet built on base-ui's first-party Drawer (no new dependency; vaul
-  rejected). Detents (peek → half → full), swipe-to-dismiss,
-  `modal={false}` peek that leaves the page behind live.
+  rejected). Half → full detents, swipe-to-dismiss, `modal={false}`
+  variant that leaves the page behind live.
 - **FilterSheet** upgraded from a fixed 65dvh sheet to a draggable Drawer
   (`snapPoints=[0.5, 0.92]`).
 - **SearchResultPanel** (the mobile "search a place → add form filled the
-  whole screen" complaint): now a Maps-style bottom sheet — opens at a
-  ~220px peek, drag up to half (0.55) or full (0.92); desktop keeps the
-  side-panel (runtime `useIsDesktop`, no hydration flash — mounts on
-  interaction).
+  whole screen" complaint): now a Maps-style bottom sheet — opens at
+  half (0.5), drag up to full (0.92); desktop keeps the side-panel
+  (runtime `useIsDesktop`, no hydration flash — mounts on interaction).
+- **Gesture refinements** (Maps parity, on-device feedback):
+  - _No peek._ The old `220px` peek showed nothing useful; the sheet now
+    opens at half — matching how Google Maps actually opens.
+  - _Whole header is the drag handle._ The title row lives in a
+    `touch-none` `DrawerHeader` (a drag zone), so the sheet drags up from
+    the entire header, not just the tiny grab bar (hard to hit).
+  - _Swipe-down never closes._ `onOpenChange` intercepts
+    `eventDetails.reason === "swipe"` and calls `details.cancel()`, so a
+    downward swipe springs back to the half detent instead of dismissing.
+    Only the X / Cancel buttons close the search sheet (plus
+    `disablePointerDismissal` so an outside tap on the map can't lose the
+    in-progress form); FilterSheet keeps Done/backdrop, guards only swipe.
+  - _Save always reachable._ Cancel/Save moved into the always-visible
+    header — base-ui translates the popup down by the snap offset, so a
+    bottom-pinned footer would sit below the fold at the half snap.
 - Review (11/11 findings, 3 high): base-ui drops percent-STRING snap
   points silently → numeric viewport fractions; the non-modal peek needs
   the base-ui pass-through pattern (Viewport `pointer-events-none` +

@@ -58,7 +58,15 @@ export function FilterSheet({ open, onOpenChange }: FilterSheetProps) {
   return (
     <Drawer
       open={open}
-      onOpenChange={onOpenChange}
+      onOpenChange={(next, details) => {
+        // Swipe-down snaps back to the half detent instead of closing
+        // (v1.24.0 refinement); the Done button and backdrop still close.
+        if (!next && details.reason === "swipe") {
+          details.cancel();
+          return;
+        }
+        onOpenChange(next);
+      }}
       snapPoints={[0.5, 0.92]}
     >
       <DrawerContent>

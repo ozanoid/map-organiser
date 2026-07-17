@@ -75,7 +75,7 @@ Components under `src/components/filters/`. All `"use client"`. Two top-level co
 
 - **File:** `src/components/filters/filter-sheet.tsx`
 - **Props:** `{ open: boolean; onOpenChange: (open: boolean) => void }`.
-- **Subcomponents:** shadcn `Sheet`, `SheetContent`, `SheetHeader`, `SheetTitle`.
+- **Subcomponents:** `ui/drawer.tsx` `Drawer`, `DrawerContent`, `DrawerHeader`, `DrawerTitle`, `DrawerBody` (base-ui Drawer; v1.24.0). Draggable bottom sheet, `snapPoints=[0.5, 0.92]` (opens at half). **Swipe-down snaps back** instead of closing — `onOpenChange` cancels `reason === "swipe"`; the Done button and backdrop still close it.
 - **Otherwise identical to FilterPanel** — same filter controls, same hook. Different layout (bottom sheet) with `safe-area-inset-bottom` padding.
 
 ### `ListFilter`

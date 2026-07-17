@@ -42,6 +42,7 @@ import { useIsDesktop } from "@/lib/hooks/use-is-desktop";
 import {
   Drawer,
   DrawerContent,
+  DrawerHeader,
   DrawerBody,
   DrawerTitle,
 } from "@/components/ui/drawer";
@@ -209,30 +210,60 @@ export function SearchResultPanel({ place, onClose }: SearchResultPanelProps) {
     place._provider === "dataforseo" ? "DataForSEO" : "Mapbox";
   const ProviderIcon = place._provider === "dataforseo" ? Database : Zap;
 
-  // Shared inner content (header + body + sticky save footer). Rendered
-  // in a desktop side-panel OR a mobile draggable bottom sheet (peek →
-  // half → full) — see the return below. The sticky header/footer work
-  // inside either scroll container.
-  const inner = (
-    <>
-      {/* Header */}
-      <div className="sticky top-0 bg-white/95 dark:bg-gray-950/95 backdrop-blur-sm z-10 flex items-center justify-between p-3 border-b">
-        <h2 className="font-semibold text-sm truncate flex-1 flex items-center gap-1.5">
-          <MapPin className="h-4 w-4 text-emerald-600 shrink-0" />
-          {place.name}
-        </h2>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-9 w-9 p-0 cursor-pointer shrink-0"
-          onClick={onClose}
-          aria-label="Close"
-        >
-          <X className="h-4 w-4" />
-        </Button>
-      </div>
+  // Shared building blocks, composed differently per platform below: a
+  // desktop right-hand side-panel (header / scroll / footer) vs. a
+  // mobile Google-Maps-style bottom sheet that opens at the half detent.
 
-      <div className="p-4 space-y-4">
+  // Title + close row. On mobile this lives in the touch-none drawer
+  // header, so the sheet can be dragged up from the whole header — not
+  // just the tiny grab handle.
+  const titleRow = (
+    <div className="flex items-center justify-between gap-2">
+      <h2 className="font-semibold text-sm truncate flex-1 flex items-center gap-1.5">
+        <MapPin className="h-4 w-4 text-emerald-600 shrink-0" />
+        {place.name}
+      </h2>
+      <Button
+        variant="ghost"
+        size="sm"
+        className="h-9 w-9 p-0 cursor-pointer shrink-0"
+        onClick={onClose}
+        aria-label="Close"
+      >
+        <X className="h-4 w-4" />
+      </Button>
+    </div>
+  );
+
+  // Cancel / Save. Pinned in the always-visible header on mobile — a
+  // bottom footer would sit below the fold at the half snap — and in a
+  // sticky footer on desktop.
+  const actionButtons = (
+    <>
+      <Button
+        variant="outline"
+        onClick={onClose}
+        className="flex-1 cursor-pointer"
+      >
+        Cancel
+      </Button>
+      <Button
+        onClick={handleSave}
+        disabled={createPlace.isPending}
+        className="flex-1 cursor-pointer"
+      >
+        {createPlace.isPending ? (
+          <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+        ) : (
+          <Check className="h-4 w-4 mr-1" />
+        )}
+        Save to my places
+      </Button>
+    </>
+  );
+
+  const bodyContent = (
+    <div className="p-4 space-y-4">
         {/* Photo */}
         {photoUrl && (
           <div className="h-40 rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800">
@@ -526,40 +557,17 @@ export function SearchResultPanel({ place, onClose }: SearchResultPanelProps) {
           />
         </div>
       </div>
-
-      {/* Sticky action bar — safe-area padding so Save clears the iOS
-          home indicator inside the bottom sheet. */}
-      <div className="sticky bottom-0 bg-white/95 dark:bg-gray-950/95 backdrop-blur-sm border-t p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] flex gap-2">
-        <Button
-          variant="outline"
-          onClick={onClose}
-          className="flex-1 cursor-pointer"
-        >
-          Cancel
-        </Button>
-        <Button
-          onClick={handleSave}
-          disabled={createPlace.isPending}
-          className="flex-1 cursor-pointer"
-        >
-          {createPlace.isPending ? (
-            <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-          ) : (
-            <Check className="h-4 w-4 mr-1" />
-          )}
-          Save to my places
-        </Button>
-      </div>
-    </>
   );
 
-  // Desktop: right side-panel (unchanged). Mobile: Google-Maps-style
-  // draggable bottom sheet that opens at a peek and expands upward.
-  // modal={false} keeps the map interactive behind the peek.
+  // Desktop: right side-panel — fixed header, scrolling body, sticky
+  // footer. Mobile: a Google-Maps-style bottom sheet that opens at the
+  // half detent; modal={false} keeps the map interactive behind it.
   if (isDesktop) {
     return (
-      <div className="absolute top-0 right-0 bottom-0 w-96 z-30 bg-white dark:bg-gray-950 border-l shadow-xl overflow-y-auto flex flex-col">
-        {inner}
+      <div className="absolute top-0 right-0 bottom-0 w-96 z-30 bg-white dark:bg-gray-950 border-l shadow-xl flex flex-col">
+        <div className="shrink-0 border-b p-3">{titleRow}</div>
+        <div className="flex-1 overflow-y-auto">{bodyContent}</div>
+        <div className="shrink-0 border-t p-3 flex gap-2">{actionButtons}</div>
       </div>
     );
   }
@@ -567,16 +575,34 @@ export function SearchResultPanel({ place, onClose }: SearchResultPanelProps) {
   return (
     <Drawer
       open
-      onOpenChange={(o) => {
-        if (!o) onClose();
+      onOpenChange={(open, details) => {
+        // Swipe-down must never dismiss the sheet — it springs back to
+        // the half detent. Only the X / Cancel buttons (onClose) close
+        // it, and disablePointerDismissal stops an outside tap on the
+        // map from closing it either.
+        if (!open && details.reason === "swipe") {
+          details.cancel();
+          return;
+        }
+        if (!open) onClose();
       }}
-      snapPoints={["220px", 0.55, 0.92]}
+      snapPoints={[0.5, 0.92]}
       modal={false}
+      disablePointerDismissal
     >
       <DrawerContent modal={false} className="bg-white dark:bg-gray-950">
-        {/* a11y name for the role=dialog sheet (header is visual only) */}
+        {/* a11y name for the role=dialog sheet (visual header is separate) */}
         <DrawerTitle className="sr-only">{place.name}</DrawerTitle>
-        <DrawerBody className="px-0">{inner}</DrawerBody>
+        <DrawerHeader className="border-b pb-3">
+          {titleRow}
+          <div className="mt-3 flex gap-2">{actionButtons}</div>
+        </DrawerHeader>
+        {/* Bottom safe-area pad: actions moved to the header, so the
+            scroll body's last field must clear the iOS home indicator
+            at the full snap (the old footer used to absorb this). */}
+        <DrawerBody className="px-0 pb-[env(safe-area-inset-bottom,0px)]">
+          {bodyContent}
+        </DrawerBody>
       </DrawerContent>
     </Drawer>
   );
