@@ -10,6 +10,7 @@ import { useFilterPersistStore } from "@/lib/stores/filter-persist-store";
 import { AddPlaceDialog } from "@/components/places/add-place-dialog";
 import { BulkActionBar } from "@/components/places/bulk-action-bar";
 import { FilterSheet } from "@/components/filters/filter-sheet";
+import { ClearFiltersChip } from "@/components/filters/clear-filters-chip";
 import { SavedFilterChips } from "@/components/filters/saved-filter-chips";
 import { FilterPanel } from "@/components/filters/filter-panel";
 import { Button } from "@/components/ui/button";
@@ -210,6 +211,9 @@ function PlacesContent() {
           )}
         </div>
         <div className="flex items-center gap-2">
+          {/* One-tap clear next to Filters (v1.23.0 mobile UX) —
+              clearing shouldn't require opening the sheet. */}
+          <ClearFiltersChip className="lg:hidden" />
           <Button
             variant="outline"
             size="sm"

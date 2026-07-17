@@ -2,10 +2,11 @@
 title: Filters
 type: component
 domain: frontend
-version: 1.3.0
-last_updated: 15.07.2026
+version: 1.4.0
+last_updated: 17.07.2026
 status: stable
 sources:
+  - src/components/filters/clear-filters-chip.tsx
   - src/components/filters/category-filter.tsx
   - src/components/filters/country-city-filter.tsx
   - src/components/filters/debounced-search-input.tsx
@@ -108,3 +109,18 @@ Components under `src/components/filters/`. All `"use client"`. Two top-level co
 
 - **`CountryCityFilter` does its own Supabase query.** Pull this into `src/lib/hooks/use-country-city.ts` for consistency.
 - **`FilterPanel` ↔ `FilterSheet` divergence.** Both files repeat the layout structure. A shared `FilterControls` body component would make adding new filters less error-prone.
+
+## `ClearFiltersChip` (v1.23.0)
+
+Mobile one-tap "clear everything" chip mounted NEXT TO the Filters
+button on /places and /map (`lg:hidden`). Visible when URL filters OR an
+AI state (`rankings`/`lastQuery`) are active; clears BOTH
+(`clearFilters()` + `useAiSearchStore.reset()`). A separate 36px target
+was chosen over an ✕ nested inside the Filters button (button-in-button
+is invalid HTML, tiny target, close-vs-clear ambiguity).
+
+FilterSheet's own Clear now does the same double reset (it previously
+only cleared URL filters — assistant-pushed rankings survived and kept
+the grid sorted/hidden: the mobile "clear doesn't clear" bug). The
+sheet's sort select is replaced by a static ✨ AI Ranked badge while
+rankings are active (desktop FilterPanel parity).
