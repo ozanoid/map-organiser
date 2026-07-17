@@ -30,6 +30,10 @@ interface MapViewProps {
 
 export interface MapViewHandle {
   flyToPlace: (placeId: string) => void;
+  /** Fly to a saved place AND open its marker balloon (as if the pin was
+   *  clicked) — used when a Mapbox search resolves to an already-saved
+   *  place, so we show it in place rather than the "add" panel. */
+  openPlacePopup: (placeId: string) => void;
   /** Pan + zoom to arbitrary coordinates (not tied to a saved place). */
   flyToCoords: (coords: { lng: number; lat: number; zoom?: number }) => void;
   /** Read viewport center — used for Search Box proximity bias. */
@@ -59,6 +63,62 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
 
   const defaultStyle = mapStyle || "mapbox://styles/mapbox/light-v11";
 
+  // Build + show the marker balloon for a saved place. Extracted so BOTH
+  // the marker-click handler and the imperative openPlacePopup() render
+  // the identical popup (no drift). Reads live refs → stable identity.
+  const showPlacePopup = useCallback((place: Place) => {
+    const m = map.current;
+    if (!m) return;
+
+    const ratingStars = place.rating
+      ? "★".repeat(place.rating) + "☆".repeat(5 - place.rating)
+      : "";
+    const visitStatusLabels: Record<string, { label: string; color: string }> = {
+      want_to_go: { label: "Want to Go", color: "#F59E0B" },
+      booked: { label: "Booked", color: "#3B82F6" },
+      visited: { label: "Visited", color: "#22C55E" },
+      favorite: { label: "Favorite", color: "#EF4444" },
+    };
+    const statusInfo = place.visit_status ? visitStatusLabels[place.visit_status] : null;
+    const isDark = document.documentElement.classList.contains("dark");
+    const textColor = isDark ? "#e2e8f0" : "#0f172a";
+    const mutedColor = isDark ? "#94a3b8" : "#666666";
+    const googleUrl = googleMapsPlaceUrl(
+      place.name,
+      place.google_place_id,
+      place.google_data?.url
+    );
+
+    const popupEl = document.createElement("article");
+    popupEl.setAttribute("role", "dialog");
+    popupEl.setAttribute("aria-label", `Place: ${place.name}`);
+    popupEl.style.fontFamily = "Inter, sans-serif";
+    popupEl.innerHTML = `
+        <p style="font-weight:600;font-size:14px;margin:0 0 4px;color:${textColor}">${place.name}</p>
+        ${place.address ? `<p style="font-size:12px;color:${mutedColor};margin:0 0 4px">${place.address}</p>` : ""}
+        ${ratingStars ? `<p style="font-size:12px;color:#F97316;margin:0 0 4px" aria-label="Rating: ${place.rating} out of 5">${ratingStars}</p>` : ""}
+        ${statusInfo ? `<p style="font-size:11px;color:${statusInfo.color};font-weight:500;margin:0 0 4px">${statusInfo.label}</p>` : ""}
+        <div style="display:flex;gap:12px;margin-top:6px;align-items:center">
+          <button type="button" class="popup-details" style="font-size:12px;color:#059669;font-weight:500;cursor:pointer;background:none;border:none;padding:6px 2px;margin:-6px -2px;min-height:44px;display:flex;align-items:center" aria-label="View details for ${place.name}">View details →</button>
+          ${googleUrl ? `<a href="${googleUrl}" target="_blank" rel="noopener noreferrer" style="font-size:12px;color:#3B82F6;text-decoration:none;font-weight:500;padding:6px 2px;min-height:44px;display:flex;align-items:center" onclick="event.stopPropagation()" aria-label="Open ${place.name} in Google Maps">Maps ↗</a>` : ""}
+        </div>
+      `;
+
+    const detailsBtn = popupEl.querySelector(".popup-details");
+    if (detailsBtn) {
+      detailsBtn.addEventListener("click", () => {
+        if (onPlaceClickRef.current) onPlaceClickRef.current(place);
+      });
+    }
+
+    new mapboxgl.Popup({ offset: 12, closeButton: false, maxWidth: "260px" })
+      .setLngLat([place.location.lng, place.location.lat])
+      .setDOMContent(popupEl)
+      .addTo(m);
+  }, []);
+  const showPlacePopupRef = useRef(showPlacePopup);
+  showPlacePopupRef.current = showPlacePopup;
+
   // Expose imperative methods to parent via ref
   useImperativeHandle(ref, () => ({
     flyToPlace: (placeId: string) => {
@@ -68,6 +128,13 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
       map.current.flyTo({ center: [place.location.lng, place.location.lat], zoom: 16 });
       // Trigger place click to open popup/detail
       if (onPlaceClickRef.current) onPlaceClickRef.current(place);
+    },
+    openPlacePopup: (placeId: string) => {
+      if (!map.current) return;
+      const place = placesRef.current.find((p) => p.id === placeId);
+      if (!place) return;
+      map.current.flyTo({ center: [place.location.lng, place.location.lat], zoom: 16 });
+      showPlacePopupRef.current(place);
     },
     flyToCoords: ({ lng, lat, zoom }) => {
       if (!map.current) return;
@@ -238,57 +305,12 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
       });
     });
 
-    // Click on marker → show popup
+    // Click on marker → show the same balloon openPlacePopup() renders.
     m.on("click", "unclustered-point", (e) => {
       if (!e.features?.[0]) return;
       const props = e.features[0].properties!;
-      const geometry = e.features[0].geometry;
-      if (geometry.type !== "Point") return;
-
-      const coordinates = geometry.coordinates.slice() as [number, number];
-      const ratingStars = props.rating
-        ? "\u2605".repeat(props.rating) + "\u2606".repeat(5 - props.rating)
-        : "";
-
-      const visitStatusLabels: Record<string, { label: string; color: string }> = {
-        want_to_go: { label: "Want to Go", color: "#F59E0B" },
-        booked: { label: "Booked", color: "#3B82F6" },
-        visited: { label: "Visited", color: "#22C55E" },
-        favorite: { label: "Favorite", color: "#EF4444" },
-      };
-      const statusInfo = props.visitStatus ? visitStatusLabels[props.visitStatus] : null;
-
-      const isDark = document.documentElement.classList.contains("dark");
-      const textColor = isDark ? "#e2e8f0" : "#0f172a";
-      const mutedColor = isDark ? "#94a3b8" : "#666666";
-
-      const popupEl = document.createElement("article");
-      popupEl.setAttribute("role", "dialog");
-      popupEl.setAttribute("aria-label", `Place: ${props.name}`);
-      popupEl.style.fontFamily = "Inter, sans-serif";
-      popupEl.innerHTML = `
-        <p style="font-weight:600;font-size:14px;margin:0 0 4px;color:${textColor}">${props.name}</p>
-        ${props.address ? `<p style="font-size:12px;color:${mutedColor};margin:0 0 4px">${props.address}</p>` : ""}
-        ${ratingStars ? `<p style="font-size:12px;color:#F97316;margin:0 0 4px" aria-label="Rating: ${props.rating} out of 5">${ratingStars}</p>` : ""}
-        ${statusInfo ? `<p style="font-size:11px;color:${statusInfo.color};font-weight:500;margin:0 0 4px">${statusInfo.label}</p>` : ""}
-        <div style="display:flex;gap:12px;margin-top:6px;align-items:center">
-          <button type="button" class="popup-details" style="font-size:12px;color:#059669;font-weight:500;cursor:pointer;background:none;border:none;padding:6px 2px;margin:-6px -2px;min-height:44px;display:flex;align-items:center" aria-label="View details for ${props.name}">View details \u2192</button>
-          ${props.googleUrl ? `<a href="${props.googleUrl}" target="_blank" rel="noopener noreferrer" style="font-size:12px;color:#3B82F6;text-decoration:none;font-weight:500;padding:6px 2px;min-height:44px;display:flex;align-items:center" onclick="event.stopPropagation()" aria-label="Open ${props.name} in Google Maps">Maps \u2197</a>` : ""}
-        </div>
-      `;
-
-      const detailsBtn = popupEl.querySelector(".popup-details");
-      if (detailsBtn) {
-        detailsBtn.addEventListener("click", () => {
-          const place = placesRef.current.find((p) => p.id === props.id);
-          if (place && onPlaceClickRef.current) onPlaceClickRef.current(place);
-        });
-      }
-
-      new mapboxgl.Popup({ offset: 12, closeButton: false, maxWidth: "260px" })
-        .setLngLat(coordinates)
-        .setDOMContent(popupEl)
-        .addTo(m);
+      const place = placesRef.current.find((p) => p.id === props.id);
+      if (place) showPlacePopupRef.current(place);
     });
 
     // Cursor pointer on hover

@@ -102,12 +102,24 @@ export function MapContent({ mapboxToken }: { mapboxToken: string }) {
   const [searchResult, setSearchResult] = useState<RetrievedPlaceData | null>(null);
   const queryClient = useQueryClient();
 
-  // Pick a search result: close any detail panel, focus the new marker, open save panel.
+  // Pick a search result. If it resolves to a place the user ALREADY
+  // saved (matched by google_place_id — the same dedupe key POST
+  // /api/places uses), don't open the "add" panel: fly to its existing
+  // pin and open the marker balloon, as if the user clicked it. Only new
+  // places open the save panel.
   const handleSearchSelect = useCallback((data: RetrievedPlaceData) => {
     setSelectedPlace(null);
+    const saved = data.placeId
+      ? places.find((p) => p.google_place_id === data.placeId)
+      : undefined;
+    if (saved) {
+      setSearchResult(null);
+      mapRef.current?.openPlacePopup(saved.id);
+      return;
+    }
     setSearchResult(data);
     mapRef.current?.flyToCoords({ lng: data.lng, lat: data.lat, zoom: 16 });
-  }, []);
+  }, [places]);
 
   // Close panel helper — shared by X button and popstate
   const closePanel = useCallback(() => {
