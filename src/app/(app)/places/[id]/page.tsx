@@ -423,9 +423,9 @@ export default function PlaceDetailPage() {
       {place.address && (
         <p className="text-sm text-muted-foreground">{place.address}</p>
       )}
-      {googleData.url && (
+      {mapsUrl && (
         <a
-          href={googleData.url}
+          href={mapsUrl}
           target="_blank"
           rel="noopener noreferrer"
           className="inline-flex items-center gap-1.5 text-sm text-emerald-600 hover:underline cursor-pointer"
