@@ -9,6 +9,7 @@ import { SearchBox } from "@/components/map/search-box";
 import { SearchResultPanel } from "@/components/map/search-result-panel";
 import type { RetrievedPlaceData } from "@/lib/hooks/use-place-search";
 import { FilterSheet } from "@/components/filters/filter-sheet";
+import { ClearFiltersChip } from "@/components/filters/clear-filters-chip";
 import { FilterPanel } from "@/components/filters/filter-panel";
 import { VisitStatusToggle, VisitStatusBadge } from "@/components/places/visit-status-toggle";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -225,6 +226,8 @@ export function MapContent({ mapboxToken }: { mapboxToken: string }) {
               <span className="ml-1.5 h-2 w-2 rounded-full bg-emerald-500" />
             )}
           </Button>
+          {/* One-tap clear next to Filters (v1.23.0 mobile UX). */}
+          <ClearFiltersChip className="lg:hidden shadow-md" />
         </div>
 
         {/* FAB — hidden when detail or search panel is open */}

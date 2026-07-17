@@ -6,6 +6,59 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 16.07.2026 — v1.23.0 — Assistant ↔ AI-search parity (rank_places + push)
+
+The assistant can now do what the AI search bar does on /map and /places
+— first step of the agreed convergence (AI-01 bar untouched; retirement
+only after side-by-side golden queries + natural ai_parse_query usage
+decline + user sign-off; NO mobile search bar — the assistant fills that
+gap).
+
+- NEW `src/lib/ai/rank-engine.ts` — server-side twin of the client
+  rerank assembly (TOP_N=50 + char-cap mirrors, shared prompt/schema),
+  `capWithGuaranteedSeats` (tag-boost recall guard — binds only past
+  TOP_N), `runRankLlm` (idx-sanitized → id rows).
+- NEW `rank_places` chat tool: full soft intent in `semantic_intent`;
+  agent passes taxonomy tags related to the intent as `boost_tag_ids`
+  (LLM does the semantic tag match, code does the guaranteed seats —
+  data showed tags solve synonym fragmentation: "Date Spot"=65 places
+  vs 7 for string-matching features, but over-applied at 51% → boost,
+  never exclusionary filter). Rides ai_rank_results SKU behind the 3×
+  backstop; graceful rating-order fallback. System prompt routes soft
+  queries to rank_places, structural ones to search_places.
+- `applied_filters` echo on search/rank outputs + PushRow in the panel:
+  "Show all on map (N) / Show as list (N)" writes through the SAME
+  ai-search-store (applyParse with requires_semantic_ranking:false +
+  applyRankings) → banner+clear, card sort/hide, why lines and
+  SaveFilterButton (ai_query) work unchanged; router.push closes panel.
+- **Review fixes (20/20 adversarial findings, no highs):** score-0
+  laziness backfill in the engine (LLM-skipped places were SHOWN after a
+  push where AI search hides them); degraded rank results use `notice`
+  not `error` (the panel's error-first branch swallowed rows AND push
+  buttons); `toModelOutput` strips all_ranked from the model context
+  (~3-4k tokens/step saved); ATTEMPT-based ai_rank_results tracking (a
+  failing loop now still trips the backstop); boosted seats capped at
+  topN/2 (an over-applied tag can't evict the top-rated majority);
+  top-10 picks exclude judge-hidden (<0.2) rows; PushRow promises the
+  VISIBLE count; backstop-exceeded degrades to rating order instead of
+  misdirecting the agent; `query` field describe guards against
+  soft-criterion prefiltering; English-intent mandate; lucide MapIcon
+  (global Map shadowing); failRerank guards pending-only; parse-result
+  staleness guard (in-flight parse can't clobber a fresh push).
+- **AI-01 bar visibility retired** (user decision, same day —
+  criteria-based gradual path superseded): FilterPanel mounts
+  `<AiSearchInput bannerOnly />`; no input field renders anywhere.
+  Active-state banner (query + clear ✕), clarification and broaden
+  toggle survive for the two remaining producers (saved ✨ chips,
+  assistant push). Endpoints/pipeline untouched.
+- Mobile clear UX (user feedback on parity testing): FilterSheet's
+  Clear now ALSO resets the AI-search store — pushed rankings previously
+  survived it and kept the grid sorted/hidden ("clear doesn't clear");
+  new one-tap ClearFiltersChip next to the mobile Filters button on
+  /places + /map; sheet sort select swaps to a static ✨ AI Ranked badge
+  while rankings are active (desktop parity).
+- v4 plan 4.10.0: merger step + visibility retirement executed.
+
 ## 16.07.2026 — v1.22.1 — Mapbox-search ↔ parse-link lite-profile parity
 
 Bugfix (user-reported on mobile PWA): adding a place via **Mapbox search →

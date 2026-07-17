@@ -29,7 +29,16 @@ interface AiSettingsState {
  * v1.8.1 — the rank-results LLM already sees the user's full taxonomy
  * and judges matches without needing UI nudges.
  */
-export function AiSearchInput() {
+/**
+ * v1.23.0 — AI-01 bar VISIBILITY retirement (user decision, 16.07.2026):
+ * `bannerOnly` renders NO input field — only the active-AI state
+ * surfaces (query banner with its own clear ✕, clarification, adaptive
+ * broaden toggle). The pipeline itself stays alive: saved ✨ filter
+ * chips re-run it, and the assistant's push writes the same store this
+ * banner reads. Deleting the input outright would have orphaned the
+ * "why is my map filtered?" affordance for both of those producers.
+ */
+export function AiSearchInput({ bannerOnly = false }: { bannerOnly?: boolean } = {}) {
   const [aiSettings, setAiSettings] = useState<AiSettingsState | null>(null);
   const [draft, setDraft] = useState("");
   const search = useAiSearch();
@@ -125,46 +134,72 @@ export function AiSearchInput() {
   const isReranking = rerankStatus === "pending";
   const showSpinner = isParsing || isReranking;
 
+  // bannerOnly with nothing active → render nothing at all.
+  if (bannerOnly && !lastQuery && !clarification && !broaden && !showSpinner) {
+    return null;
+  }
+
   return (
     <div className="space-y-2">
-      <form onSubmit={handleSubmit}>
-        <div className="relative">
-          <Sparkles className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-emerald-600 pointer-events-none" />
-          <Input
-            type="text"
-            inputMode="search"
-            enterKeyHint="search"
-            placeholder="Try: cozy cafes for remote work"
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            maxLength={200}
-            disabled={isParsing}
-            className="pl-9 pr-9"
-            aria-label="AI natural-language search"
-          />
-          {showSpinner ? (
-            <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
-          ) : lastQuery ? (
+      {!bannerOnly && (
+        <form onSubmit={handleSubmit}>
+          <div className="relative">
+            <Sparkles className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-emerald-600 pointer-events-none" />
+            <Input
+              type="text"
+              inputMode="search"
+              enterKeyHint="search"
+              placeholder="Try: cozy cafes for remote work"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              maxLength={200}
+              disabled={isParsing}
+              className="pl-9 pr-9"
+              aria-label="AI natural-language search"
+            />
+            {showSpinner ? (
+              <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+            ) : lastQuery ? (
+              <button
+                type="button"
+                onClick={handleClear}
+                aria-label="Clear AI search"
+                className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground cursor-pointer"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            ) : null}
+          </div>
+        </form>
+      )}
+
+      {bannerOnly && showSpinner && (
+        <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+          <Loader2 className="h-3 w-3 animate-spin" />
+          AI search…
+        </div>
+      )}
+
+      {lastQuery && !isParsing && (
+        <div className="flex items-start gap-1.5 text-[11px] text-muted-foreground italic">
+          <span className="min-w-0">
+            AI search: <span className="font-medium">&ldquo;{lastQuery}&rdquo;</span>
+            {rerankStatus === "ready" && " · ranked"}
+            {rerankStatus === "failed" && (
+              <span className="text-amber-600">
+                {" · "}AI ranking unavailable
+              </span>
+            )}
+          </span>
+          {bannerOnly && (
             <button
               type="button"
               onClick={handleClear}
               aria-label="Clear AI search"
-              className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground cursor-pointer"
+              className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground cursor-pointer not-italic"
             >
-              <X className="h-3.5 w-3.5" />
+              <X className="h-3 w-3" />
             </button>
-          ) : null}
-        </div>
-      </form>
-
-      {lastQuery && !isParsing && (
-        <div className="text-[11px] text-muted-foreground italic">
-          AI search: <span className="font-medium">&ldquo;{lastQuery}&rdquo;</span>
-          {rerankStatus === "ready" && " · ranked"}
-          {rerankStatus === "failed" && (
-            <span className="text-amber-600">
-              {" · "}AI ranking unavailable
-            </span>
           )}
         </div>
       )}

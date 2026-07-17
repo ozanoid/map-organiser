@@ -2,12 +2,13 @@
 title: AI Chat Flow
 type: flow
 domain: ai
-version: 1.0.0
+version: 1.1.0
 last_updated: 16.07.2026
 status: stable
 sources:
   - src/app/api/ai/chat/route.ts
   - src/lib/ai/chat-tools.ts
+  - src/lib/ai/rank-engine.ts
   - src/lib/ai/prompts/chat.ts
   - src/components/assistant/assistant-panel.tsx
   - src/components/assistant/assistant-launcher.tsx
@@ -21,7 +22,7 @@ related:
 # AI Chat Flow
 
 S3 AI-02 v1 (v1.21.0): the assistant — chat-based discovery and action
-over the user's saved places. Agent loop with 7 tools; session-only
+over the user's saved places. Agent loop with 8 tools; session-only
 memory; approval-gated mutations.
 
 ## Trigger
@@ -53,6 +54,12 @@ mobile).
        │    real taxonomy ids injected; "never invent ids" rule
        │  • tools (cookie client, RLS = ownership boundary):
        │      search_places      → shared queryPlaces() engine
+       │      rank_places        → v1.23.0 parity: queryPlaces + LLM-as-judge
+       │                           via rank-engine.ts (server twin of the AI
+       │                           search rerank; agent calls it ONLY for
+       │                           soft/subjective criteria; boost_tag_ids =
+       │                           taxonomy tags → guaranteed pool seats;
+       │                           rank_backstop gate + ai_rank_results SKU)
        │      get_place_details  → place + tags + lists + profile
        │      compare_places     → data-only side-by-side (model verbalises)
        │      get_stats          → shared computeUserStats()
@@ -117,9 +124,23 @@ and panel close; gone on hard refresh/sign-out. Persistent
 - **Hallucinated ids in tool args:** RLS-scoped queries return
   not-found; the model gets an honest `{error}` and recovers. No
   cross-user leak is possible through tools.
+
 - **Stale profile content:** tool outputs surface `place_profile`
   summaries — until the Tema 6 re-profile runs, those derive from the
   v1.15.1-era truncated-review inputs (v4 PART 4 #8).
+## Push to map/list (v1.23.0 parity)
+
+`search_places`/`rank_places` outputs echo `applied_filters`
+(PlaceFilters-shaped); the panel renders "Show all on map (N) / Show as
+list (N)" under the result card. Push writes through the SAME
+`ai-search-store` the AI search bar uses — `applyParse` with
+`requires_semantic_ranking: false` (rankings come from the tool; the
+orchestrator must NOT re-fire) + `applyRankings(all_ranked)` — so the
+banner (query + clear ✕), card sort/hide, why-lines and SaveFilterButton
+(`ai_query`) all work unchanged. Hard-filter pushes (search_places)
+reset the store instead. `router.push(/map|/places?qs)` + panel closes.
+Retirement criteria for the AI-01 bar live in the v4 plan (Tema 3 note).
+
 
 ## Open questions
 

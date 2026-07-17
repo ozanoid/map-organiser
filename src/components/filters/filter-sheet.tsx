@@ -11,7 +11,8 @@ import { TagFilter } from "./tag-filter";
 import { ListFilter } from "./list-filter";
 import { DebouncedSearchInput } from "./debounced-search-input";
 import { useFilters } from "@/lib/hooks/use-filters";
-import { X } from "lucide-react";
+import { useAiSearchStore } from "@/lib/stores/ai-search-store";
+import { X, Sparkles } from "lucide-react";
 
 interface FilterSheetProps {
   open: boolean;
@@ -29,6 +30,17 @@ const SORT_OPTIONS = [
 
 export function FilterSheet({ open, onOpenChange }: FilterSheetProps) {
   const { filters, setFilters, clearFilters, hasActiveFilters } = useFilters();
+  const resetAiSearch = useAiSearchStore((s) => s.reset);
+  // AI mode (assistant push or saved ✨ chip): rankings drive the order.
+  const aiSearchActive = useAiSearchStore((s) => s.rankings !== null);
+
+  // Clear must ALSO reset the AI store (desktop FilterPanel parity):
+  // clearFilters alone leaves pushed rankings alive, and the grid keeps
+  // hiding/sorting by stale scores — the mobile "clear doesn't clear" bug.
+  function handleClearAll() {
+    clearFilters();
+    resetAiSearch();
+  }
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -37,11 +49,11 @@ export function FilterSheet({ open, onOpenChange }: FilterSheetProps) {
           <SheetTitle>Filters</SheetTitle>
           <div className="flex items-center gap-2">
             <SaveFilterButton />
-            {hasActiveFilters && (
+            {(hasActiveFilters || aiSearchActive) && (
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={clearFilters}
+                onClick={handleClearAll}
                 className="cursor-pointer text-xs"
               >
                 <X className="h-3 w-3 mr-1" />
@@ -60,33 +72,42 @@ export function FilterSheet({ open, onOpenChange }: FilterSheetProps) {
         </SheetHeader>
 
         <div className="overflow-y-auto flex-1 px-5 pb-safe-area-inset-bottom" style={{ paddingBottom: "env(safe-area-inset-bottom, 16px)" }}>
-          {/* Sort */}
+          {/* Sort — replaced by a static badge while AI rankings drive
+              the order (desktop FilterPanel parity: changing sort would
+              be a confusing no-op against the semantic ordering). */}
           <div className="pt-2 pb-4">
             <label className="text-sm font-medium mb-2 block">Sort by</label>
-            <div className="relative">
-              <select
-                value={filters.sort || "newest"}
-                onChange={(e) =>
-                  setFilters({ sort: e.target.value === "newest" ? undefined : e.target.value })
-                }
-                className="w-full h-10 px-3 pr-8 text-sm border border-input rounded-md bg-background cursor-pointer appearance-none focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1 transition-colors duration-200"
-              >
-                {SORT_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-              <svg
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={2}
-              >
-                <path d="m6 9 6 6 6-6" />
-              </svg>
-            </div>
+            {aiSearchActive ? (
+              <div className="flex items-center gap-1.5 h-10 px-3 text-sm rounded-md border border-emerald-200 dark:border-emerald-900 bg-emerald-50/50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400">
+                <Sparkles className="h-3.5 w-3.5" />
+                AI Ranked
+              </div>
+            ) : (
+              <div className="relative">
+                <select
+                  value={filters.sort || "newest"}
+                  onChange={(e) =>
+                    setFilters({ sort: e.target.value === "newest" ? undefined : e.target.value })
+                  }
+                  className="w-full h-10 px-3 pr-8 text-sm border border-input rounded-md bg-background cursor-pointer appearance-none focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1 transition-colors duration-200"
+                >
+                  {SORT_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+                <svg
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                >
+                  <path d="m6 9 6 6 6-6" />
+                </svg>
+              </div>
+            )}
           </div>
 
           <div className="border-t" />

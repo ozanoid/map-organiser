@@ -2,7 +2,7 @@
 title: Assistant components
 type: component
 domain: frontend
-version: 1.0.0
+version: 1.1.0
 last_updated: 16.07.2026
 status: stable
 sources:
@@ -54,6 +54,17 @@ twMerge replaces rather than duels); full-width on mobile.
 - **Composer:** auto-growing `Textarea` (field-sizing-content), Enter
   submits / Shift+Enter newline, Stop button while streaming; empty
   state shows three suggestion chips that send directly.
+
+## Push to map/list (v1.23.0)
+
+`PushRow` renders under `tool-search_places` / `tool-rank_places`
+result cards: "Show all on map (N) / Show as list (N)". `pushToView`
+builds `PlaceFilters` from the tool's `applied_filters` echo
+(+ `sort: google_rating_desc`), writes the ai-search-store (rank pushes:
+`applyParse` with `requires_semantic_ranking: false` + `applyRankings`;
+hard-filter pushes: `reset()` so stale rankings can't reorder the fresh
+set), then `router.push` and closes the panel. Rank results render
+why-lines inline (score-ordered top picks).
 
 ## Gotchas
 

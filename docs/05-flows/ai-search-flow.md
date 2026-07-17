@@ -2,7 +2,7 @@
 title: AI Search Flow (LLM-as-judge, Phase 6.5)
 type: flow
 domain: places
-version: 2.6.0
+version: 2.8.0
 last_updated: 16.07.2026
 status: stable
 sources:
@@ -98,6 +98,17 @@ Two entry points (both call the same `useAiSearch` mutation):
 2. **v1.20.0 (NF-21):** clicking a saved AI-search chip
    (`SavedFilterChips` on /places) re-runs the stored NL query through
    the same pipeline — fresh rankings every time, never persisted.
+
+> **v1.23.0 — second producer:** the assistant panel's "Show all on
+> map/as list" push also writes this store (applyParse with
+> `requires_semantic_ranking: false` + applyRankings from the
+> `rank_places` tool — see [[ai-chat-flow]]). Everything downstream
+> (banner, sort/hide, why lines, SaveFilterButton) is producer-agnostic.
+> **Update (same day):** the user retired the BAR's visibility outright
+> — FilterPanel now mounts `<AiSearchInput bannerOnly />` (no input
+> field; active-state banner/clarification/broaden survive). This flow's
+> pipeline is now driven exclusively by saved ✨ chips and the
+> assistant's `rank_places`/push. Endpoints and functions unchanged.
 
 ## Steps
 

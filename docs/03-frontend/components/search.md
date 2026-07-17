@@ -2,8 +2,8 @@
 title: Search components
 type: component
 domain: frontend
-version: 1.1.0
-last_updated: 19.05.2026
+version: 1.2.0
+last_updated: 16.07.2026
 status: stable
 sources:
   - src/components/search/ai-search-input.tsx
@@ -26,6 +26,15 @@ holds one component, but the folder is the canonical home for future
 search-related primitives (saved queries, query history, voice input).
 
 ## `AiSearchInput`
+
+> **v1.23.0 — VISIBILITY retirement (user decision, 16.07.2026):** the
+> input bar is no longer rendered anywhere. FilterPanel mounts
+> `<AiSearchInput bannerOnly />` — only the active-AI state surfaces
+> (query banner with its own clear ✕, clarification, adaptive broaden
+> toggle), fed by the two remaining producers: saved ✨ filter chips
+> re-running the pipeline, and the assistant's push writing the same
+> store. The component's input-mode code, the parse/rank endpoints and
+> the whole pipeline stay intact (rank-engine reuses them).
 
 > `src/components/search/ai-search-input.tsx`
 

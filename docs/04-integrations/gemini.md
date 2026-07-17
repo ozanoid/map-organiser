@@ -2,7 +2,7 @@
 title: Google Gemini (LLM)
 type: integration
 domain: integrations
-version: 1.8.0
+version: 1.9.0
 last_updated: 16.07.2026
 status: stable
 sources:
@@ -106,7 +106,8 @@ The output is Zod-validated at the SDK boundary, so route code can treat it as a
 | `POST /api/ai/parse-query` (Phase 6) | Parse NL search query into structured filters + semantic intent. | Per user-submitted query | ~700 ms – 1.5 s | `ai_parse_query` |
 | `POST /api/ai/compare` (S2 F-04, v1.19.0) | Per-theme winners + occasion picks for 2-4 places from stored profiles. | Deliberate click on /places/compare | ~2-5 s | `ai_compare` |
 | `POST /api/ai/rank-results` (Phase 6) | LLM-as-judge rerank against `place_profile.searchable_summary` when `requires_semantic_ranking` is set. | Conditional — only when the query has fuzzy intent | ~1–2 s | `ai_rank_results` |
-| `POST /api/ai/chat` (S3 AI-02, v1.21.0) | Assistant agent loop: `streamText` + 7 tools (search/details/compare/stats + approval-gated add_to_list/create_list/set_visit_status), `stopWhen: stepCountIs(6)`. | Per chat turn (assistant panel) | streaming; 2-15 s/turn | `ai_chat` (1 unit per TURN, charged in onFinish; approval continuations free) |
+| `POST /api/ai/chat` (S3 AI-02, v1.21.0) | Assistant agent loop: `streamText` + 8 tools (search/**rank**/details/compare/stats + approval-gated add_to_list/create_list/set_visit_status), `stopWhen: stepCountIs(6)`. | Per chat turn (assistant panel) | streaming; 2-15 s/turn | `ai_chat` (1 unit per TURN, charged in onFinish; approval continuations free) |
+| `rank_places` chat tool (v1.23.0, inside /api/ai/chat) | Same LLM-as-judge prompt/schema as rank-results, run server-side via `rank-engine.ts` — agent invokes only for soft/subjective criteria; `functionId: ai.chat.rank`. | Conditional, within a chat turn | ~1-2 s | `ai_rank_results` (behind the 3× `rank_backstop`; the turn's `ai_chat` unit is the charge) |
 | `POST /api/ai/trip-plan` (S4 AI-09, v1.22.0) | AI trip planner: distributes ≤40 candidate places across trip days (idx-referenced `TripPlanSchema`, delete-after-validate write). Input ≈ 15-20k tokens (compact ~350-tok/candidate projection + trip frame). | Deliberate click on the trip page's AI Plan dialog | ~3-8 s | `ai_trip_plan` (1 unit per generation, burned even on LLM failure — but the trip stays untouched) |
 
 Phase 6 splits AI calls into two groups by behaviour: **background** (`enrich?step=profile` — fire-and-forget, latency-tolerant) and **interactive** (`/api/ai/*` — user is waiting). All share `getAiClient()` / `FLASH_MODEL`; structured calls use Output.object, the chat route streams. They differ only in error handling and observability expectations.
@@ -126,7 +127,7 @@ Gemini 3 Flash Preview pricing (verified 15.07.2026, ai.google.dev, standard tie
 
 Free tier: 15 RPM / 1M TPM (verify in AI Studio). Beyond that, paid quota. At our usage scale (a few hundred profiles + occasional regenerations), the monthly cost stays under \$2.
 
-**Per-user monthly budgets** (`checkAiBudget`, `src/lib/ai/track-usage.ts`): **search** = 500 searches/month (one unit per search, charged at `parse-query`; `rank-results` rides free behind a 3× runaway backstop) ≈ \$10.5/month ceiling; **compare** = 200 runs/month (v1.19.0, one unit per /api/ai/compare); **chat** = 200 turns/month (v1.21.0, `AI_MONTHLY_CHAT_CAP` — one unit per TURN charged in onFinish, approval continuations free, `stopWhen: stepCountIs(6)` bounds in-turn fan-out); **trip_plan** = 50 generations/month (v1.22.0, `AI_MONTHLY_TRIP_PLAN_CAP` — one unit per plan, deliberate-click only from the trip page's AI Plan dialog; a failed generation still burns the unit but never touches the trip) ≈ \$0.6/month ceiling; **profile** = 1000 generations/month across the add-chain, refresh, backfill, and cron ≈ \$9.5/month ceiling (a full ~470-place backfill fits in one month). Over budget the route returns **429** before calling Gemini; resets on the 1st (UTC). Fails open; unrelated to Gemini's own RPM quota.
+**Per-user monthly budgets** (`checkAiBudget`, `src/lib/ai/track-usage.ts`): **search** = 500 searches/month (one unit per search, charged at `parse-query`; `rank-results` rides free behind a 3× runaway backstop; v1.23.0: the assistant's rank_places tool is the backstop's SECOND consumer — worst-case legitimate use ≈ chat cap 200 + search cap 500 = 700 ≪ 1500, and chat ranks track ai_rank_results per ATTEMPT so a failing loop still trips it) ≈ \$10.5/month ceiling; **compare** = 200 runs/month (v1.19.0, one unit per /api/ai/compare); **chat** = 200 turns/month (v1.21.0, `AI_MONTHLY_CHAT_CAP` — one unit per TURN charged in onFinish, approval continuations free, `stopWhen: stepCountIs(6)` bounds in-turn fan-out); **trip_plan** = 50 generations/month (v1.22.0, `AI_MONTHLY_TRIP_PLAN_CAP` — one unit per plan, deliberate-click only from the trip page's AI Plan dialog; a failed generation still burns the unit but never touches the trip) ≈ \$0.6/month ceiling; **profile** = 1000 generations/month across the add-chain, refresh, backfill, and cron ≈ \$9.5/month ceiling (a full ~470-place backfill fits in one month). Over budget the route returns **429** before calling Gemini; resets on the 1st (UTC). Fails open; unrelated to Gemini's own RPM quota.
 
 > **⚠️ Thinking-mode pathology (16.07.2026, empirically verified):** on
 > `gemini-3-flash-preview`, the trip-plan call degenerated with DEFAULT
