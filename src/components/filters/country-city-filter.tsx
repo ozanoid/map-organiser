@@ -3,6 +3,13 @@
 import { useQuery } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { X } from "lucide-react";
 
 interface CountryCityFilterProps {
@@ -61,29 +68,26 @@ export function CountryCityFilter({
     <div className="space-y-2">
       {/* Country */}
       <div className="relative">
-        <select
-          value={country || ""}
-          onChange={(e) => {
-            onCountryChange(e.target.value || undefined);
-          }}
-          className="w-full h-9 px-3 pr-8 text-sm border border-input rounded-md bg-background cursor-pointer appearance-none focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1"
+        <Select
+          items={[
+            { value: null, label: "All countries" },
+            ...countries.map((c) => ({ value: c, label: c })),
+          ]}
+          value={country ?? null}
+          onValueChange={(v) => onCountryChange((v as string) || undefined)}
         >
-          <option value="">All countries</option>
-          {countries.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
-        <svg
-          className="absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={2}
-        >
-          <path d="m6 9 6 6 6-6" />
-        </svg>
+          <SelectTrigger className="w-full h-9">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={null}>All countries</SelectItem>
+            {countries.map((c) => (
+              <SelectItem key={c} value={c}>
+                {c}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         {country && (
           <Button
             variant="ghost"
@@ -104,27 +108,26 @@ export function CountryCityFilter({
           country and the parse-query country backfill missed it). */}
       {(country || city) && cities.length > 0 && (
         <div className="relative">
-          <select
-            value={city || ""}
-            onChange={(e) => onCityChange(e.target.value || undefined)}
-            className="w-full h-9 px-3 pr-8 text-sm border border-input rounded-md bg-background cursor-pointer appearance-none focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1"
+          <Select
+            items={[
+              { value: null, label: "All cities" },
+              ...cities.map((c) => ({ value: c, label: c })),
+            ]}
+            value={city ?? null}
+            onValueChange={(v) => onCityChange((v as string) || undefined)}
           >
-            <option value="">All cities</option>
-            {cities.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
-          <svg
-            className="absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={2}
-          >
-            <path d="m6 9 6 6 6-6" />
-          </svg>
+            <SelectTrigger className="w-full h-9">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={null}>All cities</SelectItem>
+              {cities.map((c) => (
+                <SelectItem key={c} value={c}>
+                  {c}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       )}
     </div>

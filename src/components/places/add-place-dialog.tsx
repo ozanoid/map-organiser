@@ -21,6 +21,13 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { InlineCategoryCreator } from "@/components/places/inline-category-creator";
 import { InlineListCreator } from "@/components/places/inline-list-creator";
 import { InlineTagInput } from "@/components/places/inline-tag-input";
@@ -429,26 +436,32 @@ export function AddPlaceDialog({ open, onOpenChange, initialUrl, source }: AddPl
                 Category
               </label>
               <div className="flex items-center gap-2">
-                <div className="relative flex-1">
-                  <select
+                <div className="flex-1">
+                  <Select
+                    items={categories.map((cat) => ({ value: cat.id, label: cat.name }))}
                     value={categoryId}
-                    onChange={(e) => {
-                      // Clear the subcategory when the parent changes — else a
-                      // subcategory from the old parent persists and Save writes
-                      // a mismatched category_id/subcategory_id pair.
-                      setCategoryId(e.target.value);
+                    onValueChange={(v) => {
+                      // base-ui fires onValueChange on EVERY item press (unlike
+                      // native onChange) — guard so re-picking the same category
+                      // doesn't wipe a chosen/auto-suggested subcategory. Clear
+                      // the subcategory only when the parent actually changes.
+                      const next = v as string;
+                      if (next === categoryId) return;
+                      setCategoryId(next);
                       setSubcategoryId(null);
                     }}
-                    className="w-full h-9 px-3 pr-8 text-sm border border-input rounded-md bg-background cursor-pointer appearance-none focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1"
                   >
-                    <option value="">Select a category...</option>
-                    {categories.map((cat) => (
-                      <option key={cat.id} value={cat.id}>
-                        {cat.name}
-                      </option>
-                    ))}
-                  </select>
-                  <svg className="absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="m6 9 6 6 6-6" /></svg>
+                    <SelectTrigger className="w-full h-9">
+                      <SelectValue placeholder="Select a category..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {categories.map((cat) => (
+                        <SelectItem key={cat.id} value={cat.id}>
+                          {cat.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <InlineCategoryCreator
                   onCreated={(id) => setCategoryId(id)}

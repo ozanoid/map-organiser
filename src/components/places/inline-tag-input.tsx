@@ -113,14 +113,14 @@ export function InlineTagInput({ selectedTagIds, onChange }: InlineTagInputProps
         />
 
         {showSuggestions && input.trim() && (
-          <div className="absolute top-full left-0 right-0 mt-1 bg-white border rounded-lg shadow-lg z-10 max-h-32 overflow-y-auto">
+          <div className="absolute top-full left-0 right-0 mt-1 bg-popover text-popover-foreground border rounded-lg shadow-lg z-10 max-h-32 overflow-y-auto">
             {suggestions.map((tag) => (
               <button
                 key={tag.id}
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => addTag(tag.id)}
-                className="w-full text-left px-3 py-1.5 text-sm hover:bg-gray-50 cursor-pointer"
+                className="w-full text-left px-3 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground cursor-pointer transition-colors"
               >
                 {tag.name}
               </button>
@@ -138,7 +138,7 @@ export function InlineTagInput({ selectedTagIds, onChange }: InlineTagInputProps
                     onError: (err) => toast.error(err.message),
                   });
                 }}
-                className="w-full text-left px-3 py-1.5 text-sm text-emerald-600 hover:bg-emerald-50 cursor-pointer"
+                className="w-full text-left px-3 py-1.5 text-sm text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 cursor-pointer transition-colors"
               >
                 + Create &quot;{input.trim()}&quot;
               </button>

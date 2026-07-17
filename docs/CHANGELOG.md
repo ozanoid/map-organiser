@@ -6,6 +6,28 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 17.07.2026 — v1.23.3 — Dropdown readability + native-select modernization
+
+- **Dark-mode readability fixes:** the Tags autocomplete dropdown rendered
+  `bg-white` + light text (unreadable in dark) → `bg-popover`/`hover:bg-accent`
+  tokens; the auth (login/signup) + offline pages were hardcoded light
+  (`bg-gray-50`, `text-gray-*`) → theme tokens (`bg-muted`, `text-foreground`,
+  `text-muted-foreground`).
+- **All 9 native `<select>` → shadcn `Select`** (@base-ui/react): sort (×3),
+  category (add-place, search-panel), country/city, list filter, trip-list
+  picker, and the 4 bulk-action menus. Consistent themed popup instead of the
+  OS-native control (notably better on mobile).
+- **Migration review (12/12 findings, 2 medium):** base-ui fires
+  `onValueChange` on EVERY item press (native `onChange` fires only on change)
+  — re-picking the same category was wiping the chosen/AI-suggested
+  subcategory; guarded both category selects with a `next === current` early
+  return. Restored the list filter's in-dropdown "All lists" reset (null-item,
+  matching country/city); removed dead `selectEl` reset plumbing in
+  bulk-action-bar; theme-fixed the offline page text; dropped vestigial
+  `relative` wrappers left by the removed chevrons.
+- Known minor: the category select no longer offers a "revert to none" row
+  (rare — categories auto-resolve to "Other"); use +New or leave as-is.
+
 ## 17.07.2026 — v1.23.2 — Search resolves saved places to their pin
 
 - Mapbox-searching a place already in the library opened the "add place"

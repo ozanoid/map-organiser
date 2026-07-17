@@ -15,6 +15,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { List, Plus, MapPin, Loader2, Compass, Calendar, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -293,22 +300,26 @@ function ListsContent() {
               </div>
 
               {tripSource === "list" && (
-                <div className="mt-2 relative">
-                  <select
+                <div className="mt-2">
+                  <Select
+                    items={lists.map((l) => ({
+                      value: l.id,
+                      label: `${l.name} (${l.place_count || 0} places)`,
+                    }))}
                     value={tripListId}
-                    onChange={(e) => setTripListId(e.target.value)}
-                    className="w-full h-9 px-3 pr-8 text-sm border border-input rounded-md bg-background cursor-pointer appearance-none"
+                    onValueChange={(v) => setTripListId(v as string)}
                   >
-                    <option value="">Select a list...</option>
-                    {lists.map((l) => (
-                      <option key={l.id} value={l.id}>
-                        {l.name} ({l.place_count || 0} places)
-                      </option>
-                    ))}
-                  </select>
-                  <svg className="absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                    <path d="m6 9 6 6 6-6" />
-                  </svg>
+                    <SelectTrigger className="w-full h-9">
+                      <SelectValue placeholder="Select a list..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {lists.map((l) => (
+                        <SelectItem key={l.id} value={l.id}>
+                          {l.name} ({l.place_count || 0} places)
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               )}
             </div>
