@@ -6,6 +6,19 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 17.07.2026 — v1.23.2 — Search resolves saved places to their pin
+
+- Mapbox-searching a place already in the library opened the "add place"
+  panel (desktop + mobile) even though it was already saved. Now, when a
+  search result matches a saved place by `google_place_id`, the map flies
+  to its existing pin and opens the marker balloon (as if the pin was
+  clicked) instead of the add panel. New places still open the add panel.
+  Implemented via a new `MapViewHandle.openPlacePopup(placeId)`; the
+  marker-click balloon and this method now share one extracted
+  `showPlacePopup` builder (no drift). Edge: a saved place hidden by an
+  active filter (no pin on the map) still opens the add panel — the
+  save's 409 dedupe prevents a duplicate.
+
 ## 17.07.2026 — v1.23.1 — Mobile Google Maps deep-link fix
 
 - The stored `google_data.url` (Places-API `place/?q=place_id:…` and
