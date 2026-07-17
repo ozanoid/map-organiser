@@ -51,6 +51,12 @@ gap).
   Active-state banner (query + clear ✕), clarification and broaden
   toggle survive for the two remaining producers (saved ✨ chips,
   assistant push). Endpoints/pipeline untouched.
+- Mobile clear UX (user feedback on parity testing): FilterSheet's
+  Clear now ALSO resets the AI-search store — pushed rankings previously
+  survived it and kept the grid sorted/hidden ("clear doesn't clear");
+  new one-tap ClearFiltersChip next to the mobile Filters button on
+  /places + /map; sheet sort select swaps to a static ✨ AI Ranked badge
+  while rankings are active (desktop parity).
 - v4 plan 4.10.0: merger step + visibility retirement executed.
 
 ## 16.07.2026 — v1.22.1 — Mapbox-search ↔ parse-link lite-profile parity
