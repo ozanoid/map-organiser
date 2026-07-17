@@ -7,7 +7,6 @@ import { usePlaces } from "@/lib/hooks/use-places";
 import { useFilters } from "@/lib/hooks/use-filters";
 import { useAiRerankOrchestrator } from "@/lib/hooks/use-ai-search";
 import { useFilterPersistStore } from "@/lib/stores/filter-persist-store";
-import { AddPlaceDialog } from "@/components/places/add-place-dialog";
 import { BulkActionBar } from "@/components/places/bulk-action-bar";
 import { FilterSheet } from "@/components/filters/filter-sheet";
 import { ClearFiltersChip } from "@/components/filters/clear-filters-chip";
@@ -25,7 +24,6 @@ import {
 } from "@/components/ui/select";
 import {
   MapPin,
-  Plus,
   SlidersHorizontal,
   CheckSquare,
   Square,
@@ -117,7 +115,6 @@ function PlacesContent() {
   const { filters, setFilters, hasActiveFilters } = useFilters();
   const { data: places = [], isLoading, isFetching } = usePlaces(filters);
   const queryClient = useQueryClient();
-  const [addOpen, setAddOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
@@ -153,6 +150,16 @@ function PlacesContent() {
         return sb - sa;
       })
     : places;
+
+  // Header count = cards actually rendered. In AI mode the grid hides
+  // cards scored below the threshold (SelectablePlaceCard returns null),
+  // so mirror that hide rule rather than showing the raw filtered total.
+  const visibleCount = aiActive
+    ? places.filter((p) => {
+        const r = aiRankings.get(p.id);
+        return r === undefined || r.score >= HIDE_BELOW_SCORE;
+      }).length
+    : places.length;
 
   const toggleSelect = useCallback((id: string) => {
     setSelectedIds((prev) => {
@@ -190,6 +197,14 @@ function PlacesContent() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <h1 className="text-xl font-semibold">Places</h1>
+          {!isLoading && (
+            <span
+              className="text-sm text-muted-foreground tabular-nums"
+              aria-label={`${visibleCount} places`}
+            >
+              {visibleCount}
+            </span>
+          )}
           <button
             type="button"
             onClick={() => queryClient.invalidateQueries({ queryKey: ["places"] })}
@@ -232,14 +247,6 @@ function PlacesContent() {
             {hasActiveFilters && (
               <span className="ml-1 h-2 w-2 rounded-full bg-emerald-500" />
             )}
-          </Button>
-          <Button
-            size="sm"
-            className="cursor-pointer"
-            onClick={() => setAddOpen(true)}
-          >
-            <Plus className="h-4 w-4 mr-1" />
-            Add Place
           </Button>
         </div>
       </div>
@@ -332,8 +339,6 @@ function PlacesContent() {
           onComplete={clearSelection}
         />
       )}
-
-      <AddPlaceDialog open={addOpen} onOpenChange={setAddOpen} />
       <FilterSheet open={filterOpen} onOpenChange={setFilterOpen} />
       </div>
     </div>
