@@ -39,12 +39,18 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
   Popup `pointer-events-auto` + no backdrop) or the full-screen viewport
   freezes the map behind it; visually-hidden DrawerTitle (a11y) +
   safe-area footer padding.
-- Deferred (follow-up): the map **detail panel** (marker → View details)
-  — entangled with manual back-button history (pushState/popstate) that
-  needs deleting + on-device re-verification; the Drawer scaffolding is
-  ready. Known low: the mobile search sheet skips its exit animation
-  (conditional mount); tablets (640-1023px) get the sheet (lg boundary,
-  matches app chrome).
+- **Place detail in a sheet (experiment, separate commit).** On mobile,
+  tapping a saved place (Places grid card OR map marker) now opens its
+  **full detail** in a half-height bottom-sheet on the current page
+  instead of navigating to `/places/[id]`. The 809-line detail page body
+  was extracted verbatim into a shared `PlaceDetailView` (behavior-
+  preserving; the route is now a thin wrapper) that renders as a page OR
+  inside `PlaceDetailSheet`. Desktop keeps navigation / the side-panel.
+  Isolated as its own commit — `git revert` cleanly removes it.
+- Known low: the mobile search sheet skips its exit animation (conditional
+  mount); tablets (640-1023px) get the sheet (lg boundary, matches app
+  chrome); the map's `selectedPlace` fetch still fires on mobile even
+  though the sheet loads its own data (harmless, kept the effect minimal).
 
 ## 17.07.2026 — v1.23.3 — Dropdown readability + native-select modernization
 

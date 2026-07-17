@@ -31,6 +31,8 @@ import {
   ArrowUpDown,
 } from "lucide-react";
 import { PlaceCard } from "@/components/places/place-card";
+import { PlaceDetailSheet } from "@/components/places/place-detail-sheet";
+import { useIsDesktop } from "@/lib/hooks/use-is-desktop";
 import {
   useAiSearchStore,
   HIDE_BELOW_SCORE,
@@ -50,10 +52,12 @@ function SelectablePlaceCard({
   place,
   isSelected,
   onToggle,
+  onOpenDetail,
 }: {
   place: Place;
   isSelected: boolean;
   onToggle: () => void;
+  onOpenDetail?: (id: string) => void;
 }) {
   const aiRanking = useAiSearchStore((s) => s.rankings?.get(place.id));
   if (aiRanking !== undefined && aiRanking.score < HIDE_BELOW_SCORE) {
@@ -97,6 +101,7 @@ function SelectablePlaceCard({
       <PlaceCard
         place={place}
         className={isSelected ? "ring-2 ring-emerald-500" : ""}
+        onOpenDetail={onOpenDetail}
       />
     </div>
   );
@@ -117,6 +122,10 @@ function PlacesContent() {
   const queryClient = useQueryClient();
   const [filterOpen, setFilterOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  // Mobile: tapping a card opens the detail in a bottom-sheet instead of
+  // navigating to /places/[id] (v1.24.0 experiment). Desktop keeps the Link.
+  const isDesktop = useIsDesktop();
+  const [detailId, setDetailId] = useState<string | null>(null);
 
   // Drive the AI rerank pipeline from this page too. AISearchInput lives
   // in FilterPanel and is mounted on BOTH /map and /places — without the
@@ -326,6 +335,7 @@ function PlacesContent() {
               place={place}
               isSelected={selectedIds.has(place.id)}
               onToggle={() => toggleSelect(place.id)}
+              onOpenDetail={isDesktop ? undefined : setDetailId}
             />
           ))}
         </div>
@@ -340,6 +350,14 @@ function PlacesContent() {
         />
       )}
       <FilterSheet open={filterOpen} onOpenChange={setFilterOpen} />
+
+      {/* Mobile: full place detail in a bottom-sheet on this page. */}
+      {detailId && (
+        <PlaceDetailSheet
+          placeId={detailId}
+          onClose={() => setDetailId(null)}
+        />
+      )}
       </div>
     </div>
   );

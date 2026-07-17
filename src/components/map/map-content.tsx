@@ -7,6 +7,8 @@ import type { MapViewHandle } from "@/components/map/map-view";
 import { AddPlaceDialog } from "@/components/places/add-place-dialog";
 import { SearchBox } from "@/components/map/search-box";
 import { SearchResultPanel } from "@/components/map/search-result-panel";
+import { PlaceDetailSheet } from "@/components/places/place-detail-sheet";
+import { useIsDesktop } from "@/lib/hooks/use-is-desktop";
 import type { RetrievedPlaceData } from "@/lib/hooks/use-place-search";
 import { FilterSheet } from "@/components/filters/filter-sheet";
 import { ClearFiltersChip } from "@/components/filters/clear-filters-chip";
@@ -101,6 +103,9 @@ export function MapContent({ mapboxToken }: { mapboxToken: string }) {
   const [detailLoading, setDetailLoading] = useState(false);
   const [searchResult, setSearchResult] = useState<RetrievedPlaceData | null>(null);
   const queryClient = useQueryClient();
+  // Mobile: the marker detail opens as a full bottom-sheet (v1.24.0
+  // experiment) instead of the desktop side-panel below.
+  const isDesktop = useIsDesktop();
 
   // Pick a search result. If it resolves to a place the user ALREADY
   // saved (matched by google_place_id — the same dedupe key POST
@@ -363,8 +368,9 @@ export function MapContent({ mapboxToken }: { mapboxToken: string }) {
           </div>
         )}
 
-        {/* Slide-in detail panel */}
-        {selectedPlace && (
+        {/* Slide-in detail panel (desktop). Mobile gets the full-detail
+            bottom-sheet below instead. */}
+        {selectedPlace && isDesktop && (
           <div className="absolute top-0 right-0 bottom-0 w-full sm:w-96 z-20 bg-white dark:bg-gray-950 border-l shadow-xl overflow-y-auto pb-14 lg:pb-0">
             {/* Close button */}
             <div className="sticky top-0 bg-white/95 dark:bg-gray-950/95 backdrop-blur-sm z-10 flex items-center justify-between p-3 border-b">
@@ -561,6 +567,17 @@ export function MapContent({ mapboxToken }: { mapboxToken: string }) {
               </div>
             ) : null}
           </div>
+        )}
+
+        {/* Mobile: full place detail in a bottom-sheet. history.back()
+            keeps parity with the pushState entry the select effect adds
+            (so the OS back button and the sheet close agree). */}
+        {selectedPlace && !isDesktop && (
+          <PlaceDetailSheet
+            key={selectedPlace.id}
+            placeId={selectedPlace.id}
+            onClose={() => window.history.back()}
+          />
         )}
 
         {/* Search-result panel (Mapbox Search Box → save).

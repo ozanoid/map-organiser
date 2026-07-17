@@ -2,8 +2,8 @@
 title: Places components
 type: component
 domain: frontend
-version: 1.5.0
-last_updated: 15.07.2026
+version: 1.6.0
+last_updated: 17.07.2026
 status: stable
 sources:
   - src/components/places/add-place-dialog.tsx
@@ -16,6 +16,8 @@ sources:
   - src/components/places/inline-tag-input.tsx
   - src/components/places/place-action-links.tsx
   - src/components/places/place-card.tsx
+  - src/components/places/place-detail-view.tsx
+  - src/components/places/place-detail-sheet.tsx
   - src/components/places/place-status-badges.tsx
   - src/components/places/place-topics.tsx
   - src/components/places/popular-times-widget.tsx
@@ -40,6 +42,38 @@ Seventeen files under `src/components/places/`. All `"use client"`. The Place-re
 > 1,155-line `places/[id]/page.tsx` into standalone components (below) —
 > behavior-preserving, plus the NF-06 review layer (owner answers, photo
 > lightbox, Local Guide chip, helpful votes) in `ReviewsSection`.
+
+> **v1.24.0:** the whole `places/[id]/page.tsx` **body** was extracted into
+> `PlaceDetailView` (behavior-preserving) so the same detail can render as a
+> route OR inside `PlaceDetailSheet` — a mobile bottom-sheet that opens on
+> the current page instead of navigating. See below.
+
+## `PlaceDetailView`
+
+- **File:** `src/components/places/place-detail-view.tsx`
+- **Props:** `{ placeId: string; onBack: () => void; onDeleted: () => void; variant?: "page" | "sheet" }`.
+- The full detail body — all fetching, the review/profile **polling** effects,
+  and every mutation (rating, notes, lists, tags, visit-status, share, delete,
+  refresh-google) live here. The route param and `router` navigation were
+  replaced by the `placeId` prop + `onBack`/`onDeleted` callbacks so it works
+  as a page or a sheet. `variant="sheet"` → full-width container + an X close
+  button (instead of the max-width-centered layout + "← Back").
+- **Used by:** the `/places/[id]` route (thin wrapper: `onBack=router.back`,
+  `onDeleted=router.push("/places")`) and `PlaceDetailSheet`.
+
+## `PlaceDetailSheet`
+
+- **File:** `src/components/places/place-detail-sheet.tsx`
+- **Props:** `{ placeId: string; onClose: () => void }`.
+- A half-height base-ui `Drawer` (`snapPoints=[0.5, 0.92]`, opens at half, drag
+  up to full) wrapping `<PlaceDetailView variant="sheet" onBack={onClose}
+  onDeleted={onClose} />`. Modal (backdrop); swipe-down / backdrop / the ✕ all
+  close it (a read+edit view — no swipe-guard).
+- **Triggers (mobile, v1.24.0 experiment):** the Places grid cards (via
+  `PlaceCard`'s `onOpenDetail`) and the map marker detail (`MapContent`
+  renders it for `selectedPlace` when `!isDesktop`, `onClose = history.back()`
+  to balance the panel's `pushState`). Desktop keeps navigation / the
+  side-panel.
 
 ## `AddPlaceDialog`
 
@@ -122,10 +156,13 @@ Seventeen files under `src/components/places/`. All `"use client"`. The Place-re
 ## `PlaceCard`
 
 - **File:** `src/components/places/place-card.tsx`
-- **Props:** `{ place: Place }`.
+- **Props:** `{ place: Place; className?; onOpenDetail?: (id) => void }`.
 - **No hooks**, no state. Pure presentation.
 - **Renders:** photo (if any), visit-status badge overlay or slim header, name, address, first 2 tags + overflow, category badge with color dot, user rating (orange) and/or Google rating (gray), city/country, Google Maps external link.
-- **Navigation:** clicking the card navigates to `/places/{place.id}`.
+- **Navigation:** by default the card is a `<Link>` to `/places/{place.id}`. When
+  `onOpenDetail` is passed (mobile grid, v1.24.0), it instead renders a
+  `div[role=button]` that calls `onOpenDetail(place.id)` to open `PlaceDetailSheet`
+  on the current page. The inner Maps `<a>` keeps its `stopPropagation`.
 - **Used by:** `/places` page (grid).
 
 ## `VisitStatusToggle` + `VisitStatusBadge`

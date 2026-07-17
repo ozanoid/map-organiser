@@ -88,11 +88,15 @@ Two components. `MapView` is a self-contained Mapbox renderer; `MapContent` is t
 - **Composes:**
   - `MapView` (with ref).
   - `FilterPanel` (desktop) / `FilterSheet` (mobile).
-  - `AddPlaceDialog`.
+  - `SearchResultPanel` (search → save), `AddPlaceDialog`.
+  - Marker detail: the inline side-panel on desktop; `PlaceDetailSheet`
+    (full detail bottom-sheet) on mobile — gated by `useIsDesktop` (v1.24.0).
   - Skeletons, badges, buttons from shadcn.
 - **Behavior:**
   - Reads `?add=<url>` on mount and opens Add Place dialog with `initialUrl`.
-  - Manages browser history (pushState/popState) so the mobile back button closes the detail panel.
+  - Manages browser history (pushState/popState) so the mobile back button
+    closes the detail panel/sheet (the mobile sheet's `onClose` calls
+    `history.back()` to stay in sync).
   - Invalidates React Query caches after rating/visit-status mutations.
   - Renders a visible-place-count badge with an expandable dropdown list of places currently in the viewport (uses `MapView.flyToPlace` ref).
   - Renders a floating action button to open the Add Place dialog.
