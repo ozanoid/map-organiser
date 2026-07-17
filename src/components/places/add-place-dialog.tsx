@@ -9,6 +9,7 @@ import { useLists } from "@/lib/hooks/use-lists";
 import { useTags } from "@/lib/hooks/use-tags";
 import { resolveCategoryId } from "@/lib/google/category-mapping";
 import type { PlaceProfile } from "@/lib/ai/schemas/place-profile";
+import { googleMapsPlaceUrl } from "@/lib/google/maps-url";
 import {
   Dialog,
   DialogContent,
@@ -382,9 +383,9 @@ export function AddPlaceDialog({ open, onOpenChange, initialUrl, source }: AddPl
                   parse (used at save as google_data.url), so surfacing it
                   as a link costs nothing. Lets the user verify the place
                   on Maps before adding — works for every add path. */}
-              {placeData.googleMapsUrl && (
+              {googleMapsPlaceUrl(placeData.name, placeData.placeId, placeData.googleMapsUrl) && (
                 <a
-                  href={placeData.googleMapsUrl}
+                  href={googleMapsPlaceUrl(placeData.name, placeData.placeId, placeData.googleMapsUrl)!}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1.5 mt-2 text-xs text-emerald-600 hover:underline cursor-pointer"

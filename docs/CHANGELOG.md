@@ -6,6 +6,18 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 17.07.2026 — v1.23.1 — Mobile Google Maps deep-link fix
+
+- The stored `google_data.url` (Places-API `place/?q=place_id:…` and
+  DataForSEO `?cid=…&g_mp=…` formats) opens the mobile Google Maps app
+  but fails to resolve there — the user lands on a blank app. All Maps
+  links now build Google's official cross-platform `api=1` URL
+  (`/maps/search/?api=1&query=<name>&query_place_id=<ChIJ…>`) via the new
+  `src/lib/google/maps-url.ts#googleMapsPlaceUrl` helper. Applied at every
+  render site: place card, place detail (×2), map popup + map-view marker
+  popup, add-place preview, shared list/trip/place views (public payload
+  strips place_id → name-search fallback, still app-resolvable).
+
 ## 16.07.2026 — v1.23.0 — Assistant ↔ AI-search parity (rank_places + push)
 
 The assistant can now do what the AI search bar does on /map and /places

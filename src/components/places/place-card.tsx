@@ -10,6 +10,7 @@ import {
   useAiSearchStore,
   HIDE_BELOW_SCORE,
 } from "@/lib/stores/ai-search-store";
+import { googleMapsPlaceUrl } from "@/lib/google/maps-url";
 
 /**
  * PlaceCard — the canonical visual representation of a saved place.
@@ -37,6 +38,13 @@ export function PlaceCard({
   const googlePhoto =
     place.google_data?.photo_storage_url || place.google_data?.photos?.[0];
   const googleRating = place.google_data?.rating;
+  // Cross-platform Maps link — the stored google_data.url is a format
+  // the mobile Maps app can't resolve (opens blank).
+  const mapsUrl = googleMapsPlaceUrl(
+    place.name,
+    place.google_place_id,
+    place.google_data?.url
+  );
   const tags = place.tags ?? [];
   const visibleTags = tags.slice(0, 2);
   const extraTagCount = tags.length - 2;
@@ -157,9 +165,9 @@ export function PlaceCard({
               </span>
             )}
 
-            {place.google_data?.url && (
+            {mapsUrl && (
               <a
-                href={place.google_data.url}
+                href={mapsUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={(e) => e.stopPropagation()}

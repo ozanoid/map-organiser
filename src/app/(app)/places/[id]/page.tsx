@@ -28,6 +28,7 @@ import { SimilarPlaces } from "@/components/places/similar-places";
 import { useLists } from "@/lib/hooks/use-lists";
 import { useCreateSharedLink } from "@/lib/hooks/use-shared-links";
 import type { PlaceProfile } from "@/lib/ai/schemas/place-profile";
+import { googleMapsPlaceUrl } from "@/lib/google/maps-url";
 import {
   ArrowLeft,
   Share2,
@@ -329,6 +330,12 @@ export default function PlaceDetailPage() {
   }
 
   const googleData = place.google_data || {};
+  // Cross-platform Maps link (mobile app can't resolve the stored url).
+  const mapsUrl = googleMapsPlaceUrl(
+    place.name,
+    place.google_place_id,
+    googleData.url as string | undefined
+  );
   const photoUrl = googleData.photo_storage_url || googleData.photos?.[0] || null;
   const reviews = googleData.reviews || [];
   const hasExtendedData = googleData.provider === "dataforseo";
@@ -416,9 +423,9 @@ export default function PlaceDetailPage() {
       {place.address && (
         <p className="text-sm text-muted-foreground">{place.address}</p>
       )}
-      {googleData.url && (
+      {mapsUrl && (
         <a
-          href={googleData.url}
+          href={mapsUrl}
           target="_blank"
           rel="noopener noreferrer"
           className="inline-flex items-center gap-1.5 text-sm text-emerald-600 hover:underline cursor-pointer"
@@ -523,9 +530,9 @@ export default function PlaceDetailPage() {
         )}
 
         {/* Google Maps link */}
-        {googleData.url && (
+        {mapsUrl && (
           <a
-            href={googleData.url}
+            href={mapsUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-2 text-sm text-emerald-600 hover:underline cursor-pointer"
