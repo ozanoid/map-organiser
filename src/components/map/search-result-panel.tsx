@@ -38,6 +38,13 @@ import {
 import { toast } from "sonner";
 import type { VisitStatus } from "@/lib/types";
 import type { RetrievedPlaceData } from "@/lib/hooks/use-place-search";
+import { useIsDesktop } from "@/lib/hooks/use-is-desktop";
+import {
+  Drawer,
+  DrawerContent,
+  DrawerBody,
+  DrawerTitle,
+} from "@/components/ui/drawer";
 
 interface SearchResultPanelProps {
   place: RetrievedPlaceData;
@@ -59,6 +66,7 @@ export function SearchResultPanel({ place, onClose }: SearchResultPanelProps) {
 
   const queryClient = useQueryClient();
   const createPlace = useCreatePlace();
+  const isDesktop = useIsDesktop();
   const { data: categories = [] } = useCategories();
   const { data: subcategories = [] } = useSubcategories();
   const { data: lists = [] } = useLists();
@@ -201,8 +209,12 @@ export function SearchResultPanel({ place, onClose }: SearchResultPanelProps) {
     place._provider === "dataforseo" ? "DataForSEO" : "Mapbox";
   const ProviderIcon = place._provider === "dataforseo" ? Database : Zap;
 
-  return (
-    <div className="absolute top-0 right-0 bottom-0 w-full sm:w-96 z-30 bg-white dark:bg-gray-950 border-l shadow-xl overflow-y-auto pb-14 lg:pb-0">
+  // Shared inner content (header + body + sticky save footer). Rendered
+  // in a desktop side-panel OR a mobile draggable bottom sheet (peek →
+  // half → full) — see the return below. The sticky header/footer work
+  // inside either scroll container.
+  const inner = (
+    <>
       {/* Header */}
       <div className="sticky top-0 bg-white/95 dark:bg-gray-950/95 backdrop-blur-sm z-10 flex items-center justify-between p-3 border-b">
         <h2 className="font-semibold text-sm truncate flex-1 flex items-center gap-1.5">
@@ -515,8 +527,9 @@ export function SearchResultPanel({ place, onClose }: SearchResultPanelProps) {
         </div>
       </div>
 
-      {/* Sticky action bar */}
-      <div className="sticky bottom-0 bg-white/95 dark:bg-gray-950/95 backdrop-blur-sm border-t p-3 flex gap-2">
+      {/* Sticky action bar — safe-area padding so Save clears the iOS
+          home indicator inside the bottom sheet. */}
+      <div className="sticky bottom-0 bg-white/95 dark:bg-gray-950/95 backdrop-blur-sm border-t p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] flex gap-2">
         <Button
           variant="outline"
           onClick={onClose}
@@ -537,6 +550,34 @@ export function SearchResultPanel({ place, onClose }: SearchResultPanelProps) {
           Save to my places
         </Button>
       </div>
-    </div>
+    </>
+  );
+
+  // Desktop: right side-panel (unchanged). Mobile: Google-Maps-style
+  // draggable bottom sheet that opens at a peek and expands upward.
+  // modal={false} keeps the map interactive behind the peek.
+  if (isDesktop) {
+    return (
+      <div className="absolute top-0 right-0 bottom-0 w-96 z-30 bg-white dark:bg-gray-950 border-l shadow-xl overflow-y-auto flex flex-col">
+        {inner}
+      </div>
+    );
+  }
+
+  return (
+    <Drawer
+      open
+      onOpenChange={(o) => {
+        if (!o) onClose();
+      }}
+      snapPoints={["220px", 0.55, 0.92]}
+      modal={false}
+    >
+      <DrawerContent modal={false} className="bg-white dark:bg-gray-950">
+        {/* a11y name for the role=dialog sheet (header is visual only) */}
+        <DrawerTitle className="sr-only">{place.name}</DrawerTitle>
+        <DrawerBody className="px-0">{inner}</DrawerBody>
+      </DrawerContent>
+    </Drawer>
   );
 }

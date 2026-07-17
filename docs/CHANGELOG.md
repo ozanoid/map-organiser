@@ -6,6 +6,32 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 17.07.2026 — v1.24.0 — Mobile bottom sheets (Google-Maps-style drawers)
+
+- New `src/components/ui/drawer.tsx` — a draggable, snap-point bottom
+  sheet built on base-ui's first-party Drawer (no new dependency; vaul
+  rejected). Detents (peek → half → full), swipe-to-dismiss,
+  `modal={false}` peek that leaves the page behind live.
+- **FilterSheet** upgraded from a fixed 65dvh sheet to a draggable Drawer
+  (`snapPoints=[0.5, 0.92]`).
+- **SearchResultPanel** (the mobile "search a place → add form filled the
+  whole screen" complaint): now a Maps-style bottom sheet — opens at a
+  ~220px peek, drag up to half (0.55) or full (0.92); desktop keeps the
+  side-panel (runtime `useIsDesktop`, no hydration flash — mounts on
+  interaction).
+- Review (11/11 findings, 3 high): base-ui drops percent-STRING snap
+  points silently → numeric viewport fractions; the non-modal peek needs
+  the base-ui pass-through pattern (Viewport `pointer-events-none` +
+  Popup `pointer-events-auto` + no backdrop) or the full-screen viewport
+  freezes the map behind it; visually-hidden DrawerTitle (a11y) +
+  safe-area footer padding.
+- Deferred (follow-up): the map **detail panel** (marker → View details)
+  — entangled with manual back-button history (pushState/popstate) that
+  needs deleting + on-device re-verification; the Drawer scaffolding is
+  ready. Known low: the mobile search sheet skips its exit animation
+  (conditional mount); tablets (640-1023px) get the sheet (lg boundary,
+  matches app chrome).
+
 ## 17.07.2026 — v1.23.3 — Dropdown readability + native-select modernization
 
 - **Dark-mode readability fixes:** the Tags autocomplete dropdown rendered

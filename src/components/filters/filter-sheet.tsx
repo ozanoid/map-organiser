@@ -1,6 +1,12 @@
 "use client";
 
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import {
+  Drawer,
+  DrawerContent,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerBody,
+} from "@/components/ui/drawer";
 import { Button } from "@/components/ui/button";
 import { CountryCityFilter } from "./country-city-filter";
 import { CategoryFilter } from "./category-filter";
@@ -50,10 +56,14 @@ export function FilterSheet({ open, onOpenChange }: FilterSheetProps) {
   }
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className="max-h-[65dvh] rounded-t-2xl flex flex-col" showCloseButton={false}>
-        <SheetHeader className="flex flex-row items-center justify-between shrink-0 px-5 pb-0">
-          <SheetTitle>Filters</SheetTitle>
+    <Drawer
+      open={open}
+      onOpenChange={onOpenChange}
+      snapPoints={[0.5, 0.92]}
+    >
+      <DrawerContent>
+        <DrawerHeader className="flex flex-row items-center justify-between px-5">
+          <DrawerTitle>Filters</DrawerTitle>
           <div className="flex items-center gap-2">
             <SaveFilterButton />
             {(hasActiveFilters || aiSearchActive) && (
@@ -76,9 +86,9 @@ export function FilterSheet({ open, onOpenChange }: FilterSheetProps) {
               Done
             </Button>
           </div>
-        </SheetHeader>
+        </DrawerHeader>
 
-        <div className="overflow-y-auto flex-1 px-5 pb-safe-area-inset-bottom" style={{ paddingBottom: "env(safe-area-inset-bottom, 16px)" }}>
+        <DrawerBody className="px-5" style={{ paddingBottom: "env(safe-area-inset-bottom, 16px)" }}>
           {/* Sort — replaced by a static badge while AI rankings drive
               the order (desktop FilterPanel parity: changing sort would
               be a confusing no-op against the semantic ordering). */}
@@ -203,9 +213,9 @@ export function FilterSheet({ open, onOpenChange }: FilterSheetProps) {
               onChange={(v) => setFilters({ google_rating_min: v || undefined })}
             />
           </div>
-        </div>
-      </SheetContent>
-    </Sheet>
+        </DrawerBody>
+      </DrawerContent>
+    </Drawer>
   );
 }
 
