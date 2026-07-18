@@ -77,7 +77,7 @@ export function SearchBox({ proximity, onSelect, className }: SearchBoxProps) {
           }}
           onFocus={() => setOpen(true)}
           placeholder="Search places…"
-          className="border-0 shadow-none focus-visible:ring-0 h-8 bg-transparent text-sm flex-1 min-w-0"
+          className="border-0 shadow-none focus-visible:ring-0 h-8 bg-transparent text-base md:text-sm flex-1 min-w-0"
         />
         {query && (
           <Button

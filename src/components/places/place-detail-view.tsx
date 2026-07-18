@@ -40,7 +40,6 @@ import {
   ExternalLink,
   Plus,
   Check,
-  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { Place, VisitStatus } from "@/lib/types";
@@ -54,7 +53,8 @@ export interface PlaceDetailViewProps {
   onDeleted: () => void;
   /**
    * "page" = full route (max-width centered, ArrowLeft "Back").
-   * "sheet" = inside a bottom-sheet Drawer (full width, X close, no top pad).
+   * "sheet" = inside a BottomSheet (full width, no top pad; the sheet's
+   * own drag header supplies the ✕ and the title).
    */
   variant?: "page" | "sheet";
 }
@@ -372,28 +372,28 @@ export function PlaceDetailView({
           : "p-4 lg:p-6 max-w-2xl mx-auto space-y-6 pb-12"
       }
     >
-      {/* Header: Back/Close + Name + Delete */}
+      {/* Header: Back + Name + Share/Delete. In a sheet the close ✕ and
+          the title live in the sheet's own drag header, so only the
+          Share/Delete pair is rendered here (right-aligned). */}
       <div className="flex items-center justify-between gap-2">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={onBack}
-          className="cursor-pointer gap-1 shrink-0"
-          aria-label={isSheet ? "Close" : "Back"}
-        >
-          {isSheet ? (
-            <X className="h-4 w-4" />
-          ) : (
-            <>
+        {!isSheet && (
+          <>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onBack}
+              className="cursor-pointer gap-1 shrink-0"
+              aria-label="Back"
+            >
               <ArrowLeft className="h-4 w-4" />
               Back
-            </>
-          )}
-        </Button>
-        <h1 className="text-lg font-semibold truncate flex-1 text-center">
-          {place.name}
-        </h1>
-        <div className="flex items-center shrink-0">
+            </Button>
+            <h1 className="text-lg font-semibold truncate flex-1 text-center">
+              {place.name}
+            </h1>
+          </>
+        )}
+        <div className={`flex items-center shrink-0${isSheet ? " ml-auto" : ""}`}>
           <Button
             variant="ghost"
             size="sm"
@@ -409,6 +409,7 @@ export function PlaceDetailView({
             size="sm"
             onClick={handleDelete}
             className="cursor-pointer text-red-500 hover:text-red-600 hover:bg-red-50"
+            aria-label="Delete this place"
           >
             <Trash2 className="h-4 w-4" />
           </Button>
@@ -809,7 +810,7 @@ export function PlaceDetailView({
               value={notesValue}
               onChange={(e) => setNotesValue(e.target.value)}
               placeholder="Write your notes..."
-              className="w-full min-h-[100px] rounded-lg border border-input bg-background px-3 py-2 text-sm resize-y focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="w-full min-h-[100px] rounded-lg border border-input bg-background px-3 py-2 text-base md:text-sm resize-y focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             />
             <div className="flex gap-2">
               <Button

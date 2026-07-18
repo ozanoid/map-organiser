@@ -39,13 +39,7 @@ import { toast } from "sonner";
 import type { VisitStatus } from "@/lib/types";
 import type { RetrievedPlaceData } from "@/lib/hooks/use-place-search";
 import { useIsDesktop } from "@/lib/hooks/use-is-desktop";
-import {
-  Drawer,
-  DrawerContent,
-  DrawerHeader,
-  DrawerBody,
-  DrawerTitle,
-} from "@/components/ui/drawer";
+import { BottomSheet } from "@/components/ui/bottom-sheet";
 
 interface SearchResultPanelProps {
   place: RetrievedPlaceData;
@@ -235,9 +229,27 @@ export function SearchResultPanel({ place, onClose }: SearchResultPanelProps) {
     </div>
   );
 
-  // Cancel / Save. Pinned in the always-visible header on mobile — a
-  // bottom footer would sit below the fold at the half snap — and in a
-  // sticky footer on desktop.
+  const saveLabel = createPlace.isPending ? (
+    <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+  ) : (
+    <Check className="h-4 w-4 mr-1" />
+  );
+
+  // Mobile: only the primary action goes in the sheet header — the
+  // sheet's own ✕ already cancels, so a second "Cancel" would be a
+  // duplicate control.
+  const saveButton = (
+    <Button
+      onClick={handleSave}
+      disabled={createPlace.isPending}
+      className="w-full cursor-pointer"
+    >
+      {saveLabel}
+      Save to my places
+    </Button>
+  );
+
+  // Desktop keeps the explicit Cancel/Save pair in its sticky footer.
   const actionButtons = (
     <>
       <Button
@@ -252,11 +264,7 @@ export function SearchResultPanel({ place, onClose }: SearchResultPanelProps) {
         disabled={createPlace.isPending}
         className="flex-1 cursor-pointer"
       >
-        {createPlace.isPending ? (
-          <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-        ) : (
-          <Check className="h-4 w-4 mr-1" />
-        )}
+        {saveLabel}
         Save to my places
       </Button>
     </>
@@ -572,38 +580,25 @@ export function SearchResultPanel({ place, onClose }: SearchResultPanelProps) {
     );
   }
 
+  // Mobile: the shared BottomSheet supplies the drag header, the
+  // half-detent rest position and the "swipe never closes" guard — the
+  // same contract every other sheet in the app follows. modal={false}
+  // keeps the map interactive behind it.
   return (
-    <Drawer
+    <BottomSheet
       open
-      onOpenChange={(open, details) => {
-        // Swipe-down must never dismiss the sheet — it springs back to
-        // the half detent. Only the X / Cancel buttons (onClose) close
-        // it, and disablePointerDismissal stops an outside tap on the
-        // map from closing it either.
-        if (!open && details.reason === "swipe") {
-          details.cancel();
-          return;
-        }
-        if (!open) onClose();
-      }}
-      snapPoints={[0.5, 0.92]}
+      onClose={onClose}
+      title={
+        <span className="flex items-center justify-center gap-1.5">
+          <MapPin className="h-4 w-4 shrink-0 text-emerald-600" />
+          <span className="truncate">{place.name}</span>
+        </span>
+      }
+      headerExtra={saveButton}
       modal={false}
-      disablePointerDismissal
+      className="bg-white dark:bg-gray-950"
     >
-      <DrawerContent modal={false} className="bg-white dark:bg-gray-950">
-        {/* a11y name for the role=dialog sheet (visual header is separate) */}
-        <DrawerTitle className="sr-only">{place.name}</DrawerTitle>
-        <DrawerHeader className="border-b pb-3">
-          {titleRow}
-          <div className="mt-3 flex gap-2">{actionButtons}</div>
-        </DrawerHeader>
-        {/* Bottom safe-area pad: actions moved to the header, so the
-            scroll body's last field must clear the iOS home indicator
-            at the full snap (the old footer used to absorb this). */}
-        <DrawerBody className="px-0 pb-[env(safe-area-inset-bottom,0px)]">
-          {bodyContent}
-        </DrawerBody>
-      </DrawerContent>
-    </Drawer>
+      {bodyContent}
+    </BottomSheet>
   );
 }

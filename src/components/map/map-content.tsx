@@ -576,6 +576,7 @@ export function MapContent({ mapboxToken }: { mapboxToken: string }) {
           <PlaceDetailSheet
             key={selectedPlace.id}
             placeId={selectedPlace.id}
+            placeName={selectedPlace.name}
             onClose={() => window.history.back()}
           />
         )}

@@ -57,7 +57,7 @@ function SelectablePlaceCard({
   place: Place;
   isSelected: boolean;
   onToggle: () => void;
-  onOpenDetail?: (id: string) => void;
+  onOpenDetail?: (place: Place) => void;
 }) {
   const aiRanking = useAiSearchStore((s) => s.rankings?.get(place.id));
   if (aiRanking !== undefined && aiRanking.score < HIDE_BELOW_SCORE) {
@@ -125,7 +125,7 @@ function PlacesContent() {
   // Mobile: tapping a card opens the detail in a bottom-sheet instead of
   // navigating to /places/[id] (v1.24.0 experiment). Desktop keeps the Link.
   const isDesktop = useIsDesktop();
-  const [detailId, setDetailId] = useState<string | null>(null);
+  const [detailPlace, setDetailPlace] = useState<Place | null>(null);
 
   // Drive the AI rerank pipeline from this page too. AISearchInput lives
   // in FilterPanel and is mounted on BOTH /map and /places — without the
@@ -335,7 +335,7 @@ function PlacesContent() {
               place={place}
               isSelected={selectedIds.has(place.id)}
               onToggle={() => toggleSelect(place.id)}
-              onOpenDetail={isDesktop ? undefined : setDetailId}
+              onOpenDetail={isDesktop ? undefined : setDetailPlace}
             />
           ))}
         </div>
@@ -352,10 +352,11 @@ function PlacesContent() {
       <FilterSheet open={filterOpen} onOpenChange={setFilterOpen} />
 
       {/* Mobile: full place detail in a bottom-sheet on this page. */}
-      {detailId && (
+      {detailPlace && (
         <PlaceDetailSheet
-          placeId={detailId}
-          onClose={() => setDetailId(null)}
+          placeId={detailPlace.id}
+          placeName={detailPlace.name}
+          onClose={() => setDetailPlace(null)}
         />
       )}
       </div>

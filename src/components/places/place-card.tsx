@@ -40,7 +40,7 @@ export function PlaceCard({
    * in a bottom-sheet instead of navigating to `/places/[id]`. Absent →
    * the card is a normal Link (desktop, and everywhere else).
    */
-  onOpenDetail?: (id: string) => void;
+  onOpenDetail?: (place: Place) => void;
 }) {
   const googlePhoto =
     place.google_data?.photo_storage_url || place.google_data?.photos?.[0];
@@ -196,7 +196,7 @@ export function PlaceCard({
       <div
         role="button"
         tabIndex={0}
-        onClick={() => onOpenDetail(place.id)}
+        onClick={() => onOpenDetail(place)}
         onKeyDown={(e) => {
           // Only the card wrapper itself opens the sheet — not keys that
           // bubbled up from the inner Maps <a> (Enter there must follow
@@ -206,7 +206,7 @@ export function PlaceCard({
             (e.key === "Enter" || e.key === " ")
           ) {
             e.preventDefault();
-            onOpenDetail(place.id);
+            onOpenDetail(place);
           }
         }}
         className="block w-full text-left cursor-pointer"

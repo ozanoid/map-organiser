@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  Drawer,
-  DrawerContent,
-  DrawerHeader,
-  DrawerTitle,
-  DrawerBody,
-} from "@/components/ui/drawer";
+import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { Button } from "@/components/ui/button";
 import { CountryCityFilter } from "./country-city-filter";
 import { CategoryFilter } from "./category-filter";
@@ -56,47 +50,29 @@ export function FilterSheet({ open, onOpenChange }: FilterSheetProps) {
   }
 
   return (
-    <Drawer
+    <BottomSheet
       open={open}
-      onOpenChange={(next, details) => {
-        // Swipe-down snaps back to the half detent instead of closing
-        // (v1.24.0 refinement); the Done button and backdrop still close.
-        if (!next && details.reason === "swipe") {
-          details.cancel();
-          return;
-        }
-        onOpenChange(next);
-      }}
-      snapPoints={[0.5, 0.92]}
-    >
-      <DrawerContent>
-        <DrawerHeader className="flex flex-row items-center justify-between px-5">
-          <DrawerTitle>Filters</DrawerTitle>
-          <div className="flex items-center gap-2">
-            <SaveFilterButton />
-            {(hasActiveFilters || aiSearchActive) && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleClearAll}
-                className="cursor-pointer text-xs"
-              >
-                <X className="h-3 w-3 mr-1" />
-                Clear
-              </Button>
-            )}
+      onClose={() => onOpenChange(false)}
+      title="Filters"
+      headerActions={
+        <>
+          <SaveFilterButton />
+          {(hasActiveFilters || aiSearchActive) && (
             <Button
-              variant="outline"
+              variant="ghost"
               size="sm"
-              onClick={() => onOpenChange(false)}
+              onClick={handleClearAll}
               className="cursor-pointer text-xs"
             >
-              Done
+              <X className="h-3 w-3 mr-1" />
+              Clear
             </Button>
-          </div>
-        </DrawerHeader>
-
-        <DrawerBody className="px-5" style={{ paddingBottom: "env(safe-area-inset-bottom, 16px)" }}>
+          )}
+        </>
+      }
+      bodyClassName="px-5"
+    >
+      <div>
           {/* Sort — replaced by a static badge while AI rankings drive
               the order (desktop FilterPanel parity: changing sort would
               be a confusing no-op against the semantic ordering). */}
@@ -221,9 +197,8 @@ export function FilterSheet({ open, onOpenChange }: FilterSheetProps) {
               onChange={(v) => setFilters({ google_rating_min: v || undefined })}
             />
           </div>
-        </DrawerBody>
-      </DrawerContent>
-    </Drawer>
+      </div>
+    </BottomSheet>
   );
 }
 

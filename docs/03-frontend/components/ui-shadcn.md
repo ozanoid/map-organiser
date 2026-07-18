@@ -2,8 +2,8 @@
 title: shadcn UI primitives
 type: component
 domain: frontend
-version: 1.0.0
-last_updated: 12.05.2026
+version: 1.1.0
+last_updated: 18.07.2026
 status: stable
 sources:
   - src/components/ui/
@@ -19,27 +19,62 @@ Components in `src/components/ui/`. Installed via the **shadcn CLI** with the `b
 
 ## What's installed
 
-19 primitives as of `last_updated`:
+21 primitives as of `last_updated`:
 
 | File | Component | Common uses |
 |---|---|---|
 | `avatar.tsx` | `Avatar`, `AvatarFallback`, `AvatarImage` | User avatar in header |
 | `badge.tsx` | `Badge` | Filter pills, status, place metadata |
+| `bottom-sheet.tsx` | `BottomSheet` | **The** mobile sheet — see below |
 | `button.tsx` | `Button` | Everywhere |
 | `card.tsx` | `Card`, `CardHeader`, `CardContent`, `CardTitle`, `CardDescription`, `CardFooter` | `PlaceCard`, stats widgets |
 | `command.tsx` | `Command` family | Command menu (cmdk-backed) |
 | `dialog.tsx` | `Dialog` family | `AddPlaceDialog`, confirm modals |
+| `drawer.tsx` | `Drawer` family | base-ui Drawer wrapper (`BottomSheet` builds on it) |
 | `dropdown-menu.tsx` | `DropdownMenu` family | Header user menu, action menus |
 | `input-group.tsx` | `InputGroup` | Search input wrapper |
 | `input.tsx` | `Input` | Forms |
 | `popover.tsx` | `Popover` family | Inline creators, color pickers |
 | `select.tsx` | `Select` family | Filter sort dropdown |
 | `separator.tsx` | `Separator` | Section dividers |
-| `sheet.tsx` | `Sheet` family | Mobile filter sheet |
+| `sheet.tsx` | `Sheet` family | Legacy side/overlay sheet (the mobile filter sheet moved to `BottomSheet` in v1.24.0) |
 | `skeleton.tsx` | `Skeleton` | Loading placeholders |
 | `sonner.tsx` | `Toaster` wrapper | Wired in root layout |
 | `tabs.tsx` | `Tabs` family | Settings tabs, Lists/Trips tabs |
 | `textarea.tsx` | `Textarea` | Notes inputs |
+
+## `BottomSheet` — the one mobile sheet (v1.24.0)
+
+Every draggable mobile panel renders through `BottomSheet`. It is not a
+generic primitive with options — it **bakes in** the app's sheet contract
+so panels can't drift apart (they did once: the add-place sheet got the
+drag header and swipe guard while the place-detail sheet didn't).
+
+```tsx
+<BottomSheet open onClose={close} title="Filters"
+  headerActions={<SaveFilterButton />}   // right of the title
+  headerExtra={<SaveButton />}           // optional 2nd header row
+  footer={…} modal={false}>
+  {scrollingBody}
+</BottomSheet>
+```
+
+The rules it enforces — change them **here**, never per consumer:
+
+1. **Opens at half.** `snapPoints=[0.5, 0.92]`; no peek.
+2. **The whole header drags.** The title row is a `touch-none`
+   `DrawerHeader` outside the scroll container; only `children` scroll.
+3. **Swipe-down never closes.** `onOpenChange` cancels
+   `reason === "swipe"` *and* resets the controlled `snapPoint` to the
+   resting detent — without that reset a fast flick springs back to full
+   instead of dropping to half. `snapToSequentialPoints` stops base-ui's
+   velocity snap-skipping from jumping to dismiss.
+4. **Only the ✕ closes**, plus `disablePointerDismissal` so an outside tap
+   can't discard an in-progress form.
+
+Consumers: `FilterSheet`, `SearchResultPanel` (mobile), `PlaceDetailSheet`.
+`drawer.tsx` stays the thin base-ui wrapper underneath; compose new sheets
+from `BottomSheet`, not from `Drawer` directly.
 
 ## Conventions
 
