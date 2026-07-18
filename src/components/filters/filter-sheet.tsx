@@ -1,6 +1,6 @@
 "use client";
 
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { Button } from "@/components/ui/button";
 import { CountryCityFilter } from "./country-city-filter";
 import { CategoryFilter } from "./category-filter";
@@ -50,35 +50,29 @@ export function FilterSheet({ open, onOpenChange }: FilterSheetProps) {
   }
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className="max-h-[65dvh] rounded-t-2xl flex flex-col" showCloseButton={false}>
-        <SheetHeader className="flex flex-row items-center justify-between shrink-0 px-5 pb-0">
-          <SheetTitle>Filters</SheetTitle>
-          <div className="flex items-center gap-2">
-            <SaveFilterButton />
-            {(hasActiveFilters || aiSearchActive) && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleClearAll}
-                className="cursor-pointer text-xs"
-              >
-                <X className="h-3 w-3 mr-1" />
-                Clear
-              </Button>
-            )}
+    <BottomSheet
+      open={open}
+      onClose={() => onOpenChange(false)}
+      title="Filters"
+      headerActions={
+        <>
+          <SaveFilterButton />
+          {(hasActiveFilters || aiSearchActive) && (
             <Button
-              variant="outline"
+              variant="ghost"
               size="sm"
-              onClick={() => onOpenChange(false)}
+              onClick={handleClearAll}
               className="cursor-pointer text-xs"
             >
-              Done
+              <X className="h-3 w-3 mr-1" />
+              Clear
             </Button>
-          </div>
-        </SheetHeader>
-
-        <div className="overflow-y-auto flex-1 px-5 pb-safe-area-inset-bottom" style={{ paddingBottom: "env(safe-area-inset-bottom, 16px)" }}>
+          )}
+        </>
+      }
+      bodyClassName="px-5"
+    >
+      <div>
           {/* Sort — replaced by a static badge while AI rankings drive
               the order (desktop FilterPanel parity: changing sort would
               be a confusing no-op against the semantic ordering). */}
@@ -203,9 +197,8 @@ export function FilterSheet({ open, onOpenChange }: FilterSheetProps) {
               onChange={(v) => setFilters({ google_rating_min: v || undefined })}
             />
           </div>
-        </div>
-      </SheetContent>
-    </Sheet>
+      </div>
+    </BottomSheet>
   );
 }
 

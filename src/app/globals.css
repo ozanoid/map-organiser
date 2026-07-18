@@ -133,6 +133,29 @@
   .safe-area-pb {
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
+
+}
+
+/* iOS Safari zooms the ENTIRE page when a focused text control renders
+   below 16px, which pans the visual viewport and makes the fixed header
+   and bottom nav look like they came unpinned (they didn't — the page is
+   just zoomed). shadcn's Input/Textarea already ship `text-base
+   md:text-sm`; this is the backstop so a one-off `text-sm` on any input
+   can never reintroduce the zoom. Desktop keeps the smaller type via the
+   md breakpoint.
+
+   NOTE: this block is deliberately UNLAYERED. Inside `@layer base` it was
+   inert — Tailwind's `utilities` layer outranks `base`, so an explicit
+   `text-sm` on an input still won at 14px. Unlayered rules outrank every
+   layer, so this actually holds. Keep it outside `@layer`. */
+@media (max-width: 767px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not(
+      [type="range"]
+    ),
+  textarea,
+  select {
+    font-size: 16px;
+  }
 }
 
 /* Mapbox popup dark mode */

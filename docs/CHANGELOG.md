@@ -6,6 +6,93 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 17.07.2026 — v1.24.0 — Mobile bottom sheets (Google-Maps-style drawers)
+
+- New `src/components/ui/drawer.tsx` — a draggable, snap-point bottom
+  sheet built on base-ui's first-party Drawer (no new dependency; vaul
+  rejected). Half → full detents, swipe-to-dismiss, `modal={false}`
+  variant that leaves the page behind live.
+- **FilterSheet** upgraded from a fixed 65dvh sheet to a draggable Drawer
+  (`snapPoints=[0.5, 0.92]`).
+- **SearchResultPanel** (the mobile "search a place → add form filled the
+  whole screen" complaint): now a Maps-style bottom sheet — opens at
+  half (0.5), drag up to full (0.92); desktop keeps the side-panel
+  (runtime `useIsDesktop`, no hydration flash — mounts on interaction).
+- **One shared sheet — `src/components/ui/bottom-sheet.tsx`.** The first
+  pass tuned each panel individually, so the add-place sheet and the
+  place-detail sheet drifted apart (the detail panel never got the drag
+  header or the swipe guard). Every draggable panel now renders through a
+  single `BottomSheet` that *bakes in* the house rules, so they cannot
+  diverge again:
+  - _Opens at half._ `snapPoints=[0.5, 0.92]`; no peek (a peek showed
+    nothing useful) — matching how Google Maps actually opens.
+  - _The whole header is the drag zone._ The title row lives in a
+    `touch-none` `DrawerHeader` OUTSIDE the scroll container, so dragging
+    anywhere on the header moves the sheet instead of scrolling the body.
+  - _Swipe-down never closes._ `onOpenChange` intercepts
+    `eventDetails.reason === "swipe"` and calls `details.cancel()`.
+    Cancelling alone is **not enough**: base-ui captures the pre-drag
+    detent (`DrawerViewport` line 462), calls `onOpenChange`, then — on
+    seeing the cancel — writes that detent straight back through
+    `onSnapPointChange` (line 553). That write lands after ours, so a
+    flick from full sprang back to full. A one-shot `swallowRestoreRef`
+    absorbs exactly that restore so the sheet settles at half.
+    `snapToSequentialPoints` additionally stops base-ui's velocity-based
+    snap-skipping from jumping straight to dismiss.
+  - _Only the ✕ closes_ (plus `disablePointerDismissal`, so an outside tap
+    can't discard an in-progress form). FilterSheet's redundant "Done" and
+    the mobile search sheet's redundant "Cancel" were dropped — the shared
+    ✕ is the one close affordance everywhere.
+  - _Primary action always reachable._ base-ui translates the popup down
+    by the snap offset, so a bottom-pinned footer sits below the fold at
+    half; the primary action lives in the always-visible header instead.
+  - Consumers: `FilterSheet`, `SearchResultPanel` (mobile), and
+    `PlaceDetailSheet` — all three now identical in structure and gesture.
+- **Mobile viewport fixes** (reported as "the header and bottom nav don't
+  stay fixed"): they were pinned all along — iOS Safari was *zooming the
+  whole page*, because Safari auto-zooms when a focused text control
+  renders below 16px, which pans the visual viewport and crops the
+  chrome. The map SearchBox input overrode shadcn's `text-base md:text-sm`
+  with a bare `text-sm` (14px). Fixed at the component **and** with a
+  `globals.css` backstop forcing `input/textarea/select` to 16px under
+  the `md` breakpoint, so a stray `text-sm` can never reintroduce it.
+  Also added `export const viewport` with
+  `interactiveWidget: "resizes-content"` so the on-screen keyboard shrinks
+  the layout viewport (the shell is `h-dvh`) instead of scrolling the
+  pinned header/nav out of view.
+- Review (11 raised / 6 confirmed) caught two fixes that were **silently
+  inert**, both since corrected: the swipe-cancel reset above (base-ui
+  overwrote it), and the `globals.css` 16px backstop — inside `@layer
+  base` every `text-sm` utility outranked it, so the rule is now
+  deliberately **unlayered** (unlayered CSS beats every cascade layer).
+  Also fixed two remaining sub-16px controls that sit inside the sheets
+  (`InlineTagInput`'s `text-sm`, the detail notes `<textarea>`) and gave
+  the detail Delete button an `aria-label`.
+- Known low: `PlaceDetailSheet` and the mobile search sheet are mounted
+  conditionally, so they pop in/out while `FilterSheet` (kept mounted)
+  animates. Fixing it means deferring the parent unmount until
+  `onOpenChangeComplete` fires — deliberately not taken here, since a
+  missed callback would leave a sheet unclosable, which is worse than the
+  missing motion.
+- Review (11/11 findings, 3 high): base-ui drops percent-STRING snap
+  points silently → numeric viewport fractions; the non-modal peek needs
+  the base-ui pass-through pattern (Viewport `pointer-events-none` +
+  Popup `pointer-events-auto` + no backdrop) or the full-screen viewport
+  freezes the map behind it; visually-hidden DrawerTitle (a11y) +
+  safe-area footer padding.
+- **Place detail in a sheet (experiment, separate commit).** On mobile,
+  tapping a saved place (Places grid card OR map marker) now opens its
+  **full detail** in a half-height bottom-sheet on the current page
+  instead of navigating to `/places/[id]`. The 809-line detail page body
+  was extracted verbatim into a shared `PlaceDetailView` (behavior-
+  preserving; the route is now a thin wrapper) that renders as a page OR
+  inside `PlaceDetailSheet`. Desktop keeps navigation / the side-panel.
+  Isolated as its own commit — `git revert` cleanly removes it.
+- Known low: the mobile search sheet skips its exit animation (conditional
+  mount); tablets (640-1023px) get the sheet (lg boundary, matches app
+  chrome); the map's `selectedPlace` fetch still fires on mobile even
+  though the sheet loads its own data (harmless, kept the effect minimal).
+
 ## 17.07.2026 — v1.23.3 — Dropdown readability + native-select modernization
 
 - **Dark-mode readability fixes:** the Tags autocomplete dropdown rendered

@@ -109,7 +109,10 @@ export function InlineTagInput({ selectedTagIds, onChange }: InlineTagInputProps
           onKeyDown={handleKeyDown}
           onFocus={() => setShowSuggestions(true)}
           onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
-          className="h-8 text-sm"
+          // No `text-sm`: it would beat Input's own `text-base md:text-sm`
+          // through twMerge and drop this below 16px on mobile, which makes
+          // iOS zoom the page when the field is focused inside a sheet.
+          className="h-8"
         />
 
         {showSuggestions && input.trim() && (

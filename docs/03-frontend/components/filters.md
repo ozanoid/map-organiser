@@ -75,7 +75,7 @@ Components under `src/components/filters/`. All `"use client"`. Two top-level co
 
 - **File:** `src/components/filters/filter-sheet.tsx`
 - **Props:** `{ open: boolean; onOpenChange: (open: boolean) => void }`.
-- **Subcomponents:** shadcn `Sheet`, `SheetContent`, `SheetHeader`, `SheetTitle`.
+- **Subcomponents:** [[ui-shadcn|`BottomSheet`]] (v1.24.0) — the shared mobile sheet, so this panel's structure and gestures are identical to the add-place and place-detail sheets: opens at half, the whole header drags, swipe-down never closes, and the ✕ is the only close affordance (the old **Done** button was dropped as a duplicate).
 - **Otherwise identical to FilterPanel** — same filter controls, same hook. Different layout (bottom sheet) with `safe-area-inset-bottom` padding.
 
 ### `ListFilter`

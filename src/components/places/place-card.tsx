@@ -31,9 +31,16 @@ import { googleMapsPlaceUrl } from "@/lib/google/maps-url";
 export function PlaceCard({
   place,
   className,
+  onOpenDetail,
 }: {
   place: Place;
   className?: string;
+  /**
+   * When provided (mobile grid / map), tapping the card opens the detail
+   * in a bottom-sheet instead of navigating to `/places/[id]`. Absent →
+   * the card is a normal Link (desktop, and everywhere else).
+   */
+  onOpenDetail?: (place: Place) => void;
 }) {
   const googlePhoto =
     place.google_data?.photo_storage_url || place.google_data?.photos?.[0];
@@ -57,13 +64,12 @@ export function PlaceCard({
     return null;
   }
 
-  return (
-    <Link href={`/places/${place.id}`} prefetch={false}>
-      <Card
-        className={`overflow-hidden hover:shadow-md transition-shadow cursor-pointer ${
-          className ?? ""
-        }`}
-      >
+  const card = (
+    <Card
+      className={`overflow-hidden hover:shadow-md transition-shadow cursor-pointer ${
+        className ?? ""
+      }`}
+    >
         {/* Photo area with visit status badge */}
         {googlePhoto && (
           <div className="relative h-32 bg-gray-100">
@@ -180,6 +186,39 @@ export function PlaceCard({
           </div>
         </div>
       </Card>
+  );
+
+  // Mobile grid / map: open the detail in a bottom-sheet on the current
+  // page. A div-button (not <button>) avoids nesting the inner Maps <a>
+  // inside a button element.
+  if (onOpenDetail) {
+    return (
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => onOpenDetail(place)}
+        onKeyDown={(e) => {
+          // Only the card wrapper itself opens the sheet — not keys that
+          // bubbled up from the inner Maps <a> (Enter there must follow
+          // the link, mirroring its onClick stopPropagation).
+          if (
+            e.target === e.currentTarget &&
+            (e.key === "Enter" || e.key === " ")
+          ) {
+            e.preventDefault();
+            onOpenDetail(place);
+          }
+        }}
+        className="block w-full text-left cursor-pointer"
+      >
+        {card}
+      </div>
+    );
+  }
+
+  return (
+    <Link href={`/places/${place.id}`} prefetch={false}>
+      {card}
     </Link>
   );
 }

@@ -38,6 +38,8 @@ import {
 import { toast } from "sonner";
 import type { VisitStatus } from "@/lib/types";
 import type { RetrievedPlaceData } from "@/lib/hooks/use-place-search";
+import { useIsDesktop } from "@/lib/hooks/use-is-desktop";
+import { BottomSheet } from "@/components/ui/bottom-sheet";
 
 interface SearchResultPanelProps {
   place: RetrievedPlaceData;
@@ -59,6 +61,7 @@ export function SearchResultPanel({ place, onClose }: SearchResultPanelProps) {
 
   const queryClient = useQueryClient();
   const createPlace = useCreatePlace();
+  const isDesktop = useIsDesktop();
   const { data: categories = [] } = useCategories();
   const { data: subcategories = [] } = useSubcategories();
   const { data: lists = [] } = useLists();
@@ -201,26 +204,74 @@ export function SearchResultPanel({ place, onClose }: SearchResultPanelProps) {
     place._provider === "dataforseo" ? "DataForSEO" : "Mapbox";
   const ProviderIcon = place._provider === "dataforseo" ? Database : Zap;
 
-  return (
-    <div className="absolute top-0 right-0 bottom-0 w-full sm:w-96 z-30 bg-white dark:bg-gray-950 border-l shadow-xl overflow-y-auto pb-14 lg:pb-0">
-      {/* Header */}
-      <div className="sticky top-0 bg-white/95 dark:bg-gray-950/95 backdrop-blur-sm z-10 flex items-center justify-between p-3 border-b">
-        <h2 className="font-semibold text-sm truncate flex-1 flex items-center gap-1.5">
-          <MapPin className="h-4 w-4 text-emerald-600 shrink-0" />
-          {place.name}
-        </h2>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-9 w-9 p-0 cursor-pointer shrink-0"
-          onClick={onClose}
-          aria-label="Close"
-        >
-          <X className="h-4 w-4" />
-        </Button>
-      </div>
+  // Shared building blocks, composed differently per platform below: a
+  // desktop right-hand side-panel (header / scroll / footer) vs. a
+  // mobile Google-Maps-style bottom sheet that opens at the half detent.
 
-      <div className="p-4 space-y-4">
+  // Title + close row. On mobile this lives in the touch-none drawer
+  // header, so the sheet can be dragged up from the whole header — not
+  // just the tiny grab handle.
+  const titleRow = (
+    <div className="flex items-center justify-between gap-2">
+      <h2 className="font-semibold text-sm truncate flex-1 flex items-center gap-1.5">
+        <MapPin className="h-4 w-4 text-emerald-600 shrink-0" />
+        {place.name}
+      </h2>
+      <Button
+        variant="ghost"
+        size="sm"
+        className="h-9 w-9 p-0 cursor-pointer shrink-0"
+        onClick={onClose}
+        aria-label="Close"
+      >
+        <X className="h-4 w-4" />
+      </Button>
+    </div>
+  );
+
+  const saveLabel = createPlace.isPending ? (
+    <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+  ) : (
+    <Check className="h-4 w-4 mr-1" />
+  );
+
+  // Mobile: only the primary action goes in the sheet header — the
+  // sheet's own ✕ already cancels, so a second "Cancel" would be a
+  // duplicate control.
+  const saveButton = (
+    <Button
+      onClick={handleSave}
+      disabled={createPlace.isPending}
+      className="w-full cursor-pointer"
+    >
+      {saveLabel}
+      Save to my places
+    </Button>
+  );
+
+  // Desktop keeps the explicit Cancel/Save pair in its sticky footer.
+  const actionButtons = (
+    <>
+      <Button
+        variant="outline"
+        onClick={onClose}
+        className="flex-1 cursor-pointer"
+      >
+        Cancel
+      </Button>
+      <Button
+        onClick={handleSave}
+        disabled={createPlace.isPending}
+        className="flex-1 cursor-pointer"
+      >
+        {saveLabel}
+        Save to my places
+      </Button>
+    </>
+  );
+
+  const bodyContent = (
+    <div className="p-4 space-y-4">
         {/* Photo */}
         {photoUrl && (
           <div className="h-40 rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800">
@@ -514,29 +565,40 @@ export function SearchResultPanel({ place, onClose }: SearchResultPanelProps) {
           />
         </div>
       </div>
+  );
 
-      {/* Sticky action bar */}
-      <div className="sticky bottom-0 bg-white/95 dark:bg-gray-950/95 backdrop-blur-sm border-t p-3 flex gap-2">
-        <Button
-          variant="outline"
-          onClick={onClose}
-          className="flex-1 cursor-pointer"
-        >
-          Cancel
-        </Button>
-        <Button
-          onClick={handleSave}
-          disabled={createPlace.isPending}
-          className="flex-1 cursor-pointer"
-        >
-          {createPlace.isPending ? (
-            <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-          ) : (
-            <Check className="h-4 w-4 mr-1" />
-          )}
-          Save to my places
-        </Button>
+  // Desktop: right side-panel — fixed header, scrolling body, sticky
+  // footer. Mobile: a Google-Maps-style bottom sheet that opens at the
+  // half detent; modal={false} keeps the map interactive behind it.
+  if (isDesktop) {
+    return (
+      <div className="absolute top-0 right-0 bottom-0 w-96 z-30 bg-white dark:bg-gray-950 border-l shadow-xl flex flex-col">
+        <div className="shrink-0 border-b p-3">{titleRow}</div>
+        <div className="flex-1 overflow-y-auto">{bodyContent}</div>
+        <div className="shrink-0 border-t p-3 flex gap-2">{actionButtons}</div>
       </div>
-    </div>
+    );
+  }
+
+  // Mobile: the shared BottomSheet supplies the drag header, the
+  // half-detent rest position and the "swipe never closes" guard — the
+  // same contract every other sheet in the app follows. modal={false}
+  // keeps the map interactive behind it.
+  return (
+    <BottomSheet
+      open
+      onClose={onClose}
+      title={
+        <span className="flex items-center justify-center gap-1.5">
+          <MapPin className="h-4 w-4 shrink-0 text-emerald-600" />
+          <span className="truncate">{place.name}</span>
+        </span>
+      }
+      headerExtra={saveButton}
+      modal={false}
+      className="bg-white dark:bg-gray-950"
+    >
+      {bodyContent}
+    </BottomSheet>
   );
 }
