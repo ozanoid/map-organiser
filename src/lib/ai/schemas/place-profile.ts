@@ -56,6 +56,40 @@ export const PlaceProfileSchema = z.object({
   /** UUIDs of user lists this place semantically fits. */
   suggested_lists: z.array(z.string().uuid()),
 
+  /**
+   * Concepts from the global controlled vocabulary whose `bucket` is `tag`.
+   * These are scenes, rituals, settings, policies and the like — things no
+   * `features` axis has a home for, which is why they used to end up as one-off
+   * strings in `distinctive`.
+   *
+   * `evidence` is mandatory and must be a verbatim quote from the reviews. The
+   * requirement is what holds precision: with it, a 100-place run produced zero
+   * hallucinations and left 27% of places with no concept at all, which is the
+   * correct answer for a place the reviews say nothing distinctive about.
+   *
+   * The count cap lives in the prompt and in `applyProfileSuggestions`, not
+   * here. A schema that enforces policy turns a model returning a ninth item
+   * into a total profile failure — measured at 1 place in 12. The schema
+   * validates SHAPE; the apply layer truncates.
+   */
+  matched_concepts: z.array(
+    z.object({
+      concept: z.string(),
+      evidence: z.string(),
+    })
+  ),
+
+  /**
+   * The JOB B channel: something salient the vocabulary cannot express.
+   *
+   * Never surfaced to the user and never applied — it is written to
+   * `vocabulary_candidates` and is the only input the next refresh has for
+   * growing the dictionary. Without it the vocabulary ossifies: a closed-set
+   * extractor with no gap channel found exactly one new concept across 400
+   * places, because it had been turned into a classifier.
+   */
+  concept_gaps: z.array(z.string()),
+
   // ===== full-only =====
   tldr: z.string().nullable(),
   pros: z.array(z.string()).max(5).nullable(),

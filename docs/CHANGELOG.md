@@ -6,6 +6,45 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 05.08.2026 — v1.25.0 — Controlled vocabulary (global concept dictionary)
+
+- **Root cause.** `place_profile.features.*` and the free-form tag path both
+  fragmented for the same reason: values were generated one place at a time with
+  no global view. Measured over 400 places — `occasions` held 368 distinct values
+  (`date night` and `date-night` counted separately), `dietary` five spellings of
+  "vegetarian options", `distinctive` 927 values of which 858 appeared exactly
+  once. `ai_suggestions_queue` had reached 920 pending tag proposals, 804
+  distinct, 85.8% proposed by a single place.
+- **New tables** — `vocabulary_concepts`, `vocabulary_aliases`,
+  `vocabulary_candidates`, `vocabulary_migrations`, plus `tags.concept_id`.
+  See [[02-backend/schema/vocabulary]]. Seeded with 257 concepts / 1077 aliases.
+- **First global-read tables in the app.** `vocabulary_concepts` and
+  `vocabulary_aliases` grant SELECT to all authenticated users and have no write
+  policy at all, so only the service role can mutate them. See
+  [[02-backend/rls-policies#the-global-vocabulary-carve-out]].
+- **`features` schema is unchanged.** The seven descriptive families write
+  canonical terms into the existing axes, so `rank-results`, `trip-plan` and
+  `compare` were not touched. Ten further families feed the tag system via
+  `tags` + `place_tags`, which keeps the filter panel and saved filters working
+  as-is. `features.distinctive` and `price_range` stay outside the vocabulary.
+- **Evidence is mandatory.** A concept is applied only with a verbatim review
+  quote. Dry run over 12 real places: zero assignments without evidence, zero
+  schema failures, 96% of feature-axis values canonical, an apartment block with
+  nothing filterable to say matched nothing.
+- **`concept_gaps` → `vocabulary_candidates`.** Never surfaced, never applied;
+  the only input the next refresh has. A closed-set extractor without this
+  channel was measured finding one new concept across 400 places.
+- **Caps moved out of the Zod schema.** `matched_concepts` and `concept_gaps` are
+  unbounded in the schema and truncated in `apply-suggestions.ts`: a schema that
+  rejected a ninth item discarded whole profiles, measured at 1 place in 12.
+- Known: the incremental refresh is validated as a harness (100% anchor
+  stability, quality level with a from-scratch rebuild) but is not yet a
+  scheduled job — the dictionary is static until it is wired.
+- Pre-existing and unrelated: 7 `experimental_telemetry.metadata` type errors
+  from the AI SDK v7 bump, present on `main` before this work.
+
+---
+
 ## 17.07.2026 — v1.24.0 — Mobile bottom sheets (Google-Maps-style drawers)
 
 - New `src/components/ui/drawer.tsx` — a draggable, snap-point bottom

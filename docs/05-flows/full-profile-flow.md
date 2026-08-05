@@ -2,14 +2,15 @@
 title: Full Profile Flow (AI Phase 4)
 type: flow
 domain: places
-version: 1.4.2
-last_updated: 15.07.2026
+version: 1.5.0
+last_updated: 05.08.2026
 status: stable
 sources:
   - src/app/api/places/[id]/enrich/route.ts
   - src/lib/ai/generate-profile.ts
   - src/lib/ai/prompts/place-profile-full.ts
   - src/lib/ai/apply-suggestions.ts
+  - src/lib/vocabulary/read.ts
   - src/lib/ai/schemas/place-profile.ts
   - src/components/places/ai-summary-card.tsx
   - src/app/(app)/places/[id]/page.tsx
@@ -18,6 +19,7 @@ related:
   - "[[../02-backend/api-routes/places]]"
   - "[[../02-backend/schema/ai_suggestions_queue]]"
   - "[[../02-backend/schema/subcategories]]"
+  - "[[../02-backend/schema/vocabulary]]"
   - "[[../04-integrations/gemini]]"
 ---
 

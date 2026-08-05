@@ -3,6 +3,13 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { PlaceProfile } from "@/lib/ai/schemas/place-profile";
 import { dedupProposals } from "@/lib/ai/dedup";
 import { normalize } from "@/lib/ai/normalize";
+import { resolveAlias, type Vocabulary } from "@/lib/vocabulary/read";
+
+/** Caps are enforced here, not in the Zod schema: a schema that rejects a
+ *  ninth concept discards the whole profile, which was measured failing 1 place
+ *  in 12. Truncating is always the better trade. */
+const MAX_CONCEPTS_PER_PLACE = 8;
+const MAX_GAPS_PER_PLACE = 2;
 
 /**
  * Auto-apply policy for AI place_profile suggestions (Phase 4 + 5.5).
@@ -51,6 +58,138 @@ interface ApplyContext {
   categories: Array<{ id: string; name: string }>;
   /** Model version string for traceability in the queue. */
   modelVersion: string;
+  /** The global controlled vocabulary, when loaded. Absent on older callers. */
+  vocabulary?: Vocabulary;
+}
+
+/**
+ * Concepts the LLM matched from the global vocabulary become real tags on the
+ * place — reusing `tags` + `place_tags` rather than a parallel junction, so the
+ * filter panel, saved filters and tag pills all keep working untouched.
+ *
+ * The tag carries `concept_id`, which is what makes the dictionary's promise
+ * hold: a concept can be renamed at refresh time and nothing breaks, because
+ * nothing references it by name.
+ *
+ * No moderation queue here, deliberately. The queue exists to gate NEW
+ * vocabulary; these concepts are already in the curated dictionary, each
+ * assignment carries a verbatim review quote, and a 100-place run produced zero
+ * hallucinations with 27% of places correctly matching nothing. Sending them to
+ * a queue would recreate the 920-row backlog this whole system replaced.
+ */
+async function applyMatchedConcepts(
+  supabase: SupabaseClient,
+  profile: PlaceProfile,
+  ctx: ApplyContext
+): Promise<number> {
+  const vocab = ctx.vocabulary;
+  const matched = (profile.matched_concepts ?? []).slice(0, MAX_CONCEPTS_PER_PLACE);
+  if (!vocab || matched.length === 0) return 0;
+
+  // Only concepts destined for the tag system, and only ones that really exist —
+  // the closed set is enforced here too, not just in the prompt.
+  const concepts = matched
+    .map((m) => vocab.byName.get(m.concept.toLowerCase().trim()))
+    .filter(
+      (c): c is NonNullable<typeof c> => Boolean(c) && c!.bucket === "tag"
+    );
+  if (concepts.length === 0) return 0;
+
+  const { data: existingTags } = await supabase
+    .from("tags")
+    .select("id, name, concept_id")
+    .eq("user_id", ctx.userId);
+  const byConcept = new Map<string, string>();
+  const byName = new Map<string, string>();
+  for (const t of (existingTags ?? []) as Array<{
+    id: string;
+    name: string;
+    concept_id: string | null;
+  }>) {
+    if (t.concept_id) byConcept.set(t.concept_id, t.id);
+    byName.set(normalize(t.name), t.id);
+  }
+
+  const tagIds: string[] = [];
+  for (const c of concepts) {
+    let tagId = byConcept.get(c.id);
+    if (!tagId) {
+      // The user may already own a tag for this concept under their own
+      // spelling ("Listening Bar" vs listening-bar). Adopt it rather than
+      // creating a duplicate — and link it so future refreshes track it.
+      const ownTag = byName.get(normalize(c.canonical_name));
+      if (ownTag) {
+        await supabase
+          .from("tags")
+          .update({ concept_id: c.id })
+          .eq("id", ownTag)
+          .eq("user_id", ctx.userId);
+        tagId = ownTag;
+      } else {
+        const title = c.canonical_name
+          .split("-")
+          .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
+          .join(" ");
+        const { data: created } = await supabase
+          .from("tags")
+          .insert({ user_id: ctx.userId, name: title, concept_id: c.id })
+          .select("id")
+          .single();
+        if (!created) continue;
+        tagId = created.id as string;
+      }
+      byConcept.set(c.id, tagId);
+      byName.set(normalize(c.canonical_name), tagId);
+    }
+    tagIds.push(tagId);
+  }
+  if (tagIds.length === 0) return 0;
+
+  const { data: have } = await supabase
+    .from("place_tags")
+    .select("tag_id")
+    .eq("place_id", ctx.placeId);
+  const already = new Set((have ?? []).map((r) => r.tag_id as string));
+  const toInsert = [...new Set(tagIds)]
+    .filter((id) => !already.has(id))
+    .map((tag_id) => ({ place_id: ctx.placeId, tag_id }));
+  if (toInsert.length === 0) return 0;
+  await supabase.from("place_tags").insert(toInsert);
+  return toInsert.length;
+}
+
+/**
+ * JOB B. Written silently, surfaced to nobody, read only by the next refresh.
+ *
+ * This is the single thing that keeps the vocabulary from ossifying. A
+ * closed-set extractor with no gap channel was measured finding exactly ONE new
+ * concept across 400 places — it had stopped mining and started classifying.
+ */
+async function recordConceptGaps(
+  supabase: SupabaseClient,
+  profile: PlaceProfile,
+  ctx: ApplyContext
+): Promise<number> {
+  const gaps = (profile.concept_gaps ?? [])
+    .slice(0, MAX_GAPS_PER_PLACE)
+    .map((g) => g.trim())
+    .filter((g) => g.length > 1 && g.length <= 48);
+  if (gaps.length === 0) return 0;
+  // A gap that already resolves to a concept is not a gap — the model just
+  // failed to spot the existing term.
+  const fresh = ctx.vocabulary
+    ? gaps.filter((g) => !resolveAlias(ctx.vocabulary!, g))
+    : gaps;
+  if (fresh.length === 0) return 0;
+  await supabase.from("vocabulary_candidates").insert(
+    fresh.map((raw_value) => ({
+      raw_value,
+      user_id: ctx.userId,
+      place_id: ctx.placeId,
+      source: "profile_gap",
+    }))
+  );
+  return fresh.length;
 }
 
 export async function applyProfileSuggestions(
@@ -60,10 +199,22 @@ export async function applyProfileSuggestions(
 ): Promise<{
   tagsApplied: number;
   tagsQueued: number;
+  conceptsApplied: number;
+  gapsRecorded: number;
   subcategoryApplied: string | null;
   subcategoryQueued: string | null;
   categoryChangeQueued: string | null;
 }> {
+  // Vocabulary concepts and their gap channel run first and independently of
+  // the legacy free-form tag path below — a failure in either must not take the
+  // other down.
+  const conceptsApplied = await applyMatchedConcepts(supabase, profile, ctx).catch(
+    () => 0
+  );
+  const gapsRecorded = await recordConceptGaps(supabase, profile, ctx).catch(
+    () => 0
+  );
+
   let tagsApplied = 0;
   let tagsQueued = 0;
   let subcategoryApplied: string | null = null;
@@ -249,6 +400,8 @@ export async function applyProfileSuggestions(
   return {
     tagsApplied,
     tagsQueued,
+    conceptsApplied,
+    gapsRecorded,
     subcategoryApplied,
     subcategoryQueued,
     categoryChangeQueued,

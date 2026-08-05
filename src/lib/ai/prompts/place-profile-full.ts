@@ -3,6 +3,11 @@ import {
   serializeUserContext,
   type UserContext,
 } from "@/lib/ai/context-builder";
+import {
+  serializeBucketVocabulary,
+  serializeTagVocabulary,
+  type Vocabulary,
+} from "@/lib/vocabulary/read";
 
 interface PromptInputPlace {
   name: string;
@@ -69,7 +74,8 @@ function compactReview(r: { rating?: number; text?: string }, maxChars = 1000) {
 export function buildPlaceProfilePrompt(
   place: PromptInputPlace,
   context: UserContext,
-  liteProfileForPrior?: unknown
+  liteProfileForPrior?: unknown,
+  vocabulary?: Vocabulary
 ) {
   const gd = place.google_data ?? {};
   const types: string[] = Array.isArray((gd as { types?: unknown[] }).types)
@@ -109,6 +115,60 @@ export function buildPlaceProfilePrompt(
     .map(([parent, slugs]) => `  - ${parent}: ${slugs.join(", ")}`)
     .join("\n");
 
+  // ── Controlled vocabulary ────────────────────────────────────────────────
+  // Absent (first run, or a vocabulary read failure) the prompt degrades to its
+  // pre-dictionary behaviour rather than failing the enrichment.
+  const bucketVocab = vocabulary ? serializeBucketVocabulary(vocabulary) : "";
+  const tagVocab = vocabulary ? serializeTagVocabulary(vocabulary) : "";
+
+  const bucketVocabBlock = bucketVocab
+    ? `
+   CONTROLLED VOCABULARY for the seven axes above. Reuse these EXACT terms
+   whenever one fits — spelling drift is the whole problem this solves. Values
+   that fit nothing here are still allowed, but only when no listed term comes
+   close; prefer the listed term over a synonym you would otherwise invent.
+${bucketVocab}`
+    : "";
+
+  const conceptBlock = tagVocab
+    ? `
+
+6b. MATCHED_CONCEPTS — scenes, rituals, settings, policies and the like. These
+    have no home in the seven axes above; before this vocabulary existed they
+    leaked into "distinctive" as one-off phrases.
+
+    Pick ONLY from this list. Never invent one, never return a near-miss.
+
+${tagVocab}
+
+    RULES
+    - Assign a concept only when a reviewer said something that directly
+      supports it, and quote them VERBATIM in "evidence". No quote, no concept.
+    - Never infer from venue type. "It is a popular restaurant so it probably
+      needs booking" is forbidden. "It is a cafe so it probably has wifi" is
+      forbidden.
+    - The reviews are silent on most of these for most places. AN EMPTY LIST IS
+      THE NORMAL, CORRECT ANSWER. Do not pad, and do not report absence.
+    - Opposites are mutually exclusive: never assign both booking-required and
+      walk-ins-only, both good-value and splurge, or both generous-portions and
+      small-portions. If reviewers genuinely disagree, assign neither.
+    - Region-scoped concepts (marked [NL], [TR], …) apply only to places in that
+      region.
+
+6c. CONCEPT_GAPS — at most 2, usually none.
+
+    Something genuinely notable about this place that the vocabulary above
+    CANNOT express. This is not a suggestion to the user and is never shown to
+    anyone; it is how the dictionary learns what it is missing.
+
+    A gap must still be a term a person would search for, applying to many
+    places — not a description of this one venue. "bow-and-sip-ritual" and
+    "celebrity-wall" are not gaps. A bar built around a specific game format, a
+    venue whose draw is a workshop, a regional institution the list has no word
+    for — those are gaps. Roughly one place in four reveals one; leave it empty
+    otherwise.`
+    : "";
+
   const systemPrompt = `You are a structured place profile extractor for a place-management app. Output strictly valid JSON matching the provided schema. All output strings must be in English regardless of review language — translate when needed.
 
 USER CONTEXT (entities the user already owns — use IDs from these lists):
@@ -144,6 +204,11 @@ CRITICAL RULES:
 6. FEATURES
    - cuisine_types, dietary, atmosphere, occasions, seating, music, crowd: be specific but conservative.
    - price_range: pick "$" / "$$" / "$$$" / "$$$$" or null.
+   - "distinctive" is the one free-form axis. Keep writing what is genuinely
+     notable and particular about THIS place — it is shown to the user as-is and
+     is not part of the vocabulary below.
+${bucketVocabBlock}
+${conceptBlock}
 
 7. SEARCHABLE_SUMMARY
    - 250-400 words in English. Optimized for keyword + semantic ranking. Include: cuisine, atmosphere, occasions, distinctive features, location context, and recurring specifics reviewers mention (signature dishes, standout details). Avoid generic filler.
