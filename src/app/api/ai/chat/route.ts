@@ -150,13 +150,17 @@ export async function POST(request: NextRequest) {
         messages: modelMessages,
         tools,
         stopWhen: stepCountIs(STEP_LIMIT),
-        experimental_telemetry: {
-          isEnabled: true,
+        runtimeContext: {
+          sessionId,
+          messageCount: messages.length,
+          newTurn: isNewTurn,
+        },
+        telemetry: {
           functionId: "ai.chat",
-          metadata: {
-            sessionId,
-            messageCount: messages.length,
-            newTurn: isNewTurn,
+          includeRuntimeContext: {
+            sessionId: true,
+            messageCount: true,
+            newTurn: true,
           },
         },
         onError: ({ error }) => {

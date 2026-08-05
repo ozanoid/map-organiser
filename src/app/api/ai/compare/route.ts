@@ -162,13 +162,17 @@ export async function POST(request: NextRequest) {
           prompt: userPrompt,
           // OTel: gen_ai.* spans → Honeycomb + Langfuse (see
           // instrumentation-node.ts). functionId becomes the span name.
-          experimental_telemetry: {
-            isEnabled: true,
+          runtimeContext: {
+            userId: user.id,
+            placeCount: candidates.length,
+            profiledCount: withProfile,
+          },
+          telemetry: {
             functionId: "ai.compare",
-            metadata: {
-              userId: user.id,
-              placeCount: candidates.length,
-              profiledCount: withProfile,
+            includeRuntimeContext: {
+              userId: true,
+              placeCount: true,
+              profiledCount: true,
             },
           },
         })

@@ -278,15 +278,21 @@ export async function POST(request: NextRequest) {
             system: buildTripPlanSystemPrompt(),
             prompt: buildTripPlanPrompt(trip.name, dayFrames, candidates),
             maxOutputTokens: MAX_PLAN_OUTPUT_TOKENS,
-            experimental_telemetry: {
-              isEnabled: true,
+            runtimeContext: {
+              tripId: trip_id,
+              candidates: candidates.length,
+              days: days.length,
+              includePool: include_pool,
+              attempt,
+            },
+            telemetry: {
               functionId: "ai.trip-plan",
-              metadata: {
-                tripId: trip_id,
-                candidates: candidates.length,
-                days: days.length,
-                includePool: include_pool,
-                attempt,
+              includeRuntimeContext: {
+                tripId: true,
+                candidates: true,
+                days: true,
+                includePool: true,
+                attempt: true,
               },
             },
           })

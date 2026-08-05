@@ -216,13 +216,13 @@ export async function POST(request: NextRequest) {
           // OTel: GenAI semantic-convention spans → Honeycomb + Langfuse
           // (see instrumentation-node.ts). candidateCount as metadata so
           // cost-per-call queries can stratify by payload size.
-          experimental_telemetry: {
-            isEnabled: true,
+          runtimeContext: {
+            userId: user.id,
+            candidateCount: candidates.length,
+          },
+          telemetry: {
             functionId: "ai.rank-results",
-            metadata: {
-              userId: user.id,
-              candidateCount: candidates.length,
-            },
+            includeRuntimeContext: { userId: true, candidateCount: true },
           },
         })
     );
