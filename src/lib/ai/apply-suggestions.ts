@@ -223,8 +223,29 @@ export async function applyProfileSuggestions(
   let subcategoryQueued: string | null = null;
   let categoryChangeQueued: string | null = null;
 
-  // ───── Tags: matched_existing → silent apply ─────
+  // ───── Tags: matched_existing → silent apply, USER-MADE TAGS ONLY ─────
+  //
+  // This path applies a tag with no evidence requirement, which is right for a
+  // label its owner invented — there is no dictionary entry to quote against.
+  // It is wrong for a vocabulary-derived tag, and letting it near one opens a
+  // feedback loop: the vocabulary creates "Natural Wine" on place 1 with a
+  // review quote, that tag then sits in the user's list, and from place 2 on
+  // `matched_existing` can hand it out with no quote at all.
+  //
+  // Measured on a fresh 35-place account: 376 tag applications, of which 162 —
+  // 43% — had no evidence anywhere in the place's profile. The dry run reported
+  // zero hallucinations because it never exercised this path.
+  //
+  // Tags carrying a concept_id belong to `applyMatchedConcepts`, which requires
+  // a verbatim quote. Everything else is the user's own and stays as it was.
   if (profile.suggested_tags.matched_existing.length > 0) {
+    const { data: ownTags } = await supabase
+      .from("tags")
+      .select("id")
+      .eq("user_id", ctx.userId)
+      .is("concept_id", null);
+    const userMade = new Set((ownTags ?? []).map((t) => t.id as string));
+
     const { data: existingPlaceTags } = await supabase
       .from("place_tags")
       .select("tag_id")
@@ -233,7 +254,7 @@ export async function applyProfileSuggestions(
       (existingPlaceTags ?? []).map((r) => r.tag_id as string)
     );
     const toInsert = profile.suggested_tags.matched_existing
-      .filter((id) => !have.has(id))
+      .filter((id) => userMade.has(id) && !have.has(id))
       .map((id) => ({ place_id: ctx.placeId, tag_id: id }));
     if (toInsert.length > 0) {
       await supabase.from("place_tags").insert(toInsert);
