@@ -9,6 +9,11 @@ import { applyProfileSuggestions } from "@/lib/ai/apply-suggestions";
 import { trackAiUsage, checkAiBudget } from "@/lib/ai/track-usage";
 import { loadVocabulary } from "@/lib/vocabulary/read";
 
+/** Prompt-stated limits, enforced by truncation after generation — never in the
+ *  Zod schema, where a violation costs the whole profile instead of one item. */
+const MAX_PROS_CONS = 5;
+const MAX_EVIDENCE_QUOTES = 2;
+
 export type GenerateProfileOutcome =
   | {
       ok: true;
@@ -140,6 +145,20 @@ export async function generatePlaceProfile(
   profile.generated_at = new Date().toISOString();
   profile.model_version = MODEL_VERSION;
   profile.source_review_count = usedReviewCount;
+
+  // Enforce the prompt's count limits HERE rather than in the Zod schema.
+  // A cap in the schema does not trim the extra item, it discards the whole
+  // profile: a third evidence quote per theme threw away an otherwise complete
+  // result built from 50 reviews. There is no retry, so an overshoot on the
+  // single attempt leaves the place with no profile at all — silently, because
+  // the backfill dispatches fire-and-forget.
+  profile.pros = profile.pros?.slice(0, MAX_PROS_CONS) ?? null;
+  profile.cons = profile.cons?.slice(0, MAX_PROS_CONS) ?? null;
+  profile.theme_insights =
+    profile.theme_insights?.map((t) => ({
+      ...t,
+      evidence_quotes: t.evidence_quotes.slice(0, MAX_EVIDENCE_QUOTES),
+    })) ?? null;
 
   // Persist into google_data.place_profile (re-read to avoid clobbering a
   // concurrent google_data update).

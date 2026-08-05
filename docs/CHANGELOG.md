@@ -6,6 +6,26 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 05.08.2026 — v1.25.3 — Count limits moved out of the profile schema
+
+- `evidence_quotes.max(2)` discarded a complete, well-formed profile — 50
+  reviews, four themes, a 300-word summary, five matched concepts — because the
+  model returned a third quote per theme. A Zod cap does not trim the extra item,
+  it throws the whole object away.
+- There is no retry. The place only got a profile because an unrelated trigger
+  fired a second call 34 seconds later that happened to stay under the limit; a
+  place whose single attempt overshoots is left with nothing, and the backfill
+  dispatches fire-and-forget so nobody sees the 500.
+- `pros`, `cons`, `evidence_quotes` and the retired `new_proposals` lost their
+  `.max()`. The limits stay in the prompt and are now enforced by truncation in
+  `generate-profile.ts`, alongside the existing meta-field stamping. Value-range
+  bounds (`salience`, confidences) keep their `.min/.max` — an out-of-range
+  number is genuinely malformed, unlike a sixth pro.
+- Same defect as the one fixed for `matched_concepts` in v1.25.0; that fix should
+  have been applied to the pre-existing fields at the same time.
+
+---
+
 ## 05.08.2026 — v1.25.2 — A failed review fetch no longer looks like a running one
 
 - The place detail view derived "enrichment in progress" as `has a CID && no

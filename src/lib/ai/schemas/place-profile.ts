@@ -48,9 +48,10 @@ export const PlaceProfileSchema = z.object({
   suggested_tags: z.object({
     /** UUIDs of the user's existing tags that the AI matched. */
     matched_existing: z.array(z.string().uuid()),
-    /** Brand-new tag names (lowercase-hyphenated). Max 3. Subject to
-     *  post-LLM fuzzy dedup against existing tags. */
-    new_proposals: z.array(z.string()).max(3),
+    /** Retired v1.25.0 — the prompt requires this to be empty and the apply
+     *  layer routes any straggler to vocabulary_candidates. Uncapped here for
+     *  the same reason as pros/cons/evidence_quotes below. */
+    new_proposals: z.array(z.string()),
   }),
 
   /** UUIDs of user lists this place semantically fits. */
@@ -92,8 +93,22 @@ export const PlaceProfileSchema = z.object({
 
   // ===== full-only =====
   tldr: z.string().nullable(),
-  pros: z.array(z.string()).max(5).nullable(),
-  cons: z.array(z.string()).max(5).nullable(),
+  /**
+   * COUNT LIMITS ARE NOT IN THIS SCHEMA. They live in the prompt and are
+   * enforced by truncation in generate-profile.ts.
+   *
+   * A cap here does not trim the extra item, it throws away the entire profile.
+   * Measured: `evidence_quotes.max(2)` discarded a complete, well-formed profile
+   * — 50 reviews, four themes, a 300-word summary, five matched concepts —
+   * because the model returned a third quote per theme. The place only got a
+   * profile at all because an unrelated trigger happened to fire a second call
+   * 34 seconds later that stayed under the limit. There is no retry; a place
+   * whose single attempt overshoots is left with nothing, silently.
+   *
+   * The schema validates SHAPE. Policy is the caller's job.
+   */
+  pros: z.array(z.string()).nullable(),
+  cons: z.array(z.string()).nullable(),
 
   /**
    * Per-theme review consensus. Themes only appear if mention_count >= 3
@@ -116,7 +131,7 @@ export const PlaceProfileSchema = z.object({
         sentiment: z.enum(["positive", "mixed", "negative"]),
         mention_count: z.number().int().min(0),
         salience: z.number().min(0).max(1),
-        evidence_quotes: z.array(z.string()).max(2),
+        evidence_quotes: z.array(z.string()),
       })
     )
     .nullable(),
