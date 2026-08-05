@@ -26,7 +26,9 @@ ran on `google_place_id` — a value that only exists *after* the lookup.
 - New `GET /api/cron/drain-imports`, mirroring the worker pattern already proven
   in `cron/refresh-places`: `maxDuration` 300, 240 s soft deadline, 2 workers,
   24 items per claim, leftovers released for the next run. Registered in
-  `vercel.json` at `* * * * *` (Pro plan).
+  `vercel.json` at `* * * * *` (Pro plan). It also self-chains while claimable
+  work remains — Vercel Cron fires on production only, so without that a
+  preview import would stall after the single run the creation kick gave it.
 - New `POST/GET /api/places/import-jobs` and `PATCH /api/places/import-jobs/[id]`.
   The create route queues rows and fires a non-awaited kick at the drain, then
   returns — no enrichment, no API spend in the request.

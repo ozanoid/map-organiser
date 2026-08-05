@@ -46,7 +46,8 @@ User goes to `/import`, picks a CSV or GeoJSON file (typically from Google Takeo
        │  • Returns { jobId, total } and the request is over
        ▼
 3. Drain runs — GET /api/cron/drain-imports
-       │  Every minute by Vercel Cron, plus the kick above.
+       │  Every minute by Vercel Cron, the kick above, and its own
+       │  self-chain while claimable work remains.
        │  claim_import_items(24) → FOR UPDATE SKIP LOCKED
        │  2 workers, 240 s soft deadline, 300 s maxDuration
        │
@@ -102,6 +103,7 @@ Verified against the three URL shapes Takeout emits (`?cid=`, `?q=place_id:ChIJ�
 - **Poison item:** `attempts` caps at 3, then the item retires as `failed`.
 - **Overlapping runs:** safe by construction — `FOR UPDATE SKIP LOCKED` hands concurrent runners disjoint items. Measured: 6 simultaneous runners against a 10-item pool returned 10 items, 0 collisions.
 - **Backlog pile-up:** the drain exits early when more than 60 items are already claimed and in flight, which bounds DataForSEO spend.
+- **Preview deployments:** Vercel Cron fires on production only. The drain self-chains while work remains — guarded on having made progress this run — so a preview import still completes on the kick alone.
 - **Cancel:** `PATCH /api/places/import-jobs/[id]` sets `status = cancelled`; the claim only reads from `running` jobs, so nothing new is taken. Items already in flight finish their current stage.
 
 ## Why the work list moved to the database

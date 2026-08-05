@@ -294,16 +294,49 @@ export async function GET(request: NextRequest) {
 
   await finalizeJobs(admin);
 
+  // Hand off to the next run rather than waiting for the cron minute.
+  //
+  // This is not just a latency win. Vercel Cron fires on PRODUCTION only, so on
+  // a preview deployment the kick at job creation would be the single run an
+  // import ever got and the job would stall with everything still queued.
+  //
+  // Guarded on having made progress: chaining when `processed` is 0 would spin
+  // against a queue that cannot move. Depth is bounded anyway — the next run
+  // re-checks MAX_INFLIGHT and stops when the claim comes back empty.
+  const chained = cursor > 0 && (await hasClaimableWork(admin));
+  if (chained) kickSelf(request.nextUrl.origin, secret);
+
   const summary = {
     ok: true,
     claimed: items.length,
     processed: cursor,
     released: untouched.length,
+    chained,
     ...counts,
     elapsed_ms: Date.now() - startedAt,
   };
   console.log("[drain-imports]", JSON.stringify(summary));
   return NextResponse.json(summary);
+}
+
+/** Is anything left that a next run could actually claim? */
+async function hasClaimableWork(
+  admin: ReturnType<typeof createServiceClient>
+): Promise<boolean> {
+  const { data } = await admin
+    .from("import_job_items")
+    .select("id, import_jobs!inner(status)")
+    .in("stage", ACTIVE_STAGES)
+    .lt("attempts", 3)
+    .eq("import_jobs.status", "running")
+    .limit(1);
+  return (data?.length ?? 0) > 0;
+}
+
+function kickSelf(origin: string, secret: string) {
+  void fetch(`${origin}/api/cron/drain-imports`, {
+    headers: { Authorization: `Bearer ${secret}` },
+  }).catch(() => {});
 }
 
 /** Close out any running job that has no active items left. */
