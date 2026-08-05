@@ -42,6 +42,22 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
   scheduled job — the dictionary is static until it is wired.
 - Pre-existing and unrelated: 7 `experimental_telemetry.metadata` type errors
   from the AI SDK v7 bump, present on `main` before this work.
+- **Old tag-proposal path retired.** The prompt no longer asks for
+  `new_proposals` and `apply-suggestions.ts` no longer writes tag rows to
+  `ai_suggestions_queue`. Both halves of that job moved: naming happens once,
+  offline, over the whole corpus; matching happens against the dictionary with a
+  review quote required; what the dictionary cannot express goes silently to
+  `vocabulary_candidates`. `matched_existing` stays — it applies the user's OWN
+  hand-made tags. Sub-category and category-change queues are untouched.
+- **Queue migrated.** 920 pending tag rows resolved. 158 already resolved to a
+  dictionary concept via the alias table. Of the 762 genuinely uncovered, the 74
+  values raised by 2+ places (148 rows) moved to `vocabulary_candidates`; the 614
+  raised by exactly one place were dropped — singletons from an instrument
+  measured producing 86% non-concepts carry no signal, and the better-calibrated
+  gap channel re-proposes anything real. Rows are marked `rejected` rather than
+  deleted (the status CHECK has no `migrated` value); history is intact and the
+  Settings queue now shows only the 23 sub-category and 4 category-change items.
+- `src/lib/ai/dedup.ts` is now unreferenced — left in place, a separate cleanup.
 
 ---
 

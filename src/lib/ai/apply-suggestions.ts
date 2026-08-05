@@ -1,7 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { PlaceProfile } from "@/lib/ai/schemas/place-profile";
-import { dedupProposals } from "@/lib/ai/dedup";
 import { normalize } from "@/lib/ai/normalize";
 import { resolveAlias, type Vocabulary } from "@/lib/vocabulary/read";
 
@@ -18,9 +17,10 @@ const MAX_GAPS_PER_PLACE = 2;
  *
  * | Signal                                | Action                                                           |
  * |---------------------------------------|------------------------------------------------------------------|
- * | tag matched_existing                  | silent apply (place_tags INSERT)                                 |
- * | tag new_proposals (fuzzy → existing)  | silent reroute                                                   |
- * | tag new_proposals (genuinely new)     | queue (type='tag')                                               |
+ * | matched_concepts (vocabulary)         | silent apply as a tag carrying concept_id (v1.25.0)              |
+ * | concept_gaps                          | silent write to vocabulary_candidates, never surfaced (v1.25.0)  |
+ * | tag matched_existing                  | silent apply (place_tags INSERT) — the user's OWN tags           |
+ * | tag new_proposals                     | RETIRED v1.25.0 — prompt requires empty; stragglers → candidates |
  * | sub-cat: existing slug, current parent| silent apply (places.subcategory_id UPDATE)                      |
  * | sub-cat: existing slug, NEW parent    | queue (type='subcategory', includes implicit category move)      |
  * | sub-cat: new slug, current parent     | queue (type='subcategory')                                       |
@@ -216,7 +216,9 @@ export async function applyProfileSuggestions(
   );
 
   let tagsApplied = 0;
-  let tagsQueued = 0;
+  // Always 0 since v1.25.0 — the tag queue is retired. Kept in the return
+  // shape so the enrich route's log line and its callers stay valid.
+  const tagsQueued = 0;
   let subcategoryApplied: string | null = null;
   let subcategoryQueued: string | null = null;
   let categoryChangeQueued: string | null = null;
@@ -239,47 +241,46 @@ export async function applyProfileSuggestions(
     }
   }
 
-  // ───── Tags: new_proposals → dedup + moderation queue ─────
+  // ───── Tags: new_proposals RETIRED (v1.25.0) ─────
+  //
+  // The LLM used to be asked for up to 3 brand-new tag names per place, which
+  // were fuzzy-deduped and then queued for the user to adjudicate one by one.
+  // Asking a single place to name vocabulary for a whole library cannot work:
+  // 920 proposals accumulated, 804 of them distinct, 86% raised by exactly one
+  // place — a tag on 1 of 481 places has no filtering value at all.
+  //
+  // Both halves of that job now have better homes. Naming is done once, offline,
+  // over the whole corpus, and lands in the controlled vocabulary; matching
+  // against it happens in `applyMatchedConcepts` above with a review quote
+  // required. What the vocabulary cannot express goes to `vocabulary_candidates`
+  // via `recordConceptGaps` — silently, with nothing for the user to triage.
+  //
+  // The prompt now hard-requires `new_proposals` to be empty, so this stays as a
+  // guard against a model that ignores it rather than as a live path.
   if (profile.suggested_tags.new_proposals.length > 0) {
-    const dedupResult = dedupProposals(
-      profile.suggested_tags.new_proposals,
-      ctx.tags
-    );
-
-    // The dedup helper may have rerouted proposals to existing tags; apply those.
-    if (dedupResult.rerouted.length > 0) {
-      const reroutedIds = dedupResult.rerouted.map((r) => r.matchedTo.id);
-      const { data: existing } = await supabase
-        .from("place_tags")
-        .select("tag_id")
-        .eq("place_id", ctx.placeId);
-      const have = new Set(
-        (existing ?? []).map((r) => r.tag_id as string)
-      );
-      const toInsert = reroutedIds
-        .filter((id) => !have.has(id))
-        .map((id) => ({ place_id: ctx.placeId, tag_id: id }));
-      if (toInsert.length > 0) {
-        await supabase.from("place_tags").insert(toInsert);
-        tagsApplied += toInsert.length;
-      }
-    }
-
-    // Genuinely new ones → queue. The UNIQUE INDEX dedupes per
-    // (user, type, normalized value, parent) so re-runs are safe.
-    for (const proposal of dedupResult.newProposals) {
-      await supabase.from("ai_suggestions_queue").insert({
-        user_id: ctx.userId,
-        place_id: ctx.placeId,
-        type: "tag",
-        proposed_value: proposal,
-        confidence: 0.85,
-        source_model: ctx.modelVersion,
-      });
-      // .insert errors on UNIQUE violation; treat any error as "already queued"
-      // (we don't have ON CONFLICT support in the JS client without raw SQL).
-      // The counter still reflects intent.
-      tagsQueued++;
+    // Route stragglers into the candidate pool instead of the queue. Anything
+    // the dictionary already covers is dropped: it is not a gap, the model just
+    // failed to reach for the existing term.
+    const stray = ctx.vocabulary
+      ? profile.suggested_tags.new_proposals.filter(
+          (p) => !resolveAlias(ctx.vocabulary!, p)
+        )
+      : profile.suggested_tags.new_proposals;
+    if (stray.length > 0) {
+      await supabase
+        .from("vocabulary_candidates")
+        .insert(
+          stray.slice(0, MAX_GAPS_PER_PLACE).map((raw_value) => ({
+            raw_value,
+            user_id: ctx.userId,
+            place_id: ctx.placeId,
+            source: "profile_gap",
+          }))
+        )
+        .then(
+          () => {},
+          () => {}
+        );
     }
   }
 

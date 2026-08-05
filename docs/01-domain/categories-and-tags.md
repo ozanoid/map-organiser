@@ -2,7 +2,7 @@
 title: Categories, Sub-categories & Tags
 type: entity
 domain: places
-version: 1.2.0
+version: 1.3.0
 last_updated: 05.08.2026
 status: stable
 sources:
@@ -105,9 +105,23 @@ Anything the vocabulary cannot express goes to `vocabulary_candidates` — never
 shown, never applied, read only by the next refresh. Without that channel the
 dictionary ossifies.
 
-## Tags (unchanged, with new AI consumers)
+## Tags
 
-Free-form, per-user, multi-select. The AI Phase 4 full profile produces two tag signals: `matched_existing` (UUIDs of user tags the LLM recognized) and `new_proposals` (lowercase-hyphenated strings). Existing matches silent-apply; new proposals run through `src/lib/ai/dedup.ts` fuzzy match — variations of existing tags get rerouted, true novelty lands in the moderation queue. See [[../02-backend/schema/ai_suggestions_queue]].
+Free-form, per-user, multi-select. Two things now write them:
+
+- **The vocabulary** — a matched concept becomes a tag carrying `concept_id`.
+- **The user** — anything they type stays theirs, `concept_id` NULL, never touched
+  by a refresh.
+
+`matched_existing` still runs: the profile LLM applies the user's own hand-made
+tags to places that fit them.
+
+**`new_proposals` was retired in v1.25.0.** The full profile used to be asked for
+up to 3 brand-new tag names per place, fuzzy-deduped and queued for one-by-one
+approval. A single place cannot name vocabulary for a whole library: 920
+proposals accumulated, 804 distinct, 86% raised by exactly one place. The
+[[../02-backend/schema/ai_suggestions_queue]] still serves sub-category and
+category-change proposals, which the vocabulary does not cover.
 
 Both categories and tags also feed the AI's prompt context — the LLM sees the user's full vocabulary so it can pick from existing entities rather than invent variations.
 

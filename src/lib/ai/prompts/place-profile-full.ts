@@ -185,10 +185,14 @@ CRITICAL RULES:
    - Only propose a NEW sub-category slug (lowercase-hyphenated) if confidence > 0.9 AND none of the existing slugs fit.
    - "secondary_role" is non-null only for genuine hybrids (a restaurant that's also a bar).
 
-2. TAGS (tag references use UUIDs, new proposals are strings)
+2. TAGS — the user's OWN tags, the ones they created by hand.
    - "matched_existing" must be UUIDs from the user's tag list (bracketed in context).
-   - "new_proposals" are NEW tag concept strings (MAX 3). Use lowercase-hyphenated. DO NOT propose a variation of an existing tag — if user has "japanese", don't propose "japanese-food".
-   - Skip noisy commodity tags (wifi, parking, reservations, indoor, outdoor, price-level) — they're filtered downstream anyway.
+     Apply one when the place genuinely fits a tag its owner already made.
+   - "new_proposals" must ALWAYS be an empty array. Do not propose new tag names.
+     Naming new vocabulary is no longer this call's job: matching against the
+     curated dictionary happens in 6b, and anything the dictionary cannot express
+     goes to 6c. Asking here as well produced 920 pending proposals, 804 of them
+     distinct and 86% raised by a single place.
 
 3. LISTS (UUIDs only — never invent)
    - "suggested_lists" are UUIDs from the user's list collection. Be conservative — only suggest when the place clearly fits the list's theme.
