@@ -2,7 +2,8 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { DataForSEOClient } from "@/lib/dataforseo/client";
 import { fetchBusinessInfoLive } from "@/lib/dataforseo/business-info";
-import { fetchReviews } from "@/lib/dataforseo/reviews";
+import { fetchReviews, toLocationCoordinate } from "@/lib/dataforseo/reviews";
+import { parsePostgisPoint } from "@/lib/geo";
 import { downloadAndStorePhotoFromUrl } from "@/lib/dataforseo/photo";
 import {
   transformBusinessInfoToPlaceData,
@@ -77,7 +78,7 @@ export async function refreshPlaceGoogleData(
 
   const { data: place, error: fetchError } = await supabase
     .from("places")
-    .select("google_place_id, google_data, country")
+    .select("google_place_id, google_data, country, location")
     .eq("id", placeId)
     .eq("user_id", userId)
     .single();
@@ -121,6 +122,9 @@ export async function refreshPlaceGoogleData(
       cid,
       depth: 50,
       sort_by: opts.reviewSort ?? "newest",
+      location_coordinate: toLocationCoordinate(
+        place.location ? parsePostgisPoint(place.location) : null
+      ),
       location_name: (place.country as string) || "United States",
     });
     // The task is billed whether or not reviews come back — track always.

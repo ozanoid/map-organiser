@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { DataForSEOClient } from "@/lib/dataforseo/client";
-import { fetchReviews } from "@/lib/dataforseo/reviews";
+import { parsePostgisPoint } from "@/lib/geo";
+import { fetchReviews , toLocationCoordinate } from "@/lib/dataforseo/reviews";
 import { transformReviews, mergeReviews } from "@/lib/dataforseo/transform";
 import type { GoogleReview } from "@/lib/types";
 import { trackUsage } from "@/lib/google/track-usage";
@@ -48,7 +49,7 @@ export async function POST(request: NextRequest) {
       // Fetch place to get CID
       const { data: place } = await supabase
         .from("places")
-        .select("id, google_data, country")
+        .select("id, google_data, country, location")
         .eq("id", placeId)
         .eq("user_id", user.id)
         .single();
@@ -70,6 +71,9 @@ export async function POST(request: NextRequest) {
       const reviews = await fetchReviews(client, {
         cid,
         depth: 50,
+        location_coordinate: toLocationCoordinate(
+          place.location ? parsePostgisPoint(place.location) : null
+        ),
         location_name: place.country || "United Kingdom",
       });
 

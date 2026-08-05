@@ -3,7 +3,8 @@ import { propagateAttributes } from "@langfuse/tracing";
 import { createClient } from "@/lib/supabase/server";
 import { DataForSEOClient } from "@/lib/dataforseo/client";
 import { fetchBusinessInfoLive } from "@/lib/dataforseo/business-info";
-import { fetchReviews } from "@/lib/dataforseo/reviews";
+import { fetchReviews, toLocationCoordinate } from "@/lib/dataforseo/reviews";
+import { parsePostgisPoint } from "@/lib/geo";
 import {
   transformReviews,
   extractExtendedData,
@@ -58,7 +59,7 @@ export async function POST(
 
   const { data: place } = await supabase
     .from("places")
-    .select("google_place_id, google_data, country")
+    .select("google_place_id, google_data, country, location")
     .eq("id", id)
     .eq("user_id", user.id)
     .single();
@@ -124,6 +125,9 @@ export async function POST(
     const rawReviews = await fetchReviews(client, {
       cid,
       depth: 50,
+      location_coordinate: toLocationCoordinate(
+        place.location ? parsePostgisPoint(place.location) : null
+      ),
       location_name: country,
     });
 

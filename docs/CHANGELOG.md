@@ -6,6 +6,29 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 05.08.2026 — v1.25.1 — DataForSEO reviews located by coordinate
+
+- **Bug, silent since April.** 42 Turkish places had a CID and never got a single
+  review. `bulk-enrich-reviews` passed `place.country` as DataForSEO's
+  `location_name`; Google had switched that string to "Türkiye" while the older
+  rows still said "Turkey", and DataForSEO rejected it with
+  `40501 Invalid Field: 'location_name'`. The failure only ever reached a
+  `console.warn`, so four months of empty review sets looked like normal places
+  with no reviews — and with no reviews there is no profile, and no tags.
+- **Root cause is the design, not the string.** `country` is a display value
+  parsed by whichever provider handled the address, usually Google. Nothing
+  guarantees it matches DataForSEO's own location vocabulary, and patching
+  "Turkey"→"Türkiye" would only wait for the next rename.
+- **Fix:** `fetchReviews` now takes `location_coordinate` (`"lat,lng,radius"`,
+  built by `toLocationCoordinate` from the place's PostGIS point) and prefers it
+  over code and name. Every place has a coordinate and a coordinate cannot drift.
+  All three callers pass it — bulk-enrich-reviews, enrich?step=reviews and
+  refresh-google-data — with the old country name kept as a fallback.
+- Existing rows normalised from "Turkey" to "Türkiye" so the two Turkish groups
+  agree; with coordinates in play the value no longer decides anything.
+
+---
+
 ## 05.08.2026 — v1.25.0 — Controlled vocabulary (global concept dictionary)
 
 - **Root cause.** `place_profile.features.*` and the free-form tag path both
