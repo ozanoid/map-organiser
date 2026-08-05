@@ -123,10 +123,10 @@ export async function generatePlaceProfile(
       // instrumentation-node.ts). Runs under both the cookie-authed enrich
       // route and the refresh cron — the parent span in the trace tells
       // which. functionId becomes the span name.
-      runtimeContext: { userId, placeId },
-      telemetry: {
+      experimental_telemetry: {
+        isEnabled: true,
         functionId: "ai.generate-profile",
-        includeRuntimeContext: { userId: true, placeId: true },
+        metadata: { userId, placeId },
       },
     });
     profile = result.output;

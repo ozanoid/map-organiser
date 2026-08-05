@@ -128,10 +128,10 @@ export async function POST(request: NextRequest) {
           // input_tokens, output_tokens, latency). Exported to Honeycomb +
           // Langfuse (see instrumentation-node.ts). functionId becomes the
           // span name. metadata becomes span attributes.
-          runtimeContext: { userId: user.id, queryLen: query.length },
-          telemetry: {
+          experimental_telemetry: {
+            isEnabled: true,
             functionId: "ai.parse-query",
-            includeRuntimeContext: { userId: true, queryLen: true },
+            metadata: { userId: user.id, queryLen: query.length },
           },
         })
     );

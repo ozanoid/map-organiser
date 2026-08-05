@@ -146,17 +146,10 @@ export async function runRankLlm({
     output: Output.object({ schema: LlmRankSchema }),
     system: systemPrompt,
     prompt: userPrompt,
-    // ai v7: arbitrary span attributes moved from telemetry.metadata to
-    // runtimeContext, and are excluded from telemetry unless named in
-    // includeRuntimeContext — runtimeContext is also the carrier for values a
-    // caller does NOT want exported. Everything passed here is already
-    // telemetry-safe, so every key is opted in.
-    runtimeContext: metadata,
-    telemetry: {
+    experimental_telemetry: {
+      isEnabled: true,
       functionId,
-      includeRuntimeContext: Object.fromEntries(
-        Object.keys(metadata).map((k) => [k, true])
-      ),
+      metadata,
     },
   });
 
