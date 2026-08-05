@@ -2,8 +2,8 @@
 title: Flows
 type: overview
 domain: overview
-version: 1.4.0
-last_updated: 20.05.2026
+version: 1.5.0
+last_updated: 05.08.2026
 status: stable
 related:
   - "[[auth-flow]]"
@@ -31,7 +31,7 @@ End-to-end user / data flows that span multiple subsystems. Each doc traces the 
 |---|---|---|
 | [[auth-flow]] | User clicks "Sign in" | middleware, OAuth callback, Supabase Auth |
 | [[signup-flow]] | New user authenticates for the first time | `auth.users`, `handle_new_user`, `create_default_categories`, 12 categories seeded |
-| [[place-import-flow]] | User uploads a Takeout file | `/api/places/import-parse` → loop of `/api/places/import-batch` |
+| [[place-import-flow]] | User uploads a Takeout file | `/api/places/import-jobs` → `/api/cron/drain-imports` queue |
 | [[manual-place-create-flow]] | User pastes a Google Maps URL or hits the FAB | `/api/places/parse-link` (with lite_profile) → `/api/places` → enrich chain |
 | [[place-search-flow]] | User searches on the map overlay | `/api/search/suggest` → `/api/search/retrieve/[id]` → `/api/places` |
 | [[lite-profile-flow]] | Rule-based AI suggestions inline in parse-link (Phase 3) | `parse-link` → `buildLiteProfile` → AddPlaceDialog AI chips |

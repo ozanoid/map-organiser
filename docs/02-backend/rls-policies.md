@@ -2,7 +2,7 @@
 title: RLS Policies
 type: overview
 domain: backend
-version: 1.3.0
+version: 1.4.0
 last_updated: 05.08.2026
 status: stable
 sources:
@@ -26,6 +26,8 @@ Truth source: `pg_policies`, fetched via Supabase MCP `execute_sql`. See per-tab
 |---|---|---|---|---|
 | `api_usage` | Users manage own usage | authenticated | ALL | `auth.uid() = user_id` |
 | `categories` | Users manage own categories | authenticated | ALL | `auth.uid() = user_id` |
+| `import_job_items` | `import_job_items_select` | authenticated | SELECT | `auth.uid() = user_id` — read-only by design ([[schema/import-jobs]]) |
+| `import_jobs` | `import_jobs_select` / `_insert` / `_update` | authenticated | SELECT, INSERT, UPDATE | `auth.uid() = user_id` |
 | `list_places` | Users manage own list_places | authenticated | ALL | `list_id IN (SELECT id FROM lists WHERE user_id = auth.uid())` |
 | `lists` | Users manage own lists | authenticated | ALL | `auth.uid() = user_id` |
 | `place_photos` | Users manage own place_photos | authenticated | ALL | `place_id IN (SELECT id FROM places WHERE user_id = auth.uid())` |
@@ -61,6 +63,22 @@ RLS on, zero policies.
 
 `vocabulary_candidates` is different in kind. It holds observations tied to a
 user's own places, so it keeps the ordinary `auth.uid() = user_id` shape.
+
+### The write-side carve-out on `import_job_items`
+
+Same idea, narrower. `import_jobs` carries the ordinary owner policies — a user
+creates their own import and cancels it. `import_job_items` has SELECT only:
+its `stage` column *is* the queue state, and letting a session write it would
+let a user hand themselves work the drain then executes.
+
+The initial enqueue therefore runs on the service-role client inside
+`POST /api/places/import-jobs`, with `user_id` taken from the verified session
+rather than the request body. Writing that route on the caller's client instead
+fails loudly with `new row violates row-level security policy` — which is how
+the omission surfaced during end-to-end testing rather than in production.
+
+`claim_import_items` follows the same posture: `EXECUTE` revoked from `public`,
+`anon` and `authenticated`, `search_path` pinned. See [[schema/import-jobs]].
 
 ### Storage (`storage.objects`)
 

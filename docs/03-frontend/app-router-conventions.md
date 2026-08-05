@@ -2,8 +2,8 @@
 title: App Router Conventions
 type: overview
 domain: frontend
-version: 1.0.0
-last_updated: 12.05.2026
+version: 1.1.0
+last_updated: 05.08.2026
 status: stable
 sources:
   - src/app/
@@ -139,7 +139,7 @@ The middleware here delegates to `updateSession()` from `src/lib/supabase/middle
 
 - **`@/*` alias** → `./src/*`. Use it for everything.
 - **No deep relative paths.** `../../../components/Foo` is a smell; use `@/components/Foo`.
-- **Route folders are kebab-case** (`api/share-target`, `api/places/import-batch`).
+- **Route folders are kebab-case** (`api/share-target`, `api/places/import-jobs`).
 
 ## Things to avoid
 

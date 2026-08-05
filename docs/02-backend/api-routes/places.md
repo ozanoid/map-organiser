@@ -2,8 +2,8 @@
 title: Places routes
 type: route-group
 domain: backend
-version: 1.6.0
-last_updated: 16.07.2026
+version: 2.0.0
+last_updated: 05.08.2026
 status: stable
 sources:
   - src/lib/places/query-places.ts
@@ -13,9 +13,10 @@ sources:
   - src/app/api/places/[id]/enrich/route.ts
   - src/app/api/places/[id]/refresh-google-data/route.ts
   - src/app/api/places/bulk/route.ts
-  - src/app/api/places/bulk-enrich-reviews/route.ts
-  - src/app/api/places/import-parse/route.ts
-  - src/app/api/places/import-batch/route.ts
+  - src/app/api/places/import-jobs/route.ts
+  - src/app/api/places/import-jobs/[id]/route.ts
+  - src/app/api/cron/drain-imports/route.ts
+  - src/lib/import/process-place.ts
   - src/app/api/places/migrate-photos/route.ts
   - src/app/api/places/parse-link/route.ts
 related:
@@ -30,7 +31,11 @@ related:
 
 > **Telemetry (v1.16.0):** `enrich?step=profile` stamps Langfuse trace fields (`place-profile`) around `generatePlaceProfile` and flushes via `after(flushLangfuse)`. See [[../../05-flows/observability-flow]].
 
-Ten route handler files under `/api/places/*`. The Place is the most-touched entity in the schema; this is the busiest part of the API.
+Route handler files under `/api/places/*`, plus the import drain under `/api/cron/*`. The Place is the most-touched entity in the schema; this is the busiest part of the API.
+
+> **Import rewrite (v2.0.0, 05.08.2026).** `import-parse`, `import-batch` and
+> `bulk-enrich-reviews` were removed. Bulk import is now a durable server-side
+> queue — see [[../../05-flows/place-import-flow]] and [[../schema/import-jobs]].
 
 ## At a glance
 
@@ -44,13 +49,14 @@ Ten route handler files under `/api/places/*`. The Place is the most-touched ent
 | `POST` | `/api/places/[id]/enrich` | Re-run enrichment (`step=info` or `step=reviews`). |
 | `POST` | `/api/places/[id]/refresh-google-data` | Full re-fetch: info + `newest` reviews merged into the corpus (not replace) + photo, then chains to `step=profile`. Core logic in `src/lib/places/refresh-google-data.ts` (shared with the cron). |
 | `POST` | `/api/places/bulk` | Bulk update_category / add_tags / add_to_list / update_status / delete / check_trips. |
-| `POST` | `/api/places/bulk-enrich-reviews` | Background bulk review enrichment. |
-| `POST` | `/api/places/import-parse` | Parse a Takeout file → place list (no insert). |
-| `POST` | `/api/places/import-batch` | Enrich + insert a small batch (~3 places). |
+| `POST` | `/api/places/import-jobs` | Queue a Takeout file as a durable import job. |
+| `GET` | `/api/places/import-jobs` | Progress of the newest job. |
+| `PATCH` | `/api/places/import-jobs/[id]` | Cancel a running job. |
+| `GET` | `/api/cron/drain-imports` | Drain the queue (cron-authed, not a user route). |
 | `POST` | `/api/places/migrate-photos` | Backfill: Google photo URLs → Supabase Storage. |
 | `POST` | `/api/places/parse-link` | Google Maps URL → place data preview. |
 
-All require auth.
+All require auth except `drain-imports`, which is bearer-authed with `CRON_SECRET`.
 
 ---
 
@@ -152,31 +158,36 @@ All require auth.
 - **DB:** varies by action — `places`, `place_tags`, `list_places`, `trip_day_places` (read for `check_trips`).
 - **Response:** `{ success: true, affected: number }` (or `check_trips` shape).
 
-### `POST /api/places/bulk-enrich-reviews`
+### `POST /api/places/import-jobs`
 
-- **Source:** `src/app/api/places/bulk-enrich-reviews/route.ts`
-- **Body:** `{ placeIds: string[] }`.
-- **DB:** `places` SELECT + UPDATE.
-- **External:** DataForSEO `fetchReviews`, `transformReviews`, `trackUsage`. 500 ms delay between places.
-- **Response:** `{ enriched, failed, total }`.
-- **Notes:** Fire-and-forget. Skips places missing `google_data.cid`. Per-place errors silently increment `failed`.
+- **Source:** `src/app/api/places/import-jobs/route.ts`
+- **Body:** multipart `file` + `options` (JSON: `visit_status`, `list_ids`, `tag_ids`).
+- **DB:** `import_jobs` INSERT (user client); `import_job_items` INSERT in chunks of 500 (**service client** — the table has no INSERT policy, see [[../schema/import-jobs]]).
+- **Response:** `{ jobId, total }`. `400` on parse error, `500` on insert failure.
+- **Notes:** No enrichment and no API spend in the request. Fires a non-awaited kick at `/api/cron/drain-imports` so work starts before the next cron minute.
 
-### `POST /api/places/import-parse`
+### `GET /api/places/import-jobs`
 
-- **Source:** `src/app/api/places/import-parse/route.ts`
-- **Body:** multipart `file`.
-- **DB:** none (parse-only).
-- **Response:** `{ places: ParsedPlaceData[], total: number }`. `200`, `400` on parse error.
-- **Notes:** Synchronous, fast. Pure parse — no enrichment, no DB writes. Drives the client-side batched import flow.
+- **Source:** same file.
+- **DB:** `import_jobs` SELECT (newest), `import_job_items` SELECT.
+- **Response:** `{ job: { …, counts, settled, pending_import, enriching, problems[] } | null }`.
+- **Notes:** Takes no id — the store is transient, so a user reopening the page has none to give. Polled every 3 s while `status = running`.
 
-### `POST /api/places/import-batch`
+### `PATCH /api/places/import-jobs/[id]`
 
-- **Source:** `src/app/api/places/import-batch/route.ts`
-- **Body:** `{ places: ParsedPlaceData[], visit_status?, list_ids?[], tag_ids?[] }`.
-- **DB:** `categories` SELECT; `places` SELECT (dup) / INSERT / UPDATE; `list_places` INSERT; `place_tags` INSERT.
-- **External:** DataForSEO business-info, transforms, photo download, `trackUsage`. `parseMapsUrl` for URL parsing where applicable.
-- **Response:** `{ results: [{ name, status: "enriched"|"imported"|"skipped", reason?, placeId? }] }`.
-- **Notes:** Called in a client loop of batch size 3. Per-place error handling with reasons; ownership-safe.
+- **Source:** `src/app/api/places/import-jobs/[id]/route.ts`
+- **Body:** `{ status: "cancelled" }` (Zod-validated).
+- **DB:** `import_jobs` UPDATE, scoped to `user_id`.
+- **Notes:** `claim_import_items` only reads from `running` jobs, so this stops the drain from taking anything new. In-flight items finish their current stage.
+
+### `GET /api/cron/drain-imports`
+
+- **Source:** `src/app/api/cron/drain-imports/route.ts`
+- **Auth:** `Authorization: Bearer ${CRON_SECRET}` — Vercel Cron (every minute) and the create-route kick.
+- **DB:** `claim_import_items` RPC; `import_job_items` UPDATE; `places`/`list_places`/`place_tags` writes via `importPlace`.
+- **External:** DataForSEO business-info + reviews, Gemini via `generatePlaceProfile`.
+- **Response:** `{ ok, claimed, processed, released, imported, skipped, failed, reviewed, profiled, done, elapsed_ms }`.
+- **Notes:** `maxDuration` 300, soft deadline 240 s, 2 workers, 24 items per claim. Overlapping runs are safe (`FOR UPDATE SKIP LOCKED`); exits early above 60 in-flight items to bound spend. See [[../../05-flows/place-import-flow]].
 
 ### `POST /api/places/migrate-photos`
 

@@ -2,8 +2,8 @@
 title: Hooks
 type: overview
 domain: frontend
-version: 1.4.0
-last_updated: 15.07.2026
+version: 1.5.0
+last_updated: 05.08.2026
 status: stable
 sources:
   - src/lib/hooks/
@@ -33,6 +33,7 @@ Every custom hook lives in `src/lib/hooks/`. Convention: file `use-x.ts` exports
 | `useSharedLink` + 3 mutations | react-query + mutations | `["shared-link", type, id]` | [[use-shared-links]] |
 | `useStats` | react-query (staleTime 5min) | `["stats"]` | [[use-stats]] |
 | `useTags` + 4 mutations | react-query + mutations | `["tags"]`, `["place-tags", placeId]` | [[use-tags]] |
+| `useImportJob` + 2 mutations | react-query poll + mutations | `["import-job"]` | [[use-import-job]] |
 | `useTrips` + 9 mutations | react-query + mutations | `["trips"]`, `["trip", id]` | [[use-trips]] |
 | `useAiSuggestions` + 2 mutations | react-query + mutations | `["ai-suggestions"]` (staleTime 30 s) | [[use-ai-suggestions]] |
 | `useAiSearch` + `useAiRerankOrchestrator` (Phase 6) | mutation + side-effect | no query key — writes to `useAiSearchStore` (Zustand) | [[use-ai-search]] |

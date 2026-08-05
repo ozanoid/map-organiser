@@ -2,8 +2,8 @@
 title: Place
 type: entity
 domain: places
-version: 1.4.0
-last_updated: 15.07.2026
+version: 1.5.0
+last_updated: 05.08.2026
 status: stable
 sources:
   - src/lib/types/index.ts
@@ -14,9 +14,9 @@ sources:
   - src/app/api/places/[id]/enrich/route.ts
   - src/app/api/places/[id]/refresh-google-data/route.ts
   - src/app/api/places/bulk/route.ts
-  - src/app/api/places/bulk-enrich-reviews/route.ts
-  - src/app/api/places/import-parse/route.ts
-  - src/app/api/places/import-batch/route.ts
+  - src/app/api/places/import-jobs/route.ts
+  - src/app/api/cron/drain-imports/route.ts
+  - src/lib/import/process-place.ts
   - src/app/api/places/migrate-photos/route.ts
   - src/app/api/places/parse-link/route.ts
   - src/app/(app)/places/page.tsx
@@ -139,7 +139,7 @@ Schema definition: `src/lib/ai/schemas/place-profile.ts` (Zod). See [[../05-flow
    │  • Manual UI (AddPlaceDialog)                                 │
    │  • PWA share_target → /api/share-target → /api/places         │
    │  • URL paste → /api/places/parse-link                         │
-   │  • Bulk import: /api/places/import-parse → /import-batch loop │
+   │  • Bulk import: /api/places/import-jobs → drain queue         │
    └────────────────────┬─────────────────────────────────────────┘
                         │
                         ▼
@@ -202,10 +202,10 @@ All `/api/places/*` routes live in `src/app/api/places/`. See [[../02-backend/ap
 | `POST` | `/api/places/[id]/enrich` | Re-run enrichment (`step=info` or `step=reviews`). |
 | `POST` | `/api/places/[id]/refresh-google-data` | Force re-fetch from Google. |
 | `POST` | `/api/places/parse-link` | Parse a Google Maps URL → `ParsedPlaceData`. |
-| `POST` | `/api/places/import-parse` | Parse a Takeout file → place list. |
-| `POST` | `/api/places/import-batch` | Enrich + insert a batch of 3 places. |
+| `POST` | `/api/places/import-jobs` | Queue a Takeout file as a durable import job. |
+| `GET` | `/api/places/import-jobs` | Progress of the newest job. |
 | `POST` | `/api/places/bulk` | Bulk operations (delete, list assignment, tag assignment, category, visit status; `check_trips` pre-check). |
-| `POST` | `/api/places/bulk-enrich-reviews` | Background bulk review enrichment (batch=5, depth=50). |
+| `GET` | `/api/cron/drain-imports` | Drains the import queue: insert → reviews → profile. |
 | `POST` | `/api/places/migrate-photos` | Backfill: download Google photo URLs into Supabase Storage. |
 
 ## Frontend code surface

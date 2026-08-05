@@ -2,8 +2,8 @@
 title: Google Places API
 type: integration
 domain: integrations
-version: 1.0.1
-last_updated: 15.07.2026
+version: 1.1.0
+last_updated: 05.08.2026
 status: stable
 sources:
   - src/lib/google/places-api.ts
@@ -67,7 +67,7 @@ Implementations in `src/lib/google/`:
 | `/api/places/parse-link` | Place Details or Find Place | Primary preview path when Google is enabled. |
 | `/api/places/migrate-photos` | direct `fetch` Google photo URL | Photo downloads to Supabase Storage. |
 
-DataForSEO has replaced Google for bulk import flow — see [[../02-backend/api-routes/places#post-apiplacesimport-batch]].
+DataForSEO has replaced Google for bulk import flow — see [[../05-flows/place-import-flow]].
 
 ## SKUs tracked
 

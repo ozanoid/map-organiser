@@ -2,8 +2,8 @@
 title: DataForSEO Business Data
 type: integration
 domain: integrations
-version: 1.3.0
-last_updated: 15.07.2026
+version: 1.4.0
+last_updated: 05.08.2026
 status: stable
 sources:
   - src/lib/dataforseo/
@@ -62,11 +62,11 @@ Implementation in `src/lib/dataforseo/`:
 | Caller | Purpose |
 |---|---|
 | `/api/places/parse-link` | Fallback when Google is disabled or unavailable. |
-| `/api/places/import-batch` | **Primary path for bulk import.** Every batch of 3 places goes through DataForSEO. |
+| `/api/cron/drain-imports` (`import` stage) | **Primary path for bulk import.** Every place goes through DataForSEO — unless the duplicate pre-check matched it first, which costs nothing. |
 | `/api/places/[id]/enrich?step=info` | Re-enrich a single place's business info. |
 | `/api/places/[id]/enrich?step=reviews` | Fetch reviews for a place. |
 | `/api/places/[id]/refresh-google-data` | Full re-lookup: info + `newest` reviews **merged** into the corpus (`mergeReviews`, not replace) + chains to `step=profile`. Also runs headless in the cron. |
-| `/api/places/bulk-enrich-reviews` | Background bulk review enrichment (batch=5, depth=50). |
+| `/api/cron/drain-imports` (`reviews` stage) | Bulk review enrichment for imported places (depth=50). |
 
 ## SKUs tracked
 

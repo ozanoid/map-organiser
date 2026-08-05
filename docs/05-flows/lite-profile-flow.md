@@ -2,8 +2,8 @@
 title: Lite Profile Flow
 type: flow
 domain: places
-version: 1.1.0
-last_updated: 16.07.2026
+version: 1.2.0
+last_updated: 05.08.2026
 status: stable
 sources:
   - src/lib/ai/extract/lite-profile.ts
@@ -162,7 +162,7 @@ What stays (a value can still surface if the user has a matching tag): `vegan` a
 
 ## Open questions
 
-- **Bulk import path (`/api/places/import-batch`)** doesn't yet call `buildLiteProfile`. Phase 4 will integrate AI categorization there (likely with the full LLM call for the smaller, slower batch path). Until then, batch-imported places still rely on the existing `resolveCategoryId` rule-based mapping with NO sub-category, NO tag/list suggestions.
+- **Bulk import path (the drain's `import` stage)** doesn't call `buildLiteProfile`. Phase 4 will integrate AI categorization there (likely with the full LLM call for the smaller, slower batch path). Until then, batch-imported places still rely on the existing `resolveCategoryId` rule-based mapping with NO sub-category, NO tag/list suggestions.
 - **Sub-category creation when user has none yet for that parent**: the strip simply doesn't render. Phase 5's moderation queue handles AI-proposed new sub-cats from the full profile, but a "create on the fly" affordance in the dialog could close the gap earlier.
 - **Tag chip dedup**: the strip can show duplicates if two user tags fuzzy-match the same feature. Today the matcher de-dups by tag ID, so this is theoretically OK; worth verifying with multilingual tag names.
 - **Locale-aware suppress list**: today's suppress set assumes a 2026 urban-Western baseline (wifi everywhere, outdoor seating common). In regions where these are genuinely distinctive, the chip rail would lose useful signal. Phase 4 LLM salience will handle this implicitly; a per-region static list is overkill.

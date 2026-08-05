@@ -2,8 +2,8 @@
 title: AI Enrichment Flow
 type: flow
 domain: places
-version: 1.6.0
-last_updated: 16.07.2026
+version: 1.7.0
+last_updated: 05.08.2026
 status: stable
 sources:
   - src/app/api/places/[id]/enrich/route.ts
@@ -40,10 +40,10 @@ precondition for the next:
 
 | Layer | What it adds | Written by | `place_profile.completeness` |
 |---|---|---|---|
-| 1 · Base | name, address, coords, `google_place_id` | initial fetch (`parse-link` / `import-parse`) | — |
-| 2 · Extended | hours, photos, `cid`, attributes, topics, `rating_distribution` | `enrich?step=info` · `import-batch` biz-info | — |
+| 1 · Base | name, address, coords, `google_place_id` | initial fetch (`parse-link` / import `import` stage) | — |
+| 2 · Extended | hours, photos, `cid`, attributes, topics, `rating_distribution` | `enrich?step=info` · import `import` stage biz-info | — |
 | 3 · Lite profile | rule-based category signals + features, **no LLM** | `buildLiteProfile` (in `parse-link`) | `lite` |
-| 4 · Reviews | reviews via DataForSEO `cid` lookup — each fetch ≤50, **merged** into a corpus of up to 200 (`mergeReviews`) | `enrich?step=reviews` · `bulk-enrich-reviews` · `refresh-google-data` | — |
+| 4 · Reviews | reviews via DataForSEO `cid` lookup — each fetch ≤50, **merged** into a corpus of up to 200 (`mergeReviews`) | `enrich?step=reviews` · import `reviews` stage · `refresh-google-data` | — |
 | 5 · Full profile | Gemini `place_profile`: tldr / pros / cons / theme_insights / refined features / suggested tags | `enrich?step=profile` | `full` |
 
 Layers **3** and **5** are the AI layers. Layer 3 is rule-based — free and
@@ -79,21 +79,24 @@ step=profile  Gemini Flash → full place_profile              (~5 s)
 ## Entry points — who runs which steps
 
 The cascade is the same everywhere; **what differs is how much of it runs
-automatically.** This asymmetry is the thing to know:
+automatically.**
 
 | Entry point | Lite (3) | Reviews (4) | Full profile (5) | Detail |
 |---|---|---|---|---|
 | **Manual create** — paste a Maps URL | ✅ inline in `parse-link` | ✅ `step=reviews` auto | ✅ chained auto | [[manual-place-create-flow]] |
-| **Bulk import** — Takeout file | ❌ `import-batch` skips lite | ✅ `bulk-enrich-reviews` (background) | ❌ **not automatic** | [[place-import-flow]] |
-| **Backfill** — Settings → AI / import done screen | — | ✅ if missing | ✅ that's the point | [[../06-ops/runbooks/profile-backfill]] |
+| **Bulk import** — Takeout file | ❌ the drain skips lite | ✅ `reviews` stage | ✅ `profile` stage | [[place-import-flow]] |
+| **Backfill** — Settings → AI | — | ✅ if missing | ✅ that's the point | [[../06-ops/runbooks/profile-backfill]] |
 | **Refresh cron** — daily, stalest ≤14 places of OPT-IN users (`cron_refresh_enabled`, default off) | — | ✅ newest, merged (relevant in Jan/Jul → backbone rebuild) | ✅ only past >15 new reviews | [[../06-ops/runbooks/periodic-refresh]] |
 
-**The gap:** a bulk-imported place gets reviews but **no full profile** —
-`bulk-enrich-reviews` does not chain to `step=profile` (unlike the manual
-`step=reviews`). The AI profile backfill closes it: the shared
-`BackfillProfilesPanel` runs `step=profile` for those places, and as of
-v1.10.2 it is surfaced right on the import done screen — see
-[[place-import-flow]] step 9.
+**The old gap is closed (05.08.2026).** A bulk-imported place used to get
+reviews but no full profile: `bulk-enrich-reviews` did not chain to
+`step=profile` the way the manual `step=reviews` did, so the user had to run the
+backfill panel by hand. The import queue now carries `profile` as its own stage,
+so an imported place ends up as fully enriched as a manually created one —
+including its vocabulary tags — without anyone clicking anything.
+
+`BackfillProfilesPanel` stays for places imported before this change and for
+anything the cascade missed; it self-hides when nothing is eligible.
 
 A manually-created place, by contrast, ends fully enriched on its own:
 lite profile at save time, full profile in the background minutes later.
@@ -172,7 +175,7 @@ Both AI layers are gated. A place skips them silently when a gate fails:
 - `src/lib/ai/track-usage.ts` — `trackAiUsage`, `checkAiBudget`, `AI_MONTHLY_SEARCH_CAP` / `AI_MONTHLY_PROFILE_CAP` / `AI_MONTHLY_COMPARE_CAP`.
 - `src/lib/ai/extract/lite-profile.ts` — `buildLiteProfile` (layer 3). See [[lite-profile-flow]].
 - `src/lib/ai/prompts/place-profile-full.ts`, `src/lib/ai/apply-suggestions.ts` — layer 5. See [[full-profile-flow]].
-- `src/app/api/places/import-batch/route.ts`, `src/app/api/places/bulk-enrich-reviews/route.ts` — bulk import path.
+- `src/app/api/cron/drain-imports/route.ts`, `src/lib/import/process-place.ts` — bulk import path.
 - `src/app/api/user/backfill-profiles/route.ts` — backfill dispatcher.
 
 ## Related docs

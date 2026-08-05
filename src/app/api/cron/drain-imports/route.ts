@@ -1,0 +1,328 @@
+import { NextRequest, NextResponse } from "next/server";
+import { createServiceClient } from "@/lib/supabase/server";
+import { DataForSEOClient } from "@/lib/dataforseo/client";
+import { parsePostgisPoint } from "@/lib/geo";
+import { fetchReviews, toLocationCoordinate } from "@/lib/dataforseo/reviews";
+import { transformReviews, mergeReviews } from "@/lib/dataforseo/transform";
+import { generatePlaceProfile } from "@/lib/ai/generate-profile";
+import { importPlace } from "@/lib/import/process-place";
+import type { ImportPayload } from "@/lib/import/process-place";
+import { trackUsage } from "@/lib/google/track-usage";
+import type { Category, GoogleReview } from "@/lib/types";
+
+/**
+ * Drain the import pipeline.
+ *
+ * The import work list used to live in the browser: a 330-place file meant 110
+ * sequential POSTs driven by a `for` loop in the page, so closing the tab lost
+ * everything still queued, and a re-upload paid DataForSEO again for each place
+ * that had already landed. `import_job_items` holds the list instead, and this
+ * route advances items through it.
+ *
+ * Each visit moves an item ONE stage — import → reviews → profile → done — so
+ * a run never blocks on finishing a whole place, and the soft deadline can cut
+ * cleanly wherever it lands. Unclaimed items simply wait for the next run,
+ * which is the same resumability `cron/refresh-places` relies on.
+ *
+ * Auth: `Authorization: Bearer ${CRON_SECRET}`, matching the refresh sweep.
+ * Both the minute cron and the kick fired at job creation use it.
+ */
+export const maxDuration = 300;
+
+/** Items pulled per run. Roughly what CONCURRENCY workers clear inside the
+ *  soft deadline at the import stage (~17 s/place), so a run rarely returns
+ *  work it never touched. */
+const CLAIM_SIZE = 24;
+/** Parallel workers. Matches cron/refresh-places — the ceiling is DataForSEO
+ *  politeness, not CPU. */
+const CONCURRENCY = 2;
+/** Stop claiming here so the summary log and response always emit before
+ *  maxDuration kills the function. */
+const SOFT_DEADLINE_MS = 240_000;
+/** Politeness delay between DataForSEO calls per worker. */
+const DELAY_MS = 500;
+/**
+ * Skip the run when this many items are already claimed and in flight.
+ *
+ * Overlap is safe on its own — `claim_import_items` uses FOR UPDATE SKIP
+ * LOCKED, so concurrent runners take disjoint items and never double-process.
+ * (A session-level advisory lock would be the usual guard, but Supabase pools
+ * connections in transaction mode, where such a lock is not reliably held
+ * across statements.) What this cap actually protects is spend: a minute cron
+ * against a 240 s run means ~4 live runs normally, and this stops a backlog
+ * from stacking into an unbounded number of paid lookups.
+ */
+const MAX_INFLIGHT = 60;
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+const ACTIVE_STAGES = ["import", "reviews", "profile"] as const;
+
+interface JobItem {
+  id: string;
+  job_id: string;
+  user_id: string;
+  payload: ImportPayload;
+  stage: string;
+  attempts: number;
+  place_id: string | null;
+}
+
+function getDataForSEOClient(): DataForSEOClient | null {
+  const login = process.env.DATAFORSEO_LOGIN;
+  const password = process.env.DATAFORSEO_PASSWORD;
+  if (!login || !password) return null;
+  return new DataForSEOClient({ login, password });
+}
+
+export async function GET(request: NextRequest) {
+  const secret = process.env.CRON_SECRET;
+  if (!secret) {
+    return NextResponse.json({ error: "CRON_SECRET not configured" }, { status: 500 });
+  }
+  if (request.headers.get("authorization") !== `Bearer ${secret}`) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const client = getDataForSEOClient();
+  if (!client) {
+    return NextResponse.json({ error: "DataForSEO not configured" }, { status: 500 });
+  }
+
+  const admin = createServiceClient();
+
+  const { count: inflight } = await admin
+    .from("import_job_items")
+    .select("id", { count: "exact", head: true })
+    .in("stage", ACTIVE_STAGES)
+    .gt("claimed_at", new Date(Date.now() - 5 * 60 * 1000).toISOString());
+  if ((inflight ?? 0) >= MAX_INFLIGHT) {
+    return NextResponse.json({ ok: true, claimed: 0, message: "runners already saturated" });
+  }
+
+  const { data: claimed, error: claimErr } = await admin.rpc("claim_import_items", {
+    p_limit: CLAIM_SIZE,
+  });
+  if (claimErr) {
+    console.error("[drain-imports] claim failed:", claimErr);
+    return NextResponse.json({ error: claimErr.message }, { status: 500 });
+  }
+
+  const items = (claimed ?? []) as JobItem[];
+  if (items.length === 0) {
+    await finalizeJobs(admin);
+    return NextResponse.json({ ok: true, claimed: 0, message: "nothing queued" });
+  }
+
+  // Per-owner category cache — resolveCategoryId needs the user's own set, and
+  // a job's items all belong to one owner in practice.
+  const categoryCache = new Map<string, Category[]>();
+  async function categoriesFor(userId: string): Promise<Category[]> {
+    const hit = categoryCache.get(userId);
+    if (hit) return hit;
+    const { data } = await admin.from("categories").select("*").eq("user_id", userId);
+    const cats = (data ?? []) as Category[];
+    categoryCache.set(userId, cats);
+    return cats;
+  }
+
+  // Job defaults (visit status, lists, tags) are per job, not per item.
+  const jobCache = new Map<string, { visit_status: string | null; list_ids: string[]; tag_ids: string[] }>();
+  async function defaultsFor(jobId: string) {
+    const hit = jobCache.get(jobId);
+    if (hit) return hit;
+    const { data } = await admin
+      .from("import_jobs")
+      .select("visit_status, list_ids, tag_ids")
+      .eq("id", jobId)
+      .single();
+    const d = {
+      visit_status: (data?.visit_status as string | null) ?? null,
+      list_ids: (data?.list_ids as string[]) ?? [],
+      tag_ids: (data?.tag_ids as string[]) ?? [],
+    };
+    jobCache.set(jobId, d);
+    return d;
+  }
+
+  async function advance(
+    item: JobItem,
+    patch: { stage: string; place_id?: string | null; reason?: string | null }
+  ) {
+    await admin
+      .from("import_job_items")
+      .update({
+        stage: patch.stage,
+        place_id: patch.place_id ?? item.place_id,
+        reason: patch.reason ?? null,
+        claimed_at: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", item.id);
+  }
+
+  const counts = { imported: 0, skipped: 0, failed: 0, reviewed: 0, profiled: 0, done: 0 };
+  const startedAt = Date.now();
+  let cursor = 0;
+
+  async function worker() {
+    while (cursor < items.length && Date.now() - startedAt < SOFT_DEADLINE_MS) {
+      const item = items[cursor++];
+      try {
+        if (item.stage === "import") {
+          const defaults = await defaultsFor(item.job_id);
+          const outcome = await importPlace(
+            admin,
+            client!,
+            item.user_id,
+            item.payload,
+            {
+              visitStatus: defaults.visit_status,
+              listIds: defaults.list_ids,
+              tagIds: defaults.tag_ids,
+            },
+            await categoriesFor(item.user_id)
+          );
+
+          if (outcome.status === "imported") {
+            counts.imported++;
+            await advance(item, { stage: "reviews", place_id: outcome.placeId });
+          } else if (outcome.status === "skipped") {
+            counts.skipped++;
+            await advance(item, {
+              stage: "skipped",
+              place_id: outcome.placeId ?? null,
+              reason: outcome.reason,
+            });
+          } else {
+            counts.failed++;
+            await advance(item, { stage: "failed", reason: outcome.reason });
+          }
+          await sleep(DELAY_MS);
+          continue;
+        }
+
+        if (item.stage === "reviews") {
+          const ok = await enrichReviews(item);
+          if (ok) counts.reviewed++;
+          // No reviews means no profile is possible — the place is finished
+          // either way, it just has less on it.
+          await advance(item, { stage: ok ? "profile" : "done", reason: ok ? null : "No reviews" });
+          await sleep(DELAY_MS);
+          continue;
+        }
+
+        if (item.stage === "profile") {
+          const result = item.place_id
+            ? await generatePlaceProfile(admin, item.user_id, item.place_id)
+            : null;
+          if (result?.ok) counts.profiled++;
+          counts.done++;
+          await advance(item, {
+            stage: "done",
+            reason: result && !result.ok ? result.reason : null,
+          });
+          continue;
+        }
+      } catch (e) {
+        console.error(`[drain-imports] item ${item.id} (${item.stage}) threw:`, e);
+        // Leave the stage alone and release the claim: attempts already ticked
+        // up, so a persistently throwing item retires itself after 3 tries
+        // rather than blocking the queue forever.
+        const retire = item.attempts >= 3;
+        await advance(item, {
+          stage: retire ? "failed" : item.stage,
+          reason: retire ? "Repeated errors" : null,
+        });
+        if (retire) counts.failed++;
+      }
+    }
+  }
+
+  async function enrichReviews(item: JobItem): Promise<boolean> {
+    if (!item.place_id) return false;
+    const { data: place } = await admin
+      .from("places")
+      .select("google_data, location, country")
+      .eq("id", item.place_id)
+      .single();
+    if (!place) return false;
+
+    const gd = (place.google_data as Record<string, unknown>) || {};
+    const cid = gd.cid as string | undefined;
+    if (!cid) return false;
+
+    const reviews = await fetchReviews(client!, {
+      cid,
+      depth: 50,
+      location_coordinate: toLocationCoordinate(
+        place.location ? parsePostgisPoint(place.location as string) : null
+      ),
+      location_name: (place.country as string | null) || "United Kingdom",
+    });
+    if (!reviews || reviews.length === 0) return false;
+
+    await trackUsage(item.user_id, "dataforseo_reviews");
+    await admin
+      .from("places")
+      .update({
+        google_data: {
+          ...gd,
+          reviews: mergeReviews(
+            (gd.reviews as GoogleReview[] | undefined) ?? [],
+            transformReviews(reviews),
+            { incomingOrder: "relevant" }
+          ),
+        },
+      })
+      .eq("id", item.place_id);
+    return true;
+  }
+
+  await Promise.all(Array.from({ length: CONCURRENCY }, worker));
+
+  // Items claimed but never reached (soft deadline) still hold a claim; drop it
+  // so the next run picks them up immediately instead of waiting out the
+  // 10-minute stale window.
+  const untouched = items.slice(cursor).map((i) => i.id);
+  if (untouched.length > 0) {
+    await admin
+      .from("import_job_items")
+      .update({ claimed_at: null })
+      .in("id", untouched);
+  }
+
+  await finalizeJobs(admin);
+
+  const summary = {
+    ok: true,
+    claimed: items.length,
+    processed: cursor,
+    released: untouched.length,
+    ...counts,
+    elapsed_ms: Date.now() - startedAt,
+  };
+  console.log("[drain-imports]", JSON.stringify(summary));
+  return NextResponse.json(summary);
+}
+
+/** Close out any running job that has no active items left. */
+async function finalizeJobs(admin: ReturnType<typeof createServiceClient>) {
+  const { data: running } = await admin
+    .from("import_jobs")
+    .select("id")
+    .eq("status", "running");
+  for (const job of running ?? []) {
+    const { count } = await admin
+      .from("import_job_items")
+      .select("id", { count: "exact", head: true })
+      .eq("job_id", job.id as string)
+      .in("stage", ACTIVE_STAGES);
+    if ((count ?? 0) === 0) {
+      await admin
+        .from("import_jobs")
+        .update({ status: "done", finished_at: new Date().toISOString() })
+        .eq("id", job.id as string);
+    }
+  }
+}

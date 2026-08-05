@@ -2,8 +2,8 @@
 title: Observability Flow (Honeycomb + Vercel/Axiom + Langfuse)
 type: flow
 domain: infra
-version: 3.4.0
-last_updated: 15.07.2026
+version: 3.5.0
+last_updated: 05.08.2026
 status: stable
 sources:
   - src/instrumentation.ts
@@ -259,7 +259,7 @@ body) → stable queries on both backends:
   count. If Honeycomb logs lag, switch to `SimpleLogRecordProcessor`.
   The dual-write means this can never black out monitoring — the
   console pipe is the guarantee.
-- Other API routes (`parse-link`, `enrich`, `import-batch`) still use
+- Other API routes (`parse-link`, `enrich`, `drain-imports`) still use
   ad-hoc `console.log` — they reach the Vercel dashboard + Axiom but
   unstructured, and never reach Honeycomb. Migrate to `log.*`
   opportunistically.

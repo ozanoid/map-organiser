@@ -2,19 +2,23 @@
 title: Place Import Flow
 type: flow
 domain: places
-version: 1.1.2
-last_updated: 15.07.2026
+version: 2.0.0
+last_updated: 05.08.2026
 status: stable
 sources:
-  - src/app/api/places/import-parse/route.ts
-  - src/app/api/places/import-batch/route.ts
-  - src/app/api/places/bulk-enrich-reviews/route.ts
+  - src/app/api/places/import-jobs/route.ts
+  - src/app/api/places/import-jobs/[id]/route.ts
+  - src/app/api/cron/drain-imports/route.ts
+  - src/lib/import/process-place.ts
+  - src/lib/hooks/use-import-job.ts
   - src/lib/stores/import-store.ts
   - src/app/(app)/import/page.tsx
   - src/lib/google/takeout-parser.ts
+  - src/lib/google/parse-maps-url.ts
   - src/lib/dataforseo/business-info.ts
 related:
   - "[[../01-domain/places]]"
+  - "[[../02-backend/schema/import-jobs]]"
   - "[[../03-frontend/stores/import-store]]"
   - "[[../02-backend/api-routes/places]]"
   - "[[../04-integrations/dataforseo]]"
@@ -23,109 +27,106 @@ related:
 
 # Place Import Flow
 
-Batched, client-driven bulk import of saved Google Maps places from a Takeout export. The current production path (v2 design replaced an earlier NDJSON-streaming endpoint with this).
+Server-driven bulk import of saved Google Maps places from a Takeout export. The work list lives in the database, so a run survives a closed tab, a sleeping laptop, and a dropped connection.
 
 ## Trigger
 
-User goes to `/import`, picks a CSV or GeoJSON file (typically downloaded from Google Takeout → Maps → "Saved" or "Want to go"), configures options, clicks Start.
+User goes to `/import`, picks a CSV or GeoJSON file (typically from Google Takeout → Maps → "Saved"), configures options, clicks Start.
 
 ## Steps
 
 ```
-1. Pick file
-       │  setFile(name, size) → useImportStore: phase = "options"
+1. Pick file + options
+       │  setFile / toggleListId / toggleTagId / setVisitStatus — UI state only
        ▼
-2. Pick visit_status, lists, tags (optional)
-       │  toggleListId / toggleTagId / setVisitStatus on the store
-       ▼
-3. POST /api/places/import-parse  (multipart file)
+2. POST /api/places/import-jobs  (multipart: file + options JSON)
        │  • Parses CSV / GeoJSON server-side
-       │  • Returns { places: ParsedPlaceData[], total }
-       │  • No DB writes
+       │  • INSERT import_jobs (1 row) + import_job_items (1 row per place)
+       │  • Fires a non-awaited kick at the drain
+       │  • Returns { jobId, total } and the request is over
        ▼
-4. startImport(total) on the store → phase = "importing"
+3. Drain runs — GET /api/cron/drain-imports
+       │  Every minute by Vercel Cron, plus the kick above.
+       │  claim_import_items(24) → FOR UPDATE SKIP LOCKED
+       │  2 workers, 240 s soft deadline, 300 s maxDuration
        │
-       ▼ Client loop (batch size = 3):
-5. POST /api/places/import-batch  { places: batch, visit_status, list_ids, tag_ids }
-       │  For each of the 3 places:
-       │    • DataForSEO fetchBusinessInfoLive
-       │    • transformBusinessInfoToPlaceData
-       │    • Dedup by google_place_id (SELECT places WHERE ...)
-       │    • If new: INSERT places + INSERT list_places + INSERT place_tags + photo download
-       │    • Track usage (dataforseo.business_info)
-       │  Returns { results: [{ name, status, reason?, placeId? }] }
+       │  Each visit advances ONE item ONE stage:
        │
-       │  Client checks useImportStore.getState().cancelled between batches
-       │
-       ▼ Loop continues until done or cancelled
-6. finishImport(result) → phase = "done"
-       │  Aggregates: imported count, failed count, enriched count, skipped[], importedPlaceIds[]
-       │
+       │    import ──► reviews ──► profile ──► done
+       │       │           │
+       │       ├─► skipped (already exists / no coordinates)
+       │       └─► failed  (insert error / 3 failed attempts)
        ▼
-7. Background: POST /api/places/bulk-enrich-reviews { placeIds }
-       │  • Iterates placeIds in batches of 5
-       │  • For each: fetch reviews via DataForSEO, transform, MERGE into places.google_data.reviews (dedup, newest-first, cap 200 — see mergeReviews)
-       │  • 500 ms delay between places (rate-limit politeness)
-       │  • Fire-and-forget from the client
+4. UI polls GET /api/places/import-jobs every 3 s
+       │  Counts per stage → progress bar, "waiting to be added",
+       │  "on the map, collecting reviews & tags"
        ▼
-8. Done — import summary card
-       │
-       ▼ once review enrichment settles (reviewsEnriching = false)
-9. BackfillProfilesPanel renders on the done screen
-       │  • One-click "Generate AI profiles" for the imported places
-       │  • By now they have reviews + CID → cheap step=profile each
-       │  • Shared component with Settings → AI; self-hides when nothing eligible
+5. Job auto-closes when no active items remain (status = done)
 ```
 
-> **Step 9 — AI profile backfill (added 20.05.2026).** Bulk import never
-> generates a `place_profile` (that's the full-profile LLM step). Once the
-> background review enrichment settles, the import done screen renders the
-> shared `BackfillProfilesPanel` — the same one-click, cost-shown backfill as
-> Settings → AI. Gated on `reviewsEnriching = false` so the backfill runs the
-> cheap `step=profile` rather than re-fetching reviews. See
-> [[../06-ops/runbooks/profile-backfill]].
+### Stage detail
+
+| Stage | What happens | Next |
+|---|---|---|
+| `import` | `resolveIdentity` (free) → duplicate pre-check → `fetchBusinessInfoLive` → INSERT places + list_places + place_tags + photo | `reviews`, or `skipped`/`failed` |
+| `reviews` | `fetchReviews` (depth 50) → `mergeReviews` into `google_data.reviews` | `profile`, or `done` if the place has no CID or no reviews |
+| `profile` | `generatePlaceProfile` — the full Gemini pass, which also applies vocabulary concepts as tags | `done` |
+
+Stage priority in the claim is `import` → `reviews` → `profile`, not insertion order. Import is ~17 s per place while reviews poll DataForSEO for up to 110 s; interleaving them would leave the map half-empty for the whole run.
 
 ## Inputs / outputs
 
 | Step | Input | Output |
 |---|---|---|
-| 3 | Takeout file (CSV/GeoJSON) | Parsed `ParsedPlaceData[]` (no DB write) |
-| 5 (per batch) | 3 parsed places + import options | 3 new `places` rows + `list_places` + `place_tags` + photo in Storage |
-| 7 (per batch) | up to 5 placeIds with `google_data.cid` set | Reviews merged into `google_data.reviews` |
+| 2 | Takeout file + options | 1 `import_jobs` row + N `import_job_items` rows. No place rows yet, no API spend. |
+| 3 `import` | one item payload | a `places` row (+ list/tag links, photo in Storage) |
+| 3 `reviews` | a place with `google_data.cid` | reviews merged into `google_data.reviews` |
+| 3 `profile` | a place with reviews | `google_data.place_profile` + vocabulary tags |
+
+## The duplicate pre-check
+
+`resolveIdentity` pulls a CID and/or place_id out of the Takeout URL — regex plus, for short links, one free redirect follow. `findExisting` then looks for a place the user already has under either id, **before** `fetchBusinessInfoLive` is called.
+
+This is what makes a resumed import cheap. The old flow checked for duplicates on `google_place_id`, which only exists after DataForSEO has answered, so re-uploading a 330-place file paid for 330 lookups before concluding it had nothing to do.
+
+Both identifiers are stored on insert, including a CID we derived from the URL when DataForSEO does not return one — otherwise the next run has nothing to match against.
+
+Verified against the three URL shapes Takeout emits (`?cid=`, `?q=place_id:ChIJ…`, `!1s0x…:0x…`), plus a negative control.
 
 ## Failure modes
 
-- **Parse fails (step 3):** Invalid file format. UI shows error, no further action.
-- **Per-place DataForSEO failure (step 5):** Marked `skipped` with reason. Batch continues. Place is NOT inserted.
-- **Per-place duplicate (step 5):** Same `google_place_id` already exists for this user. Marked `skipped` with `reason: "duplicate"`. UPDATE may run if attaching new list/tags.
-- **Photo download fails (step 5):** Place is still inserted; `google_data.photo_storage_url` is null. User can run `/api/places/migrate-photos` later.
-- **Vercel Function timeout (step 5):** A batch of 3 takes ~15–20 s. If one takes longer, the batch may time out. Place is not inserted. Worth lowering batch to 2 if timeouts become common.
-- **Cancel:** `useImportStore.requestCancel()` sets `cancelled = true`. Client loop checks between batches and exits. Already-inserted places stay.
-- **Reviews batch failure (step 7):** Logged silently. Place keeps existing data. No retry.
+- **Parse fails (step 2):** invalid file. UI shows the error, nothing is written.
+- **Per-place DataForSEO failure:** the place is inserted unenriched if coordinates survive, otherwise `skipped` with a reason. Never blocks the queue.
+- **Duplicate:** `skipped`, reason `Already exists`, at zero API cost.
+- **Runner dies mid-item:** the item keeps a stale `claimed_at` and returns to the pool after 10 minutes.
+- **Poison item:** `attempts` caps at 3, then the item retires as `failed`.
+- **Overlapping runs:** safe by construction — `FOR UPDATE SKIP LOCKED` hands concurrent runners disjoint items. Measured: 6 simultaneous runners against a 10-item pool returned 10 items, 0 collisions.
+- **Backlog pile-up:** the drain exits early when more than 60 items are already claimed and in flight, which bounds DataForSEO spend.
+- **Cancel:** `PATCH /api/places/import-jobs/[id]` sets `status = cancelled`; the claim only reads from `running` jobs, so nothing new is taken. Items already in flight finish their current stage.
 
-## Why client-driven batches (not server-side stream)
+## Why the work list moved to the database
 
-The v1 design used a single long-running `/api/places/import` endpoint that NDJSON-streamed progress. Vercel Function timeouts (~60s default, with cold-start variance) made this unreliable for large imports. The v2 redesign moved the loop client-side:
+The v2 design ran the loop in the browser: `import-parse` returned the place array, and the page POSTed `import-batch` three places at a time. That was a deliberate answer to Vercel's old ~60 s function timeout, and it worked, but the work list only existed in the tab.
 
-- Each batch is a short HTTP request, well under any timeout.
-- Cancel is cooperative, with the store as shared state.
-- Progress UI reads directly from the store.
+Two costs followed. A 330-place file needed the tab open for ~1 h 36 min at a measured 17.4 s per place, and any interruption lost the remainder. Re-uploading then paid full DataForSEO price for everything already imported, because the duplicate check ran after the lookup.
 
-The legacy `/api/places/import` route was **removed in v1.15.0** (S0 maintenance) — it had zero code references after the v2 redesign.
+Neither constraint holds now. Vercel's default timeout is 300 s, and `cron/refresh-places` had already proven the durable pattern in this codebase: claim a slice, work until a soft deadline, leave the rest for the next run. This flow reuses it.
+
+`import-parse`, `import-batch` and `bulk-enrich-reviews` were removed in the same change — all three were superseded and had no remaining callers.
 
 ## Related code
 
-- `src/app/(app)/import/page.tsx` — the import page UI.
-- `src/lib/stores/import-store.ts` — the Zustand store; see [[../03-frontend/stores/import-store]].
-- `src/app/api/places/import-parse/route.ts` — parse endpoint.
-- `src/app/api/places/import-batch/route.ts` — batch endpoint.
-- `src/app/api/places/bulk-enrich-reviews/route.ts` — background reviews endpoint.
+- `src/app/(app)/import/page.tsx` — the page. Reports on the job; does not drive it.
+- `src/lib/hooks/use-import-job.ts` — `useImportJob` / `useCreateImportJob` / `useCancelImportJob`.
+- `src/lib/stores/import-store.ts` — file choice and options; see [[../03-frontend/stores/import-store]].
+- `src/app/api/places/import-jobs/route.ts` — create (POST) and progress (GET).
+- `src/app/api/places/import-jobs/[id]/route.ts` — cancel (PATCH).
+- `src/app/api/cron/drain-imports/route.ts` — the drain.
+- `src/lib/import/process-place.ts` — `resolveIdentity`, `findExisting`, `importPlace`.
 - `src/lib/google/takeout-parser.ts` — `parseTakeoutGeoJson`, `parseTakeoutCsv`.
-- `src/lib/dataforseo/business-info.ts` — `fetchBusinessInfoLive`.
-- `src/lib/dataforseo/transform.ts` — adapter into our shape.
-- `src/lib/dataforseo/photo.ts` — `downloadAndStorePhotoFromUrl`.
+- `src/lib/google/parse-maps-url.ts` — identity extraction from a Maps URL.
 
 ## Open questions
 
-- **Batch size.** Fixed at 3. Auto-tune based on observed per-place latency would help in slow-network regions.
-- **Reviews retry.** No retry on review batch failures — places stay without reviews until the user manually runs refresh. A "retry failed reviews" button in Settings could help.
+- **Throughput.** `CLAIM_SIZE` 24 × `CONCURRENCY` 2 clears roughly 27 import-stage places per run. A 330-place file therefore lands on the map in ~12 minutes and finishes enrichment over the following hour or two. Raising concurrency is a DataForSEO politeness question, not a code one.
+- **Per-user fairness.** The claim is global and ordered by stage then age. One user's 5000-place import would sit ahead of another user's 10-place one. A per-user round-robin matters once there is more than one active importer.

@@ -2,8 +2,8 @@
 title: Glossary
 type: overview
 domain: overview
-version: 1.1.0
-last_updated: 18.05.2026
+version: 1.2.0
+last_updated: 05.08.2026
 status: stable
 related:
   - "[[system-overview]]"
@@ -42,7 +42,7 @@ Single source of truth for every domain term, abbreviation, and acronym used in 
 |---|---|
 | **Auto-plan** | The trip-day distribution algorithm: K-means++ clustering by lat/lng → category ordering → nearest-neighbor routing. Lives in `src/lib/trip/auto-plan.ts`. |
 | **Enrichment** | Fetching rich data (rating, photos, opening hours, reviews) for a Place from Google Places API or DataForSEO. Stored in `places.google_data` (jsonb). |
-| **Batch import** | The client-driven flow that parses a Google Takeout file, then loops `POST /api/places/import-batch` in chunks of 3. Progress tracked in [[../03-frontend/stores/import-store]]. |
+| **Batch import** | The server-driven flow that parses a Google Takeout file into `import_job_items`, then advances each row through insert → reviews → profile in `/api/cron/drain-imports`. Survives a closed tab. See [[../05-flows/place-import-flow]]. |
 | **Share target** | The PWA `share_target` declaration in `src/app/manifest.ts` that lets mobile browsers send `url`/`text`/`title` to `/api/share-target`. |
 
 ## AI

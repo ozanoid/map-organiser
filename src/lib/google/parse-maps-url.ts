@@ -51,8 +51,10 @@ function extractChIJPlaceId(url: string): string | null {
   const match = url.match(/!1s(ChIJ[a-zA-Z0-9_-]+)/);
   if (match) return match[1];
 
-  // Format: place_id=ChIJ...
-  const paramMatch = url.match(/place_id=(ChIJ[^&]+)/);
+  // Format: place_id=ChIJ… and the ?q=place_id:ChIJ… form, which is what
+  // transformBusinessInfoToPlaceData builds for google_data.url — matching
+  // only on `=` meant we could not read back a URL we had written ourselves.
+  const paramMatch = url.match(/place_id[=:](ChIJ[^&\s]+)/);
   if (paramMatch) return decodeURIComponent(paramMatch[1]);
 
   return null;

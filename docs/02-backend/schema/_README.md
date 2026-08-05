@@ -2,8 +2,8 @@
 title: Schema
 type: overview
 domain: backend
-version: 1.1.0
-last_updated: 15.07.2026
+version: 1.2.0
+last_updated: 05.08.2026
 status: stable
 sources:
   - Supabase project hukppmaevcapvbrvxtph (via MCP)
@@ -22,11 +22,11 @@ All user-facing tables in the `public` schema of the Supabase project `hukppmaev
 | Table | Doc | Rows (snapshot) | Purpose |
 |---|---|---|---|
 | `profiles` | [[profiles]] | 3 | Per-user profile, encrypted API keys, feature flags |
-| `places` | [[places]] | 458 | The core entity — saved Google Maps locations |
+| `places` | [[places]] | 525 | The core entity — saved Google Maps locations |
 | `categories` | [[categories]] | 36 | Classification (12 defaults seeded × 3 users) |
 | `subcategories` | [[subcategories]] | 186 | Granular taxonomy under each parent category (~62 defaults × 3 users) |
-| `tags` | [[tags]] | 4 | Free-form labels |
-| `place_tags` | [[place_tags]] | 2 | Junction: places ↔ tags |
+| `tags` | [[tags]] | 92 | Labels — free-form, or bound to a vocabulary concept via `concept_id` |
+| `place_tags` | [[place_tags]] | 451 | Junction: places ↔ tags |
 | `lists` | [[lists]] | 6 | Named groupings of places |
 | `list_places` | [[list_places]] | 95 | Junction: lists ↔ places with `sort_order` |
 | `place_photos` | [[place_photos]] | 0 | Place photo metadata (storage refs) |
@@ -36,7 +36,13 @@ All user-facing tables in the `public` schema of the Supabase project `hukppmaev
 | `trip_day_places` | [[trip_day_places]] | 102 | Places within a trip day, ordered |
 | `shared_links` | [[shared_links]] | 3 | Public slug links to lists/trips/places |
 | `saved_filters` | [[saved_filters]] | 0 | Saved filter presets / quick chips (v1.20.0) |
-| `ai_suggestions_queue` | [[ai_suggestions_queue]] | 0 | Moderation queue for AI-proposed tags & sub-categories (Phase 4 writer, Phase 5 reader) |
+| `ai_suggestions_queue` | [[ai_suggestions_queue]] | 0 | Moderation queue for AI-proposed sub-categories & category changes |
+| `vocabulary_concepts` | [[vocabulary]] | 257 | The global controlled vocabulary — one dictionary for every account |
+| `vocabulary_aliases` | [[vocabulary]] | 1086 | Surface forms resolving to a concept |
+| `vocabulary_candidates` | [[vocabulary]] | 202 | Gaps the vocabulary could not express; input to the next refresh |
+| `vocabulary_migrations` | [[vocabulary]] | 0 | Audit trail of dictionary refreshes |
+| `import_jobs` | [[import-jobs]] | 0 | One row per bulk-import upload |
+| `import_job_items` | [[import-jobs]] | 0 | The import queue — one row per place, carrying its own stage |
 
 > `public.spatial_ref_sys` exists but it's a PostGIS internal table (8500 rows of SRID reference data). Not documented separately.
 
@@ -58,6 +64,7 @@ All user-facing tables in the `public` schema of the Supabase project `hukppmaev
 | `handle_new_user()` | trigger function | On `auth.users` INSERT, creates the matching `public.profiles` row. SECURITY DEFINER. |
 | `create_default_categories()` | trigger function | On `public.profiles` INSERT, seeds the 12 default categories. SECURITY DEFINER. |
 | `increment_api_usage(p_user_id, p_sku, p_cost)` | RPC | Atomic UPSERT into `api_usage` for cost tracking. SECURITY DEFINER. |
+| `claim_import_items(p_limit)` | RPC | Claims the next slice of the import queue with `FOR UPDATE SKIP LOCKED`. Service-role only — `EXECUTE` revoked from `public`/`anon`/`authenticated`. See [[import-jobs]]. |
 
 Triggers:
 

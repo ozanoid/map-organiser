@@ -2,8 +2,8 @@
 title: API Routes
 type: overview
 domain: backend
-version: 1.6.0
-last_updated: 16.07.2026
+version: 1.7.0
+last_updated: 05.08.2026
 status: stable
 sources:
   - src/app/api/
@@ -117,5 +117,5 @@ Follow [[../../_agent/common-tasks#add-a-new-api-route]]. The short version:
 
 ## Open questions
 
-- **Background work patterns.** Several routes are fire-and-forget from the client (`bulk-enrich-reviews`, `migrate-photos`, the secondary review-enrichment after import). They run synchronously on Vercel Functions. If they ever exceed the function timeout, consider Supabase Edge Functions or Vercel Queues.
+- **Background work patterns.** Long work is queued, not fired from the client. Bulk import writes `import_job_items` and lets `/api/cron/drain-imports` advance them — claim a slice, work to a soft deadline, leave the rest for the next run (the same shape as `cron/refresh-places`). `migrate-photos` is still a synchronous fire-and-forget; move it to the same pattern if it starts brushing the function timeout.
 - **No central error handler.** Each route catches and shapes errors in its own way. A shared `apiError(error, status)` helper could standardize the response shape.

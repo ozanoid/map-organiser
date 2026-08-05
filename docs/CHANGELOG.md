@@ -6,6 +6,77 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 05.08.2026 — v1.26.0 — Bulk import survives a closed tab
+
+**The problem.** The import work list lived in the browser. `import-parse`
+returned the parsed place array and the page looped `POST import-batch` three
+at a time, so closing the tab lost everything still queued. Measured on a real
+run: 17.4 s per place, which is **1 h 36 min of required tab time** for the
+330-place file this was built for. Re-uploading after an interruption then paid
+DataForSEO again for every place already imported, because the duplicate check
+ran on `google_place_id` — a value that only exists *after* the lookup.
+
+**The fix.** The list moved into Postgres and the server drains it.
+
+- New `import_jobs` + `import_job_items`, and `claim_import_items(p_limit)`
+  using `FOR UPDATE SKIP LOCKED`. Each item carries its own `stage`
+  (`import` → `reviews` → `profile` → `done`), so one drain advances the whole
+  pipeline — including the AI profile, which bulk import never generated before.
+  See [[02-backend/schema/import-jobs]].
+- New `GET /api/cron/drain-imports`, mirroring the worker pattern already proven
+  in `cron/refresh-places`: `maxDuration` 300, 240 s soft deadline, 2 workers,
+  24 items per claim, leftovers released for the next run. Registered in
+  `vercel.json` at `* * * * *` (Pro plan).
+- New `POST/GET /api/places/import-jobs` and `PATCH /api/places/import-jobs/[id]`.
+  The create route queues rows and fires a non-awaited kick at the drain, then
+  returns — no enrichment, no API spend in the request.
+- Per-place logic extracted to `src/lib/import/process-place.ts` so the drain and
+  any future caller share one implementation.
+- The page stopped driving and started polling, via the new
+  [[03-frontend/hooks/use-import-job]]. `import-store` shrank to the file choice
+  and options — server state belongs in React Query, and the split is what makes
+  a closed tab harmless. Reopening `/import` in a fresh tab renders the running
+  job.
+- **Removed:** `import-parse`, `import-batch`, `bulk-enrich-reviews`. All three
+  were superseded with no remaining callers.
+
+**The duplicate pre-check.** `resolveIdentity` pulls a CID/place_id out of the
+Takeout URL — regex, plus one free redirect follow for short links — and
+`findExisting` matches it against the user's places *before* the paid lookup. A
+resumed import is now free for everything already landed.
+
+Two gaps surfaced while testing it and were fixed:
+
+- `extractChIJPlaceId` matched `place_id=` but not `place_id:`, so it could not
+  read back the `?q=place_id:ChIJ…` URL that `transformBusinessInfoToPlaceData`
+  writes into `google_data.url`. One character class.
+- Only 152 of 475 imported places had `google_data.cid` populated, though 323
+  carried a CID in their stored URL. Backfilled from the URL; 522 of 525 places
+  now carry a CID and all 525 a place_id, so the pre-check can match every one.
+  New imports persist the URL-derived CID when DataForSEO does not return one.
+
+**Testing.** Stage priority, poison-item retirement, stale-claim reclaim, live
+claim protection and cancel each verified in SQL. Six simultaneous runners
+against a 10-item pool returned 10 items with **0 collisions** and every
+`attempts` at 1 — the property overlapping cron runs depend on. The pre-check
+resolved all three Takeout URL shapes to the right existing place, with a
+negative control that correctly missed. Create → poll → cancel exercised end to
+end in the browser, which is where the RLS omission below turned up.
+
+**RLS.** `import_job_items` is SELECT-only for its owner: `stage` *is* the queue
+state, so a session that could write it could hand itself work the drain then
+executes. The create route therefore enqueues on the service-role client with
+`user_id` from the verified session. Built on the caller's client first, it
+failed loudly with `new row violates row-level security policy`.
+`claim_import_items` follows the same posture — `EXECUTE` revoked from
+`public`/`anon`/`authenticated`, `search_path` pinned.
+
+**Ops.** `CRON_SECRET` is now load-bearing for import, not just the daily
+refresh: without it the kick no-ops and the cron 500s, so a job never starts. It
+is absent from `.env.local` by default, so imports do not drain locally.
+
+---
+
 ## 05.08.2026 — v1.25.3 — Count limits moved out of the profile schema
 
 - `evidence_quotes.max(2)` discarded a complete, well-formed profile — 50

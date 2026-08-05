@@ -1,22 +1,24 @@
 "use client";
 
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useLists } from "@/lib/hooks/use-lists";
 import { useTags } from "@/lib/hooks/use-tags";
+import {
+  useImportJob,
+  useCreateImportJob,
+  useCancelImportJob,
+} from "@/lib/hooks/use-import-job";
 import { useImportStore } from "@/lib/stores/import-store";
-import type { ImportProgressItem, ImportResult } from "@/lib/stores/import-store";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { BackfillProfilesPanel } from "@/components/settings/backfill-profiles-panel";
 import {
-  Upload, FileJson, Check, Loader2, AlertCircle, CheckCircle2,
+  Upload, FileJson, Check, Loader2, AlertCircle,
   X as XIcon, Bookmark, CalendarCheck, CheckCircle, Heart, StopCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { VisitStatus } from "@/lib/types";
-
-const BATCH_SIZE = 3;
 
 const VISIT_STATUS_OPTIONS: { value: VisitStatus | ""; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { value: "", label: "None", icon: XIcon },
@@ -32,6 +34,20 @@ export default function ImportPage() {
   const { data: tags = [] } = useTags();
   const queryClient = useQueryClient();
   const fileRef = useRef<File | null>(null);
+
+  const { data: job } = useImportJob();
+  const createJob = useCreateImportJob();
+  const cancelJob = useCancelImportJob();
+
+  const running = job?.status === "running";
+
+  // Places land on the map as the drain works through them, so refresh the
+  // lists while a job is live rather than only at the end.
+  useEffect(() => {
+    if (!running) return;
+    queryClient.invalidateQueries({ queryKey: ["places"] });
+    queryClient.invalidateQueries({ queryKey: ["stats"] });
+  }, [running, job?.settled, queryClient]);
 
   const handleFile = useCallback((f: File) => {
     if (!f.name.endsWith(".json") && !f.name.endsWith(".geojson") && !f.name.endsWith(".csv")) {
@@ -51,117 +67,24 @@ export default function ImportPage() {
     const file = fileRef.current;
     if (!file) return;
 
-    // Step 1: Parse
-    const formData = new FormData();
-    formData.append("file", file);
-
-    let places: any[];
     try {
-      const res = await fetch("/api/places/import-parse", { method: "POST", body: formData });
-      if (!res.ok) {
-        const data = await res.json();
-        toast.error(data.error || "Failed to parse file");
-        return;
-      }
-      const parsed = await res.json();
-      places = parsed.places;
-    } catch {
-      toast.error("Failed to parse file");
-      return;
-    }
-
-    // Step 2: Batch loop
-    store.startImport(places.length);
-
-    let imported = 0;
-    let failed = 0;
-    let enriched = 0;
-    const skipped: { name: string; reason: string }[] = [];
-    const importedPlaceIds: string[] = [];
-    const allItems: ImportProgressItem[] = [];
-
-    for (let i = 0; i < places.length; i += BATCH_SIZE) {
-      // Check cancel — read directly from store
-      if (useImportStore.getState().cancelled) {
-        toast.info(`Import cancelled. ${imported} places imported so far.`);
-        break;
-      }
-
-      const batch = places.slice(i, i + BATCH_SIZE);
-
-      try {
-        const res = await fetch("/api/places/import-batch", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            places: batch,
-            visit_status: store.visitStatus || null,
-            list_ids: store.selectedListIds,
-            tag_ids: store.selectedTagIds,
-          }),
-        });
-
-        if (!res.ok) {
-          for (const p of batch) {
-            failed++;
-            skipped.push({ name: p.name, reason: "Request failed" });
-            allItems.push({ name: p.name, status: "skipped", reason: "Request failed" });
-          }
-        } else {
-          const data = await res.json();
-          for (const r of data.results) {
-            if (r.status === "skipped") {
-              failed++;
-              skipped.push({ name: r.name, reason: r.reason || "Skipped" });
-            } else {
-              imported++;
-              if (r.status === "enriched") enriched++;
-              if (r.placeId) importedPlaceIds.push(r.placeId);
-            }
-            allItems.push(r);
-          }
-        }
-      } catch {
-        for (const p of batch) {
-          failed++;
-          skipped.push({ name: p.name, reason: "Network error" });
-          allItems.push({ name: p.name, status: "skipped", reason: "Network error" });
-        }
-      }
-
-      // Update store — Zustand triggers re-render
-      store.updateProgress(
-        Math.min(i + BATCH_SIZE, places.length),
-        allItems.slice(-4)
-      );
-    }
-
-    // Done
-    const result: ImportResult = { imported, failed, enriched, total: places.length, skipped, importedPlaceIds };
-    store.finishImport(result);
-    queryClient.invalidateQueries({ queryKey: ["places"] });
-    queryClient.invalidateQueries({ queryKey: ["stats"] });
-
-    if (imported > 0) toast.success(`Imported ${imported} places!`);
-
-    // Background reviews
-    if (importedPlaceIds.length > 0) {
-      store.setReviewsEnriching(true);
-      try {
-        for (let j = 0; j < importedPlaceIds.length; j += 5) {
-          await fetch("/api/places/bulk-enrich-reviews", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ placeIds: importedPlaceIds.slice(j, j + 5) }),
-          });
-        }
-        queryClient.invalidateQueries({ queryKey: ["places"] });
-      } catch {}
-      store.setReviewsEnriching(false);
+      const { total } = await createJob.mutateAsync({
+        file,
+        visitStatus: store.visitStatus || null,
+        listIds: store.selectedListIds,
+        tagIds: store.selectedTagIds,
+      });
+      fileRef.current = null;
+      store.reset();
+      toast.success(`${total} places queued — this runs on the server, you can close the page.`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to start import");
     }
   }
 
-  const pct = store.total > 0 ? Math.round((store.current / store.total) * 100) : 0;
+  const pct = job && job.total > 0 ? Math.round((job.settled / job.total) * 100) : 0;
+  const imported = (job?.counts.done ?? 0) + (job?.counts.reviews ?? 0) + (job?.counts.profile ?? 0);
+  const showDropzone = store.phase === "idle" && !running;
 
   return (
     <div className="p-4 lg:p-6 max-w-xl mx-auto space-y-6">
@@ -181,8 +104,8 @@ export default function ImportPage() {
         </ol>
       </Card>
 
-      {/* Upload area — only in idle phase */}
-      {store.phase === "idle" && (
+      {/* Upload area */}
+      {showDropzone && (
         <div
           className="border-2 border-dashed rounded-lg p-8 text-center transition-colors border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600"
           onDragOver={(e) => e.preventDefault()}
@@ -190,7 +113,7 @@ export default function ImportPage() {
         >
           <label className="cursor-pointer block">
             <Upload className="h-10 w-10 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
-            <p className="text-sm text-gray-500">Drag & drop your file here</p>
+            <p className="text-sm text-gray-500">Drag &amp; drop your file here</p>
             <p className="text-xs text-gray-400 mt-1">or click to browse</p>
             <input type="file" className="hidden" accept=".json,.geojson,.csv" onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])} />
           </label>
@@ -198,7 +121,7 @@ export default function ImportPage() {
       )}
 
       {/* Options phase */}
-      {store.phase === "options" && (
+      {store.phase === "options" && !running && (
         <Card className="p-4 space-y-4">
           <div className="flex items-center gap-3">
             <FileJson className="h-8 w-8 text-emerald-600 shrink-0" />
@@ -275,22 +198,26 @@ export default function ImportPage() {
             <Button variant="outline" size="sm" onClick={() => { fileRef.current = null; store.clearFile(); }} className="cursor-pointer">
               Change file
             </Button>
-            <Button size="sm" onClick={handleImport} className="cursor-pointer">
-              <Upload className="h-4 w-4 mr-1" />Start Import
+            <Button size="sm" onClick={handleImport} disabled={createJob.isPending} className="cursor-pointer">
+              {createJob.isPending
+                ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" />Queueing...</>
+                : <><Upload className="h-4 w-4 mr-1" />Start Import</>}
             </Button>
           </div>
         </Card>
       )}
 
-      {/* Importing phase */}
-      {store.phase === "importing" && (
+      {/* Running job. Survives a page close — the drain owns the work, this
+          card only reports on it. */}
+      {job && running && (
         <Card className="p-4">
           <div className="space-y-3">
             <div className="flex items-center justify-between text-sm">
-              <span className="font-medium">Importing... {store.current} / {store.total}</span>
+              <span className="font-medium">Importing… {job.settled} / {job.total}</span>
               <div className="flex items-center gap-2">
                 <span className="text-muted-foreground text-xs">{pct}%</span>
-                <Button variant="ghost" size="sm" onClick={() => store.requestCancel()}
+                <Button variant="ghost" size="sm" onClick={() => cancelJob.mutate(job.id)}
+                  disabled={cancelJob.isPending}
                   className="cursor-pointer text-red-500 hover:text-red-600 h-7 px-2">
                   <StopCircle className="h-3.5 w-3.5 mr-1" />Cancel
                 </Button>
@@ -299,46 +226,58 @@ export default function ImportPage() {
             <div className="h-2 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
               <div className="h-full bg-emerald-500 rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
             </div>
-            <div className="space-y-1">
-              {store.items.map((item, i) => (
-                <div key={i} className="flex items-center gap-2 text-xs">
-                  {item.status === "enriched" ? <CheckCircle2 className="h-3 w-3 text-emerald-500 shrink-0" /> :
-                   item.status === "imported" ? <Check className="h-3 w-3 text-blue-500 shrink-0" /> :
-                   <XIcon className="h-3 w-3 text-red-400 shrink-0" />}
-                  <span className="truncate">{item.name}</span>
-                  {item.reason && <span className="text-muted-foreground shrink-0">— {item.reason}</span>}
+
+            <div className="space-y-1 text-xs">
+              {job.pending_import > 0 && (
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Loader2 className="h-3 w-3 animate-spin shrink-0" />
+                  {job.pending_import} waiting to be added
                 </div>
-              ))}
+              )}
+              {job.enriching > 0 && (
+                <div className="flex items-center gap-2 text-emerald-600">
+                  <Loader2 className="h-3 w-3 animate-spin shrink-0" />
+                  {job.enriching} on the map, collecting reviews &amp; tags
+                </div>
+              )}
+              {imported > 0 && (
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Check className="h-3 w-3 text-emerald-500 shrink-0" />
+                  {imported} added
+                </div>
+              )}
             </div>
+
+            <p className="text-xs text-muted-foreground border-t pt-3">
+              This runs on the server. You can close this page — it keeps going.
+            </p>
           </div>
         </Card>
       )}
 
-      {/* Done phase */}
-      {store.phase === "done" && store.result && (
+      {/* Finished job */}
+      {job && !running && (
         <Card className="p-4">
           <div className="flex items-center gap-3">
-            {store.result.failed === 0 ? <Check className="h-8 w-8 text-emerald-600" /> : <AlertCircle className="h-8 w-8 text-orange-500" />}
+            {job.problems.length === 0
+              ? <Check className="h-8 w-8 text-emerald-600" />
+              : <AlertCircle className="h-8 w-8 text-orange-500" />}
             <div>
-              <p className="font-medium text-sm">Import complete</p>
+              <p className="font-medium text-sm">
+                {job.status === "cancelled" ? "Import cancelled" : "Import complete"}
+              </p>
               <p className="text-xs text-muted-foreground">
-                {store.result.imported} imported, {store.result.enriched} enriched
-                {store.result.failed > 0 ? `, ${store.result.failed} skipped` : ""} out of {store.result.total}
+                {job.counts.done ?? 0} added
+                {job.problems.length > 0 ? `, ${job.problems.length} skipped` : ""} out of {job.total}
               </p>
             </div>
           </div>
 
-          {store.reviewsEnriching && (
-            <div className="mt-3 flex items-center gap-2 text-xs text-emerald-600">
-              <Loader2 className="h-3 w-3 animate-spin" />Enriching reviews in background...
-            </div>
-          )}
-
-          {store.result.skipped.length > 0 && (
+          {job.problems.length > 0 && (
             <div className="mt-4 border-t pt-3">
               <p className="text-xs font-medium text-muted-foreground mb-2">Skipped places:</p>
               <div className="space-y-1.5 max-h-48 overflow-y-auto">
-                {store.result.skipped.map((s, i) => (
+                {job.problems.map((s, i) => (
                   <div key={i} className="text-xs bg-gray-50 dark:bg-gray-900 rounded-md px-3 py-2">
                     <span className="font-medium">{s.name}</span>
                     <span className="text-muted-foreground ml-2">({s.reason})</span>
@@ -349,19 +288,17 @@ export default function ImportPage() {
           )}
 
           <div className="mt-4 pt-3 border-t">
-            <Button variant="outline" size="sm" className="cursor-pointer" onClick={() => { fileRef.current = null; store.reset(); }}>
+            <Button variant="outline" size="sm" className="cursor-pointer"
+              onClick={() => { fileRef.current = null; store.reset(); }}>
               Import another file
             </Button>
           </div>
         </Card>
       )}
 
-      {/* AI profile backfill — surfaced once review enrichment has settled,
-          so the just-imported places get one-click profile generation.
-          Self-hides when there's nothing eligible. */}
-      {store.phase === "done" && !store.reviewsEnriching && (
-        <BackfillProfilesPanel />
-      )}
+      {/* Profile backfill for places imported before the pipeline existed —
+          self-hides when there's nothing eligible. */}
+      {!running && <BackfillProfilesPanel />}
     </div>
   );
 }
