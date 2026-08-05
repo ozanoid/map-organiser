@@ -96,6 +96,11 @@ export function buildLiteProfile(
     features,
     suggested_tags,
     suggested_lists,
+    // The lite path is rule-based and never sees reviews, so it cannot judge a
+    // concept against evidence and cannot spot a gap. Both stay empty; the full
+    // profile fills them minutes later.
+    matched_concepts: [],
+    concept_gaps: [],
     tldr: null,
     pros: null,
     cons: null,

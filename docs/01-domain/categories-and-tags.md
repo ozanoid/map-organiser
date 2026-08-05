@@ -2,8 +2,8 @@
 title: Categories, Sub-categories & Tags
 type: entity
 domain: places
-version: 1.1.0
-last_updated: 18.05.2026
+version: 1.3.0
+last_updated: 05.08.2026
 status: stable
 sources:
   - src/lib/types/index.ts
@@ -18,6 +18,7 @@ sources:
   - src/components/filters/tag-filter.tsx
   - src/components/places/inline-category-creator.tsx
   - src/components/places/inline-tag-input.tsx
+  - src/lib/vocabulary/read.ts
   - src/app/(app)/settings/page.tsx
 related:
   - "[[places]]"
@@ -26,6 +27,7 @@ related:
   - "[[../02-backend/schema/subcategories]]"
   - "[[../02-backend/schema/tags]]"
   - "[[../02-backend/schema/place_tags]]"
+  - "[[../02-backend/schema/vocabulary]]"
   - "[[../05-flows/full-profile-flow]]"
 ---
 
@@ -65,9 +67,61 @@ Places carry `places.subcategory_id uuid REFERENCES subcategories.id ON DELETE S
 - **Lite path** (Add Place dialog): `src/lib/ai/extract/category-resolver.ts` maps Google `types` to a `(primary, sub_category)` tuple. The dialog auto-pre-selects the sub-cat pill when `sub_category_confidence ≥ 0.85`.
 - **Full path** (background): the Gemini full profile can propose new sub-cat slugs. The 4-band apply policy in `src/lib/ai/apply-suggestions.ts` silent-applies existing matches and queues new ones for moderation. Phase 5.5 added a 4th band — if the LLM's parent category disagrees with the place's current category, the proposal is bundled with a category move; accept-time atomically updates `places.category_id` AND `places.subcategory_id`. See [[../05-flows/full-profile-flow#auto-apply-policy-4-band]].
 
-## Tags (unchanged, with new AI consumers)
+## The controlled vocabulary (v1.25.0)
 
-Free-form, per-user, multi-select. The AI Phase 4 full profile produces two tag signals: `matched_existing` (UUIDs of user tags the LLM recognized) and `new_proposals` (lowercase-hyphenated strings). Existing matches silent-apply; new proposals run through `src/lib/ai/dedup.ts` fuzzy match — variations of existing tags get rerouted, true novelty lands in the moderation queue. See [[../02-backend/schema/ai_suggestions_queue]].
+Tags and `features.*` values are no longer free text. A **global dictionary**
+shared by all accounts supplies the canonical terms — see
+[[../02-backend/schema/vocabulary]] for the tables.
+
+The problem it solves is the same in both places: values were generated one place
+at a time with no global view, so they fragmented. 400 places produced 368
+distinct `occasions` values (`date night` and `date-night` counted separately),
+five spellings of "vegetarian options", and 920 pending tag proposals of which
+85.8% came from a single place.
+
+Concepts split by destination:
+
+| Destination | Families | Effect |
+|---|---|---|
+| `place_profile.features.<axis>` | CUISINE · DIETARY · ATMOSPHERE · OCCASION · SEATING · CROWD · MUSIC | The profile LLM writes the canonical term into the existing field. **The `features` schema is unchanged**, so `rank-results`, `trip-plan` and `compare` are untouched. |
+| Tag system | SCENE · RITUAL · SETTING · ACTIVITY · PREPARATION · PROVENANCE · DRINKS · POLICY · SOCIAL · VALUE | Becomes a row in `tags` (carrying `concept_id`) + `place_tags`. These have no home in any `features` axis — before the dictionary they leaked into `distinctive` as one-off phrases. |
+
+Two fields are deliberately **excluded**:
+
+- **`features.distinctive`** stays free-form. Its job is "what is genuinely
+  particular about this place", and being unrepeatable is correct for that — 93%
+  of its values appear on exactly one place, which is the point, not a defect.
+  It is shown to the user as-is on the AI Summary card and is not filterable.
+- **`features.price_range`** is an ordinal enum, not a vocabulary.
+
+A tag only appears in a user's list once one of their places matches its concept,
+so the dictionary's size is never a UI burden.
+
+Every assignment must carry a verbatim review quote; a concept with no quotable
+evidence is not applied. Measured over 100 places: zero hallucinations, 27% of
+places correctly matching nothing.
+
+Anything the vocabulary cannot express goes to `vocabulary_candidates` — never
+shown, never applied, read only by the next refresh. Without that channel the
+dictionary ossifies.
+
+## Tags
+
+Free-form, per-user, multi-select. Two things now write them:
+
+- **The vocabulary** — a matched concept becomes a tag carrying `concept_id`.
+- **The user** — anything they type stays theirs, `concept_id` NULL, never touched
+  by a refresh.
+
+`matched_existing` still runs: the profile LLM applies the user's own hand-made
+tags to places that fit them.
+
+**`new_proposals` was retired in v1.25.0.** The full profile used to be asked for
+up to 3 brand-new tag names per place, fuzzy-deduped and queued for one-by-one
+approval. A single place cannot name vocabulary for a whole library: 920
+proposals accumulated, 804 distinct, 86% raised by exactly one place. The
+[[../02-backend/schema/ai_suggestions_queue]] still serves sub-category and
+category-change proposals, which the vocabulary does not cover.
 
 Both categories and tags also feed the AI's prompt context — the LLM sees the user's full vocabulary so it can pick from existing entities rather than invent variations.
 

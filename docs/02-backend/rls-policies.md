@@ -2,8 +2,8 @@
 title: RLS Policies
 type: overview
 domain: backend
-version: 1.2.0
-last_updated: 15.07.2026
+version: 1.3.0
+last_updated: 05.08.2026
 status: stable
 sources:
   - pg_policies (via Supabase MCP)
@@ -41,6 +41,26 @@ Truth source: `pg_policies`, fetched via Supabase MCP `execute_sql`. See per-tab
 | `trip_day_places` | Users can manage own trip day places | public | ALL | `trip_day_id IN (SELECT td.id FROM trip_days td JOIN trips t ON t.id = td.trip_id WHERE t.user_id = auth.uid())` |
 | `trip_days` | Users can manage own trip days | public | ALL | `trip_id IN (SELECT id FROM trips WHERE user_id = auth.uid())` |
 | `trips` | Users can manage own trips | public | ALL | `auth.uid() = user_id` |
+| `vocabulary_aliases` | Aliases are readable by all authenticated | authenticated | SELECT | `true` — global read, no write policy ([[schema/vocabulary]]) |
+| `vocabulary_candidates` | Users manage own vocabulary candidates | authenticated | ALL | `auth.uid() = user_id` |
+| `vocabulary_concepts` | Vocabulary is readable by all authenticated | authenticated | SELECT | `true` — global read, no write policy ([[schema/vocabulary]]) |
+| `vocabulary_migrations` | *(none — RLS on, service role only)* | — | — | — |
+
+### The global-vocabulary carve-out
+
+`vocabulary_concepts` and `vocabulary_aliases` are the **only tables in the app
+that are not user-scoped**. One controlled vocabulary serves every account, so
+`using (true)` for SELECT is correct rather than a leak — the rows contain no
+user data, only concept names and definitions.
+
+The safety property is on the write side: neither table has an INSERT, UPDATE or
+DELETE policy at all. With RLS enabled and no policy, `authenticated` cannot
+write, so the dictionary is mutable only by the service role — the monthly
+refresh job. `vocabulary_migrations` uses the same posture for the audit trail:
+RLS on, zero policies.
+
+`vocabulary_candidates` is different in kind. It holds observations tied to a
+user's own places, so it keeps the ordinary `auth.uid() = user_id` shape.
 
 ### Storage (`storage.objects`)
 

@@ -7,6 +7,7 @@ import { PlaceProfileSchema } from "@/lib/ai/schemas/place-profile";
 import { buildPlaceProfilePrompt } from "@/lib/ai/prompts/place-profile-full";
 import { applyProfileSuggestions } from "@/lib/ai/apply-suggestions";
 import { trackAiUsage, checkAiBudget } from "@/lib/ai/track-usage";
+import { loadVocabulary } from "@/lib/vocabulary/read";
 
 export type GenerateProfileOutcome =
   | {
@@ -82,7 +83,10 @@ export async function generatePlaceProfile(
     return { ok: false, reason: "no_reviews" };
   }
 
-  const userContext = await buildUserContext(supabase, userId);
+  const [userContext, vocabulary] = await Promise.all([
+    buildUserContext(supabase, userId),
+    loadVocabulary(supabase),
+  ]);
   const liteForPrior = googleData.place_profile ?? undefined;
 
   const currentCategoryId = (placeFull.category_id as string | null) ?? null;
@@ -102,7 +106,8 @@ export async function generatePlaceProfile(
         google_data: googleData,
       },
       userContext,
-      liteForPrior
+      liteForPrior,
+      vocabulary
     );
 
   console.log(`[enrich:profile] Calling Gemini for ${placeId}…`);
@@ -170,6 +175,7 @@ export async function generatePlaceProfile(
     currentCategoryId,
     currentCategoryName,
     modelVersion: MODEL_VERSION,
+    vocabulary,
   });
 
   trackAiUsage(userId, "ai_place_profile", supabase).catch(() => {});
