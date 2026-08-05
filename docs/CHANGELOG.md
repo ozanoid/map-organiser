@@ -6,6 +6,22 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 05.08.2026 — v1.25.2 — A failed review fetch no longer looks like a running one
+
+- The place detail view derived "enrichment in progress" as `has a CID && no
+  reviews`, which is equally the signature of a fetch that FAILED. For the 45
+  places in that state the page spun "Loading reviews…" forever, kept the Refresh
+  button disabled so the failure could never be retried, and polled
+  `/api/places/[id]` every 8 seconds for as long as the tab stayed open.
+- Bounded it by place age (`ENRICHMENT_WINDOW_MS`, 5 min — the DataForSEO task
+  polls ~90s). Past the window the place reads "No reviews yet. Tap Refresh" —
+  copy that already existed but was unreachable — the button re-enables, and the
+  poll stops. The same derived flag now drives both the effect and the prop.
+- Verified against live data: 45 places were locked under the old condition, 0
+  under the new one, and no place that should still be polling was affected.
+
+---
+
 ## 05.08.2026 — v1.25.1 — DataForSEO reviews located by coordinate
 
 - **Bug, silent since April.** 42 Turkish places had a CID and never got a single

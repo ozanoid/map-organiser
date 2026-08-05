@@ -60,6 +60,14 @@ export interface PlaceDetailViewProps {
 }
 
 /**
+ * How long after a place is saved its review fetch can plausibly still be in
+ * flight. The DataForSEO task polls 12 times on a 5s→10s backoff (~90s); five
+ * minutes leaves room for queueing without letting a failed fetch masquerade as
+ * a running one forever.
+ */
+const ENRICHMENT_WINDOW_MS = 5 * 60 * 1000;
+
+/**
  * The full place-detail body — shared by the `/places/[id]` route and the
  * mobile PlaceDetailSheet (v1.24.0 experiment). All data-fetching, polling
  * and mutations live here; the caller only supplies `placeId` and the
@@ -102,15 +110,29 @@ export function PlaceDetailView({
     fetchPlace();
   }, [fetchPlace]);
 
-  // Poll for reviews if enrichment is likely in progress
-  // (has CID but no reviews yet → background enrichment running)
-  useEffect(() => {
-    if (!place) return;
+  // Poll for reviews while enrichment is plausibly still running.
+  //
+  // "has a CID but no reviews" alone does NOT mean enrichment is running — it is
+  // equally the signature of a fetch that FAILED. 42 places sat in that state for
+  // four months after DataForSEO rejected their location, and because the
+  // condition never cleared, the detail page spun "Loading reviews…" forever,
+  // kept the Refresh button disabled so the failure could not be retried, and
+  // polled this endpoint every 8 seconds for as long as the page stayed open.
+  //
+  // Bounding it by age fixes all three: past the window the place reads as
+  // "no reviews yet", the button re-enables, and the poll stops.
+  const enrichmentMaybeRunning = (() => {
+    if (!place) return false;
     const gd = place.google_data || {};
-    const hasReviews = gd.reviews && gd.reviews.length > 0;
-    const hasCid = !!gd.cid;
+    if (!gd.cid) return false;
+    if (gd.reviews && gd.reviews.length > 0) return false;
+    const createdAt = place.created_at ? new Date(place.created_at).getTime() : 0;
+    if (!createdAt) return false;
+    return Date.now() - createdAt < ENRICHMENT_WINDOW_MS;
+  })();
 
-    if (hasCid && !hasReviews) {
+  useEffect(() => {
+    if (enrichmentMaybeRunning) {
       const interval = setInterval(() => {
         fetch(`/api/places/${placeId}`)
           .then((res) => res.json())
@@ -125,7 +147,7 @@ export function PlaceDetailView({
 
       return () => clearInterval(interval);
     }
-  }, [place?.google_data?.reviews, place?.google_data?.cid, placeId]);
+  }, [enrichmentMaybeRunning, placeId]);
 
   // Poll for full place_profile (Phase 4 background pipeline).
   // Reviews arrived but place_profile not "full" yet → keep polling until it lands.
@@ -667,7 +689,7 @@ export function PlaceDetailView({
           hasPlaceId={!!place.google_place_id}
           provider={googleData.provider}
           refreshing={refreshing}
-          enriching={!!googleData.cid && reviews.length === 0}
+          enriching={enrichmentMaybeRunning}
           onRefresh={handleRefreshGoogle}
           topicFilter={topicFilter}
           onClearTopicFilter={() => setTopicFilter(null)}
