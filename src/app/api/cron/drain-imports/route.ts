@@ -145,6 +145,17 @@ export async function GET(request: NextRequest) {
     return d;
   }
 
+  /**
+   * Write the item's new stage and release its claim.
+   *
+   * `attempts` resets whenever the stage actually moves, so it counts failed
+   * tries AT THE CURRENT STAGE rather than total visits. Without the reset it
+   * counted both: a healthy item spends exactly three claims walking
+   * import → reviews → profile, which is the whole retry budget, so one
+   * transient failure anywhere left the item stranded — never claimable again,
+   * never terminal, and `finalizeJobs` only closes a job once no active items
+   * remain, so the job would stay `running` forever.
+   */
   async function advance(
     item: JobItem,
     patch: { stage: string; place_id?: string | null; reason?: string | null }
@@ -156,6 +167,7 @@ export async function GET(request: NextRequest) {
         place_id: patch.place_id ?? item.place_id,
         reason: patch.reason ?? null,
         claimed_at: null,
+        ...(patch.stage !== item.stage && { attempts: 0 }),
         updated_at: new Date().toISOString(),
       })
       .eq("id", item.id);

@@ -70,7 +70,7 @@ One row per place per job. This is the queue.
 | `payload` | `jsonb` | the parsed place: name, address, lat, lng, googleMapsUrl, note |
 | `stage` | `text` | active: `import` \| `reviews` \| `profile`. terminal: `done` \| `skipped` \| `failed` |
 | `claimed_at` | `timestamptz` | set when a runner takes the item; stale after 10 min |
-| `attempts` | `int` | incremented on claim; caps at 3 |
+| `attempts` | `int` | failed tries **at the current stage**; incremented on claim, reset to 0 when the stage moves; caps at 3 |
 | `place_id` | `uuid` → `places` | set once the place exists; `on delete set null` |
 | `reason` | `text` | why it was skipped or failed |
 | `created_at`, `updated_at` | `timestamptz` | |
@@ -111,7 +111,11 @@ Three properties matter:
 - **Stage priority** puts every place on the map before any of them get enriched.
   Import is ~17 s per place; reviews poll DataForSEO for up to 110 s.
 - **The stale window** returns an item whose runner died, and `attempts` stops a
-  poison item from doing that forever.
+  poison item from doing that forever. The drain resets `attempts` on every
+  successful stage advance, so the cap counts failures at one stage rather than
+  total visits — without the reset a healthy item spent its entire budget just
+  walking `import → reviews → profile`, and one transient failure anywhere left
+  it stranded: never claimable, never terminal, and the job never closing.
 
 `search_path` is pinned and `EXECUTE` is revoked from `public`, `anon` and
 `authenticated` — the function writes rows RLS would otherwise hide, so only the

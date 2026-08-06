@@ -6,6 +6,23 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 06.08.2026 — v1.26.1 — `attempts` counts stage failures, not stage transitions
+
+- Caught on the first real import (23 places, Belgium). Items were sitting at
+  `profile` with `attempts = 3` — and the claim filter is `attempts < 3`.
+- The counter incremented on every claim, but a healthy item needs exactly three
+  claims to walk `import → reviews → profile`. It therefore spent its whole retry
+  budget on success, and any single transient failure anywhere in the pipeline
+  stranded the item: never claimable again, never terminal. `finalizeJobs` only
+  closes a job when no active items remain, so the job would also stay `running`
+  forever and the UI would show an import that never ends.
+- `advance` now resets `attempts` to 0 whenever the stage actually changes, so
+  the cap means "three failures at this stage" — which is what it was for. The
+  catch-block retirement check is unchanged and now reads correctly.
+- The in-flight job was repaired by resetting `attempts` on its active items.
+
+---
+
 ## 05.08.2026 — v1.26.0 — Bulk import survives a closed tab
 
 **The problem.** The import work list lived in the browser. `import-parse`
