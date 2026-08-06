@@ -5,7 +5,7 @@ import { parsePostgisPoint } from "@/lib/geo";
 import { fetchReviews, toLocationCoordinate } from "@/lib/dataforseo/reviews";
 import { transformReviews, mergeReviews } from "@/lib/dataforseo/transform";
 import { generatePlaceProfile } from "@/lib/ai/generate-profile";
-import { importPlace } from "@/lib/import/process-place";
+import { importPlace, ensurePlacePhoto } from "@/lib/import/process-place";
 import type { ImportPayload } from "@/lib/import/process-place";
 import { trackUsage } from "@/lib/google/track-usage";
 import type { Category, GoogleReview } from "@/lib/types";
@@ -56,7 +56,7 @@ const MAX_INFLIGHT = 60;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-const ACTIVE_STAGES = ["import", "reviews", "profile"] as const;
+const ACTIVE_STAGES = ["import", "photo", "reviews", "profile"] as const;
 
 interface JobItem {
   id: string;
@@ -173,7 +173,15 @@ export async function GET(request: NextRequest) {
       .eq("id", item.id);
   }
 
-  const counts = { imported: 0, skipped: 0, failed: 0, reviewed: 0, profiled: 0, done: 0 };
+  const counts = {
+    imported: 0,
+    photographed: 0,
+    skipped: 0,
+    failed: 0,
+    reviewed: 0,
+    profiled: 0,
+    done: 0,
+  };
   const startedAt = Date.now();
   let cursor = 0;
 
@@ -198,7 +206,7 @@ export async function GET(request: NextRequest) {
 
           if (outcome.status === "imported") {
             counts.imported++;
-            await advance(item, { stage: "reviews", place_id: outcome.placeId });
+            await advance(item, { stage: "photo", place_id: outcome.placeId });
           } else if (outcome.status === "skipped") {
             counts.skipped++;
             await advance(item, {
@@ -211,6 +219,21 @@ export async function GET(request: NextRequest) {
             await advance(item, { stage: "failed", reason: outcome.reason });
           }
           await sleep(DELAY_MS);
+          continue;
+        }
+
+        if (item.stage === "photo") {
+          // A missing photo never blocks the place — it just moves on with the
+          // reason recorded, so the item stays visible instead of vanishing the
+          // way the old inline download did.
+          const result = item.place_id
+            ? await ensurePlacePhoto(admin, client!, item.user_id, item.place_id)
+            : "unavailable";
+          if (result === "stored") counts.photographed++;
+          await advance(item, {
+            stage: "reviews",
+            reason: result === "unavailable" ? "No photo available" : null,
+          });
           continue;
         }
 

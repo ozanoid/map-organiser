@@ -6,6 +6,25 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 06.08.2026 — v1.27.0 — The photo is a pipeline stage, not an inline side effect
+
+- Fixing the client bug in v1.26.4 left the deeper problem in place: the photo
+  download ran inline inside the insert, so a failure produced no record and no
+  retry. That is why an entire import lost its pictures without a single visible
+  error.
+- New `photo` stage between `import` and `reviews`, with `ensurePlacePhoto` in
+  `src/lib/import/process-place.ts`. It inherits the claim, the retry cap, the
+  stale-reclaim and the soft deadline like every other stage. A place with no
+  usable image records `No photo available` and moves on rather than blocking.
+- Placed before `reviews` deliberately: a CDN fetch is fast and immediately
+  visible, while reviews poll DataForSEO for up to 110 s.
+- Free when `google_data.main_image` is set (v1.26.4). Places imported before
+  that have no source URL left, so their repair costs one business-info lookup —
+  and stores the URL on the way through, making any later retry free.
+- `claim_import_items` and the partial claim index updated for the new stage.
+
+---
+
 ## 06.08.2026 — v1.26.4 — The photo uploader takes a client instead of assuming one
 
 - Every place in the first queue-driven import landed without a photo: 0 of 23,

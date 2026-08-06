@@ -16,7 +16,7 @@ export interface ImportJobProgress {
   status: "running" | "done" | "cancelled";
   created_at: string;
   finished_at: string | null;
-  /** Row count per stage: import | reviews | profile | done | skipped | failed. */
+  /** Row count per stage: import | photo | reviews | profile | done | skipped | failed. */
   counts: Record<string, number>;
   /** Reached a terminal stage, whatever the outcome. */
   settled: number;

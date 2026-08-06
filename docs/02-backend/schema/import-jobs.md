@@ -68,7 +68,7 @@ One row per place per job. This is the queue.
 | `job_id` | `uuid` → `import_jobs` | cascade delete |
 | `user_id` | `uuid` → `auth.users` | denormalized so the claim scan and RLS never need the join |
 | `payload` | `jsonb` | the parsed place: name, address, lat, lng, googleMapsUrl, note |
-| `stage` | `text` | active: `import` \| `reviews` \| `profile`. terminal: `done` \| `skipped` \| `failed` |
+| `stage` | `text` | active: `import` \| `photo` \| `reviews` \| `profile`. terminal: `done` \| `skipped` \| `failed` |
 | `claimed_at` | `timestamptz` | set when a runner takes the item; stale after 10 min |
 | `attempts` | `int` | failed tries **at the current stage**; incremented on claim, reset to 0 when the stage moves; caps at 3 |
 | `place_id` | `uuid` → `places` | set once the place exists; `on delete set null` |
@@ -93,7 +93,7 @@ update import_job_items i
       and j.status = 'running'
       and c.attempts < 3
       and (c.claimed_at is null or c.claimed_at < now() - interval '10 minutes')
-    order by array_position(array['import','reviews','profile'], c.stage), c.created_at
+    order by array_position(array['import','photo','reviews','profile'], c.stage), c.created_at
     limit p_limit
     for update of c skip locked
  ) returning i.*;
@@ -108,8 +108,9 @@ Three properties matter:
   (A session-level advisory lock would be the usual guard, but Supabase pools
   connections in transaction mode, where such a lock is not reliably held across
   statements.)
-- **Stage priority** puts every place on the map before any of them get enriched.
-  Import is ~17 s per place; reviews poll DataForSEO for up to 110 s.
+- **Stage priority** puts every place on the map before any of them get enriched,
+  then gives them a picture before the slow part. Import is ~17 s per place and
+  `photo` is a CDN fetch, while `reviews` polls DataForSEO for up to 110 s.
 - **The stale window** returns an item whose runner died, and `attempts` stops a
   poison item from doing that forever. The drain resets `attempts` on every
   successful stage advance, so the cap counts failures at one stage rather than
@@ -138,7 +139,7 @@ role.
 
 | Index | On | Why |
 |---|---|---|
-| `import_job_items_claimable_idx` | `(created_at) where stage in ('import','reviews','profile')` | the claim scan; partial so terminal rows never widen it |
+| `import_job_items_claimable_idx` | `(created_at) where stage in ('import','photo','reviews','profile')` | the claim scan; partial so terminal rows never widen it |
 | `import_job_items_job_idx` | `(job_id)` | progress counts |
 | `import_jobs_user_idx` | `(user_id, created_at desc)` | "my latest job" |
 

@@ -162,7 +162,8 @@ export async function GET() {
       // Places exist and are on the map from here on; reviews and profile only
       // add to them, so the UI can say "importing" vs "enriching".
       pending_import: counts.import ?? 0,
-      enriching: (counts.reviews ?? 0) + (counts.profile ?? 0),
+      enriching:
+        (counts.photo ?? 0) + (counts.reviews ?? 0) + (counts.profile ?? 0),
       problems: rows
         .filter((r) => r.stage === "skipped" || r.stage === "failed")
         .map((r) => ({ name: r.name ?? "Unknown", reason: r.reason ?? "Skipped" })),

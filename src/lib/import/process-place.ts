@@ -144,6 +144,75 @@ export async function findExisting(
 }
 
 /**
+ * Make sure a place has its photo in Storage.
+ *
+ * Runs as the drain's `photo` stage rather than inline in the insert, so a
+ * failure is a retryable queue item instead of a swallowed `null`.
+ *
+ * Free when `google_data.main_image` is present — just a CDN fetch and an
+ * upload. Places imported before that field was persisted have no source URL
+ * left, so recovering their photo costs one business-info lookup; the URL is
+ * stored on the way through, and the second attempt is free.
+ */
+export async function ensurePlacePhoto(
+  supabase: SupabaseClient,
+  client: DataForSEOClient,
+  userId: string,
+  placeId: string
+): Promise<"stored" | "already" | "unavailable"> {
+  const { data: place } = await supabase
+    .from("places")
+    .select("google_data, google_place_id, country")
+    .eq("id", placeId)
+    .eq("user_id", userId)
+    .single();
+  if (!place) return "unavailable";
+
+  const gd = (place.google_data as Record<string, unknown>) ?? {};
+  if (gd.photo_storage_url) return "already";
+
+  let imageUrl = gd.main_image as string | undefined;
+
+  if (!imageUrl) {
+    const gpid = place.google_place_id as string | null;
+    if (!gpid) return "unavailable";
+    const raw = await fetchBusinessInfoLive(client, {
+      keyword: gpid.startsWith("ChIJ") ? `place_id:${gpid}` : `cid:${gpid}`,
+      location_name: (place.country as string | null) ?? undefined,
+    });
+    await trackUsage(userId, "dataforseo_business_info_live");
+    imageUrl = raw?.main_image ?? undefined;
+    if (!imageUrl) return "unavailable";
+    gd.main_image = imageUrl;
+  }
+
+  const url = await downloadAndStorePhotoFromUrl(supabase, imageUrl, placeId, userId);
+  if (!url) return "unavailable";
+
+  // Re-read rather than reuse `gd`: the reviews stage may have written to
+  // google_data while the CDN fetch was in flight.
+  const { data: cur } = await supabase
+    .from("places")
+    .select("google_data")
+    .eq("id", placeId)
+    .eq("user_id", userId)
+    .single();
+  await supabase
+    .from("places")
+    .update({
+      google_data: {
+        ...((cur?.google_data as Record<string, unknown>) ?? {}),
+        main_image: imageUrl,
+        photo_storage_url: url,
+      },
+    })
+    .eq("id", placeId)
+    .eq("user_id", userId);
+
+  return "stored";
+}
+
+/**
  * Enrich and insert a single place.
  *
  * Extracted from the old `/api/places/import-batch` handler so the durable
@@ -262,20 +331,9 @@ export async function importPlace(
     return { status: "failed", reason: error?.message || "Insert failed" };
   }
 
-  if (photoRef) {
-    const url = await downloadAndStorePhotoFromUrl(
-      supabase,
-      photoRef,
-      inserted.id,
-      userId
-    );
-    if (url) {
-      await supabase
-        .from("places")
-        .update({ google_data: { ...googleData, photo_storage_url: url } })
-        .eq("id", inserted.id);
-    }
-  }
+  // The photo is NOT downloaded here — the drain's `photo` stage does it, using
+  // the `main_image` stored above. Inline, a failed download left no record and
+  // no way to retry, which is how a whole import landed without pictures.
 
   const listIds = defaults.listIds ?? [];
   const tagIds = defaults.tagIds ?? [];

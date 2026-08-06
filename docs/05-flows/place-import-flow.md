@@ -53,8 +53,8 @@ User goes to `/import`, picks a CSV or GeoJSON file (typically from Google Takeo
        │
        │  Each visit advances ONE item ONE stage:
        │
-       │    import ──► reviews ──► profile ──► done
-       │       │           │
+       │    import ──► photo ──► reviews ──► profile ──► done
+       │       │                     │
        │       ├─► skipped (already exists / no coordinates)
        │       └─► failed  (insert error / 3 failed attempts)
        ▼
@@ -69,11 +69,12 @@ User goes to `/import`, picks a CSV or GeoJSON file (typically from Google Takeo
 
 | Stage | What happens | Next |
 |---|---|---|
-| `import` | `resolveIdentity` (free) → duplicate pre-check → `fetchBusinessInfoLive` → INSERT places + list_places + place_tags + photo | `reviews`, or `skipped`/`failed` |
+| `import` | `resolveIdentity` (free) → duplicate pre-check → `fetchBusinessInfoLive` → INSERT places + list_places + place_tags, storing `main_image` | `photo`, or `skipped`/`failed` |
+| `photo` | `ensurePlacePhoto` — CDN fetch of `main_image` → Storage upload. Free unless `main_image` is missing, which costs one business-info lookup | `reviews` (always; a missing photo records a reason and moves on) |
 | `reviews` | `fetchReviews` (depth 50) → `mergeReviews` into `google_data.reviews` | `profile`, or `done` if the place has no CID or no reviews |
 | `profile` | `generatePlaceProfile` — the full Gemini pass, which also applies vocabulary concepts as tags | `done` |
 
-Stage priority in the claim is `import` → `reviews` → `profile`, not insertion order. Import is ~17 s per place while reviews poll DataForSEO for up to 110 s; interleaving them would leave the map half-empty for the whole run.
+Stage priority in the claim is `import` → `photo` → `reviews` → `profile`, not insertion order. Import is ~17 s per place while reviews poll DataForSEO for up to 110 s; interleaving them would leave the map half-empty for the whole run.
 
 ## Inputs / outputs
 
@@ -98,7 +99,7 @@ Verified against the three URL shapes Takeout emits (`?cid=`, `?q=place_id:ChIJ�
 
 - **Parse fails (step 2):** invalid file. UI shows the error, nothing is written.
 - **Per-place DataForSEO failure:** the place is inserted unenriched if coordinates survive, otherwise `skipped` with a reason. Never blocks the queue.
-- **Photo download or upload fails:** the place is inserted without `photo_storage_url`. `google_data.main_image` keeps the source URL so a retry costs nothing. Background callers must hand `downloadAndStorePhotoFromUrl` a service-role client — a cookie-scoped one has no `auth.uid()` and the Storage policy rejects the write silently.
+- **Photo download or upload fails:** its own stage, so it retries like anything else instead of vanishing. `google_data.main_image` keeps the source URL, so the retry is free. Background callers must hand `downloadAndStorePhotoFromUrl` a service-role client — a cookie-scoped one has no `auth.uid()` and the Storage policy rejects the write silently, returning the same `null` a dead image URL would.
 - **Duplicate:** `skipped`, reason `Already exists`, at zero API cost.
 - **Runner dies mid-item:** the item keeps a stale `claimed_at` and returns to the pool after 10 minutes.
 - **Poison item:** `attempts` caps at 3, then the item retires as `failed`.

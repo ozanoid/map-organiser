@@ -83,7 +83,12 @@ export default function ImportPage() {
   }
 
   const pct = job && job.total > 0 ? Math.round((job.settled / job.total) * 100) : 0;
-  const imported = (job?.counts.done ?? 0) + (job?.counts.reviews ?? 0) + (job?.counts.profile ?? 0);
+  // Everything past the `import` stage is already on the map.
+  const imported =
+    (job?.counts.done ?? 0) +
+    (job?.counts.photo ?? 0) +
+    (job?.counts.reviews ?? 0) +
+    (job?.counts.profile ?? 0);
   const showDropzone = store.phase === "idle" && !running;
 
   return (
