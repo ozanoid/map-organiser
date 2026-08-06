@@ -6,6 +6,30 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 06.08.2026 — v1.26.2 — A DataForSEO attribute key is not review evidence
+
+- Spotted in the first Belgian profile: KMSKA got seven concepts, and three
+  cited `welcomes_lgbtq`, `is_transgender_safespace` and `has_wi_fi` as their
+  "verbatim quote". The attributes block is in the prompt's context and the
+  model sometimes reaches for it instead of the reviews. Measured across all
+  accounts: 25 of 257 assignments, 9.7%.
+- The attribute is not wrong — the place really does have wifi. The problem is
+  what the evidence requirement is FOR. It exists to make a tag discriminating:
+  something reviewers noticed. An attribute is a checkbox Google set, so a wifi
+  tag lands on whichever places have the flag AND happen to get cited — 3 of 500,
+  arbitrarily. Filtering on it returns noise, which is worse than the tag not
+  existing. Same failure class as the `matched_existing` leak in v1.25.4: a path
+  that reaches `place_tags` without paying the evidence price.
+- `applyMatchedConcepts` now drops any assignment whose evidence matches
+  `^[a-z0-9_]+$`. No sentence looks like that, and no attribute key doesn't.
+- The dictionary keeps `wifi`, `transgender-safespace` and `childrens-menu` even
+  though those are the three that have never drawn a real quote. A café review
+  saying "great wifi for working" is a legitimate match; the evidence rule, not
+  a prune list, is the right gate.
+- 25 existing tag links removed, along with the tags left with no links.
+
+---
+
 ## 06.08.2026 — v1.26.1 — `attempts` counts stage failures, not stage transitions
 
 - Caught on the first real import (23 places, Belgium). Items were sitting at

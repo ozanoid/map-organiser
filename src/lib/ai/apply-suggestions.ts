@@ -63,6 +63,29 @@ interface ApplyContext {
 }
 
 /**
+ * Is this evidence an actual review quote, or a DataForSEO attribute key?
+ *
+ * The prompt asks for a verbatim quote, but the attributes block is also in
+ * context and the model sometimes cites that instead — `has_wi_fi`,
+ * `welcomes_lgbtq`, `is_transgender_safespace`. Measured across 257 assignments:
+ * 25 of them, just under 10%.
+ *
+ * The problem is not that the attribute is wrong. It is that the evidence
+ * requirement exists to make a tag DISCRIMINATING — something reviewers actually
+ * noticed. An attribute is a checkbox Google set, so a wifi tag lands on
+ * whichever places happen to have the flag AND happen to get cited: 3 places out
+ * of 500, chosen arbitrarily. Filtering on it returns noise. A review-backed tag
+ * lands wherever people bothered to mention it, which is a consistent signal.
+ *
+ * An attribute key is lowercase, digits and underscores with no whitespace. No
+ * sentence looks like that.
+ */
+function isReviewQuote(evidence: string): boolean {
+  const e = evidence.trim();
+  return e.length > 0 && !/^[a-z0-9_]+$/.test(e);
+}
+
+/**
  * Concepts the LLM matched from the global vocabulary become real tags on the
  * place — reusing `tags` + `place_tags` rather than a parallel junction, so the
  * filter panel, saved filters and tag pills all keep working untouched.
@@ -83,7 +106,9 @@ async function applyMatchedConcepts(
   ctx: ApplyContext
 ): Promise<number> {
   const vocab = ctx.vocabulary;
-  const matched = (profile.matched_concepts ?? []).slice(0, MAX_CONCEPTS_PER_PLACE);
+  const matched = (profile.matched_concepts ?? [])
+    .filter((m) => isReviewQuote(m.evidence))
+    .slice(0, MAX_CONCEPTS_PER_PLACE);
   if (!vocab || matched.length === 0) return 0;
 
   // Only concepts destined for the tag system, and only ones that really exist —

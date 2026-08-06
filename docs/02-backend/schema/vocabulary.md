@@ -168,6 +168,19 @@ parallel junction, so the filter panel, saved filters and tag pills all keep
 working with no change. It also gives "invisible until matched" for free: a
 concept only appears in someone's tag list once one of their places matches it.
 
+## Evidence must read like a sentence
+
+`applyMatchedConcepts` rejects any assignment whose evidence matches
+`^[a-z0-9_]+$`. That is the shape of a DataForSEO attribute key — `has_wi_fi`,
+`welcomes_lgbtq` — which sits in the prompt's context and which the model
+sometimes cites in place of a review quote (9.7% of assignments when measured).
+
+The attribute is usually true. It is just not *evidence* in the sense the design
+needs: a tag earns its place by being something reviewers noticed, and an
+attribute is a checkbox that lands on whichever places have the flag set and
+happen to get cited. That produces arbitrary partial coverage, which filters
+worse than no tag at all.
+
 ## Related code
 
 - `src/lib/vocabulary/read.ts` — load, serialize for the prompt, resolve aliases.
