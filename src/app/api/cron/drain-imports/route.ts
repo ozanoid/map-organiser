@@ -230,8 +230,16 @@ export async function GET(request: NextRequest) {
             ? await ensurePlacePhoto(admin, client!, item.user_id, item.place_id)
             : "unavailable";
           if (result === "stored") counts.photographed++;
+
+          // A place that already has a profile was enriched on an earlier pass
+          // — this item exists only to repair its photo. Sending it on would
+          // re-fetch reviews it already has and re-run the LLM over them, at
+          // real cost, and could churn its tags for nothing.
+          const enriched = item.place_id
+            ? await alreadyEnriched(item.place_id)
+            : false;
           await advance(item, {
-            stage: "reviews",
+            stage: enriched ? "done" : "reviews",
             reason: result === "unavailable" ? "No photo available" : null,
           });
           continue;
@@ -272,6 +280,17 @@ export async function GET(request: NextRequest) {
         if (retire) counts.failed++;
       }
     }
+  }
+
+  /** Has this place already been through reviews + profile on an earlier pass? */
+  async function alreadyEnriched(placeId: string): Promise<boolean> {
+    const { data } = await admin
+      .from("places")
+      .select("google_data")
+      .eq("id", placeId)
+      .single();
+    const gd = (data?.google_data as Record<string, unknown>) ?? {};
+    return Boolean(gd.place_profile);
   }
 
   async function enrichReviews(item: JobItem): Promise<boolean> {

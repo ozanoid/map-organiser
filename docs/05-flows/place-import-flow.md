@@ -70,7 +70,7 @@ User goes to `/import`, picks a CSV or GeoJSON file (typically from Google Takeo
 | Stage | What happens | Next |
 |---|---|---|
 | `import` | `resolveIdentity` (free) → duplicate pre-check → `fetchBusinessInfoLive` → INSERT places + list_places + place_tags, storing `main_image` | `photo`, or `skipped`/`failed` |
-| `photo` | `ensurePlacePhoto` — CDN fetch of `main_image` → Storage upload. Free unless `main_image` is missing, which costs one business-info lookup | `reviews` (always; a missing photo records a reason and moves on) |
+| `photo` | `ensurePlacePhoto` — CDN fetch of `main_image` → Storage upload. Free unless `main_image` is missing, which costs one business-info lookup | `reviews`, or straight to `done` if the place already has a profile (a repair-only item). A missing photo records a reason and moves on either way |
 | `reviews` | `fetchReviews` (depth 50) → `mergeReviews` into `google_data.reviews` | `profile`, or `done` if the place has no CID or no reviews |
 | `profile` | `generatePlaceProfile` — the full Gemini pass, which also applies vocabulary concepts as tags | `done` |
 
@@ -107,6 +107,18 @@ Verified against the three URL shapes Takeout emits (`?cid=`, `?q=place_id:ChIJ�
 - **Backlog pile-up:** the drain exits early when more than 60 items are already claimed and in flight, which bounds DataForSEO spend.
 - **Preview deployments:** Vercel Cron fires on production only. The drain self-chains while work remains — guarded on having made progress this run — so a preview import still completes on the kick alone.
 - **Cancel:** `PATCH /api/places/import-jobs/[id]` sets `status = cancelled`; the claim only reads from `running` jobs, so nothing new is taken. Items already in flight finish their current stage.
+
+## Repairing one thing about an existing place
+
+An `import_job_items` row with `stage = 'photo'` and a `place_id` set is a
+standalone repair: the drain fixes that place's photo and stops, because a place
+that already carries a `place_profile` was enriched on an earlier pass. Sending
+it on to `reviews` would re-fetch reviews it already has, re-run the LLM over
+them at real cost, and possibly churn its tags for nothing.
+
+That is how the 23 photo-less Belgian places were repaired without a panel, a
+new route, or a second secret — the queue already ran in production with the
+right credentials.
 
 ## Why the work list moved to the database
 

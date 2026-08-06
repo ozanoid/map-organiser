@@ -22,6 +22,12 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
   that have no source URL left, so their repair costs one business-info lookup —
   and stores the URL on the way through, making any later retry free.
 - `claim_import_items` and the partial claim index updated for the new stage.
+- A `photo` item whose place already has a `place_profile` goes straight to
+  `done` instead of on to `reviews`. That makes a lone `photo` row a standalone
+  repair unit — which is how the 23 photo-less Belgian places were fixed, with
+  no panel, no new route and no second secret, since the queue already runs in
+  production with the right credentials. Without the rule each repair would have
+  re-fetched minutes-old reviews and re-run the LLM over them.
 
 ---
 
