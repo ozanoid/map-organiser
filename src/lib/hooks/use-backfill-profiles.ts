@@ -11,6 +11,8 @@ export interface BackfillEligibility {
   has_reviews_no_profile: number;
   has_cid_no_reviews: number;
   no_cid_no_profile: number;
+  /** Asked within the recheck window and Google had none — not actionable. */
+  no_reviews_available: number;
   estimated_cost_usd: number;
   ai_features_enabled: boolean;
 }

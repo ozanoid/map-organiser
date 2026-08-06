@@ -8,6 +8,10 @@ import { generatePlaceProfile } from "@/lib/ai/generate-profile";
 import { importPlace, ensurePlacePhoto } from "@/lib/import/process-place";
 import type { ImportPayload } from "@/lib/import/process-place";
 import { trackUsage } from "@/lib/google/track-usage";
+import {
+  stampReviewsChecked,
+  reviewsRecentlyChecked,
+} from "@/lib/places/reviews-checked";
 import type { Category, GoogleReview } from "@/lib/types";
 
 /**
@@ -305,6 +309,8 @@ export async function GET(request: NextRequest) {
     const gd = (place.google_data as Record<string, unknown>) || {};
     const cid = gd.cid as string | undefined;
     if (!cid) return false;
+    // Already asked recently and got nothing — don't pay for the same answer.
+    if (reviewsRecentlyChecked(gd)) return false;
 
     const reviews = await fetchReviews(client!, {
       cid,
@@ -314,7 +320,10 @@ export async function GET(request: NextRequest) {
       ),
       location_name: (place.country as string | null) || "United Kingdom",
     });
-    if (!reviews || reviews.length === 0) return false;
+    if (!reviews || reviews.length === 0) {
+      await stampReviewsChecked(admin, item.place_id);
+      return false;
+    }
 
     await trackUsage(item.user_id, "dataforseo_reviews");
     await admin

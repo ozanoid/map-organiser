@@ -152,6 +152,12 @@ export function BackfillProfilesPanel() {
               need reviews first — DataForSEO then Gemini Flash.
             </li>
           )}
+          {data.no_reviews_available > 0 && (
+            <li className="text-muted-foreground/80">
+              <span className="font-medium">{data.no_reviews_available}</span>{" "}
+              have no reviews on Google. Skipped — we&apos;ll look again in a month.
+            </li>
+          )}
           {data.no_cid_no_profile > 0 && (
             <li className="text-muted-foreground/80">
               <span className="font-medium">{data.no_cid_no_profile}</span>{" "}

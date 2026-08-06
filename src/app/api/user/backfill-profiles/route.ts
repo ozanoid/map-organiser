@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { reviewsRecentlyChecked } from "@/lib/places/reviews-checked";
 import { AI_SKU_CONFIG } from "@/lib/ai/track-usage";
 
 /**
@@ -37,6 +38,7 @@ interface EligibilityReport {
   has_reviews_no_profile: number;  // → fire step=profile only (~$0.001 each)
   has_cid_no_reviews: number;       // → fire step=reviews (chains to profile)
   no_cid_no_profile: number;        // → cannot enrich (skipped)
+  no_reviews_available: number;     // → asked within REVIEWS_RECHECK_DAYS, Google had none
   estimated_cost_usd: number;
   ai_features_enabled: boolean;
 }
@@ -116,6 +118,9 @@ export async function POST(request: NextRequest) {
     const hasReviews = Array.isArray(reviews) && reviews.length > 0;
     const cid = typeof gd.cid === "string" ? gd.cid : null;
     if (!hasReviews && !cid) continue; // unreachable
+    // Don't spend a reviews call re-asking about a place Google just told us
+    // has none — the same rule the eligibility report counts by.
+    if (!hasReviews && reviewsRecentlyChecked(gd)) continue;
     eligible.push({
       id: p.id as string,
       needs_reviews: !hasReviews,
@@ -172,6 +177,7 @@ export async function POST(request: NextRequest) {
     const cid = typeof gd.cid === "string" ? gd.cid : null;
     const reviews = gd.reviews;
     const hasReviews = Array.isArray(reviews) && reviews.length > 0;
+    if (!hasReviews && reviewsRecentlyChecked(gd)) return false;
     return hasReviews || cid != null;
   }).length;
 
@@ -195,6 +201,7 @@ async function buildEligibilityReport(
   let has_reviews_no_profile = 0;
   let has_cid_no_reviews = 0;
   let no_cid_no_profile = 0;
+  let no_reviews_available = 0;
 
   for (const p of places ?? []) {
     const gd = (p.google_data as Record<string, unknown> | null) ?? {};
@@ -207,6 +214,12 @@ async function buildEligibilityReport(
     const cid = typeof gd.cid === "string" ? gd.cid : null;
     if (hasReviews) {
       has_reviews_no_profile += 1;
+    } else if (cid && reviewsRecentlyChecked(gd)) {
+      // We already asked and Google had nothing. Counting these as actionable
+      // is what made the panel re-offer the same place after every import,
+      // spending a reviews call each time for the same empty answer. They
+      // return to `has_cid_no_reviews` once the stamp ages out.
+      no_reviews_available += 1;
     } else if (cid) {
       has_cid_no_reviews += 1;
     } else {
@@ -229,6 +242,7 @@ async function buildEligibilityReport(
     has_reviews_no_profile,
     has_cid_no_reviews,
     no_cid_no_profile,
+    no_reviews_available,
     estimated_cost_usd,
   };
 }

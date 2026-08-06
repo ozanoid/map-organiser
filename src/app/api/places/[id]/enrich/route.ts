@@ -15,6 +15,7 @@ import { downloadAndStorePhotoFromUrl } from "@/lib/dataforseo/photo";
 import { trackUsage } from "@/lib/google/track-usage";
 import { generatePlaceProfile } from "@/lib/ai/generate-profile";
 import { flushLangfuse } from "@/lib/telemetry/langfuse";
+import { stampReviewsChecked } from "@/lib/places/reviews-checked";
 
 function getDataForSEOClient(): DataForSEOClient | null {
   const login = process.env.DATAFORSEO_LOGIN;
@@ -171,6 +172,12 @@ export async function POST(
           console.warn(`[enrich:reviews] profile chain failed for ${id}:`, e);
         });
       }
+    } else {
+      // Remember that we asked and Google had nothing. Without this the place
+      // stays permanently eligible for backfill — "has a CID, has no reviews"
+      // is true forever — so the panel re-offers it after every import and each
+      // click burns another reviews call for the same empty answer.
+      await stampReviewsChecked(supabase, id);
     }
 
     return NextResponse.json({ ok: true, reviews: rawReviews.length });

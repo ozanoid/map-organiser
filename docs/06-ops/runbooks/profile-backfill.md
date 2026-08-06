@@ -2,8 +2,8 @@
 title: AI place_profile backfill (per user)
 type: runbook
 domain: ops
-version: 1.2.0
-last_updated: 15.07.2026
+version: 1.3.0
+last_updated: 06.08.2026
 status: stable
 related:
   - "[[_README]]"
@@ -164,3 +164,19 @@ Re-run the backfill afterward to regenerate.
 | Date | User | Eligible | Cost | Notes |
 |---|---|---|---|---|
 | _(none yet — backfill flow shipped 19.05.2026)_ | — | — | — | — |
+
+## Places that will never become eligible
+
+A place whose reviews fetch comes back empty gets `google_data.reviews_checked_at`
+stamped, and the eligibility report counts it under `no_reviews_available`
+rather than `has_cid_no_reviews`. Without that, "has a CID and no reviews" stays
+true forever and the panel re-offers the place after every import, burning a
+DataForSEO call each time for the same empty answer.
+
+The stamp expires after 30 days (`REVIEWS_RECHECK_DAYS` in
+`src/lib/places/reviews-checked.ts`), so a place that later accumulates reviews
+comes back on its own.
+
+Note that a null `user_ratings_total` is NOT a reliable "no reviews" signal — it
+means our stored record is incomplete. The British Museum carries a 4.7 rating
+with no review count.

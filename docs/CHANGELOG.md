@@ -6,6 +6,33 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 06.08.2026 — v1.27.1 — Remember when Google had no reviews
+
+- Backfill eligibility asks "has a CID, has no reviews?" — a condition that is
+  permanently true for a place Google holds no reviews for. So the panel
+  re-offered the same place after every import, and each click spent another
+  DataForSEO reviews call to be told the same nothing. `enrich?step=reviews`
+  gates everything on `rawReviews.length > 0`, so an empty answer stored no
+  data, chained to no profile, and left no trace that we had asked.
+- A fetch that comes back empty now stamps `google_data.reviews_checked_at`
+  (both the enrich route and the drain's reviews stage). Eligibility counts
+  those places in a new `no_reviews_available` bucket instead of the actionable
+  one, the POST handler skips them, and the panel says so rather than letting
+  them vanish silently.
+- The stamp expires after `REVIEWS_RECHECK_DAYS` (30). A place with no reviews
+  today may have some next month, and an empty answer caused by a transient
+  upstream fault should not exile it permanently.
+- Investigated but deliberately NOT used as the signal: a null
+  `user_ratings_total`. The data says it means "our record is incomplete", not
+  "Google has none" — The British Museum sits in that bucket with a 4.7 rating
+  and no stored review count. Filtering on it would have hidden recoverable
+  places for good.
+- Also noted: `trackUsage` sits inside the `length > 0` branch, so an empty
+  fetch is billed by DataForSEO but invisible in the cost tracker. Left alone
+  for now — this change stops the repeat calls that made it matter.
+
+---
+
 ## 06.08.2026 — v1.27.0 — The photo is a pipeline stage, not an inline side effect
 
 - Fixing the client bug in v1.26.4 left the deeper problem in place: the photo
