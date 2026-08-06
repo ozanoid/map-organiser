@@ -6,6 +6,27 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 06.08.2026 — v1.26.3 — Releasing an unclaimed item gives back its attempt
+
+- Third defect in the same family, found watching the 23-place Belgian import:
+  five items sat at `reviews` with `attempts = 2` having never failed at
+  anything.
+- The claim increments `attempts` up front, which is what protects the queue from
+  an item that hard-crashes its runner. But claiming is not attempting. A run
+  routinely claims more than it can finish — the reviews stage polls DataForSEO
+  for 30-110 s per place, so 2 workers clear well under `CLAIM_SIZE` inside the
+  240 s deadline — and the untouched remainder was released with `claimed_at`
+  cleared but the counter left charged. Three releases and a healthy place
+  retires as `failed`.
+- New `release_import_items(p_ids)` RPC does both halves: clears the claim and
+  decrements `attempts` (floored at 0). Same posture as the claim function —
+  pinned `search_path`, `EXECUTE` revoked from everyone but the service role.
+- Also fixed the progress card rendering "5on the map". Each label is now a
+  single template expression rather than `{count} text`, where the space between
+  them was at the mercy of JSX text-node trimming.
+
+---
+
 ## 06.08.2026 — v1.26.2 — A DataForSEO attribute key is not review evidence
 
 - Spotted in the first Belgian profile: KMSKA got seven concepts, and three

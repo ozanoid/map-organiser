@@ -227,23 +227,26 @@ export default function ImportPage() {
               <div className="h-full bg-emerald-500 rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
             </div>
 
+            {/* Each label is ONE expression. Splitting it as `{count} text`
+                leaves the space between them at the mercy of JSX text-node
+                trimming, which ate it here and rendered "5on the map". */}
             <div className="space-y-1 text-xs">
               {job.pending_import > 0 && (
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <Loader2 className="h-3 w-3 animate-spin shrink-0" />
-                  {job.pending_import} waiting to be added
+                  <span>{`${job.pending_import} waiting to be added`}</span>
                 </div>
               )}
               {job.enriching > 0 && (
                 <div className="flex items-center gap-2 text-emerald-600">
                   <Loader2 className="h-3 w-3 animate-spin shrink-0" />
-                  {job.enriching} on the map, collecting reviews &amp; tags
+                  <span>{`${job.enriching} on the map, collecting reviews & tags`}</span>
                 </div>
               )}
               {imported > 0 && (
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <Check className="h-3 w-3 text-emerald-500 shrink-0" />
-                  {imported} added
+                  <span>{`${imported} added`}</span>
                 </div>
               )}
             </div>

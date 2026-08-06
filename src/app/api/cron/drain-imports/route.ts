@@ -296,12 +296,15 @@ export async function GET(request: NextRequest) {
   // Items claimed but never reached (soft deadline) still hold a claim; drop it
   // so the next run picks them up immediately instead of waiting out the
   // 10-minute stale window.
+  //
+  // `release_import_items` also gives back the attempt the claim charged them.
+  // Claiming is not attempting: a run routinely takes more than it can finish —
+  // the reviews stage polls DataForSEO for 30-110 s per place, so CONCURRENCY
+  // workers clear well under CLAIM_SIZE inside the deadline. Charging the
+  // remainder anyway retired healthy places as `failed` after three releases.
   const untouched = items.slice(cursor).map((i) => i.id);
   if (untouched.length > 0) {
-    await admin
-      .from("import_job_items")
-      .update({ claimed_at: null })
-      .in("id", untouched);
+    await admin.rpc("release_import_items", { p_ids: untouched });
   }
 
   await finalizeJobs(admin);

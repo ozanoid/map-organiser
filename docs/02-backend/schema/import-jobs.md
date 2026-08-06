@@ -121,6 +121,19 @@ Three properties matter:
 `authenticated` — the function writes rows RLS would otherwise hide, so only the
 service-role drain may call it.
 
+## `release_import_items(p_ids uuid[])`
+
+The other half of the claim. Sets `claimed_at = null` and gives back the attempt
+the claim charged, for items a run took but never reached.
+
+Claiming is not attempting. A run routinely claims more than it can finish — the
+`reviews` stage polls DataForSEO for 30-110 s per place, so `CONCURRENCY` workers
+clear well under `CLAIM_SIZE` inside the soft deadline. Releasing without
+restoring the counter charged those items for a try they never got, and three
+such releases retired a perfectly healthy place as `failed`. Same posture as the
+claim: pinned `search_path`, `EXECUTE` revoked from everyone but the service
+role.
+
 ## Indexes
 
 | Index | On | Why |
