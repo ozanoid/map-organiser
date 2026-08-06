@@ -5,9 +5,26 @@
  * We download and upload to Supabase Storage (same pattern as Google Photos).
  */
 
-import { createClient } from "@/lib/supabase/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
+/**
+ * Download a photo and put it in Storage under `<userId>/<placeId>.<ext>`.
+ *
+ * The caller passes its own client, and that is load-bearing rather than
+ * stylistic. This used to build a cookie-scoped client internally, which is
+ * correct in a request handler and silently wrong everywhere else: the
+ * `place-photos` policy is
+ * `(storage.foldername(name))[1] = auth.uid()::text`, so with no session
+ * `auth.uid()` is NULL, the upload is denied, and the function returns null
+ * exactly as it would for a dead image URL. Every Belgian place in the first
+ * queue-driven import landed without a photo that way, and the daily refresh
+ * cron had been quietly failing the same check for as long as it has existed.
+ *
+ * Background callers (the import drain, the refresh cron) must pass a
+ * service-role client; request handlers pass their own.
+ */
 export async function downloadAndStorePhotoFromUrl(
+  supabase: SupabaseClient,
   imageUrl: string,
   placeId: string,
   userId: string
@@ -36,8 +53,6 @@ export async function downloadAndStorePhotoFromUrl(
           ? "webp"
           : "jpg";
     const fileName = `${userId}/${placeId}.${ext}`;
-
-    const supabase = await createClient();
 
     const { error } = await supabase.storage
       .from("place-photos")

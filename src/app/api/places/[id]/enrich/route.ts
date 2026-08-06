@@ -96,7 +96,12 @@ export async function POST(
       const merged = { ...curData, ...extended };
 
       if (!curData.photo_storage_url && raw.main_image) {
-        const photoUrl = await downloadAndStorePhotoFromUrl(raw.main_image, id, user.id);
+        const photoUrl = await downloadAndStorePhotoFromUrl(
+          supabase,
+          raw.main_image,
+          id,
+          user.id
+        );
         if (photoUrl) merged.photo_storage_url = photoUrl;
         console.log(`[enrich:info] Photo: ${photoUrl ? "saved" : "failed"}`);
       }

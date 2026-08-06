@@ -145,6 +145,7 @@ export async function refreshPlaceGoogleData(
   let photoStorageUrl = existingData.photo_storage_url as string | undefined;
   if (!opts.skipPhoto && !photoStorageUrl && details?.photoRef) {
     const newUrl = await downloadAndStorePhotoFromUrl(
+      supabase,
       details.photoRef,
       placeId,
       userId

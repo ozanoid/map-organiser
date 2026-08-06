@@ -98,6 +98,7 @@ Verified against the three URL shapes Takeout emits (`?cid=`, `?q=place_id:ChIJâ
 
 - **Parse fails (step 2):** invalid file. UI shows the error, nothing is written.
 - **Per-place DataForSEO failure:** the place is inserted unenriched if coordinates survive, otherwise `skipped` with a reason. Never blocks the queue.
+- **Photo download or upload fails:** the place is inserted without `photo_storage_url`. `google_data.main_image` keeps the source URL so a retry costs nothing. Background callers must hand `downloadAndStorePhotoFromUrl` a service-role client â€” a cookie-scoped one has no `auth.uid()` and the Storage policy rejects the write silently.
 - **Duplicate:** `skipped`, reason `Already exists`, at zero API cost.
 - **Runner dies mid-item:** the item keeps a stale `claimed_at` and returns to the pool after 10 minutes.
 - **Poison item:** `attempts` caps at 3, then the item retires as `failed`.

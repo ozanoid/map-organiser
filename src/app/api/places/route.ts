@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { resolveCategoryId } from "@/lib/google/category-mapping";
-import { downloadAndStorePhotoFromUrl } from "@/lib/dataforseo/photo";
 import { queryPlaces } from "@/lib/places/query-places";
 import { log } from "@/lib/telemetry/logger";
 
@@ -189,7 +188,12 @@ export async function POST(request: NextRequest) {
   // If photoRef exists (DataForSEO path), download photo immediately
   if (photoRef) {
     const { downloadAndStorePhotoFromUrl } = await import("@/lib/dataforseo/photo");
-    const storageUrl = await downloadAndStorePhotoFromUrl(photoRef, place.id, user.id);
+    const storageUrl = await downloadAndStorePhotoFromUrl(
+      supabase,
+      photoRef,
+      place.id,
+      user.id
+    );
     if (storageUrl) {
       await supabase
         .from("places")

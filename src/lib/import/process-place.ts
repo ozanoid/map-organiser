@@ -212,6 +212,13 @@ export async function importPlace(
   // pre-check above on a re-run; persisting ours closes that gap going forward.
   if (identity.cid && !googleData.cid) googleData.cid = identity.cid;
 
+  // Keep the source image URL, not just the stored copy. When the download or
+  // the Storage upload fails, the only record of what to fetch used to be the
+  // DataForSEO response we had already thrown away — so recovering one photo
+  // meant paying for a whole business-info lookup again. 23 places needed
+  // exactly that after the drain ran without a session-scoped Storage client.
+  if (photoRef) googleData.main_image = photoRef;
+
   if (!lat || !lng) {
     return { status: "skipped", reason: "No coordinates" };
   }
@@ -256,7 +263,12 @@ export async function importPlace(
   }
 
   if (photoRef) {
-    const url = await downloadAndStorePhotoFromUrl(photoRef, inserted.id, userId);
+    const url = await downloadAndStorePhotoFromUrl(
+      supabase,
+      photoRef,
+      inserted.id,
+      userId
+    );
     if (url) {
       await supabase
         .from("places")

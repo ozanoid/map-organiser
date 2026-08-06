@@ -6,6 +6,32 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 06.08.2026 — v1.26.4 — The photo uploader takes a client instead of assuming one
+
+- Every place in the first queue-driven import landed without a photo: 0 of 23,
+  against 9 of 9 for the same account's earlier browser-driven import.
+- `downloadAndStorePhotoFromUrl` built a **cookie-scoped** client internally.
+  That is correct inside a request handler and silently wrong in the drain,
+  which has no session: the `place-photos` policy is
+  `(storage.foldername(name))[1] = auth.uid()::text`, so `auth.uid()` was NULL,
+  the upload was denied, and the function returned `null` — indistinguishable
+  from a dead image URL.
+- **The daily refresh cron had the same bug**, through the shared
+  `refreshPlaceGoogleData`. Photo refresh has been failing there for as long as
+  the cron has existed; nothing surfaced it because the failure path is a
+  `console.error` and a null return.
+- The function now takes a `SupabaseClient` as its first argument, so the type
+  checker makes every one of the four call sites state which client it means.
+  Background callers pass service-role.
+- `google_data.main_image` is now persisted on import. The source URL was
+  discarded once the download succeeded, so a failed upload left nothing to
+  retry from and recovering one photo cost a full business-info lookup — which
+  is exactly the bill these 23 places came with.
+- Removed a dead static import of the same function in `api/places/route.ts`
+  (the handler uses a dynamic import).
+
+---
+
 ## 06.08.2026 — v1.26.3 — Releasing an unclaimed item gives back its attempt
 
 - Third defect in the same family, found watching the 23-place Belgian import:
