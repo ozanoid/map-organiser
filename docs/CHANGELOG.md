@@ -6,6 +6,25 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 06.08.2026 — v1.27.2 — Fall back to a name search when a CID draws a blank
+
+- Two Lisbon places out of 286 landed carrying only `cid` and a coordinate.
+  DataForSEO's `business_info` has no record for their CIDs, so the lookup
+  returned nothing — and every later stage then had nothing to work with: no
+  `main_image` so no photo, no reviews so no profile and no tags. The place is
+  on the map and permanently thin, with nothing on screen to say why.
+- The CID extraction was correct: both hex ftids convert to exactly the stored
+  values, and 249 places from the same URL shape in the same import worked. The
+  gap is upstream.
+- `importPlace` now retries once with the place name when the first lookup comes
+  back empty, bounded by the coordinate already resolved from the URL. A hit
+  further than 200 m from the saved place is discarded — the coordinate is a
+  bias rather than a filter, and a chain can have two branches inside the 1 km
+  radius. A thin record beats a confident wrong one.
+- Costs one extra call only in the case that would otherwise produce nothing.
+
+---
+
 ## 06.08.2026 — v1.27.1 — Remember when Google had no reviews
 
 - Backfill eligibility asks "has a CID, has no reviews?" — a condition that is

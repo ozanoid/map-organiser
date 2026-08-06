@@ -11,6 +11,7 @@ import {
 } from "@/lib/dataforseo/transform";
 import { downloadAndStorePhotoFromUrl } from "@/lib/dataforseo/photo";
 import type { Category } from "@/lib/types";
+import { haversineDistance } from "@/lib/geo";
 
 /** One place as the Takeout parser produces it. */
 export interface ImportPayload {
@@ -35,6 +36,11 @@ export type ImportOutcome =
 
 /** Google Maps radius bias for the business-info lookup, in metres. */
 const LOOKUP_RADIUS_M = 1000;
+
+/** How far a name-search hit may sit from the saved coordinate before it is
+ *  treated as a different venue. Well inside the 1 km lookup bias, so a second
+ *  branch of the same chain cannot be mistaken for the one that was saved. */
+const NAME_FALLBACK_MAX_KM = 0.2;
 
 /**
  * Pull a CID out of a Maps URL by pattern alone.
@@ -244,11 +250,40 @@ export async function importPlace(
   let photoRef: string | null = null;
   let googleData: Record<string, unknown> = {};
 
-  const raw = await fetchBusinessInfoLive(client, {
+  let raw = await fetchBusinessInfoLive(client, {
     keyword: identity.keyword,
     location_coordinate: identity.locationCoordinate,
   });
   await trackUsage(userId, "dataforseo_business_info_live");
+
+  // A `cid:` DataForSEO holds no record for returns nothing at all, and the
+  // place then lands with a name, a coordinate and nothing else: no address, no
+  // rating, no image, so no photo, no reviews, no profile and no tags. Measured
+  // at 2 of 286 on one import — rare, silent, and permanent.
+  //
+  // Retry by name, and only when we have a coordinate to bound it with: a bare
+  // name search would happily return a same-named place in another city. Even
+  // so the answer is verified below before it is trusted.
+  if (!raw && identity.locationCoordinate && identity.keyword !== payload.name) {
+    raw = await fetchBusinessInfoLive(client, {
+      keyword: payload.name,
+      location_coordinate: identity.locationCoordinate,
+    });
+    await trackUsage(userId, "dataforseo_business_info_live");
+
+    // The coordinate is a bias, not a filter, and chains put two branches
+    // inside one radius. Anything further than NAME_FALLBACK_MAX_KM from the
+    // place the user actually saved is a different venue — better to keep a
+    // thin record than a confident wrong one.
+    if (raw) {
+      const hit = transformBusinessInfoToPlaceData(raw);
+      const off =
+        hit.lat != null && hit.lng != null && lat != null && lng != null
+          ? haversineDistance(lat, lng, hit.lat, hit.lng)
+          : Infinity;
+      if (off > NAME_FALLBACK_MAX_KM) raw = null;
+    }
+  }
 
   if (raw) {
     const placeData = transformBusinessInfoToPlaceData(raw);
