@@ -36,6 +36,9 @@ export interface MapViewHandle {
   openPlacePopup: (placeId: string) => void;
   /** Pan + zoom to arbitrary coordinates (not tied to a saved place). */
   flyToCoords: (coords: { lng: number; lat: number; zoom?: number }) => void;
+  /** Frame a set of points — one point flies to it, several fit their bounds
+   *  (used to show the places an Instagram import just added). */
+  fitToCoords: (points: { lng: number; lat: number }[]) => void;
   /** Read viewport center — used for Search Box proximity bias. */
   getCenter: () => { lng: number; lat: number } | null;
 }
@@ -139,6 +142,16 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
     flyToCoords: ({ lng, lat, zoom }) => {
       if (!map.current) return;
       map.current.flyTo({ center: [lng, lat], zoom: zoom ?? 16 });
+    },
+    fitToCoords: (points) => {
+      if (!map.current || points.length === 0) return;
+      if (points.length === 1) {
+        map.current.flyTo({ center: [points[0].lng, points[0].lat], zoom: 16 });
+        return;
+      }
+      const bounds = new mapboxgl.LngLatBounds();
+      points.forEach((p) => bounds.extend([p.lng, p.lat]));
+      map.current.fitBounds(bounds, { padding: 80, maxZoom: 15 });
     },
     getCenter: () => {
       const c = map.current?.getCenter();

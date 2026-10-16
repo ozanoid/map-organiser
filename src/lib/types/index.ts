@@ -17,7 +17,7 @@ export interface Place {
   visited_at: string | null;
   booked_at: string | null;
   google_data: GooglePlaceData;
-  source: "manual" | "import" | "link" | "mapbox_search" | "similar" | "shared";
+  source: "manual" | "import" | "link" | "mapbox_search" | "similar" | "shared" | "instagram";
   created_at: string;
   updated_at: string;
   // Joined

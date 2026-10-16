@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useImperativeHandle, useRef, useState, type Ref } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Search, X, Loader2, MapPin } from "lucide-react";
@@ -8,12 +8,19 @@ import { usePlaceSearch } from "@/lib/hooks/use-place-search";
 import type { RetrievedPlaceData } from "@/lib/hooks/use-place-search";
 import type { SearchSuggestion } from "@/lib/mapbox/search-box";
 
+export interface SearchBoxHandle {
+  /** Fill the box with `text`, open the suggestions and focus it — used by the
+   *  Instagram import's "Pick branch" / "Search manually". */
+  search: (text: string) => void;
+}
+
 interface SearchBoxProps {
   /** Viewport center for proximity bias. */
   proximity?: { lng: number; lat: number };
   /** Fired when the user picks a suggestion and the retrieve completes. */
   onSelect: (place: RetrievedPlaceData) => void;
   className?: string;
+  ref?: Ref<SearchBoxHandle>;
 }
 
 /**
@@ -23,12 +30,24 @@ interface SearchBoxProps {
  * - Debounced via `usePlaceSearch` (300ms).
  * - On select, hides the dropdown and delegates retrieved data to parent.
  */
-export function SearchBox({ proximity, onSelect, className }: SearchBoxProps) {
+export function SearchBox({ proximity, onSelect, className, ref }: SearchBoxProps) {
   const { query, setQuery, suggestions, isSearching, retrieve, isRetrieving, clear } =
     usePlaceSearch({ proximity });
   const [open, setOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      search: (text: string) => {
+        setQuery(text);
+        setOpen(true);
+        inputRef.current?.focus();
+      },
+    }),
+    [setQuery]
+  );
 
   // Close dropdown on outside click
   useEffect(() => {

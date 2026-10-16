@@ -10,6 +10,8 @@ import { useTags } from "@/lib/hooks/use-tags";
 import { resolveCategoryId } from "@/lib/google/category-mapping";
 import type { PlaceProfile } from "@/lib/ai/schemas/place-profile";
 import { googleMapsPlaceUrl } from "@/lib/google/maps-url";
+import { isInstagramPostUrl, parseInstagramPostUrl } from "@/lib/instagram/url";
+import type { InstagramJobPhase } from "@/lib/instagram/types";
 import {
   Dialog,
   DialogContent,
@@ -32,6 +34,7 @@ import { InlineCategoryCreator } from "@/components/places/inline-category-creat
 import { InlineListCreator } from "@/components/places/inline-list-creator";
 import { InlineTagInput } from "@/components/places/inline-tag-input";
 import { VisitStatusToggle } from "@/components/places/visit-status-toggle";
+import { InstagramImportPanel } from "@/components/places/instagram-import-panel";
 import {
   Link2,
   MapPin,
@@ -57,10 +60,33 @@ interface AddPlaceDialogProps {
    *  "link"; SimilarPlaces passes "similar" (v1.18.0 — the CHECK
    *  constraint was widened for it). */
   source?: string;
+  /** An Instagram import the parent already knows about — set after a
+   *  refresh from `/map?ig=<id>`. `url` null means "whatever post it was". */
+  instagramJob?: { url: string | null; id: string } | null;
+  /** Fired when an Instagram import starts, so the parent can keep it in the URL. */
+  onInstagramJob?: (job: { url: string | null; id: string }) => void;
+  onInstagramPhase?: (phase: InstagramJobPhase) => void;
+  /** Instagram results: fit the map to these points (map page only). */
+  onShowOnMap?: (points: { lat: number; lng: number }[]) => void;
+  /** Instagram results: hand a venue name (and the post it came from) to the map's search box. */
+  onSearchPlaces?: (query: string, context: { postUrl: string; tagId: string | null }) => void;
 }
 
-export function AddPlaceDialog({ open, onOpenChange, initialUrl, source }: AddPlaceDialogProps) {
+export function AddPlaceDialog({
+  open,
+  onOpenChange,
+  initialUrl,
+  source,
+  instagramJob,
+  onInstagramJob,
+  onInstagramPhase,
+  onShowOnMap,
+  onSearchPlaces,
+}: AddPlaceDialogProps) {
   const [url, setUrl] = useState("");
+  // Instagram links skip the single-place preview: they run as an import job.
+  const [pastedInstagramUrl, setPastedInstagramUrl] = useState<string | null>(null);
+  const [localInstagramJob, setLocalInstagramJob] = useState<{ url: string | null; id: string } | null>(null);
   const [placeData, setPlaceData] = useState<ParsedPlaceData | null>(null);
   const [liteProfile, setLiteProfile] = useState<PlaceProfile | null>(null);
   const [providerInfo, setProviderInfo] = useState<{ name: string; timeMs: number } | null>(null);
@@ -117,7 +143,7 @@ export function AddPlaceDialog({ open, onOpenChange, initialUrl, source }: AddPl
 
   // Auto-parse when opened via share target with initialUrl
   useEffect(() => {
-    if (open && initialUrl && !placeData && !parseLink.isPending) {
+    if (open && initialUrl && !isInstagramPostUrl(initialUrl) && !placeData && !parseLink.isPending) {
       setUrl(initialUrl);
       parseLink.mutate(initialUrl, {
         onSuccess: (data: any) => {
@@ -170,6 +196,8 @@ export function AddPlaceDialog({ open, onOpenChange, initialUrl, source }: AddPl
 
   function reset() {
     setUrl("");
+    setPastedInstagramUrl(null);
+    setLocalInstagramJob(null);
     setPlaceData(null);
     setLiteProfile(null);
     setProviderInfo(null);
@@ -186,6 +214,11 @@ export function AddPlaceDialog({ open, onOpenChange, initialUrl, source }: AddPl
 
   async function handlePaste() {
     if (!url.trim()) return;
+    const instagram = parseInstagramPostUrl(url);
+    if (instagram) {
+      setPastedInstagramUrl(instagram.canonicalUrl);
+      return;
+    }
 
     parseLink.mutate(url, {
       onSuccess: (data: any) => {
@@ -274,6 +307,44 @@ export function AddPlaceDialog({ open, onOpenChange, initialUrl, source }: AddPl
     );
   }
 
+  const instagramUrl = pastedInstagramUrl ?? parseInstagramPostUrl(initialUrl)?.canonicalUrl ?? null;
+  // A job belongs to this dialog when it is for the same post — or, after a
+  // refresh, when there is no post URL at all and the job came from the page URL.
+  const knownJob = [instagramJob, localInstagramJob].find(
+    (j): j is { url: string | null; id: string } =>
+      !!j && (instagramUrl ? j.url === instagramUrl : true)
+  );
+  if (instagramUrl || (instagramJob && !initialUrl)) {
+    return (
+      <Dialog
+        open={open}
+        onOpenChange={(v) => {
+          if (!v) reset();
+          onOpenChange(v);
+        }}
+      >
+        <DialogContent className="sm:max-w-lg max-h-[90vh] flex flex-col overflow-hidden">
+          <InstagramImportPanel
+            url={instagramUrl}
+            jobId={knownJob?.id ?? null}
+            onJobId={(id) => {
+              const job = { url: instagramUrl, id };
+              setLocalInstagramJob(job);
+              onInstagramJob?.(job);
+            }}
+            onPhase={onInstagramPhase}
+            onClose={() => {
+              reset();
+              onOpenChange(false);
+            }}
+            onShowOnMap={onShowOnMap}
+            onSearch={onSearchPlaces}
+          />
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
   return (
     <Dialog
       open={open}
@@ -298,7 +369,7 @@ export function AddPlaceDialog({ open, onOpenChange, initialUrl, source }: AddPl
               <Input
                 type="url"
                 inputMode="url"
-                placeholder="Paste a Google Maps link..."
+                placeholder="Paste a Google Maps or Instagram link..."
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handlePaste()}
@@ -326,7 +397,7 @@ export function AddPlaceDialog({ open, onOpenChange, initialUrl, source }: AddPl
             )}
 
             <p className="text-xs text-muted-foreground text-center">
-              Paste any Google Maps link to auto-fill place details
+              Paste a Google Maps link to fill in the place, or an Instagram post to add the places in it
             </p>
           </div>
         )}

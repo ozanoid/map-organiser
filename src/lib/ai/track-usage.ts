@@ -65,6 +65,13 @@ export const AI_SKU_CONFIG = {
     costPer1k: 12.0,
     freeMonthly: 0,
   },
+  // Instagram import: one unit = one post read (~1.2k in / ~0.3k out
+  // tokens with low thinking ≈ $0.0015).
+  ai_instagram_read: {
+    name: "AI Instagram Read",
+    costPer1k: 1.5,
+    freeMonthly: 0,
+  },
 } as const;
 
 export type AiSku = keyof typeof AI_SKU_CONFIG;
@@ -124,6 +131,9 @@ export const AI_MONTHLY_CHAT_CAP = 200;
 /** v1.22.0 (S4 AI-09) — one unit per plan generation; deliberate-click
  *  only from the trip page's AI Plan dialog. */
 export const AI_MONTHLY_TRIP_PLAN_CAP = 50;
+/** One unit per Instagram post import (one Gemini read; it also bounds the
+ *  HikerAPI and Google calls the import makes). */
+export const AI_MONTHLY_INSTAGRAM_CAP = 300;
 
 export type AiBudgetKind =
   | "search"
@@ -131,7 +141,8 @@ export type AiBudgetKind =
   | "rank_backstop"
   | "compare"
   | "chat"
-  | "trip_plan";
+  | "trip_plan"
+  | "instagram";
 
 const BUDGETS: Record<AiBudgetKind, { sku: AiSku; cap: number }> = {
   search: { sku: "ai_parse_query", cap: AI_MONTHLY_SEARCH_CAP },
@@ -140,6 +151,7 @@ const BUDGETS: Record<AiBudgetKind, { sku: AiSku; cap: number }> = {
   compare: { sku: "ai_compare", cap: AI_MONTHLY_COMPARE_CAP },
   chat: { sku: "ai_chat", cap: AI_MONTHLY_CHAT_CAP },
   trip_plan: { sku: "ai_trip_plan", cap: AI_MONTHLY_TRIP_PLAN_CAP },
+  instagram: { sku: "ai_instagram_read", cap: AI_MONTHLY_INSTAGRAM_CAP },
 };
 
 export interface AiCapStatus {

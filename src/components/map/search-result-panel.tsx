@@ -44,19 +44,22 @@ import { BottomSheet } from "@/components/ui/bottom-sheet";
 interface SearchResultPanelProps {
   place: RetrievedPlaceData;
   onClose: () => void;
+  /** Starting notes/tags — an Instagram "Pick branch" search passes the post
+   *  link and the "instagram" tag so the chosen branch carries them too. */
+  prefill?: { notes?: string; tagIds?: string[] };
 }
 
 /**
  * Slide-in panel shown after the user picks a search result.
  * Mirrors the AddPlaceDialog form but lives on the map page (no dialog modal).
  */
-export function SearchResultPanel({ place, onClose }: SearchResultPanelProps) {
+export function SearchResultPanel({ place, onClose, prefill }: SearchResultPanelProps) {
   const [categoryId, setCategoryId] = useState<string>("");
   const [subcategoryId, setSubcategoryId] = useState<string | null>(null);
-  const [notes, setNotes] = useState("");
+  const [notes, setNotes] = useState(prefill?.notes ?? "");
   const [rating, setRating] = useState<number>(0);
   const [selectedListIds, setSelectedListIds] = useState<string[]>([]);
-  const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
+  const [selectedTagIds, setSelectedTagIds] = useState<string[]>(prefill?.tagIds ?? []);
   const [visitStatus, setVisitStatus] = useState<VisitStatus | null>("want_to_go");
 
   const queryClient = useQueryClient();

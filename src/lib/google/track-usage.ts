@@ -40,6 +40,20 @@ export const SKU_CONFIG = {
     costPer1k: 2.0,
     freeMonthly: 100000,
   },
+  // Instagram import: candidate search asks for website + phone, which puts
+  // Text Search on the Enterprise SKU ($35/1K after 1K free per month).
+  text_search_enterprise: {
+    name: "Text Search (Enterprise)",
+    costPer1k: 35.0,
+    freeMonthly: 1000,
+  },
+  // Instagram import: one per post, reel-usertags and profile read
+  // (HikerAPI pay-as-you-go plan, $1 per 1,000 requests).
+  hikerapi_request: {
+    name: "HikerAPI Requests",
+    costPer1k: 1.0,
+    freeMonthly: 0,
+  },
 } as const;
 
 export type SkuType = keyof typeof SKU_CONFIG;
