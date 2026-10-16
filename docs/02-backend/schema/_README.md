@@ -2,8 +2,8 @@
 title: Schema
 type: overview
 domain: backend
-version: 1.2.0
-last_updated: 05.08.2026
+version: 1.2.1
+last_updated: 16.10.2026
 status: stable
 sources:
   - Supabase project hukppmaevcapvbrvxtph (via MCP)
@@ -41,7 +41,7 @@ All user-facing tables in the `public` schema of the Supabase project `hukppmaev
 | `vocabulary_aliases` | [[vocabulary]] | 1086 | Surface forms resolving to a concept |
 | `vocabulary_candidates` | [[vocabulary]] | 202 | Gaps the vocabulary could not express; input to the next refresh |
 | `vocabulary_migrations` | [[vocabulary]] | 0 | Audit trail of dictionary refreshes |
-| `import_jobs` | [[import-jobs]] | 0 | One row per bulk-import upload |
+| `import_jobs` | [[import-jobs]] | 0 | One row per import job — a Takeout upload or (v1.28.0, migration pending) a shared Instagram post |
 | `import_job_items` | [[import-jobs]] | 0 | The import queue — one row per place, carrying its own stage |
 
 > `public.spatial_ref_sys` exists but it's a PostGIS internal table (8500 rows of SRID reference data). Not documented separately.

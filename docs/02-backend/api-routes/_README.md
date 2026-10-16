@@ -2,8 +2,8 @@
 title: API Routes
 type: overview
 domain: backend
-version: 1.7.0
-last_updated: 05.08.2026
+version: 1.8.1
+last_updated: 16.10.2026
 status: stable
 sources:
   - src/app/api/
@@ -32,7 +32,8 @@ All Next.js route handlers grouped by area. Each linked doc is the canonical ref
 | User | `/api/user/*` — includes `ai-settings` (Phase 1) and `ai-suggestions/*` (Phase 5 moderation queue: list, accept, reject) | Required | [[user]] |
 | AI | `/api/ai/*` — `parse-query`, `rank-results` (Phase 6 NL filtering), `compare` (v1.19.0), `chat` (v1.21.0 assistant, streaming), `trip-plan` (v1.22.0 AI trip planner — the group's only writing route) | Required | [[ai]] |
 | Search | `/api/search/*` (Mapbox geocoder proxy) | Required | [[search]] |
-| Cron | `/api/cron/refresh-places` (15.07.2026) — daily periodic-refresh sweep | **`CRON_SECRET` bearer** (service-role) | [[../../06-ops/runbooks/periodic-refresh]] |
+| Instagram | `/api/instagram/import` (POST — start an import from a post URL, work runs in `after()`) + `/api/instagram/import/[id]` (GET — the dialog's progress view) — v1.28.0; `/api/instagram/import/[id]/pick` (POST — add the place picked for a skipped venue) — v1.28.1 | Required | [[instagram]] |
+| Cron | `/api/cron/refresh-places` (15.07.2026) — daily periodic-refresh sweep; `/api/cron/drain-imports` (v1.26.0) — every minute, drains the import queue for Takeout and Instagram jobs | **`CRON_SECRET` bearer** (service-role) | [[../../06-ops/runbooks/periodic-refresh]], [[places]] |
 | Share target | `/api/share-target` | **None** (PWA inbound) | [[share-target]] |
 | Auth callback | `/auth/callback` | **None** (OAuth handshake) | [[auth-callback]] |
 
@@ -40,8 +41,8 @@ All Next.js route handlers grouped by area. Each linked doc is the canonical ref
 
 ## Counts
 
-- 41 route handler files (40 × `src/app/api/**/route.ts` + `src/app/auth/callback/route.ts`) — Phase 6 added `/api/ai/parse-query` + `/api/ai/rank-results`; 15.07.2026 added `/api/cron/refresh-places`; v1.21.0 added `/api/ai/chat` (assistant); v1.22.0 added `/api/ai/trip-plan` + `PATCH /api/trips/[id]/days/[dayId]`. (NF-05 similar-adds reuse `POST /api/places` via the AddPlaceDialog preview — no dedicated route.)
-- ~55 HTTP method exports across them
+- 44 route handler files (43 × `src/app/api/**/route.ts` + `src/app/auth/callback/route.ts`) — Phase 6 added `/api/ai/parse-query` + `/api/ai/rank-results`; 15.07.2026 added `/api/cron/refresh-places`; v1.21.0 added `/api/ai/chat` (assistant); v1.22.0 added `/api/ai/trip-plan` + `PATCH /api/trips/[id]/days/[dayId]`; v1.26.0 swapped `import-parse` / `import-batch` / `bulk-enrich-reviews` for `import-jobs`, `import-jobs/[id]` and `cron/drain-imports` (net zero); v1.28.0 added `/api/instagram/import` + `/api/instagram/import/[id]`; v1.28.1 added `/api/instagram/import/[id]/pick`. (NF-05 similar-adds reuse `POST /api/places` via the AddPlaceDialog preview — no dedicated route.)
+- ~59 HTTP method exports across them
 
 ## Cross-route conventions
 
@@ -55,7 +56,7 @@ These hold for every route. See [[../_agent/conventions#api-routes]] for the ful
    if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
    ```
 
-2. **RLS does access control**, not the route. Don't add `.eq("user_id", user.id)` — it's redundant. **Exception:** the service-role paths (`GET /api/shared/[slug]`, `/api/cron/refresh-places` and the libs it calls) BYPASS RLS, so they MUST filter by `user_id` explicitly on every query. Never assume RLS on a service-role client.
+2. **RLS does access control**, not the route. Don't add `.eq("user_id", user.id)` — it's redundant. **Exception:** the service-role paths (listed in [[../supabase-clients]] — the public share read, both cron routes, the import-queue writes, the Instagram import's `after()` job and its pick route, plus the libs they call) BYPASS RLS, so they MUST filter by `user_id` explicitly on every query. Never assume RLS on a service-role client.
 3. **Validate inputs.** Either Zod (preferred for complex bodies) or explicit destructuring with checks.
 4. **Status codes**:
    - `200` — success (including `Response.redirect`).
@@ -64,8 +65,8 @@ These hold for every route. See [[../_agent/conventions#api-routes]] for the ful
    - `404` — not found / no ownership.
    - `409` — duplicate (e.g. `google_place_id` collision).
    - `500` — unhandled error.
-5. **Cost-tracked external calls go through `trackUsage`** (`src/lib/google/track-usage.ts`) → `increment_api_usage` RPC. Apply to every Google Places, DataForSEO, and (since v1.22.0) Mapbox Directions call (`mapbox_directions` — both `getRoute` call sites). For AI calls, use `trackAiUsage` (`src/lib/ai/track-usage.ts`) which writes the same table under `ai_*` SKUs.
-6. **Service-role client** (`createServiceClient()`) is used in `GET /api/shared/[slug]` and `GET /api/cron/refresh-places` (the periodic sweep runs cross-user, so it can't use a cookie). Every other route uses the cookie-scoped `createClient()`. Service-role paths must filter by `user_id` (see #2).
+5. **Cost-tracked external calls go through `trackUsage`** (`src/lib/google/track-usage.ts`) → `increment_api_usage` RPC. Apply to every Google Places, DataForSEO, HikerAPI (v1.28.0, `hikerapi_request`) and (since v1.22.0) Mapbox Directions call (`mapbox_directions` — both `getRoute` call sites). For AI calls, use `trackAiUsage` (`src/lib/ai/track-usage.ts`) which writes the same table under `ai_*` SKUs.
+6. **Service-role client** (`createServiceClient()`) only where no session can do the job: the public share read (`/api/shared/[slug]`, and the original-content reads in `.../save`), both cron routes (cross-user, no cookie), the `import_job_items` insert in `POST /api/places/import-jobs` (the table has no INSERT policy), the Instagram import's background job in `POST /api/instagram/import` (runs after the response; writes items), and `POST /api/instagram/import/[id]/pick` (moves an item the session client has just read; the table has no UPDATE policy). Every other route uses the cookie-scoped `createClient()`. Service-role paths must filter by `user_id` (see #2). Canonical list: [[../supabase-clients]].
 7. **PostGIS coords are always parsed.** Every route that returns a place coercion `location` to `{ lat, lng }` via `src/lib/geo.ts#parsePostgisPoint` before serializing.
 
 ## Common helpers
@@ -76,7 +77,7 @@ These are reused across many routes:
 |---|---|---|
 | `parsePostgisPoint` | `src/lib/geo.ts` | EWKB/WKT/GeoJSON → `{lat, lng}`. |
 | `createClient` (server) | `src/lib/supabase/server.ts` | Cookie-scoped Supabase. |
-| `createServiceClient` | `src/lib/supabase/server.ts` | RLS bypass. **Only in `/api/shared/[slug]`.** |
+| `createServiceClient` | `src/lib/supabase/server.ts` | RLS bypass — only on the paths in convention #6. |
 | `trackUsage` | `src/lib/google/track-usage.ts` | Wraps `increment_api_usage` RPC. |
 | `getUserApiKeys` | `src/lib/google/get-user-api-keys.ts` | Decrypts profile API keys. |
 | `parseMapsUrl` | `src/lib/google/parse-maps-url.ts` | Google Maps URL → place data. |
@@ -97,7 +98,11 @@ These are reused across many routes:
 | `applyProfileSuggestions` | `src/lib/ai/apply-suggestions.ts` | 4-band auto-apply policy for LLM output. |
 | `buildLiteProfile` | `src/lib/ai/extract/lite-profile.ts` | LLM-less rule-based profile inline in `parse-link`. |
 | `dedupProposals` / `isFuzzyMatch` | `src/lib/ai/dedup.ts`, `normalize.ts` | Post-LLM and accept-time fuzzy match. |
-| `trackAiUsage` / `checkAiBudget` | `src/lib/ai/track-usage.ts` | Per-SKU AI counter + monthly budget gates (search 500 / profile 1000 / compare 200 / chat 200 / trip_plan 50). |
+| `trackAiUsage` / `checkAiBudget` | `src/lib/ai/track-usage.ts` | Per-SKU AI counter + monthly budget gates (search 500 / profile 1000 / compare 200 / chat 200 / trip_plan 50 / instagram 300). |
+| `findExisting` / `importPlace` | `src/lib/import/process-place.ts` | Duplicate check by place_id / CID without an API call; per-place import used by the drain (`ImportDefaults.source` sets `places.source`). |
+| `kickDrain` | `src/lib/import/kick-drain.ts` | Non-awaited `GET /api/cron/drain-imports` with the `CRON_SECRET` bearer — fired by the Takeout create route and the Instagram job (v1.28.0, moved out of the import-jobs route), and by the Instagram pick route (v1.28.1). |
+| `analyzeInstagramPost` / `runInstagramImportJob` | `src/lib/instagram/analyze.ts`, `import-job.ts` | Instagram post → venues → Google places (writes nothing) / the job that turns that into `import_job_items` (v1.28.0). See [[instagram]]. |
+| `searchPlaceCandidates` | `src/lib/google/place-candidates.ts` | Places API (New) Text Search returning several candidates with phone + website (Enterprise SKU, `text_search_enterprise`). |
 | `generatePlaceProfile` | `src/lib/ai/generate-profile.ts` | Full place_profile generation + auto-apply. Service-client-safe (used by enrich route + cron). |
 | `refreshPlaceGoogleData` | `src/lib/places/refresh-google-data.ts` | Full DataForSEO re-lookup + review merge. Service-client-safe (used by refresh route + cron). |
 | `mergeReviews` / `countNewReviews` | `src/lib/dataforseo/transform.ts` | Two-tier review corpus (relevance backbone + newest pool). |
@@ -117,5 +122,5 @@ Follow [[../../_agent/common-tasks#add-a-new-api-route]]. The short version:
 
 ## Open questions
 
-- **Background work patterns.** Long work is queued, not fired from the client. Bulk import writes `import_job_items` and lets `/api/cron/drain-imports` advance them — claim a slice, work to a soft deadline, leave the rest for the next run (the same shape as `cron/refresh-places`). `migrate-photos` is still a synchronous fire-and-forget; move it to the same pattern if it starts brushing the function timeout.
+- **Background work patterns.** Long work is queued, not fired from the client. Bulk import writes `import_job_items` and lets `/api/cron/drain-imports` advance them — claim a slice, work to a soft deadline, leave the rest for the next run (the same shape as `cron/refresh-places`). The Instagram import adds a second shape in front of the queue: one bounded unit of work (read one post) run in Next's `after()` under the route's `maxDuration`, which then writes items into the same queue. `migrate-photos` is still a synchronous fire-and-forget; move it to the same pattern if it starts brushing the function timeout.
 - **No central error handler.** Each route catches and shapes errors in its own way. A shared `apiError(error, status)` helper could standardize the response shape.

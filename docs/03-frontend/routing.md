@@ -2,13 +2,14 @@
 title: Routing
 type: overview
 domain: frontend
-version: 1.2.0
-last_updated: 15.07.2026
+version: 1.3.1
+last_updated: 16.10.2026
 status: stable
 sources:
   - src/app/
   - src/middleware.ts
   - src/lib/supabase/middleware.ts
+  - src/components/map/map-content.tsx
 related:
   - "[[_README]]"
   - "[[app-router-conventions]]"
@@ -61,6 +62,7 @@ All under `/api/*`. Full detail in [[../02-backend/api-routes/_README]].
 | `/api/shared/*` | Shared (4 endpoints incl. public GET) | [[../02-backend/api-routes/shared]] |
 | `/api/stats` | Stats | [[../02-backend/api-routes/stats]] |
 | `/api/user/*` | User (api-keys, usage) | [[../02-backend/api-routes/user]] |
+| `/api/instagram/*` | Instagram import (3 endpoints — v1.28.0, plus the branch pick in v1.28.1) | [[../02-backend/api-routes/instagram]] |
 | `/api/share-target` | PWA share target — **public POST** | [[../02-backend/api-routes/share-target]] |
 
 ## Middleware matcher
@@ -100,7 +102,7 @@ See [[../02-backend/auth#middleware-gate]] for the implementation.
 
 | Pattern | Used in | Param type (Next.js 16) |
 |---|---|---|
-| `[id]` | `/places/[id]`, `/lists/[id]`, `/trips/[id]`, `/api/places/[id]`, `/api/trips/[id]`, `/api/lists/[id]/reorder`, `/api/places/[id]/...`, `/api/trips/[id]/...` | `Promise<{ id: string }>` |
+| `[id]` | `/places/[id]`, `/lists/[id]`, `/trips/[id]`, `/api/places/[id]`, `/api/trips/[id]`, `/api/lists/[id]/reorder`, `/api/places/[id]/...`, `/api/trips/[id]/...`, `/api/instagram/import/[id]`, `/api/instagram/import/[id]/pick` | `Promise<{ id: string }>` |
 | `[slug]` | `/shared/[slug]`, `/api/shared/[slug]`, `/api/shared/[slug]/save` | `Promise<{ slug: string }>` |
 | `[dayId]` | `/api/trips/[id]/days/[dayId]/...` | combined: `Promise<{ id: string, dayId: string }>` |
 
@@ -108,7 +110,8 @@ See [[../02-backend/auth#middleware-gate]] for the implementation.
 
 ## Special URLs
 
-- `/map?add=<url>` — used by the PWA share-target redirect. The map page reads `?add=...` client-side and opens the Add Place dialog pre-populated.
+- `/map?add=<url>` — used by the PWA share-target redirect, on iPhone by the iOS Shortcut "Add to MapOrganiser", and (v1.28.1) by the header's Add Place, which hands a pasted Instagram post link over this way. The map page reads `?add=...` client-side whenever it appears, opens the Add Place dialog pre-populated, then removes only `add` (`router.replace`), keeping the filters; the same link can come in again later. A Google Maps link gets the usual preview; an Instagram post/reel link switches the dialog to the Instagram import (v1.28.0, [[../05-flows/instagram-import-flow]]); any other Instagram link gets an inline "not a post" hint.
+- `/map?ig=<jobId>` — v1.28.0. Set while the Add Place dialog shows an Instagram import, so a refresh reopens the dialog on that job. Only `ig` is added or removed (`router.replace`); the rest of the query string — the filters — is kept. Cleared when the dialog closes.
 - `/login?error=auth_failed` — auth callback failure state.
 - `/login?next=<path>` — (intended) redirect-back path after login. Verify the page reads it.
 

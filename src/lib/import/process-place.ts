@@ -27,6 +27,8 @@ export interface ImportDefaults {
   visitStatus?: string | null;
   listIds?: string[];
   tagIds?: string[];
+  /** `places.source` for the new row; Takeout imports leave it as "import". */
+  source?: "import" | "instagram";
 }
 
 export type ImportOutcome =
@@ -350,7 +352,7 @@ export async function importPlace(
       google_place_id: googlePlaceId,
       google_data: googleData,
       category_id: categoryId,
-      source: "import",
+      source: defaults.source ?? "import",
       ...(defaults.visitStatus && { visit_status: defaults.visitStatus }),
       ...(defaults.visitStatus === "visited" && {
         visited_at: new Date().toISOString(),

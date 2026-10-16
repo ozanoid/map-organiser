@@ -2,8 +2,8 @@
 title: Lite Profile Flow
 type: flow
 domain: places
-version: 1.2.0
-last_updated: 05.08.2026
+version: 1.2.2
+last_updated: 16.10.2026
 status: stable
 sources:
   - src/lib/ai/extract/lite-profile.ts
@@ -34,7 +34,11 @@ reviews are fetched.
 ## Trigger
 
 User pastes a Google Maps URL into `AddPlaceDialog`, OR PWA share-target
-opens the dialog with `initialUrl`. Either way, `parseLink.mutate()` runs.
+opens the dialog with `initialUrl`. Either way, `parseLink.mutate()` runs —
+unless the URL is an Instagram link: a post or reel runs the Instagram import
+instead (v1.28.0), any other Instagram link gets an inline "not a post" hint
+(v1.28.1); `parse-link` is never called and no lite profile is built (see
+[[instagram-import-flow]]).
 
 ## Steps
 

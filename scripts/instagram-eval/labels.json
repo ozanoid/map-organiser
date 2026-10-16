@@ -1,0 +1,776 @@
+[
+ {
+  "code": "C-qWhZRNMoM",
+  "url": "https://www.instagram.com/p/C-qWhZRNMoM/",
+  "set": "dev",
+  "venues": [
+   {
+    "key": "@dishoom",
+    "status": "include",
+    "name": "Dishoom Covent Garden",
+    "place_id": "ChIJxZXYx7cEdkgRdgAOZ6OHOJw",
+    "alt_place_ids": [],
+    "place_name": "Dishoom Covent Garden",
+    "place_address": "12 Upper St Martin's Ln, London WC2H 9FB, UK"
+   },
+   {
+    "key": "@mousetraplondon",
+    "status": "optional",
+    "name": "The Mousetrap (St Martin's Theatre)",
+    "place_id": "ChIJ2dkqXs0EdkgRlVUsXtEbwsQ",
+    "alt_place_ids": [],
+    "place_name": "St. Martin's Theatre",
+    "place_address": "West St, London WC2H 9NZ, UK"
+   }
+  ]
+ },
+ {
+  "code": "CMh7p0ql0NK",
+  "url": "https://www.instagram.com/p/CMh7p0ql0NK/",
+  "set": "dev",
+  "venues": [
+   {
+    "key": "@naga_putrika",
+    "status": "include",
+    "name": "Naga Putrika",
+    "place_id": "ChIJ2WIzwIq4yhQRnDfLgoPPQ_Y",
+    "alt_place_ids": [],
+    "place_name": "Naga Putrika",
+    "place_address": "Caferağa, Moda Cd. 161/A, 34710 Kadıköy/İstanbul, Türkiye"
+   },
+   {
+    "key": "text:Moda iskelesi",
+    "status": "optional",
+    "name": "Moda iskelesi",
+    "place_id": "ChIJjzj8-B-5yhQRRKECiI-A2Ak",
+    "alt_place_ids": [
+     "ChIJw999A4u4yhQRDrZ3Or0aa4c"
+    ],
+    "place_name": "Moda Pier",
+    "place_address": "Caferağa, Moda Cd. No:175, 34710 Kadıköy/İstanbul, Türkiye"
+   }
+  ]
+ },
+ {
+  "code": "DAQ9KfPN0q5",
+  "url": "https://www.instagram.com/p/DAQ9KfPN0q5/",
+  "set": "dev",
+  "venues": [
+   {
+    "key": "@bigchefscafe",
+    "status": "include",
+    "name": "BigChefs",
+    "place_id": "ChIJzYMlHd7HyhQRNHbboW6CgG0",
+    "alt_place_ids": [],
+    "place_name": "Big Chefs - Emaar Square Mall AVM Şubesi",
+    "place_address": "Ünalan, Libadiye Cd. No:88, 34700 Üsküdar/İstanbul, Türkiye"
+   }
+  ]
+ },
+ {
+  "code": "DBEbb2ygjW0",
+  "url": "https://www.instagram.com/p/DBEbb2ygjW0/",
+  "set": "dev",
+  "venues": [
+   {
+    "key": "@polka.kafe",
+    "status": "include",
+    "name": "Polka kafe",
+    "place_id": "ChIJR-p1Pme4yhQRz_ustDFoIEQ",
+    "alt_place_ids": [],
+    "place_name": "Polka Kafe",
+    "place_address": "Caferağa Mahallesi, No:, Caferağa, Zuhal Sk. No:19, 34710 Kadıköy/İstanbul, Türkiye"
+   }
+  ]
+ },
+ {
+  "code": "DGQsCc3MbU9",
+  "url": "https://www.instagram.com/p/DGQsCc3MbU9/",
+  "set": "dev",
+  "venues": []
+ },
+ {
+  "code": "DJMC-WhiTNi",
+  "url": "https://www.instagram.com/p/DJMC-WhiTNi/",
+  "set": "dev",
+  "venues": [
+   {
+    "key": "@chaptercommunity",
+    "status": "include",
+    "name": "Chapter",
+    "place_id": "ChIJj9pL4ljYuxQRWNTDGN-DutA",
+    "alt_place_ids": [],
+    "place_name": "Chapter Community",
+    "place_address": "Kültür, Dr. Mustafa Enver Bey Cd. No: 32/A, 35220 Konak/İzmir, Türkiye"
+   }
+  ]
+ },
+ {
+  "code": "DKieHXEuLzh",
+  "url": "https://www.instagram.com/p/DKieHXEuLzh/",
+  "set": "dev",
+  "venues": [
+   {
+    "key": "@lindustriebk",
+    "status": "include",
+    "name": "L'industrie Pizzeria",
+    "place_id": "ChIJ92OsaJVZwokRsC54kf-J-3g",
+    "alt_place_ids": [],
+    "place_name": "L’industrie Pizzeria - West Village",
+    "place_address": "104 Christopher St, New York, NY 10014, USA"
+   }
+  ]
+ },
+ {
+  "code": "DMF8FiTtB9P",
+  "url": "https://www.instagram.com/p/DMF8FiTtB9P/",
+  "set": "dev",
+  "venues": [
+   {
+    "key": "@daenzoal29",
+    "status": "include",
+    "name": "Da Enzo al 29",
+    "place_id": "ChIJfy613ThgLxMR-Kr1iDROgrU",
+    "alt_place_ids": [],
+    "place_name": "Trattoria Da Enzo",
+    "place_address": "Via dei Vascellari, 29, 00153 Roma RM, Italy"
+   }
+  ]
+ },
+ {
+  "code": "DP4CaeSDBC0",
+  "url": "https://www.instagram.com/p/DP4CaeSDBC0/",
+  "set": "dev",
+  "venues": [
+   {
+    "key": "@voi.coffee",
+    "status": "closed",
+    "name": "VOI Feriye",
+    "place_id": "ChIJeXx_r7W3yhQRbFiMgvIMohU",
+    "alt_place_ids": [],
+    "place_name": "VOI Feriye",
+    "place_address": "Avrupa Yakası, Yıldız, 34349 Beşiktaş/İstanbul, Türkiye"
+   },
+   {
+    "key": "@penguen.kitabevi",
+    "status": "include",
+    "name": "Penguen Kitabevi",
+    "place_id": "ChIJBUqwPWfHyhQRv6gp1w8LCjU",
+    "alt_place_ids": [],
+    "place_name": "Penguen Kitabevi İçerenköy",
+    "place_address": "Küçükbakkalköy, Kayışdağı Cd. No:145 D:2, 34758 Ataşehir/İstanbul, Türkiye"
+   },
+   {
+    "key": "@thewhirl",
+    "status": "include",
+    "name": "The Whirl Roastery",
+    "place_id": "ChIJ1VuOAiy1yhQRs9Tob0lem0w",
+    "alt_place_ids": [],
+    "place_name": "The Whirl Roastery",
+    "place_address": "Maslak Mah. AOS 2. Kısım 6. Sokak No:144, Maslak, 34398 Sarıyer/İstanbul, Türkiye"
+   },
+   {
+    "key": "@walterscoffee",
+    "status": "include",
+    "name": "Walter's Coffee Roastery",
+    "place_id": "ChIJM7mzw7LHyhQRkr8TL1IkGZQ",
+    "alt_place_ids": [],
+    "place_name": "Walter's Coffee Roastery - Fikirtepe 1071",
+    "place_address": "Fikirtepe Mah. Hızırbey Cad. No:121, Fikirtepe, İşyeri No:174 D:1071 Konutları B Blok, 34720 Kadıköy/İstanbul, Türkiye"
+   },
+   {
+    "key": "@istkitapcisi",
+    "status": "include",
+    "name": "Vapur Kafe & İstanbul Kitapçısı",
+    "place_id": "ChIJ-aIUkzO5yhQRB12TFIR2vMs",
+    "alt_place_ids": [],
+    "place_name": "Istanbul Bookstore Karakoy Branch",
+    "place_address": "Kemankeş Karamustafa Paşa Mahallesi, Rıhtım Cd, Kemankeş Karamustafa Paşa, Kadıköy İskelesi Üstü No:17, 34425 Beyoğlu/İstanbul, Türkiye"
+   },
+   {
+    "key": "@filbooks",
+    "status": "include",
+    "name": "FiLBooks",
+    "place_id": "ChIJtRSjs925yhQRx2ubSWrvHDs",
+    "alt_place_ids": [],
+    "place_name": "FiLBooks",
+    "place_address": "Reşitpaşa, Tuncay Artun Cd. No:91, 34425 Sarıyer/İstanbul, Türkiye"
+   },
+   {
+    "key": "@minoapera",
+    "status": "include",
+    "name": "Minoa Pera",
+    "place_id": "ChIJqyBtv6O5yhQRAbGKie2Fe4Q",
+    "alt_place_ids": [],
+    "place_name": "Minoa Pera",
+    "place_address": "Evliya Çelebi, Meşrutiyet Cd. No:99, 34430 Beyoğlu/İstanbul, Türkiye"
+   },
+   {
+    "key": "@fugacoffee.co",
+    "status": "include",
+    "name": "Fuga Coffee",
+    "place_id": "ChIJbyXv9Nu3yhQRwLuJva9uUfA",
+    "alt_place_ids": [],
+    "place_name": "Fuga Coffee",
+    "place_address": "Esentepe, Ecza Sokağı No:4/6, 34394 Şişli/İstanbul, Türkiye"
+   },
+   {
+    "key": "@caffeneroturkiye",
+    "status": "include",
+    "name": "Caffè Nero Nişantaşı",
+    "place_id": "ChIJE9ro6YS3yhQRJjfxVqaogyk",
+    "alt_place_ids": [],
+    "place_name": "Caffè Nero",
+    "place_address": "Veziroğlu Apt, Harbiye, Vali Konağı Cd. No:28/1-2, 34365 Şişli/İstanbul, Türkiye"
+   },
+   {
+    "key": "@casacooklife",
+    "status": "include",
+    "name": "Casa Cooklife",
+    "place_id": "ChIJP28e0QK6yhQRcHWnRc2ZOus",
+    "alt_place_ids": [],
+    "place_name": "Casa Cooklife",
+    "place_address": "Bomonti silahşör caddesi Yeniyol Sk. No:2 now, Cumhuriyet, Silahşör Cd., 34440 Şişli/İstanbul, Türkiye"
+   }
+  ]
+ },
+ {
+  "code": "DPjJjPViBZZ",
+  "url": "https://www.instagram.com/p/DPjJjPViBZZ/",
+  "set": "dev",
+  "venues": [
+   {
+    "key": "@deliyengecankara",
+    "status": "include",
+    "name": "Deli Yengeç Restaurant",
+    "place_id": "ChIJ697hSYNP0xQRIAXltgdIJYQ",
+    "alt_place_ids": [],
+    "place_name": "Deli Yengeç",
+    "place_address": "DELİ YENGEÇ, Gaziosmanpaşa, Filistin Cd. NO:2/B, 06680 Çankaya/Ankara, Türkiye"
+   }
+  ]
+ },
+ {
+  "code": "DPuQI_2jbur",
+  "url": "https://www.instagram.com/p/DPuQI_2jbur/",
+  "set": "dev",
+  "venues": [
+   {
+    "key": "loc:New Dishoom Covent Garden",
+    "status": "include",
+    "name": "Dishoom Covent Garden",
+    "place_id": "ChIJxZXYx7cEdkgRdgAOZ6OHOJw",
+    "alt_place_ids": [],
+    "place_name": "Dishoom Covent Garden",
+    "place_address": "12 Upper St Martin's Ln, London WC2H 9FB, UK"
+   }
+  ]
+ },
+ {
+  "code": "DQ400lsiHpS",
+  "url": "https://www.instagram.com/p/DQ400lsiHpS/",
+  "set": "dev",
+  "venues": [
+   {
+    "key": "@vermilion.coffee",
+    "status": "include",
+    "name": "Vermilion Coffee",
+    "place_id": "ChIJSczjKgC5yhQR4UGV1RI-zlY",
+    "alt_place_ids": [],
+    "place_name": "Vermilion Coffee + Matcha",
+    "place_address": "Caferağa, Rızapaşa Sok. 27/A, 34710 Kadıköy/İstanbul, Türkiye"
+   }
+  ]
+ },
+ {
+  "code": "DRk9wcJmILl",
+  "url": "https://www.instagram.com/p/DRk9wcJmILl/",
+  "set": "dev",
+  "venues": [
+   {
+    "key": "text:Pera Palace",
+    "status": "include",
+    "name": "Pera Palace",
+    "place_id": "ChIJS2R8TuC5yhQRw3LxYafNe3I",
+    "alt_place_ids": [],
+    "place_name": "Pera Palace Hotel",
+    "place_address": "Meşrutiyet Caddesi, Evliya Çelebi, Tepebaşı Cd. No:52, 34430 Beyoğlu/İstanbul, Türkiye"
+   },
+   {
+    "key": "text:Kubbeli Lounge",
+    "status": "optional",
+    "name": "Kubbeli Lounge",
+    "place_id": "ChIJJRCU7l-3yhQRTtkgOKSXepo",
+    "alt_place_ids": [],
+    "place_name": "Kubbeli Saloon Tea Lounge",
+    "place_address": "Meşrutiyet Caddesi No: 52 Lobby, Palace Hotel, Evliya Çelebi, Tepebaşı Cd., 34430 Beyoğlu/İstanbul, Türkiye"
+   },
+   {
+    "key": "text:The Blue Mosque",
+    "status": "optional",
+    "name": "The Blue Mosque (Sultanahmet Camii)",
+    "place_id": "ChIJ4fRwZb25yhQRpHwVijb3LeU",
+    "alt_place_ids": [],
+    "place_name": "The Blue Mosque",
+    "place_address": "Cankurtaran, At Meydanı Cd No:7, 34122 Fatih/İstanbul, Türkiye"
+   },
+   {
+    "key": "text:Topkapi Palace",
+    "status": "optional",
+    "name": "Topkapi Palace",
+    "place_id": "ChIJM_ilr7i5yhQRAFMBw0MZqhU",
+    "alt_place_ids": [
+     "ChIJoYxhKAC5yhQRStEJVj8qphY"
+    ],
+    "place_name": "Topkapi Palace Museum",
+    "place_address": "Cankurtaran, Babı Hümayun Cad No: 1, 34122 Fatih/İstanbul, Türkiye"
+   },
+   {
+    "key": "text:Hagia Sophia",
+    "status": "optional",
+    "name": "Hagia Sophia",
+    "place_id": "ChIJJxwBkr65yhQRrk9EN29vbiM",
+    "alt_place_ids": [],
+    "place_name": "Hagia Sophia Grand Mosque",
+    "place_address": "Sultan Ahmet, Ayasofya Meydanı No:1, 34122 Fatih/İstanbul, Türkiye"
+   },
+   {
+    "key": "text:Dolmabahçe Palace",
+    "status": "optional",
+    "name": "Dolmabahçe Palace",
+    "place_id": "ChIJ4307Gna3yhQRC4M7zzg-09w",
+    "alt_place_ids": [],
+    "place_name": "Dolmabahçe Palace",
+    "place_address": "Vişnezade, Dolmabahçe Cd., 34357 Beşiktaş/İstanbul, Türkiye"
+   }
+  ]
+ },
+ {
+  "code": "DSpSggmDKY9",
+  "url": "https://www.instagram.com/p/DSpSggmDKY9/",
+  "set": "dev",
+  "venues": [
+   {
+    "key": "text:Kaptanın Yeri",
+    "status": "include",
+    "name": "Kaptanın Yeri",
+    "place_id": "ChIJdbPJs9c40xQRT9xnFRMB0WQ",
+    "alt_place_ids": [],
+    "place_name": "Kaptan'ın Yeri (Konutkent)",
+    "place_address": "Konutkent Carsısı 2 carsısı No.21, Prof. Dr. Ahmet Taner Kışlı Mah., Prof. Dr. Ahmet Taner Kışlalı, 06810 Çankaya/Ankara, Türkiye"
+   }
+  ]
+ },
+ {
+  "code": "DVquYg1COdV",
+  "url": "https://www.instagram.com/p/DVquYg1COdV/",
+  "set": "dev",
+  "venues": [
+   {
+    "key": "loc:Çiya Sofrası",
+    "status": "include",
+    "name": "Çiya Sofrası",
+    "place_id": "ChIJhToLome4yhQRE1EMuLSuqlg",
+    "alt_place_ids": [
+     "ChIJkTGADAC5yhQRHG-W8ctGVCo"
+    ],
+    "place_name": "Çiya Sofrası",
+    "place_address": "Caferağa, Güneşlibahçe Sok. no 34710, 34710 Kadıköy/İstanbul, Türkiye"
+   }
+  ]
+ },
+ {
+  "code": "DY7eKwYjDxL",
+  "url": "https://www.instagram.com/p/DY7eKwYjDxL/",
+  "set": "dev",
+  "venues": []
+ },
+ {
+  "code": "DYSbxpMM6GM",
+  "url": "https://www.instagram.com/p/DYSbxpMM6GM/",
+  "set": "dev",
+  "venues": [
+   {
+    "key": "@cafenuances",
+    "status": "include",
+    "name": "Café Nuances (Le Marais)",
+    "place_id": "ChIJNZ33UABv5kcR6I6cNiqIv_s",
+    "alt_place_ids": [],
+    "place_name": "Café Nuances - Marais",
+    "place_address": "51 Rue des Francs Bourgeois, 75004 Paris, France"
+   }
+  ]
+ },
+ {
+  "code": "DYmRlmFtFB-",
+  "url": "https://www.instagram.com/p/DYmRlmFtFB-/",
+  "set": "dev",
+  "venues": [
+   {
+    "key": "@karakoymarinobalikdurum",
+    "status": "not_on_google",
+    "name": "Karaköy Marino Balık Dürüm",
+    "place_id": null,
+    "alt_place_ids": [],
+    "place_name": null,
+    "place_address": null
+   }
+  ]
+ },
+ {
+  "code": "DZ978ajMtau",
+  "url": "https://www.instagram.com/p/DZ978ajMtau/",
+  "set": "dev",
+  "venues": [
+   {
+    "key": "text:Dishoom Covent Garden",
+    "status": "include",
+    "name": "Dishoom Covent Garden",
+    "place_id": "ChIJxZXYx7cEdkgRdgAOZ6OHOJw",
+    "alt_place_ids": [],
+    "place_name": "Dishoom Covent Garden",
+    "place_address": "12 Upper St Martin's Ln, London WC2H 9FB, UK"
+   }
+  ]
+ },
+ {
+  "code": "DZw2m83CNTE",
+  "url": "https://www.instagram.com/p/DZw2m83CNTE/",
+  "set": "dev",
+  "venues": [
+   {
+    "key": "@rosciolisalumeria",
+    "status": "include",
+    "name": "Roscioli Salumeria",
+    "place_id": "ChIJ4T6-zEhgLxMRSa1VL3N0DyY",
+    "alt_place_ids": [],
+    "place_name": "Roscioli Salumeria con Cucina",
+    "place_address": "Via dei Giubbonari, 21, 00186 Roma RM, Italy"
+   }
+  ]
+ },
+ {
+  "code": "Dbnfu0oCGIp",
+  "url": "https://www.instagram.com/p/Dbnfu0oCGIp/",
+  "set": "dev",
+  "venues": [
+   {
+    "key": "@the_crepeescape",
+    "status": "include",
+    "name": "The Crepe Escape",
+    "place_id": "ChIJXY_PRHTHyhQR7xoQcUluXFA",
+    "alt_place_ids": [],
+    "place_name": "The Crepe Escape",
+    "place_address": "Desen Apt, Caddebostan, Beyaz Akasya Sk. D:4/B, 34728 Kadıköy/İstanbul, Türkiye"
+   },
+   {
+    "key": "@cupofjoy.goodcoffee",
+    "status": "ambiguous",
+    "name": "Cup of Joy",
+    "place_id": null,
+    "alt_place_ids": [],
+    "place_name": null,
+    "place_address": null
+   },
+   {
+    "key": "@zestsociety.ist",
+    "status": "include",
+    "name": "Zest Society",
+    "place_id": "ChIJ6UZFUlDHyhQRCuaW8Uu66wI",
+    "alt_place_ids": [],
+    "place_name": "Zest Society By Marie Antoinette Chocolatier",
+    "place_address": "Erenköy, Ömerpaşa Sok. 24/a, 34738 Kadıköy/İstanbul, Türkiye"
+   },
+   {
+    "key": "@ethique.pb",
+    "status": "include",
+    "name": "Ethique",
+    "place_id": "ChIJHal41rHHyhQRMNtWj8DX03Q",
+    "alt_place_ids": [],
+    "place_name": "Ethique French Bakery & Cuisine",
+    "place_address": "Fikirtepe, Volkan Sk. Pırlanta Sitesi B Blok 1/1D, 34720 Kadıköy/İstanbul, Türkiye"
+   },
+   {
+    "key": "@murverkarakoy",
+    "status": "include",
+    "name": "Mürver",
+    "place_id": "ChIJqb2RQ9y5yhQRjiF403kTipg",
+    "alt_place_ids": [],
+    "place_name": "Mürver Restaurant",
+    "place_address": "Kemankeş Karamustafa Paşa, Kemankeş Cd. No:57-59, 34425 Beyoğlu/İstanbul, Türkiye"
+   },
+   {
+    "key": "@arkestra.ist",
+    "status": "include",
+    "name": "Arkestra",
+    "place_id": "ChIJW1D7CIu3yhQRDmAZbPUrjjw",
+    "alt_place_ids": [],
+    "place_name": "Arkestra",
+    "place_address": "Etiler, Dilhayat Sk. No:28, 34337 Beşiktaş/İstanbul, Türkiye"
+   },
+   {
+    "key": "@jburger1977",
+    "status": "include",
+    "name": "J. Burger",
+    "place_id": "ChIJNR33ZXnHyhQRIYxbdMFqFQw",
+    "alt_place_ids": [],
+    "place_name": "J Burger",
+    "place_address": "Caddebostan, Operatör Cemil Topuzlu Cd. No:36/A, 34728 Kadıköy/İstanbul, Türkiye"
+   }
+  ]
+ },
+ {
+  "code": "DciOsLGMszt",
+  "url": "https://www.instagram.com/p/DciOsLGMszt/",
+  "set": "dev",
+  "venues": [
+   {
+    "key": "@starbucks",
+    "status": "include",
+    "name": "Starbucks",
+    "place_id": "ChIJIwvracy5yhQRELDO_rXAjsk",
+    "alt_place_ids": [],
+    "place_name": "Starbucks",
+    "place_address": "Tünel Narmanlı, Asmalı Mescit, İstiklal Cd. No:180, 34430 Beyoğlu/İstanbul, Türkiye"
+   },
+   {
+    "key": "text:Narmanlı Han",
+    "status": "optional",
+    "name": "Narmanlı Han",
+    "place_id": "ChIJJTOglOC5yhQRB1SZq5vN9kM",
+    "alt_place_ids": [],
+    "place_name": "Narmanlı Han",
+    "place_address": "Mahallesi, Asmalı Mescit, İstiklal Cd. No:180, 34430 Beyoğlu/İstanbul, Türkiye"
+   }
+  ]
+ },
+ {
+  "code": "DdJ1p9Voyjs",
+  "url": "https://www.instagram.com/p/DdJ1p9Voyjs/",
+  "set": "dev",
+  "venues": [
+   {
+    "key": "@gretagumusluk",
+    "status": "include",
+    "name": "Greta Gümüşlük",
+    "place_id": "ChIJWQm5BlN1vhQRXCbqiM5YPt4",
+    "alt_place_ids": [],
+    "place_name": "Greta Restaurant | Gümüşlük – Bodrum",
+    "place_address": "Gümüşlük, Yağmur Sk. No:45, 48970 Bodrum/Muğla, Türkiye"
+   }
+  ]
+ },
+ {
+  "code": "Ddi2Z4fufxZ",
+  "url": "https://www.instagram.com/p/Ddi2Z4fufxZ/",
+  "set": "dev",
+  "venues": []
+ },
+ {
+  "code": "DdjPg9Vi5ni",
+  "url": "https://www.instagram.com/p/DdjPg9Vi5ni/",
+  "set": "dev",
+  "venues": [
+   {
+    "key": "loc:Galata Tower Istanbul",
+    "status": "include",
+    "name": "Galata Tower",
+    "place_id": "ChIJQ3x3p-e5yhQRCzOLzD3Pdkw",
+    "alt_place_ids": [
+     "ChIJvVXZCee5yhQRCJI3QoShtAQ"
+    ],
+    "place_name": "Galata Tower",
+    "place_address": "Bereketzade, 34421 Beyoğlu/İstanbul, Türkiye"
+   }
+  ]
+ },
+ {
+  "code": "C0iuUU3Mspu",
+  "url": "https://www.instagram.com/p/C0iuUU3Mspu/",
+  "set": "holdout",
+  "venues": [
+   {
+    "key": "text:Kültür Sanat Fabrikası Kahve Dünyası",
+    "status": "include",
+    "name": "Kültür Sanat Fabrikası Kahve Dünyası",
+    "place_id": "ChIJkSd3ZUnZuxQRBciatRuS7b8",
+    "alt_place_ids": [],
+    "place_name": "Kahve Dünyası-İzmir Tekel Müze ve Kültür Kompleksi",
+    "place_address": "Mimar Sinan Mah, İzmir Tekel Müze ve Kültür Kompleksi, Alsancak, Ziya Gökalp Blv. No: 9/12, 35250 Konak/İzmir, Türkiye"
+   },
+   {
+    "key": "loc:İzmir Kültür Sanat Fabrikası",
+    "status": "optional",
+    "name": "İzmir Kültür Sanat Fabrikası",
+    "place_id": "ChIJ9eymEb7ZuxQRE_6Ae6xflyg",
+    "alt_place_ids": [
+     "ChIJG6SJZ_bYuxQRJI7BJ7IT3eo"
+    ],
+    "place_name": "İzmir Kültür Sanat Fabrikası",
+    "place_address": "Mimar Sinan, Atatürk Cd. No:5, 35220 Konak/İzmir, Türkiye"
+   }
+  ]
+ },
+ {
+  "code": "C4C-BBHIoDm",
+  "url": "https://www.instagram.com/p/C4C-BBHIoDm/",
+  "set": "holdout",
+  "venues": [
+   {
+    "key": "@sevenlyheart",
+    "status": "include",
+    "name": "Sevenly Heart",
+    "place_id": "ChIJ01_y7EJv5kcRFN2ETmBVQrM",
+    "alt_place_ids": [],
+    "place_name": "Sevenly Heart",
+    "place_address": "55 Rue des Archives, 75003 Paris, France"
+   }
+  ]
+ },
+ {
+  "code": "CzogBgotGWh",
+  "url": "https://www.instagram.com/p/CzogBgotGWh/",
+  "set": "holdout",
+  "venues": [
+   {
+    "key": "text:80’ler Kahvaltı Alsancak",
+    "status": "closed",
+    "name": "80’ler Kahvaltı Alsancak",
+    "place_id": null,
+    "alt_place_ids": [],
+    "place_name": null,
+    "place_address": null
+   }
+  ]
+ },
+ {
+  "code": "DRrUeptiJ5W",
+  "url": "https://www.instagram.com/p/DRrUeptiJ5W/",
+  "set": "holdout",
+  "venues": [
+   {
+    "key": "@sonne.cafe",
+    "status": "include",
+    "name": "Sonne",
+    "place_id": "ChIJE6By9SO5yhQRt75W5Sy-xH8",
+    "alt_place_ids": [],
+    "place_name": "Sonne",
+    "place_address": "Yurttaş Sokak No:12/1A, Rasimpaşa, Celal Muhtar Sok. No:19D, 34716 Kadıköy/İstanbul, Türkiye"
+   }
+  ]
+ },
+ {
+  "code": "DTveaqbjHIz",
+  "url": "https://www.instagram.com/p/DTveaqbjHIz/",
+  "set": "holdout",
+  "venues": [
+   {
+    "key": "@fishandfish.official",
+    "status": "include",
+    "name": "Fish&Fish",
+    "place_id": "ChIJUfS1H1tJ0xQR7CnvtH1L2wY",
+    "alt_place_ids": [],
+    "place_name": "Fish&Fish",
+    "place_address": "Mustafa Kemal, 2124. Cd Yaşam İş Merkezi No:16/C, 06510 Çankaya/Ankara, Türkiye"
+   }
+  ]
+ },
+ {
+  "code": "DWJ0aQljNFx",
+  "url": "https://www.instagram.com/p/DWJ0aQljNFx/",
+  "set": "holdout",
+  "venues": [
+   {
+    "key": "@hausperacoffee",
+    "status": "include",
+    "name": "Haus Pera (Alsancak branch)",
+    "place_id": "ChIJYaCy4y3ZuxQRZawU5aSf3Ug",
+    "alt_place_ids": [],
+    "place_name": "Haus Pera Bango",
+    "place_address": "Talatpaşa bul. Kültür, Alsancak, caddesi. Sevsay 14/C, 35220 Konak/İzmir, Türkiye"
+   },
+   {
+    "key": "text:Haus Pera (Buca’daki şubesi)",
+    "status": "optional",
+    "name": "Haus Pera – Buca branch",
+    "place_id": "ChIJmQTT3ArZuxQRhe79yFBWhNE",
+    "alt_place_ids": [],
+    "place_name": "Haus Pera Coffee Buca",
+    "place_address": "Dumlupınar, 109. Sk. NO: 14, 35400 Buca/İzmir, Türkiye"
+   }
+  ]
+ },
+ {
+  "code": "DWTwdOFCIyu",
+  "url": "https://www.instagram.com/p/DWTwdOFCIyu/",
+  "set": "holdout",
+  "venues": [
+   {
+    "key": "owner:@barcelonatapas",
+    "status": "include",
+    "name": "Barcelona Tapas Bar & Restaurant",
+    "place_id": "ChIJ3XSYrLQcdkgRReXOuEpX9S4",
+    "alt_place_ids": [],
+    "place_name": "Barcelona Tapas Bar & Restaurant",
+    "place_address": "Barcelona Tapas Bar & Restaurant 1 Middlesex Street, E1 7AA (OFF St Botolph Street, London EC3A 7DT, London E1 7AA, UK"
+   }
+  ]
+ },
+ {
+  "code": "DYAT4TKDEVy",
+  "url": "https://www.instagram.com/p/DYAT4TKDEVy/",
+  "set": "holdout",
+  "venues": [
+   {
+    "key": "@bijou.community",
+    "status": "include",
+    "name": "Bijou",
+    "place_id": "ChIJF7JlcbvZuxQRDZgS-YOx9lk",
+    "alt_place_ids": [],
+    "place_name": "Bijou",
+    "place_address": "Kültür, Meksika Sok. 11/A, 35220 Konak/İzmir, Türkiye"
+   }
+  ]
+ },
+ {
+  "code": "DZxOpyQsN3f",
+  "url": "https://www.instagram.com/p/DZxOpyQsN3f/",
+  "set": "holdout",
+  "venues": [
+   {
+    "key": "@fenerrestaurant",
+    "status": "include",
+    "name": "Fener Restaurant (Akyarlar, Bodrum)",
+    "place_id": "ChIJAQAAwF8MvhQRSMDunuyV8r4",
+    "alt_place_ids": [],
+    "place_name": "Fener Restaurant",
+    "place_address": "Akyarlar Mahallesi, Turgutreis, Kemer Cd. No: 30, 48960 Bodrum/Muğla, Türkiye"
+   }
+  ]
+ },
+ {
+  "code": "DbRpQF-R7WF",
+  "url": "https://www.instagram.com/p/DbRpQF-R7WF/",
+  "set": "holdout",
+  "venues": [
+   {
+    "key": "@galatamediterraneangrill",
+    "status": "include",
+    "name": "Galata Mediterranean Grill",
+    "place_id": "ChIJkWLqLl3TD4gR2dEfp3Cq0Fo",
+    "alt_place_ids": [],
+    "place_name": "Galata Mediterranean Grill",
+    "place_address": "3345 N Clark St, Chicago, IL 60657, USA"
+   },
+   {
+    "key": "text:Galata Tower",
+    "status": "optional",
+    "name": "Galata Tower (Istanbul)",
+    "place_id": "ChIJQ3x3p-e5yhQRCzOLzD3Pdkw",
+    "alt_place_ids": [],
+    "place_name": "Galata Tower",
+    "place_address": "Bereketzade, 34421 Beyoğlu/İstanbul, Türkiye"
+   }
+  ]
+ }
+]

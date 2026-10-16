@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useParseLink, useCreatePlace } from "@/lib/hooks/use-places";
 import { useCategories } from "@/lib/hooks/use-categories";
@@ -10,6 +10,8 @@ import { useTags } from "@/lib/hooks/use-tags";
 import { resolveCategoryId } from "@/lib/google/category-mapping";
 import type { PlaceProfile } from "@/lib/ai/schemas/place-profile";
 import { googleMapsPlaceUrl } from "@/lib/google/maps-url";
+import { isInstagramUrl, parseInstagramPostUrl } from "@/lib/instagram/url";
+import type { InstagramJobPhase } from "@/lib/instagram/types";
 import {
   Dialog,
   DialogContent,
@@ -32,6 +34,7 @@ import { InlineCategoryCreator } from "@/components/places/inline-category-creat
 import { InlineListCreator } from "@/components/places/inline-list-creator";
 import { InlineTagInput } from "@/components/places/inline-tag-input";
 import { VisitStatusToggle } from "@/components/places/visit-status-toggle";
+import { InstagramImportPanel } from "@/components/places/instagram-import-panel";
 import {
   Link2,
   MapPin,
@@ -57,10 +60,47 @@ interface AddPlaceDialogProps {
    *  "link"; SimilarPlaces passes "similar" (v1.18.0 — the CHECK
    *  constraint was widened for it). */
   source?: string;
+  /** An Instagram import the parent already knows about — set after a
+   *  refresh from `/map?ig=<id>`. `url` null means "whatever post it was". */
+  instagramJob?: { url: string | null; id: string } | null;
+  /** Fired when an Instagram import starts, so the parent can keep it in the URL. */
+  onInstagramJob?: (job: { url: string | null; id: string }) => void;
+  onInstagramPhase?: (phase: InstagramJobPhase) => void;
+  /** Instagram results: fit the map to these points (map page only). */
+  onShowOnMap?: (points: { lat: number; lng: number }[]) => void;
+  /** Instagram results: hand a venue name (and the post it came from) to the
+   *  map's search box, aimed at `near` when the post says where it is. */
+  onSearchPlaces?: (
+    query: string,
+    context: { postUrl: string; tagId: string | null; near: { lat: number; lng: number } | null }
+  ) => void;
+  /** Set where Instagram imports aren't run in place (the header): a pasted
+   *  post link is handed over — to the map page — instead. */
+  onInstagramLink?: (url: string) => void;
 }
 
-export function AddPlaceDialog({ open, onOpenChange, initialUrl, source }: AddPlaceDialogProps) {
+const INSTAGRAM_NOT_A_POST =
+  "That's an Instagram profile or page, not a post. Share a post or reel to add the places in it.";
+
+export function AddPlaceDialog({
+  open,
+  onOpenChange,
+  initialUrl,
+  source,
+  instagramJob,
+  onInstagramJob,
+  onInstagramPhase,
+  onShowOnMap,
+  onSearchPlaces,
+  onInstagramLink,
+}: AddPlaceDialogProps) {
   const [url, setUrl] = useState("");
+  // Instagram links skip the single-place preview: they run as an import job.
+  const [pastedInstagramUrl, setPastedInstagramUrl] = useState<string | null>(null);
+  const [localInstagramJob, setLocalInstagramJob] = useState<{ url: string | null; id: string } | null>(null);
+  const [linkError, setLinkError] = useState<string | null>(null);
+  // The Instagram view opens on its title, not on the first "Remove" button.
+  const igTitleRef = useRef<HTMLHeadingElement>(null);
   const [placeData, setPlaceData] = useState<ParsedPlaceData | null>(null);
   const [liteProfile, setLiteProfile] = useState<PlaceProfile | null>(null);
   const [providerInfo, setProviderInfo] = useState<{ name: string; timeMs: number } | null>(null);
@@ -115,9 +155,10 @@ export function AddPlaceDialog({ open, onOpenChange, initialUrl, source }: AddPl
     );
   }, [aiSuggestions, categoryId, subcategories]);
 
-  // Auto-parse when opened via share target with initialUrl
+  // Auto-parse when opened via share target with initialUrl. Instagram links
+  // never go to the Maps parser: posts import, anything else gets a hint.
   useEffect(() => {
-    if (open && initialUrl && !placeData && !parseLink.isPending) {
+    if (open && initialUrl && !isInstagramUrl(initialUrl) && !placeData && !parseLink.isPending) {
       setUrl(initialUrl);
       parseLink.mutate(initialUrl, {
         onSuccess: (data: any) => {
@@ -170,6 +211,9 @@ export function AddPlaceDialog({ open, onOpenChange, initialUrl, source }: AddPl
 
   function reset() {
     setUrl("");
+    setPastedInstagramUrl(null);
+    setLocalInstagramJob(null);
+    setLinkError(null);
     setPlaceData(null);
     setLiteProfile(null);
     setProviderInfo(null);
@@ -186,6 +230,20 @@ export function AddPlaceDialog({ open, onOpenChange, initialUrl, source }: AddPl
 
   async function handlePaste() {
     if (!url.trim()) return;
+    const instagram = parseInstagramPostUrl(url);
+    if (instagram) {
+      if (onInstagramLink) {
+        reset();
+        onInstagramLink(instagram.canonicalUrl);
+        return;
+      }
+      setPastedInstagramUrl(instagram.canonicalUrl);
+      return;
+    }
+    if (isInstagramUrl(url)) {
+      setLinkError(INSTAGRAM_NOT_A_POST);
+      return;
+    }
 
     parseLink.mutate(url, {
       onSuccess: (data: any) => {
@@ -274,6 +332,52 @@ export function AddPlaceDialog({ open, onOpenChange, initialUrl, source }: AddPl
     );
   }
 
+  const instagramUrl = pastedInstagramUrl ?? parseInstagramPostUrl(initialUrl)?.canonicalUrl ?? null;
+  // A job belongs to this dialog when it is for the same post — or, after a
+  // refresh, when there is no post URL at all and the job came from the page URL.
+  const knownJob = [instagramJob, localInstagramJob].find(
+    (j): j is { url: string | null; id: string } =>
+      !!j && (instagramUrl ? j.url === instagramUrl : true)
+  );
+  if (instagramUrl || (instagramJob && !initialUrl)) {
+    return (
+      <Dialog
+        open={open}
+        onOpenChange={(v) => {
+          if (!v) reset();
+          onOpenChange(v);
+        }}
+      >
+        <DialogContent
+          className="sm:max-w-lg max-h-[90vh] flex flex-col overflow-hidden"
+          initialFocus={igTitleRef}
+        >
+          <InstagramImportPanel
+            url={instagramUrl}
+            jobId={knownJob?.id ?? null}
+            onJobId={(id) => {
+              const job = { url: instagramUrl, id };
+              setLocalInstagramJob(job);
+              onInstagramJob?.(job);
+            }}
+            onPhase={onInstagramPhase}
+            onClose={() => {
+              reset();
+              onOpenChange(false);
+            }}
+            onShowOnMap={onShowOnMap}
+            onSearch={onSearchPlaces}
+            titleRef={igTitleRef}
+          />
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
+  // Opened with an Instagram link that isn't a post (a profile shared by the Shortcut).
+  const shownLinkError =
+    linkError ?? (initialUrl && !url && isInstagramUrl(initialUrl) ? INSTAGRAM_NOT_A_POST : null);
+
   return (
     <Dialog
       open={open}
@@ -298,11 +402,15 @@ export function AddPlaceDialog({ open, onOpenChange, initialUrl, source }: AddPl
               <Input
                 type="url"
                 inputMode="url"
-                placeholder="Paste a Google Maps link..."
+                placeholder="Paste a Google Maps or Instagram link..."
                 value={url}
-                onChange={(e) => setUrl(e.target.value)}
+                onChange={(e) => {
+                  setUrl(e.target.value);
+                  setLinkError(null);
+                }}
                 onKeyDown={(e) => e.key === "Enter" && handlePaste()}
                 disabled={parseLink.isPending}
+                aria-invalid={!!shownLinkError}
               />
               <Button
                 onClick={handlePaste}
@@ -317,6 +425,12 @@ export function AddPlaceDialog({ open, onOpenChange, initialUrl, source }: AddPl
               </Button>
             </div>
 
+            {shownLinkError && (
+              <p role="alert" className="text-sm text-destructive">
+                {shownLinkError}
+              </p>
+            )}
+
             {parseLink.isPending && (
               <div className="space-y-3">
                 <Skeleton className="h-40 w-full rounded-lg" />
@@ -326,7 +440,7 @@ export function AddPlaceDialog({ open, onOpenChange, initialUrl, source }: AddPl
             )}
 
             <p className="text-xs text-muted-foreground text-center">
-              Paste any Google Maps link to auto-fill place details
+              Paste a Google Maps link to fill in the place, or an Instagram post to add the places in it
             </p>
           </div>
         )}

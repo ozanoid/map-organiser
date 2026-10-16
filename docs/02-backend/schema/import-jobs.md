@@ -2,20 +2,28 @@
 title: Import job tables
 type: table
 domain: backend
-version: 1.0.0
-last_updated: 05.08.2026
+version: 1.2.0
+last_updated: 16.10.2026
 status: stable
 sources:
   - src/app/api/places/import-jobs/route.ts
   - src/app/api/places/import-jobs/[id]/route.ts
   - src/app/api/cron/drain-imports/route.ts
+  - src/app/api/instagram/import/route.ts
+  - src/app/api/instagram/import/[id]/route.ts
+  - src/app/api/instagram/import/[id]/pick/route.ts
+  - src/lib/instagram/import-job.ts
+  - src/lib/instagram/types.ts
   - src/lib/import/process-place.ts
+  - src/lib/import/kick-drain.ts
   - src/lib/hooks/use-import-job.ts
 related:
   - "[[_README]]"
   - "[[places]]"
   - "[[../rls-policies]]"
   - "[[../../05-flows/place-import-flow]]"
+  - "[[../../05-flows/instagram-import-flow]]"
+  - "[[../api-routes/instagram]]"
   - "[[../../03-frontend/stores/import-store]]"
 tags:
   - import
@@ -24,8 +32,12 @@ tags:
 
 # Import jobs — `import_jobs`, `import_job_items`
 
-The durable work list behind bulk import. Two tables and one claim function turn
-a Takeout upload into a queue the server drains on its own schedule.
+The durable work list behind both imports. Two tables and one claim function turn
+a Takeout upload — or, since v1.28.0, the venues of an Instagram post — into a
+queue the server drains on its own schedule.
+
+> **Instagram migration (applied 16.10.2026).** `kind` and `meta` below, and the
+> `instagram` job kind, come from `instagram_import_job_kind_and_place_source`. See [[#instagram-migration]].
 
 ## Why it exists
 
@@ -40,23 +52,50 @@ already carrying an id is skipped for free.
 
 ## `import_jobs`
 
-One row per upload.
+One row per upload (Takeout) or per shared post (Instagram).
 
 | Column | Type | Notes |
 |---|---|---|
 | `id` | `uuid` pk | |
 | `user_id` | `uuid` → `auth.users` | cascade delete |
-| `file_name` | `text` | shown in the UI |
-| `total` | `int` | places parsed out of the file |
-| `status` | `text` | `running` \| `done` \| `cancelled` |
-| `visit_status` | `text` | import-time default applied to every place |
-| `list_ids` | `uuid[]` | ditto |
-| `tag_ids` | `uuid[]` | ditto |
+| `kind` | `text` not null, default `'takeout'`, CHECK `takeout` \| `instagram` | Since 16.10.2026 ([[#instagram-migration]]). Decides `places.source` in the drain and which UI reports the job. |
+| `file_name` | `text` | Takeout: the file name, shown in the UI. Instagram: the canonical post URL (`https://www.instagram.com/p/<shortcode>/`) — the 10-minute reuse check matches on it. |
+| `total` | `int` | Takeout: places parsed out of the file. Instagram: places queued + places already saved, written once the post is read; +1 for each picked place sent back into the queue. |
+| `status` | `text` | `running` \| `done` \| `cancelled`, plus `reading` for an Instagram job while its post is being read. No CHECK constraint (verified 16.10.2026). |
+| `visit_status` | `text` | import-time default applied to every place (Instagram: always `want_to_go`) |
+| `list_ids` | `uuid[]` | ditto (Instagram: none) |
+| `tag_ids` | `uuid[]` | ditto (Instagram: the user's `instagram` tag) |
+| `meta` | `jsonb` not null, default `'{}'` | Since 16.10.2026. Instagram only: `{ phase, shortcode, post?: { owner, ownerFullName, caption (≤ 280 chars), locationName }, error? }` — `InstagramJobMeta` in `src/lib/instagram/types.ts`. |
 | `created_at` | `timestamptz` | |
 | `finished_at` | `timestamptz` | set when the job closes |
 
 `status` is the cancel switch: `claim_import_items` only reads from `running`
 jobs, so flipping the row stops the drain from taking anything new.
+
+### Two kinds of job
+
+| | `takeout` | `instagram` |
+|---|---|---|
+| Created by | `POST /api/places/import-jobs` | `POST /api/instagram/import` |
+| Items written | all at once, in the request | after the response, once the post is read (`after()`) |
+| Status path | `running` → `done` / `cancelled` | `reading` → `running` → `done`, or `reading` → `done` when nothing needs importing or the read failed; a pick turns a `done` job back to `running` until the picked place is through |
+| New places get `source` | `import` | `instagram` |
+| Reported by | `GET /api/places/import-jobs` (filters `kind = 'takeout'`) | `GET /api/instagram/import/[id]` |
+
+**Why `reading`.** An Instagram job has no items until its post has been read.
+Created as `running`, it would be closed at once by the drain's `finalizeJobs`,
+which marks every `running` job with no active items `done`. `reading` keeps it
+out of both `finalizeJobs` and the claim until `runInstagramImportJob` has written
+its items and flipped it to `running`.
+
+**Who writes `meta.phase`.** `reading` at creation; `adding` / `done` / `failed`
+when the read finishes; `done` again from the drain's `finalizeJobs` when it
+closes the job (it selects `*` and patches `meta` only for an `instagram` job);
+`adding` from a pick that sends an item back into the queue. The dialog's phase
+is still computed by `GET /api/instagram/import/[id]` from this value plus the
+items — see [[../api-routes/instagram]]. `meta.error` is one of
+`budget_exceeded`, `invalid_url`, `post_unavailable`, `not_configured`,
+`service_error` (the dialog's `stalled` is computed, never stored).
 
 ## `import_job_items`
 
@@ -67,17 +106,26 @@ One row per place per job. This is the queue.
 | `id` | `uuid` pk | |
 | `job_id` | `uuid` → `import_jobs` | cascade delete |
 | `user_id` | `uuid` → `auth.users` | denormalized so the claim scan and RLS never need the join |
-| `payload` | `jsonb` | the parsed place: name, address, lat, lng, googleMapsUrl, note |
+| `payload` | `jsonb` | the parsed place: name, address, lat, lng, googleMapsUrl, note. Instagram items add `instagram` (`InstagramItemInfo`: label, sources, rule, evidence labels, skip code, same-name count, `searchName`); their `googleMapsUrl` is `https://maps.google.com/?cid=<cid>` (or `?q=place_id:<id>`) and `note` the post URL. A venue it could not pin also carries `instagram.options` (up to 20 `{ id, name, address, lat, lng, cid }` to pick from) and `instagram.near` (`{ lat, lng }` or `null`); a picked item has `rule 'picked'`, `evidence ['Picked by you']` and no `options`. |
 | `stage` | `text` | active: `import` \| `photo` \| `reviews` \| `profile`. terminal: `done` \| `skipped` \| `failed` |
 | `claimed_at` | `timestamptz` | set when a runner takes the item; stale after 10 min |
 | `attempts` | `int` | failed tries **at the current stage**; incremented on claim, reset to 0 when the stage moves; caps at 3 |
 | `place_id` | `uuid` → `places` | set once the place exists; `on delete set null` |
-| `reason` | `text` | why it was skipped or failed |
-| `created_at`, `updated_at` | `timestamptz` | |
+| `reason` | `text` | why it was skipped or failed. Instagram adds `Already exists` rows written at read time (with `place_id`) and the codes `chain_branch_unknown`, `no_evidence`, `ambiguous`, `closed` for venues it could not pin (no `place_id`). |
+| `created_at`, `updated_at` | `timestamptz` | `updated_at` is stamped by the claim and by the drain on every stage change (and by a pick). The Instagram status route reads it: an item at `photo` with an `updated_at` older than 10 minutes no longer counts as waiting for its photo. |
 
 `stage` doubles as the queue state. There is no separate `status` column because
 "pending at stage X" and "at stage X" are the same thing — what distinguishes a
 claimed item is `claimed_at`, not another flag.
+
+Instagram items are born either at `import` (a place to create) or already
+terminal at `skipped` (already saved, or not pinnable) — the latter exist so the
+dialog can list them. A pick (`POST /api/instagram/import/[id]/pick`) is the one
+way back from `skipped`: for a not-pinnable item and one of its stored options,
+it moves the item to `import` (`attempts 0`, `claimed_at null`, payload built
+from the option) under a `stage = 'skipped'` guard and sets the job `running`
+again — or, when the user already has that place, rewrites it as
+`skipped / Already exists` with the `place_id`.
 
 ## `claim_import_items(p_limit int)`
 
@@ -85,11 +133,11 @@ Hands a runner its next slice and returns the claimed rows.
 
 ```sql
 update import_job_items i
-   set claimed_at = now(), attempts = i.attempts + 1
+   set claimed_at = now(), attempts = i.attempts + 1, updated_at = now()
  where i.id in (
    select c.id from import_job_items c
      join import_jobs j on j.id = c.job_id
-    where c.stage in ('import','reviews','profile')
+    where c.stage in ('import','photo','reviews','profile')
       and j.status = 'running'
       and c.attempts < 3
       and (c.claimed_at is null or c.claimed_at < now() - interval '10 minutes')
@@ -142,6 +190,7 @@ role.
 | `import_job_items_claimable_idx` | `(created_at) where stage in ('import','photo','reviews','profile')` | the claim scan; partial so terminal rows never widen it |
 | `import_job_items_job_idx` | `(job_id)` | progress counts |
 | `import_jobs_user_idx` | `(user_id, created_at desc)` | "my latest job" |
+| `idx_import_jobs_user_kind_created` | `(user_id, kind, created_at desc)` | Since 16.10.2026. "My latest Takeout job" and the Instagram reuse check, both of which now filter on `kind` |
 
 ## RLS
 
@@ -155,14 +204,64 @@ belong to the drain. The create route inserts items on the **service-role**
 client with `user_id` taken from the verified session, never from the request
 body. Building the route on the caller's client instead fails with
 `new row violates row-level security policy` — which is how this was caught.
+The Instagram import follows the same rule: the job row is inserted on the
+session client, its items by the `after()` job on the service-role client. The
+pick route reads the job and the item on the session client — RLS proves they
+are the caller's — and then updates both on the service-role client, limited to
+the one transition the import offered (a `skipped` item, one of its stored
+options).
+
+## Instagram migration
+
+Written for the Instagram import (v1.28.0, branch `feat/instagram-import`) and
+**applied to the live DB on 16.10.2026** as `instagram_import_job_kind_and_place_source` (Supabase MCP
+`apply_migration`). Verified right after: `places_source_check` lists
+`instagram`; `import_jobs.kind` (default `'takeout'`, CHECK) and `meta` exist;
+the index exists; the 6 jobs already in the table read `kind = 'takeout'`;
+`places` kept its 905 rows.
+
+```sql
+alter table public.places drop constraint places_source_check;
+alter table public.places add constraint places_source_check
+  check (source = any (array['manual','import','link','mapbox_search','similar','shared','instagram']));
+alter table public.import_jobs
+  add column kind text not null default 'takeout' check (kind in ('takeout','instagram')),
+  add column meta jsonb not null default '{}'::jsonb;
+create index if not exists idx_import_jobs_user_kind_created on public.import_jobs (user_id, kind, created_at desc);
+```
+
+Existing rows become `kind = 'takeout'` through the default; the Takeout create
+route does not set `kind` and relies on it.
+
+It had to land before the branch's code served anyone — a preview deployment
+included, since one Supabase project (`hukppmaevcapvbrvxtph`) backs every
+environment. Without it:
+
+- `POST /api/instagram/import` → 500: the insert names `kind` and `meta`;
+- `GET /api/instagram/import/[id]` → 404: its `kind` filter errors;
+- `GET /api/places/import-jobs` → `{ job: null }`: its new `kind = 'takeout'`
+  filter errors and the route reads only `data`, so **a running Takeout import
+  disappears from `/import`**;
+- the drain is safe — it reads job defaults with `select("*")` and treats a
+  missing `kind` as `takeout`.
+
+The four statements went in as one migration: with `kind` but without the wider
+`places_source_check`, every Instagram place would have failed at the drain's
+insert.
 
 ## Related code
 
-- `src/app/api/places/import-jobs/route.ts` — create (POST), progress (GET).
+- `src/app/api/places/import-jobs/route.ts` — Takeout create (POST), progress (GET, `kind = 'takeout'` only).
 - `src/app/api/places/import-jobs/[id]/route.ts` — cancel (PATCH).
+- `src/app/api/instagram/import/route.ts` — Instagram create / reuse; `after()` job.
+- `src/app/api/instagram/import/[id]/route.ts` — Instagram progress view.
+- `src/app/api/instagram/import/[id]/pick/route.ts` — sends a picked place for a skipped Instagram item back into the queue.
+- `src/lib/instagram/import-job.ts` — `runInstagramImportJob`: writes the items, `meta`, `total`, `status`.
 - `src/app/api/cron/drain-imports/route.ts` — the drain; mirrors the worker
-  pattern in `cron/refresh-places`.
+  pattern in `cron/refresh-places`. Reads `kind` to set `places.source`, and
+  writes an Instagram job's `meta.phase = 'done'` when `finalizeJobs` closes it.
 - `src/lib/import/process-place.ts` — per-place logic shared by any caller.
+- `src/lib/import/kick-drain.ts` — the non-awaited kick both create paths fire, and the Instagram pick.
 
 ## Open questions
 

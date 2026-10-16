@@ -2,8 +2,8 @@
 title: Backend Overview
 type: overview
 domain: backend
-version: 1.0.0
-last_updated: 12.05.2026
+version: 1.1.0
+last_updated: 16.10.2026
 status: stable
 sources:
   - src/lib/supabase/client.ts
@@ -37,8 +37,10 @@ The "backend" in this repo is a thin layer: Next.js API route handlers + Supabas
    Next.js route handler   (src/app/api/.../route.ts)
         │
         ├──► createClient()         (cookie-scoped Supabase, respects RLS)
-        ├──► createServiceClient()  (service-role, bypasses RLS — public share path only)
-        └──► fetch(...)             (Google Places, DataForSEO, Mapbox Directions, Supabase Storage)
+        ├──► createServiceClient()  (service-role, bypasses RLS — share reads, crons,
+        │                            import queue, Instagram job; see supabase-clients)
+        └──► fetch(...)             (Google Places, DataForSEO, Mapbox, Gemini,
+                                     HikerAPI, Supabase Storage)
         │
         ▼
    Supabase Postgres + Auth + Storage
@@ -65,7 +67,7 @@ The "backend" in this repo is a thin layer: Next.js API route handlers + Supabas
 - **No ORM.** All queries go through `@supabase/supabase-js` directly.
 - **No Prisma migration folder.** Schema is owned by Supabase. Migration history is fetched live via Supabase MCP (`list_migrations` — currently 28 entries).
 - **No edge functions.** `supabase functions list` returns empty. If we add one, document in [[edge-functions]].
-- **No background workers.** "Background" tasks (review enrichment, photo migration) are simply HTTP requests the client fires-and-forgets after a foreground action — they run inside Vercel Functions, not separate workers.
+- **No separate worker processes.** Background work still runs inside Vercel Functions, in three shapes: requests the client fires and forgets after a foreground action (review enrichment, photo migration); cron routes that drain durable work from Postgres (`/api/cron/refresh-places`, and `/api/cron/drain-imports` for the import queue — v1.26.0); and Next's `after()` for one bounded unit of work after the response (the Instagram import's post read, v1.28.0, which then feeds the import queue).
 
 ## Cross-cutting backend conventions
 
@@ -75,8 +77,8 @@ These apply to **every** API route. Enforced informally — see [[../_agent/conv
 2. **Zod every body.** Validate before touching the DB. Return `400` with the Zod error on failure.
 3. **`Response.json(data, { status })`.** Never bare `Response.json(data)` for non-200s.
 4. **RLS does the access control, not the route.** The user-scoped client is enough — `WHERE user_id = auth.uid()` is implicit on every query. Don't add `eq("user_id", user.id)` explicitly — it's redundant and gets out of sync with RLS.
-5. **Service-role client only for `/api/shared/[slug]` GET** — the public read path. Never expose it elsewhere.
-6. **Server-only env vars never reach the client.** `GOOGLE_PLACES_API_KEY`, `ENCRYPTION_SECRET`, `SUPABASE_SERVICE_ROLE_KEY`, `DATAFORSEO_*` — all no-`NEXT_PUBLIC_` prefix.
+5. **Service-role client only where no session can do the job** — the public share read, the cron routes, the import-queue writes and the Instagram import's background job ([[supabase-clients]] keeps the list). Every query on it filters by `user_id` explicitly; never hand it to anything a request can steer.
+6. **Server-only env vars never reach the client.** `GOOGLE_PLACES_API_KEY`, `ENCRYPTION_SECRET`, `SUPABASE_SERVICE_ROLE_KEY`, `DATAFORSEO_*`, `HIKERAPI_KEY` — all no-`NEXT_PUBLIC_` prefix. Full list: [[../06-ops/env-vars]].
 7. **Cost-tracked external calls go through `increment_api_usage`** RPC so they show up in `api_usage` and the user's cost tracker.
 
 ## Database snapshot (as of `last_updated`)

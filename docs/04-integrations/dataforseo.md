@@ -2,8 +2,8 @@
 title: DataForSEO Business Data
 type: integration
 domain: integrations
-version: 1.4.0
-last_updated: 05.08.2026
+version: 1.5.0
+last_updated: 16.10.2026
 status: stable
 sources:
   - src/lib/dataforseo/
@@ -62,7 +62,7 @@ Implementation in `src/lib/dataforseo/`:
 | Caller | Purpose |
 |---|---|
 | `/api/places/parse-link` | Fallback when Google is disabled or unavailable. |
-| `/api/cron/drain-imports` (`import` stage) | **Primary path for bulk import.** Every place goes through DataForSEO — unless the duplicate pre-check matched it first, which costs nothing. |
+| `/api/cron/drain-imports` (`import` stage) | **Primary path for bulk import** — Takeout files and, since v1.28.0, the places an Instagram post adds (their payload URL is `https://maps.google.com/?cid=…`, so the lookup is an exact `cid:` keyword — or `?q=place_id:…` → `place_id:` when Google returned no CID). Every place goes through DataForSEO — unless the duplicate pre-check matched it first, which costs nothing. |
 | `/api/places/[id]/enrich?step=info` | Re-enrich a single place's business info. |
 | `/api/places/[id]/enrich?step=reviews` | Fetch reviews for a place. |
 | `/api/places/[id]/refresh-google-data` | Full re-lookup: info + `newest` reviews **merged** into the corpus (`mergeReviews`, not replace) + chains to `step=profile`. Also runs headless in the cron. |
@@ -70,8 +70,8 @@ Implementation in `src/lib/dataforseo/`:
 
 ## SKUs tracked
 
-- `dataforseo.business_info` — Business Info Live calls.
-- `dataforseo.reviews` — Reviews calls.
+- `dataforseo_business_info_live` — Business Info Live calls.
+- `dataforseo_reviews` — Reviews calls.
 
 Each call → +1 in `api_usage`. `cost_per_1k` is set per DataForSEO's price.
 

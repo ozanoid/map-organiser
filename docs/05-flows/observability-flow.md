@@ -2,8 +2,8 @@
 title: Observability Flow (Honeycomb + Vercel/Axiom + Langfuse)
 type: flow
 domain: infra
-version: 3.5.0
-last_updated: 05.08.2026
+version: 3.6.0
+last_updated: 16.10.2026
 status: stable
 sources:
   - src/instrumentation.ts
@@ -14,6 +14,8 @@ sources:
   - src/app/api/ai/parse-query/route.ts
   - src/app/api/ai/rank-results/route.ts
   - src/app/api/places/route.ts
+  - src/lib/instagram/read-post.ts
+  - src/app/api/instagram/import/route.ts
 related:
   - "[[ai-search-flow]]"
   - "[[../02-backend/api-routes/ai]]"
@@ -128,9 +130,12 @@ Span sources:
   experimental_telemetry: { isEnabled: true, functionId, metadata } })`.
   GenAI semantic conventions: model, prompt, completion, input/output
   tokens, latency, finish_reason. → Honeycomb **and** Langfuse.
-  All FOUR LLM call sites carry this: `ai.parse-query`,
-  `ai.rank-results`, `ai.generate-profile` (lib — runs under both the
-  enrich route and the refresh cron), and `ai.compare` (v1.19.0).
+  Every LLM call site carries this: `ai.parse-query`,
+  `ai.rank-results`, `ai.generate-profile` (lib — runs under the enrich
+  route, the refresh cron and the import drain's `profile` stage),
+  `ai.compare` (v1.19.0), `ai.chat` (v1.21.0) and its `ai.chat.rank` tool
+  (v1.23.0), `ai.trip-plan` (v1.22.0), and `ai.instagram-read-post`
+  (v1.28.0 — `src/lib/instagram/read-post.ts`, userId + shortcode metadata).
 
 **Langfuse trace-level fields** (name, user, tags) are stamped via
 `propagateAttributes({ traceName, userId, tags }, () => generateText(…))`
@@ -140,11 +145,16 @@ rank-results — one merged trace via the traceparent below),
 `ai-compare` (compare route, v1.19.0).
 
 **Serverless flush:** Langfuse batches span exports; Vercel can suspend
-the function right after the response. Every route that produces LLM
-spans calls `after(flushLangfuse)` (`next/server`) so the batch is
-force-flushed once the response is sent. `flushLangfuse()` no-ops when
-the processor is unconfigured and swallows its own errors — telemetry
-never breaks the request path.
+the function right after the response. Routes that produce LLM spans call
+`after(flushLangfuse)` (`next/server`) so the batch is force-flushed once
+the response is sent — the five `/api/ai/*` routes, the enrich route and
+the refresh cron. `flushLangfuse()` no-ops when the processor is
+unconfigured and swallows its own errors — telemetry never breaks the
+request path. **Two LLM-producing routes do not flush (checked
+16.10.2026):** `/api/cron/drain-imports` (the `profile` stage) and
+`/api/instagram/import` (the read runs inside its own `after()` job). Their
+spans rely on the processor's batching and can be lost when the function
+is suspended; neither sets a `propagateAttributes` trace name either.
 
 > **File location:** the project uses a `src/` directory, so Next.js
 > looks for `src/instrumentation.ts` — NOT a root-level one. A root

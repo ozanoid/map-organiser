@@ -2,8 +2,8 @@
 title: Search routes
 type: route-group
 domain: backend
-version: 1.1.0
-last_updated: 16.07.2026
+version: 1.2.0
+last_updated: 16.10.2026
 status: stable
 sources:
   - src/app/api/search/suggest/route.ts
@@ -42,7 +42,8 @@ Both routes require an authenticated user. The Mapbox session is owned by the **
 - **Query params:**
   - `q` (string, required) — search text.
   - `session_token` (UUIDv4, required) — groups suggest+retrieve into one Mapbox billable session.
-  - `proximity` (`<lng>,<lat>`, optional) — bias results near a viewport center.
+  - `proximity` (`<lng>,<lat>`, optional) — bias results near a viewport center. A bias only: a strong name match elsewhere still ranks first.
+  - `bbox` (`<minLng>,<minLat>,<maxLng>,<maxLat>`, optional, v1.28.1) — only results inside it; ignored unless all four are numbers. Sent by an Instagram-aimed search (see [[../../05-flows/place-search-flow]]).
 - **DB:** none.
 - **External:** `GET https://api.mapbox.com/search/searchbox/v1/suggest` via `src/lib/mapbox/search-box.ts#suggest`. Server token: `MAPBOX_SERVER_TOKEN` (falls back to `NEXT_PUBLIC_MAPBOX_TOKEN`).
 - **Hard-coded:** `types=poi`, `language=en`, `limit=8`. POI-only — we are not adding cities/postcodes as places.

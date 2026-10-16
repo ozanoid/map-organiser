@@ -2,8 +2,8 @@
 title: Categories, Sub-categories & Tags
 type: entity
 domain: places
-version: 1.3.0
-last_updated: 05.08.2026
+version: 1.4.0
+last_updated: 16.10.2026
 status: stable
 sources:
   - src/lib/types/index.ts
@@ -19,6 +19,7 @@ sources:
   - src/components/places/inline-category-creator.tsx
   - src/components/places/inline-tag-input.tsx
   - src/lib/vocabulary/read.ts
+  - src/lib/instagram/provenance.ts
   - src/app/(app)/settings/page.tsx
 related:
   - "[[places]]"
@@ -29,6 +30,7 @@ related:
   - "[[../02-backend/schema/place_tags]]"
   - "[[../02-backend/schema/vocabulary]]"
   - "[[../05-flows/full-profile-flow]]"
+  - "[[../05-flows/instagram-import-flow]]"
 ---
 
 # Categories, Sub-categories & Tags
@@ -107,11 +109,19 @@ dictionary ossifies.
 
 ## Tags
 
-Free-form, per-user, multi-select. Two things now write them:
+Free-form, per-user, multi-select. Three things now write them:
 
 - **The vocabulary** — a matched concept becomes a tag carrying `concept_id`.
 - **The user** — anything they type stays theirs, `concept_id` NULL, never touched
   by a refresh.
+- **The Instagram import** (v1.28.0) — one tag per user named `instagram`,
+  colour `#E4405F`, created on first use by `ensureInstagramTag`
+  (`src/lib/instagram/provenance.ts`). An existing tag of that name in any letter
+  case is reused. Every place an Instagram post adds carries it, and so does a
+  place the user already had when a post points at it (the post URL is appended
+  to that place's notes too). It is an ordinary user tag afterwards — recolour,
+  rename or delete it like any other. The import finds it by name, so after a
+  rename or a delete the next import creates a fresh `instagram` tag.
 
 `matched_existing` still runs: the profile LLM applies the user's own hand-made
 tags to places that fit them.

@@ -2,12 +2,13 @@
 title: Deployment
 type: overview
 domain: ops
-version: 1.0.1
-last_updated: 15.07.2026
+version: 1.1.0
+last_updated: 16.10.2026
 status: stable
 sources:
   - next.config.ts
   - package.json
+  - vercel.json
   - .github/workflows/dependabot.yml
 related:
   - "[[_README]]"
@@ -102,7 +103,8 @@ Before promoting to production:
 - [ ] No `console.log` of secrets remains in code.
 - [ ] `.env.local.example` matches what Vercel needs (add missing keys before deploy — currently `SUPABASE_SERVICE_ROLE_KEY` is one such gap).
 - [ ] Any schema changes are applied to the Supabase project AND visible via `list_migrations`.
-- [ ] If a new external integration: env vars added to Vercel for Production AND Preview.
+- [ ] If a new external integration: env vars added to Vercel for Production AND Preview (v1.28.0: `HIKERAPI_KEY` for the Instagram import).
+- [x] Branch `feat/instagram-import`: its migration had to land **before** the code deployed — applied 16.10.2026, see [[../02-backend/schema/import-jobs#instagram-migration]].
 
 ## Post-deploy checks
 
@@ -119,11 +121,29 @@ Vercel Function default timeout is **60 seconds** (verify current plan default).
 - `POST /api/places/[id]/enrich?step=reviews` — DataForSEO reviews can take ~30 s.
 - `GET /api/trips/[id]` — Mapbox Directions per day; long trips with many days can stack.
 
-The repo doesn't currently export `export const maxDuration` on any route. If timeouts become an issue, set it per route (Vercel plans cap at 300 s now per the platform updates).
+Routes that export `maxDuration` (checked 16.10.2026):
+
+| Route | `maxDuration` | Why |
+|---|---|---|
+| `/api/cron/refresh-places` | 300 | daily sweep; 240 s soft deadline |
+| `/api/cron/drain-imports` | 300 | import queue; 240 s soft deadline |
+| `/api/ai/chat` | 120 | multi-step agent turns (+ the Langfuse flush) |
+| `/api/ai/trip-plan` | 120 | bounded LLM call + one retry on degeneration |
+| `/api/instagram/import` | 120 | the post read runs in `after()` and counts against the same invocation (v1.28.0) |
+
+Everything else runs on the platform default. Vercel caps `maxDuration` at 300 s.
 
 ## Cron jobs
 
-None today. If we add scheduled work (e.g. periodic photo migration cleanup), configure in `vercel.json` (or `vercel.ts`) and document here.
+Configured in `vercel.json` (Vercel Cron fires on **production only**):
+
+| Path | Schedule | What |
+|---|---|---|
+| `/api/cron/refresh-places` | `0 3 * * *` | daily periodic refresh — [[runbooks/periodic-refresh]] |
+| `/api/cron/drain-imports` | `* * * * *` | the import queue (Takeout and Instagram jobs) — [[../05-flows/place-import-flow]] |
+
+Both require `CRON_SECRET`. On preview deployments the drain only runs from the
+kick at job creation and its own self-chain.
 
 ## Dependabot
 

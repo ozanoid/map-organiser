@@ -5,7 +5,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { MapView } from "@/components/map/map-view";
 import type { MapViewHandle } from "@/components/map/map-view";
 import { AddPlaceDialog } from "@/components/places/add-place-dialog";
-import { SearchBox } from "@/components/map/search-box";
+import { SearchBox, type SearchBoxHandle } from "@/components/map/search-box";
 import { SearchResultPanel } from "@/components/map/search-result-panel";
 import { PlaceDetailSheet } from "@/components/places/place-detail-sheet";
 import { useIsDesktop } from "@/lib/hooks/use-is-desktop";
@@ -28,6 +28,8 @@ import {
   HIDE_BELOW_SCORE,
 } from "@/lib/stores/ai-search-store";
 import { useFilterPersistStore } from "@/lib/stores/filter-persist-store";
+import { useInstagramImport } from "@/lib/hooks/use-instagram-import";
+import type { InstagramJobPhase } from "@/lib/instagram/types";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   SlidersHorizontal,
@@ -73,19 +75,27 @@ export function MapContent({ mapboxToken }: { mapboxToken: string }) {
   const mapRef = useRef<MapViewHandle>(null);
   const searchParams = useSearchParams();
   const router = useRouter();
-  const sharedHandled = useRef(false);
+  const sharedHandled = useRef<string | null>(null);
 
-  // Handle share target: ?add=encodedUrl
+  // Handle share target: ?add=encodedUrl — also the iOS Shortcut, and the
+  // header's Add Place handing over an Instagram link while this page is open.
   useEffect(() => {
     const addParam = searchParams.get("add");
-    if (addParam && !sharedHandled.current) {
-      sharedHandled.current = true;
-      const decodedUrl = decodeURIComponent(addParam);
-      setSharedUrl(decodedUrl);
-      setAddOpen(true);
-      // Clean up the URL param
-      router.replace("/map");
+    if (!addParam) {
+      // Cleaned up: the same link may be shared again.
+      sharedHandled.current = null;
+      return;
     }
+    if (sharedHandled.current === addParam) return;
+    sharedHandled.current = addParam;
+    const decodedUrl = decodeURIComponent(addParam);
+    setSharedUrl(decodedUrl);
+    setAddOpen(true);
+    // Clean up the URL param; the rest of the query string holds the filters.
+    const params = new URLSearchParams(window.location.search);
+    params.delete("add");
+    const qs = params.toString();
+    router.replace(qs ? `/map?${qs}` : "/map");
   }, [searchParams, router]);
 
   // Mirror current URL query string into the cross-page filter-persist
@@ -96,7 +106,10 @@ export function MapContent({ mapboxToken }: { mapboxToken: string }) {
     (s) => s.setLastMapPlacesQuery
   );
   useEffect(() => {
-    setLastMapPlacesQuery(searchParams.toString());
+    // `ig` reopens an Instagram import dialog — a page state, not a filter.
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("ig");
+    setLastMapPlacesQuery(params.toString());
   }, [searchParams, setLastMapPlacesQuery]);
   const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
   const [detailData, setDetailData] = useState<Place | null>(null);
@@ -106,6 +119,102 @@ export function MapContent({ mapboxToken }: { mapboxToken: string }) {
   // Mobile: the marker detail opens as a full bottom-sheet (v1.24.0
   // experiment) instead of the desktop side-panel below.
   const isDesktop = useIsDesktop();
+  const searchBoxRef = useRef<SearchBoxHandle>(null);
+
+  // Instagram import shown in the add dialog. `?ig=<jobId>` keeps it across a
+  // refresh; the job itself runs on the server either way.
+  const [igJob, setIgJob] = useState<{ url: string | null; id: string } | null>(() => {
+    const id = searchParams.get("ig");
+    return id ? { url: null, id } : null;
+  });
+  const [igDialogOpen, setIgDialogOpen] = useState(() => Boolean(searchParams.get("ig")));
+  const igPhaseRef = useRef<InstagramJobPhase | null>(null);
+  // Whether the add dialog is up — read when a started job's id arrives late.
+  const addDialogOpenRef = useRef(false);
+  useEffect(() => {
+    addDialogOpenRef.current = addOpen || igDialogOpen;
+  }, [addOpen, igDialogOpen]);
+  // A job closed half-way keeps running; watch it and say when it's done.
+  const [igWatchId, setIgWatchId] = useState<string | null>(null);
+  const { data: igWatched } = useInstagramImport(igWatchId, { waitForPhotos: false });
+  const igNotified = useRef<string | null>(null);
+  // Set by an Instagram "Search": the next search result panel starts with
+  // the post link and the "instagram" tag.
+  const [igSearchContext, setIgSearchContext] = useState<{ postUrl: string; tagId: string | null } | null>(null);
+  // Viewport center, for the search box's proximity bias.
+  const [mapCenter, setMapCenter] = useState<{ lng: number; lat: number } | undefined>();
+
+  // Add/remove only `ig` — the rest of the query string holds the filters.
+  const setIgParam = useCallback(
+    (id: string | null) => {
+      const params = new URLSearchParams(window.location.search);
+      if (id) params.set("ig", id);
+      else params.delete("ig");
+      const qs = params.toString();
+      router.replace(qs ? `/map?${qs}` : "/map");
+    },
+    [router]
+  );
+
+  const reopenInstagram = useCallback(
+    (id: string) => {
+      setIgWatchId(null);
+      setIgJob({ url: null, id });
+      setIgDialogOpen(true);
+      setIgParam(id);
+    },
+    [setIgParam]
+  );
+
+  useEffect(() => {
+    if (!igWatched || igNotified.current === igWatched.id) return;
+    if (igWatched.phase !== "done" && igWatched.phase !== "failed") return;
+    igNotified.current = igWatched.id;
+    queryClient.invalidateQueries({ queryKey: ["places"] });
+    const added = igWatched.items.filter((i) => i.status === "added").length;
+    // The user went on with something else — give them time to see it and tap View.
+    const options = { action: { label: "View", onClick: () => reopenInstagram(igWatched.id) }, duration: 10_000 };
+    if (igWatched.phase === "failed") toast.error("Couldn't add from that Instagram post", options);
+    else if (added > 0) toast.success(`${added} place${added === 1 ? "" : "s"} added from Instagram`, options);
+    else toast("No new places from that Instagram post", options);
+  }, [igWatched, queryClient, reopenInstagram]);
+
+  const closeAddDialog = useCallback(() => {
+    setAddOpen(false);
+    setSharedUrl(undefined);
+    setIgDialogOpen(false);
+    if (igJob) {
+      const phase = igPhaseRef.current;
+      if (phase !== "done" && phase !== "failed") setIgWatchId(igJob.id);
+      setIgJob(null);
+      setIgParam(null);
+    }
+    igPhaseRef.current = null;
+  }, [igJob, setIgParam]);
+
+  const handleInstagramJob = useCallback(
+    (job: { url: string | null; id: string }) => {
+      // Closed before the server answered: nothing on screen to update, so
+      // watch the job and say when it's done.
+      if (!addDialogOpenRef.current) {
+        setIgWatchId(job.id);
+        return;
+      }
+      setIgJob(job);
+      setIgParam(job.id);
+    },
+    [setIgParam]
+  );
+
+  // Visible places and the search bias both follow the viewport.
+  const handleVisiblePlacesChange = useCallback((ids: string[]) => {
+    setVisiblePlaceIds(ids);
+    const c = mapRef.current?.getCenter();
+    if (!c) return;
+    // ~1 km steps: plenty for a search bias, and small pans don't refetch suggestions.
+    const next = { lng: Math.round(c.lng * 100) / 100, lat: Math.round(c.lat * 100) / 100 };
+    setMapCenter((prev) => (prev && prev.lng === next.lng && prev.lat === next.lat ? prev : next));
+  }, []);
 
   // Pick a search result. If it resolves to a place the user ALREADY
   // saved (matched by google_place_id — the same dedupe key POST
@@ -119,6 +228,7 @@ export function MapContent({ mapboxToken }: { mapboxToken: string }) {
       : undefined;
     if (saved) {
       setSearchResult(null);
+      setIgSearchContext(null);
       mapRef.current?.openPlacePopup(saved.id);
       return;
     }
@@ -218,7 +328,7 @@ export function MapContent({ mapboxToken }: { mapboxToken: string }) {
           places={placesForMap}
           categories={categories}
           onPlaceClick={handlePlaceClick}
-          onVisiblePlacesChange={setVisiblePlaceIds}
+          onVisiblePlacesChange={handleVisiblePlacesChange}
           mapboxToken={mapboxToken}
           mapStyle={mapStyleUrl}
           markerStyle={markerStyle}
@@ -233,6 +343,8 @@ export function MapContent({ mapboxToken }: { mapboxToken: string }) {
         {/* Search + filter row */}
         <div className="absolute top-4 left-4 right-4 sm:right-auto z-10 flex gap-2 items-center">
           <SearchBox
+            ref={searchBoxRef}
+            proximity={mapCenter}
             onSelect={handleSearchSelect}
             className="flex-1 max-w-sm"
           />
@@ -589,17 +701,44 @@ export function MapContent({ mapboxToken }: { mapboxToken: string }) {
           <SearchResultPanel
             key={searchResult._mapbox_id}
             place={searchResult}
-            onClose={() => setSearchResult(null)}
+            prefill={
+              igSearchContext
+                ? {
+                    notes: igSearchContext.postUrl,
+                    tagIds: igSearchContext.tagId ? [igSearchContext.tagId] : [],
+                  }
+                : undefined
+            }
+            onClose={() => {
+              setSearchResult(null);
+              setIgSearchContext(null);
+            }}
           />
         )}
 
         <AddPlaceDialog
-          open={addOpen}
+          open={addOpen || igDialogOpen}
           onOpenChange={(v) => {
-            setAddOpen(v);
-            if (!v) setSharedUrl(undefined);
+            if (v) setAddOpen(true);
+            else closeAddDialog();
           }}
           initialUrl={sharedUrl}
+          instagramJob={igJob}
+          onInstagramJob={handleInstagramJob}
+          onInstagramPhase={(phase) => {
+            igPhaseRef.current = phase;
+          }}
+          onShowOnMap={(points) => {
+            closeAddDialog();
+            mapRef.current?.fitToCoords(points);
+          }}
+          onSearchPlaces={(query, { postUrl, tagId, near }) => {
+            closeAddDialog();
+            setIgSearchContext({ postUrl, tagId });
+            // Search where the post is, and show that part of the map.
+            if (near) mapRef.current?.flyToCoords({ ...near, zoom: 12 });
+            searchBoxRef.current?.search(query, { proximity: near });
+          }}
         />
         <FilterSheet open={filterOpen} onOpenChange={setFilterOpen} />
       </div>

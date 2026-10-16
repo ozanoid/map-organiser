@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useImperativeHandle, useRef, useState, type Ref } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Search, X, Loader2, MapPin } from "lucide-react";
@@ -8,12 +8,27 @@ import { usePlaceSearch } from "@/lib/hooks/use-place-search";
 import type { RetrievedPlaceData } from "@/lib/hooks/use-place-search";
 import type { SearchSuggestion } from "@/lib/mapbox/search-box";
 
+export interface SearchBoxHandle {
+  /** Fill the box with `text`, open the suggestions and focus it — used by the
+   *  Instagram import's "Search" / "Search manually". `proximity` keeps this
+   *  search within ~30 km of the post's area until the box is cleared. */
+  search: (text: string, opts?: { proximity?: { lng: number; lat: number } | null }) => void;
+}
+
+/** About 30 km each way — a city and its suburbs. */
+function boxAround(p: { lng: number; lat: number }): [number, number, number, number] {
+  const dLat = 0.27;
+  const dLng = dLat / Math.max(0.2, Math.cos((p.lat * Math.PI) / 180));
+  return [p.lng - dLng, p.lat - dLat, p.lng + dLng, p.lat + dLat];
+}
+
 interface SearchBoxProps {
   /** Viewport center for proximity bias. */
   proximity?: { lng: number; lat: number };
   /** Fired when the user picks a suggestion and the retrieve completes. */
   onSelect: (place: RetrievedPlaceData) => void;
   className?: string;
+  ref?: Ref<SearchBoxHandle>;
 }
 
 /**
@@ -23,12 +38,30 @@ interface SearchBoxProps {
  * - Debounced via `usePlaceSearch` (300ms).
  * - On select, hides the dropdown and delegates retrieved data to parent.
  */
-export function SearchBox({ proximity, onSelect, className }: SearchBoxProps) {
+export function SearchBox({ proximity, onSelect, className, ref }: SearchBoxProps) {
+  const [aimedAt, setAimedAt] = useState<{ lng: number; lat: number } | null>(null);
   const { query, setQuery, suggestions, isSearching, retrieve, isRetrieving, clear } =
-    usePlaceSearch({ proximity });
+    usePlaceSearch(
+      // An aimed search stays in that city: proximity alone only ranks, and a
+      // strong name match on another continent still comes first.
+      aimedAt ? { proximity: aimedAt, bbox: boxAround(aimedAt) } : { proximity }
+    );
   const [open, setOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      search: (text, opts) => {
+        setAimedAt(opts?.proximity ?? null);
+        setQuery(text);
+        setOpen(true);
+        inputRef.current?.focus();
+      },
+    }),
+    [setQuery]
+  );
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -49,6 +82,7 @@ export function SearchBox({ proximity, onSelect, className }: SearchBoxProps) {
       const data = await retrieve(s.mapbox_id);
       onSelect(data);
       clear();
+      setAimedAt(null);
     } catch {
       // Hook surfaces error; just keep input intact
     }
@@ -56,6 +90,7 @@ export function SearchBox({ proximity, onSelect, className }: SearchBoxProps) {
 
   function handleClear() {
     clear();
+    setAimedAt(null);
     setOpen(false);
     inputRef.current?.focus();
   }

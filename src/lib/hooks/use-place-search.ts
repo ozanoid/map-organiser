@@ -29,6 +29,8 @@ const MIN_QUERY_LEN = 2;
  */
 export function usePlaceSearch(opts?: {
   proximity?: { lng: number; lat: number };
+  /** Only results inside [minLng, minLat, maxLng, maxLat]. */
+  bbox?: [number, number, number, number];
 }) {
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
@@ -61,7 +63,7 @@ export function usePlaceSearch(opts?: {
   const shouldQuery = debouncedQuery.trim().length >= MIN_QUERY_LEN;
 
   const suggestionsQuery = useQuery<SearchSuggestion[]>({
-    queryKey: ["place-search", "suggest", debouncedQuery, opts?.proximity],
+    queryKey: ["place-search", "suggest", debouncedQuery, opts?.proximity, opts?.bbox],
     enabled: shouldQuery,
     queryFn: async () => {
       // Activity bump + rotate session if call count hits 50.
@@ -79,6 +81,7 @@ export function usePlaceSearch(opts?: {
       if (opts?.proximity) {
         params.set("proximity", `${opts.proximity.lng},${opts.proximity.lat}`);
       }
+      if (opts?.bbox) params.set("bbox", opts.bbox.join(","));
 
       const res = await fetch(`/api/search/suggest?${params.toString()}`);
       if (!res.ok) throw new Error("Suggest failed");

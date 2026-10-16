@@ -2,8 +2,8 @@
 title: Hooks
 type: overview
 domain: frontend
-version: 1.5.0
-last_updated: 05.08.2026
+version: 1.6.1
+last_updated: 16.10.2026
 status: stable
 sources:
   - src/lib/hooks/
@@ -34,6 +34,7 @@ Every custom hook lives in `src/lib/hooks/`. Convention: file `use-x.ts` exports
 | `useStats` | react-query (staleTime 5min) | `["stats"]` | [[use-stats]] |
 | `useTags` + 4 mutations | react-query + mutations | `["tags"]`, `["place-tags", placeId]` | [[use-tags]] |
 | `useImportJob` + 2 mutations | react-query poll + mutations | `["import-job"]` | [[use-import-job]] |
+| `useInstagramImport` + `useStartInstagramImport` (v1.28.0) + `usePickInstagramPlace` (v1.28.1) | react-query poll (1.5 s while reading/adding, 3 s while a photo is pending) + two mutations | `["instagram-import", jobId]` | [[use-instagram-import]] |
 | `useTrips` + 9 mutations | react-query + mutations | `["trips"]`, `["trip", id]` | [[use-trips]] |
 | `useAiSuggestions` + 2 mutations | react-query + mutations | `["ai-suggestions"]` (staleTime 30 s) | [[use-ai-suggestions]] |
 | `useAiSearch` + `useAiRerankOrchestrator` (Phase 6) | mutation + side-effect | no query key — writes to `useAiSearchStore` (Zustand) | [[use-ai-search]] |

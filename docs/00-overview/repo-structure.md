@@ -2,8 +2,8 @@
 title: Repo Structure
 type: overview
 domain: overview
-version: 1.7.0
-last_updated: 16.07.2026
+version: 1.8.1
+last_updated: 16.10.2026
 status: stable
 sources:
   - src/
@@ -11,6 +11,8 @@ sources:
   - docs/
   - .claude/
   - .github/
+  - scripts/
+  - package.json
   - components.json
   - next.config.ts
   - tsconfig.json
@@ -36,7 +38,7 @@ What every top-level directory contains, why it exists, and where to dig further
 ├── components.json            shadcn config — style `base-nova`, alias map, icon lib
 ├── eslint.config.mjs          Extends eslint-config-next core-web-vitals + typescript
 ├── next.config.ts             Empty (no overrides)
-├── package.json               Deps + scripts (dev/build/start/lint)
+├── package.json               Deps + scripts (dev/build/start/lint/eval:instagram)
 ├── package-lock.json          npm lockfile (committed)
 ├── postcss.config.mjs         Wires @tailwindcss/postcss
 ├── tsconfig.json              Strict TS; alias `@/*` → `src/*`
@@ -46,6 +48,8 @@ What every top-level directory contains, why it exists, and where to dig further
 ├── .github/                   Workflows (dependabot only)
 ├── docs/                      This vault
 ├── public/                    Static assets (PWA icons, service worker)
+├── scripts/                   Dev scripts — instagram-eval/ (v1.28.0): the Instagram import's
+│                              regression run (run.ts, labels.json, README.md, tsconfig.json)
 └── src/                       Application source
 ```
 
@@ -80,9 +84,11 @@ src/
 │   ├── shared/layout.tsx
 │   ├── offline/page.tsx       PWA offline fallback
 │   └── api/                   Route handlers (see [[../02-backend/api-routes/_README]])
-│       ├── places/            CRUD + bulk + enrich (info/reviews/profile) + refresh-google-data (merge + profile chain) + import + parse-link (returns lite_profile) + migrate-photos
+│       ├── places/            CRUD + bulk + enrich (info/reviews/profile) + refresh-google-data (merge + profile chain) + import-jobs (durable import queue) + parse-link (returns lite_profile) + migrate-photos
 │       ├── ai/                parse-query + rank-results (Phase 6) + compare (v1.19.0) + chat (v1.21.0, streaming) + trip-plan (v1.22.0, writes trip tables)
-│       ├── cron/              refresh-places — daily periodic-refresh sweep (CRON_SECRET, service-role, opt-in per user)
+│       ├── cron/              refresh-places — daily periodic-refresh sweep (CRON_SECRET, service-role, opt-in per user);
+│       │                      drain-imports — every minute, the import queue (Takeout + Instagram jobs)
+│       ├── instagram/         import (POST — start from a post URL, work in after()) + import/[id] (GET — dialog progress) — v1.28.0; import/[id]/pick (POST — add the place picked for a skipped venue) — v1.28.1
 │       ├── trips/             CRUD + auto-plan + day PATCH (routing_profile/notes, v1.22.0) + day reorder + day places (move/update shapes) + swap-days
 │       ├── lists/[id]/reorder
 │       ├── subcategories/     CRUD (per-user; default seed via signup trigger)
@@ -95,8 +101,8 @@ src/
 │   ├── filters/               Category / country-city / list / tag / visit-status / open-now / search filter UIs;
 │   │                          save-filter-button + saved-filter-chips (v1.20.0)
 │   ├── layout/                AppHeader, AppSidebar, MobileNav, OfflineBanner
-│   ├── map/                   MapView, MapContent
-│   ├── places/                PlaceCard, AddPlaceDialog (with AI Suggestions panel + sub-cat strip), BulkActionBar, inline creators, VisitStatusToggle, AiSummaryCard,
+│   ├── map/                   MapView, MapContent, SearchBox, SearchResultPanel
+│   ├── places/                PlaceCard, AddPlaceDialog (with AI Suggestions panel + sub-cat strip), InstagramImportPanel (v1.28.0), BulkActionBar, inline creators, VisitStatusToggle, AiSummaryCard,
 │   │                          + detail-page widgets (v1.17.0): RatingDistributionBar, PopularTimesWidget, PlaceStatusBadges, PlaceActionLinks, AmenitiesGrid, PlaceTopics, ReviewsSection
 │   ├── settings/              ApiKeysManager, CostTracker, AiSettings (master toggle), AiSuggestionsQueue (moderation UI)
 │   ├── sw-register.tsx        Service worker registration (client component)
@@ -114,8 +120,14 @@ src/
     │                          attribute-icons.ts (NF-04 group/icon map);
     │                          query-places.ts + user-stats.ts (v1.21.0 — extracted route engines shared with chat tools)
     ├── dataforseo/            DataForSEO client + types + adapters + transform (mergeReviews) + reviews + photo
-    ├── google/                Google Places + URL parser + category mapping + Takeout parser + usage tracker + key access
-    ├── hooks/                 React Query hooks (16 files): useAiSearch, useAiSuggestions, useBackfillProfiles, useCategories, useDebounce, useFilters, useLists, useMapStyle, usePlaceSearch, usePlaces, useSavedFilters, useSharedLinks, useStats, useSubcategories, useTags, useTrips
+    ├── google/                Google Places + URL parser + category mapping + Takeout parser + usage tracker + key access;
+    │                          place-candidates.ts (multi-candidate Text Search for the Instagram import, v1.28.0)
+    ├── hikerapi/              client.ts — HikerAPI (Instagram data) wrapper, server-only (v1.28.0)
+    ├── instagram/             The Instagram import (v1.28.0): url.ts + types.ts (client-safe), analyze.ts, read-post.ts (Gemini),
+    │                          resolve.ts (deterministic pinning rules), normalize.ts, maps-link.ts, import-job.ts, provenance.ts
+    ├── import/                process-place.ts (resolveIdentity / findExisting / importPlace / ensurePlacePhoto),
+    │                          kick-drain.ts (nudge the drain; shared by both imports, v1.28.0)
+    ├── hooks/                 React Query hooks (19 files): useAiSearch, useAiSuggestions, useBackfillProfiles, useCategories, useDebounce, useFilters, useImportJob, useInstagramImport, useIsDesktop, useLists, useMapStyle, usePlaceSearch, usePlaces, useSavedFilters, useSharedLinks, useStats, useSubcategories, useTags, useTrips
     ├── stores/                Zustand stores (currently just import-store.ts)
     ├── map/                   category-icons.ts (canvas marker rendering)
     ├── trip/                  auto-plan.ts (k-means clustering), directions.ts (Mapbox wrapper, RoutingProfile param v1.22.0),
@@ -181,9 +193,9 @@ Counts (approximate, as of `last_updated`):
 | Area | Files |
 |---|---|
 | App routes (`src/app/**/page.tsx`) | 12 page files |
-| API route handlers (`src/app/api/**/route.ts`) | 40 routes (v1.22.0 added `/api/ai/trip-plan` + `/api/trips/[id]/days/[dayId]`) |
+| API route handlers (`src/app/api/**/route.ts`) | 43 routes (v1.22.0 added `/api/ai/trip-plan` + `/api/trips/[id]/days/[dayId]`; v1.28.0 added `/api/instagram/import` + `/api/instagram/import/[id]`; v1.28.1 added `/api/instagram/import/[id]/pick`) |
 | Feature components (`src/components/{assistant,filters,layout,map,places,settings}`) | ~27 |
 | shadcn UI (`src/components/ui/`) | 19 primitives |
-| Custom hooks (`src/lib/hooks/`) | 16 (v1.20.0 added: useSavedFilters) |
+| Custom hooks (`src/lib/hooks/`) | 19 files (v1.20.0 added useSavedFilters; later useImportJob, useIsDesktop; v1.28.0 useInstagramImport) |
 | Supabase clients (`src/lib/supabase/`) | 3 (browser, server, middleware) |
 | Vault docs (`docs/**/*.md`, excl. `_archive`) | tracked in [[../CHANGELOG]] |

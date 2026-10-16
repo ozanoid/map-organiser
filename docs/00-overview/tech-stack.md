@@ -2,8 +2,8 @@
 title: Tech Stack
 type: overview
 domain: overview
-version: 1.5.0
-last_updated: 16.07.2026
+version: 1.6.0
+last_updated: 16.10.2026
 status: stable
 sources:
   - package.json
@@ -12,6 +12,8 @@ sources:
   - tsconfig.json
   - eslint.config.mjs
   - postcss.config.mjs
+  - package-lock.json
+  - scripts/instagram-eval/tsconfig.json
 related:
   - "[[system-overview]]"
   - "[[repo-structure]]"
@@ -33,6 +35,7 @@ Every runtime, library, and tool the repo currently depends on. Pin sources are 
 | `typescript` | `^6` | Type system | `strict: true`. Path alias `@/*` → `src/*`. |
 | `eslint` | `^10` | Linter | Extends `eslint-config-next` core-web-vitals + typescript. `settings.react.version` pinned in `eslint.config.mjs` (ESLint-10 compat — the bundled `eslint-plugin-react` uses the removed `getFilename()`). Some strict rules `warn`-deferred — see v4 PART 4 #12. |
 | `eslint-config-next` | `16.2.10` | Lint preset | Tracked with Next.js version. Pulls `eslint-plugin-react-hooks@7` (React-Compiler rules). |
+| `tsx` | `^4.23.15` | TypeScript runner (devDependency, v1.28.0) | Runs `npm run eval:instagram` — `scripts/instagram-eval/run.ts` with `--env-file=.env.local` and that folder's `tsconfig.json`, which maps `@/*` to `src/*` and stubs `server-only` so production modules import outside Next. |
 
 ## UI
 
@@ -111,8 +114,9 @@ See [[../05-flows/observability-flow]] for the full architecture.
 
 - **Supabase** project `hukppmaevcapvbrvxtph` — eu-central-1, Pro plan, PostGIS enabled. Schema is dashboard/MCP-managed; no local `supabase/migrations/` folder. See [[../02-backend/_README]] when written.
 - **Mapbox** — GL JS map + Directions API. Free tier: 100K directions requests/month.
-- **Google Places API** — server-only via `GOOGLE_PLACES_API_KEY`. Per-user opt-in via `profiles.google_places_enabled`.
+- **Google Places API** — server-only via `GOOGLE_PLACES_API_KEY`. Per-user opt-in via `profiles.google_places_enabled` — except the Instagram import's candidate search (Text Search, Enterprise SKU), which always runs on the user's key (v1.28.0).
 - **DataForSEO Business Data API** — default enrichment provider. HTTP basic auth via `DATAFORSEO_LOGIN`/`DATAFORSEO_PASSWORD`.
+- **HikerAPI** — hosted Instagram data API for the Instagram import (v1.28.0). System-level key `HIKERAPI_KEY` (server-only); SKU `hikerapi_request`. See [[../04-integrations/hikerapi]].
 - **Google Gemini** (via Generative Language API) — Phase 4+ AI feature provider. Model: `gemini-3-flash-preview` (since 15.07.2026). Key: `GOOGLE_GENERATIVE_AI_API_KEY` (server-only). Cost-tracked via `api_usage` table under SKUs `ai_*`. See [[../04-integrations/gemini]].
 - **Vercel** — hosting platform. CLI permission granted in `.claude/settings.local.json`.
 
@@ -139,7 +143,25 @@ These are common adjacent picks that this repo deliberately doesn't use:
 ## Lockfile & install
 
 - `package-lock.json` is committed (npm).
-- Scripts: `dev`, `build`, `start`, `lint` — that's it.
+- Scripts: `dev`, `build`, `start`, `lint`, and `eval:instagram` (v1.28.0 —
+  the Instagram import's regression run; makes paid API calls, writes nothing to
+  the DB; see [[../05-flows/instagram-import-flow#measured-quality]]).
+- **Keep `node_modules` in step with the lockfile.** On 16.10.2026 a local
+  install held `ai@7.0.31` and `@ai-sdk/google@4.0.18` while the lockfile pins
+  `6.0.228` / `3.0.75`; `npm install` re-synced them. The 7
+  `experimental_telemetry.metadata` type errors seen locally came from that
+  mismatch, not from the code — CHANGELOG v1.25.0 had put them down to an
+  "AI SDK v7 bump" on `main`, but `package.json` has never left `ai@6`. When
+  type errors appear around the AI SDK, compare
+  `node_modules/ai/package.json` with the lockfile first:
+
+  ```bash
+  node -e 'console.log(require("./node_modules/ai/package.json").version, require("./package-lock.json").packages["node_modules/ai"].version)'
+  ```
+
+  ```bash
+  npm install
+  ```
 
 ## Versioning behavior
 

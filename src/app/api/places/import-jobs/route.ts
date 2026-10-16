@@ -5,6 +5,7 @@ import {
   parseTakeoutGeoJson,
   parseTakeoutCsv,
 } from "@/lib/google/takeout-parser";
+import { kickDrain } from "@/lib/import/kick-drain";
 
 /**
  * Import jobs — the durable replacement for the browser-driven import loop.
@@ -127,6 +128,9 @@ export async function GET() {
     .from("import_jobs")
     .select("id, file_name, total, status, created_at, finished_at")
     .eq("user_id", user.id)
+    // Instagram imports run through the same queue but report in their own
+    // dialog; "your latest import" on this page means a Takeout file.
+    .eq("kind", "takeout")
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -169,18 +173,4 @@ export async function GET() {
         .map((r) => ({ name: r.name ?? "Unknown", reason: r.reason ?? "Skipped" })),
     },
   });
-}
-
-/**
- * Nudge the drain so an import starts now instead of at the next cron minute.
- *
- * Deliberately not awaited: under Fluid Compute the call outlives this
- * response, and the minute cron is the safety net if it never lands.
- */
-function kickDrain(origin: string) {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) return;
-  void fetch(`${origin}/api/cron/drain-imports`, {
-    headers: { Authorization: `Bearer ${secret}` },
-  }).catch(() => {});
 }

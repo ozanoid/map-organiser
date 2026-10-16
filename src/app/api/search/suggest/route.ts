@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { suggest } from "@/lib/mapbox/search-box";
 
 /**
- * GET /api/search/suggest?q=...&session_token=<uuidv4>&proximity=<lng,lat>
+ * GET /api/search/suggest?q=...&session_token=<uuidv4>&proximity=<lng,lat>[&bbox=<minLng,minLat,maxLng,maxLat>]
  *
  * Mapbox Search Box `/suggest` proxy. Returns autocomplete suggestions.
  * The session_token groups suggest+retrieve into a single billable session;
@@ -38,6 +38,11 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  const suggestions = await suggest({ q, sessionToken, proximity, limit: 8 });
+  // Optional `bbox=minLng,minLat,maxLng,maxLat`: results only inside it.
+  const box = sp.get("bbox")?.split(",").map(Number);
+  const bbox =
+    box && box.length === 4 && box.every(Number.isFinite) ? (box as [number, number, number, number]) : undefined;
+
+  const suggestions = await suggest({ q, sessionToken, proximity, bbox, limit: 8 });
   return NextResponse.json({ suggestions });
 }

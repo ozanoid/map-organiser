@@ -2,8 +2,8 @@
 title: Google Gemini (LLM)
 type: integration
 domain: integrations
-version: 1.9.0
-last_updated: 16.07.2026
+version: 1.10.0
+last_updated: 16.10.2026
 status: stable
 sources:
   - src/lib/ai/client.ts
@@ -11,6 +11,8 @@ sources:
   - src/lib/ai/schemas/place-profile.ts
   - src/lib/ai/apply-suggestions.ts
   - src/app/api/places/[id]/enrich/route.ts
+  - src/lib/instagram/read-post.ts
+  - src/lib/ai/track-usage.ts
 related:
   - "[[_README]]"
   - "[[../00-overview/tech-stack#ai]]"
@@ -18,6 +20,7 @@ related:
   - "[[../05-flows/full-profile-flow]]"
   - "[[../05-flows/lite-profile-flow]]"
   - "[[../06-ops/env-vars]]"
+  - "[[../05-flows/instagram-import-flow]]"
 ---
 
 # Google Gemini
@@ -40,7 +43,9 @@ The LLM provider behind the AI features added across PRs #30–#35 (Phases 1–5
 |---|---|---|
 | `ai` | `^6.0.228` | AI SDK v6 — provider-agnostic call layer. Structured JSON calls use `generateText` + `Output.object`. **v1.21.0 amendment:** the chat assistant (`/api/ai/chat`) uses `streamText` + tools — the one deliberate exception to the old "never streamText" rule; progressive output IS the product there. Everything else stays on generateText. |
 | `@ai-sdk/react` | `3.0.230` | `useChat` for the assistant panel (v1.21.0). ⚠️ VERSION LOCKSTEP: the 3.x line pairs with ai@6 via an EXACT pin (3.0.230 → ai@6.0.228). Plain `npm i @ai-sdk/react` installs 4.x which drags in ai@7 as a nested duplicate and splits UIMessage type identity — always bump the two together. |
-| `@ai-sdk/google` | `^3.0.73` | Google provider plugin. Exports `createGoogleGenerativeAI`. |
+| `@ai-sdk/google` | `^3.0.75` | Google provider plugin. Exports `createGoogleGenerativeAI`. |
+
+> **Check `node_modules` before blaming the code (16.10.2026).** A local install had drifted to `ai@7.0.31` / `@ai-sdk/google@4.0.18` while `package-lock.json` pins `6.0.228` / `3.0.75`; `npm install` re-synced it. The 7 `experimental_telemetry.metadata` type errors seen locally — attributed in v1.25.0 to an "AI SDK v7 bump" on `main` — came from that drift, not from the code: `package.json` has never left the 6.x line. See [[../00-overview/tech-stack#lockfile--install]].
 
 ## Env vars
 
@@ -109,8 +114,9 @@ The output is Zod-validated at the SDK boundary, so route code can treat it as a
 | `POST /api/ai/chat` (S3 AI-02, v1.21.0) | Assistant agent loop: `streamText` + 8 tools (search/**rank**/details/compare/stats + approval-gated add_to_list/create_list/set_visit_status), `stopWhen: stepCountIs(6)`. | Per chat turn (assistant panel) | streaming; 2-15 s/turn | `ai_chat` (1 unit per TURN, charged in onFinish; approval continuations free) |
 | `rank_places` chat tool (v1.23.0, inside /api/ai/chat) | Same LLM-as-judge prompt/schema as rank-results, run server-side via `rank-engine.ts` — agent invokes only for soft/subjective criteria; `functionId: ai.chat.rank`. | Conditional, within a chat turn | ~1-2 s | `ai_rank_results` (behind the 3× `rank_backstop`; the turn's `ai_chat` unit is the charge) |
 | `POST /api/ai/trip-plan` (S4 AI-09, v1.22.0) | AI trip planner: distributes ≤40 candidate places across trip days (idx-referenced `TripPlanSchema`, delete-after-validate write). Input ≈ 15-20k tokens (compact ~350-tok/candidate projection + trip frame). | Deliberate click on the trip page's AI Plan dialog | ~3-8 s | `ai_trip_plan` (1 unit per generation, burned even on LLM failure — but the trip stays untouched) |
+| `readPost` (`src/lib/instagram/read-post.ts`, v1.28.0) — inside the `after()` job of `POST /api/instagram/import` | Instagram import: classifies every account a post points at (venue / venue_brand_multi / person / media_or_creator / brand_or_product / other), marks featured venues, quotes branch hints, addresses, plain-text venues and the area. `Output.object(PostReadingSchema)` with `thinkingLevel: "low"`; caption ≤ 3,000 chars, bios ≤ 200. It never picks a Google place — `resolve.ts` does that deterministically, and every quote is checked against the post text first. `functionId: ai.instagram-read-post`. | One per shared post (a repeat share within 10 min reuses the job) | not measured | `ai_instagram_read` (1 unit per read, charged only when the analysis succeeds) |
 
-Phase 6 splits AI calls into two groups by behaviour: **background** (`enrich?step=profile` — fire-and-forget, latency-tolerant) and **interactive** (`/api/ai/*` — user is waiting). All share `getAiClient()` / `FLASH_MODEL`; structured calls use Output.object, the chat route streams. They differ only in error handling and observability expectations.
+Phase 6 splits AI calls into two groups by behaviour: **background** (`enrich?step=profile` — fire-and-forget, latency-tolerant; since v1.28.0 also the Instagram read, which runs in `after()` while the dialog polls) and **interactive** (`/api/ai/*` — user is waiting). All share `getAiClient()` / `FLASH_MODEL`; structured calls use Output.object, the chat route streams. They differ only in error handling and observability expectations.
 
 ## Cost & limits
 
@@ -123,11 +129,11 @@ Gemini 3 Flash Preview pricing (verified 15.07.2026, ai.google.dev, standard tie
 
 - Input: ~7–14K tokens (user context + ≤50 reviews × ≤1000 chars + system prompt) → ~\$0.004–0.007
 - Output: ~1–2K tokens (PlaceProfile JSON) → ~\$0.003–0.006
-- **Total: ~\$0.008–0.012 per place_profile.** `AI_SKU_CONFIG` values updated accordingly (profile \$9.5/1k, rank \$20/1k, parse \$0.70/1k, compare \$9.5/1k, chat \$15/1k — a fixed average-turn estimate since increment_api_usage freezes cost_per_1k at the first daily insert — and trip_plan \$12/1k, v1.22.0: ~15-20k input tokens ≈ \$0.012/plan).
+- **Total: ~\$0.008–0.012 per place_profile.** `AI_SKU_CONFIG` values updated accordingly (profile \$9.5/1k, rank \$20/1k, parse \$0.70/1k, compare \$9.5/1k, chat \$15/1k — a fixed average-turn estimate since increment_api_usage freezes cost_per_1k at the first daily insert — and trip_plan \$12/1k, v1.22.0: ~15-20k input tokens ≈ \$0.012/plan; instagram_read \$1.5/1k, v1.28.0: ~1.2k input + ~0.3k output tokens with low thinking ≈ \$0.0015/post).
 
 Free tier: 15 RPM / 1M TPM (verify in AI Studio). Beyond that, paid quota. At our usage scale (a few hundred profiles + occasional regenerations), the monthly cost stays under \$2.
 
-**Per-user monthly budgets** (`checkAiBudget`, `src/lib/ai/track-usage.ts`): **search** = 500 searches/month (one unit per search, charged at `parse-query`; `rank-results` rides free behind a 3× runaway backstop; v1.23.0: the assistant's rank_places tool is the backstop's SECOND consumer — worst-case legitimate use ≈ chat cap 200 + search cap 500 = 700 ≪ 1500, and chat ranks track ai_rank_results per ATTEMPT so a failing loop still trips it) ≈ \$10.5/month ceiling; **compare** = 200 runs/month (v1.19.0, one unit per /api/ai/compare); **chat** = 200 turns/month (v1.21.0, `AI_MONTHLY_CHAT_CAP` — one unit per TURN charged in onFinish, approval continuations free, `stopWhen: stepCountIs(6)` bounds in-turn fan-out); **trip_plan** = 50 generations/month (v1.22.0, `AI_MONTHLY_TRIP_PLAN_CAP` — one unit per plan, deliberate-click only from the trip page's AI Plan dialog; a failed generation still burns the unit but never touches the trip) ≈ \$0.6/month ceiling; **profile** = 1000 generations/month across the add-chain, refresh, backfill, and cron ≈ \$9.5/month ceiling (a full ~470-place backfill fits in one month). Over budget the route returns **429** before calling Gemini; resets on the 1st (UTC). Fails open; unrelated to Gemini's own RPM quota.
+**Per-user monthly budgets** (`checkAiBudget`, `src/lib/ai/track-usage.ts`): **search** = 500 searches/month (one unit per search, charged at `parse-query`; `rank-results` rides free behind a 3× runaway backstop; v1.23.0: the assistant's rank_places tool is the backstop's SECOND consumer — worst-case legitimate use ≈ chat cap 200 + search cap 500 = 700 ≪ 1500, and chat ranks track ai_rank_results per ATTEMPT so a failing loop still trips it) ≈ \$10.5/month ceiling; **compare** = 200 runs/month (v1.19.0, one unit per /api/ai/compare); **chat** = 200 turns/month (v1.21.0, `AI_MONTHLY_CHAT_CAP` — one unit per TURN charged in onFinish, approval continuations free, `stopWhen: stepCountIs(6)` bounds in-turn fan-out); **trip_plan** = 50 generations/month (v1.22.0, `AI_MONTHLY_TRIP_PLAN_CAP` — one unit per plan, deliberate-click only from the trip page's AI Plan dialog; a failed generation still burns the unit but never touches the trip) ≈ \$0.6/month ceiling; **profile** = 1000 generations/month across the add-chain, refresh, backfill, and cron ≈ \$9.5/month ceiling (a full ~470-place backfill fits in one month); **instagram** = 300 post reads/month (v1.28.0, `AI_MONTHLY_INSTAGRAM_CAP`, SKU `ai_instagram_read` — the unit also bounds the import's HikerAPI and Google Text Search calls; checked inside the background job, so going over it fails the job with `budget_exceeded` instead of a 429). Over budget the route returns **429** before calling Gemini; resets on the 1st (UTC). Fails open; unrelated to Gemini's own RPM quota.
 
 > **⚠️ Thinking-mode pathology (16.07.2026, empirically verified):** on
 > `gemini-3-flash-preview`, the trip-plan call degenerated with DEFAULT
@@ -165,6 +171,7 @@ If we ever add a second provider (Claude/OpenAI for ranking, vision, etc.), revi
 |---|---|---|
 | Route returns `{ ok: false, reason: "ai_disabled" }` 503 | `GOOGLE_GENERATIVE_AI_API_KEY` not set | Add the env var in Vercel → redeploy. Settings AI tab also shows the "not configured" banner. |
 | Route returns 429 | User spent a monthly AI budget (search 500 / profile 1000 / compare 200 / chat 200 / trip_plan 50) | Expected — resets on the 1st (UTC). An app-level guard, not a Gemini rate limit. |
+| Instagram dialog: "You've used this month's Instagram imports." | The `instagram` budget (300 reads/month) is spent | Same reset. The import does not check `profiles.ai_features_enabled` — only the server key and this budget gate it. |
 | Route returns 500 with "LLM generation failed" | Provider 5xx, rate limit, or schema validation failure | Retry from `AiSummaryCard` refresh button. Persistent failure → check Vercel logs for the underlying error. |
 | AI Summary card stays in skeleton state | Reviews not yet present OR profile hasn't been generated (pre-Phase-4 place) | If reviews exist, click "Generate" in the skeleton header. If not, wait for `step=reviews` to finish (~30 s on a fresh paste). |
 | Profile generated but tags/sub-cats not applied | `ai_features_enabled = false` on the profile, OR LLM proposed entities outside the 4-band threshold | Toggle AI on in Settings → AI; pending proposals queue up. |

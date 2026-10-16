@@ -6,6 +6,7 @@ import { fetchReviews, toLocationCoordinate } from "@/lib/dataforseo/reviews";
 import { transformReviews, mergeReviews } from "@/lib/dataforseo/transform";
 import { generatePlaceProfile } from "@/lib/ai/generate-profile";
 import { importPlace, ensurePlacePhoto } from "@/lib/import/process-place";
+import { attachInstagramSource } from "@/lib/instagram/provenance";
 import type { ImportPayload } from "@/lib/import/process-place";
 import { trackUsage } from "@/lib/google/track-usage";
 import {
@@ -131,19 +132,25 @@ export async function GET(request: NextRequest) {
   }
 
   // Job defaults (visit status, lists, tags) are per job, not per item.
-  const jobCache = new Map<string, { visit_status: string | null; list_ids: string[]; tag_ids: string[] }>();
+  const jobCache = new Map<
+    string,
+    { visit_status: string | null; list_ids: string[]; tag_ids: string[]; kind: string }
+  >();
   async function defaultsFor(jobId: string) {
     const hit = jobCache.get(jobId);
     if (hit) return hit;
     const { data } = await admin
       .from("import_jobs")
-      .select("visit_status, list_ids, tag_ids")
+      // `*` rather than naming `kind`: a deploy that lands before the column
+      // exists must not lose a Takeout job's defaults to a select error.
+      .select("*")
       .eq("id", jobId)
       .single();
     const d = {
       visit_status: (data?.visit_status as string | null) ?? null,
       list_ids: (data?.list_ids as string[]) ?? [],
       tag_ids: (data?.tag_ids as string[]) ?? [],
+      kind: (data?.kind as string | null) ?? "takeout",
     };
     jobCache.set(jobId, d);
     return d;
@@ -204,6 +211,7 @@ export async function GET(request: NextRequest) {
               visitStatus: defaults.visit_status,
               listIds: defaults.list_ids,
               tagIds: defaults.tag_ids,
+              source: defaults.kind === "instagram" ? "instagram" : "import",
             },
             await categoriesFor(item.user_id)
           );
@@ -213,6 +221,17 @@ export async function GET(request: NextRequest) {
             await advance(item, { stage: "photo", place_id: outcome.placeId });
           } else if (outcome.status === "skipped") {
             counts.skipped++;
+            // An Instagram share of a place the user already has still marks it
+            // as seen on Instagram: the tag and the post link go on the old row.
+            if (defaults.kind === "instagram" && outcome.placeId) {
+              await attachInstagramSource(
+                admin,
+                item.user_id,
+                outcome.placeId,
+                item.payload.note,
+                defaults.tag_ids
+              );
+            }
             await advance(item, {
               stage: "skipped",
               place_id: outcome.placeId ?? null,
@@ -409,7 +428,8 @@ function kickSelf(origin: string, secret: string) {
 async function finalizeJobs(admin: ReturnType<typeof createServiceClient>) {
   const { data: running } = await admin
     .from("import_jobs")
-    .select("id")
+    // `*` rather than naming `kind`/`meta`, as in defaultsFor.
+    .select("*")
     .eq("status", "running");
   for (const job of running ?? []) {
     const { count } = await admin
@@ -418,9 +438,12 @@ async function finalizeJobs(admin: ReturnType<typeof createServiceClient>) {
       .eq("job_id", job.id as string)
       .in("stage", ACTIVE_STAGES);
     if ((count ?? 0) === 0) {
+      // An Instagram job's stored phase follows it, so the row reads "done" too.
+      const meta =
+        job.kind === "instagram" && job.meta ? { ...(job.meta as Record<string, unknown>), phase: "done" } : null;
       await admin
         .from("import_jobs")
-        .update({ status: "done", finished_at: new Date().toISOString() })
+        .update({ status: "done", finished_at: new Date().toISOString(), ...(meta && { meta }) })
         .eq("id", job.id as string);
     }
   }
