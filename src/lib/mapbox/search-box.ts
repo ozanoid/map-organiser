@@ -17,7 +17,10 @@ import "server-only";
 export interface SuggestRequest {
   q: string;
   sessionToken: string;
+  /** Ranks nearby results first — a bias: a strong name match elsewhere still wins. */
   proximity?: { lng: number; lat: number };
+  /** Only results inside [minLng, minLat, maxLng, maxLat]. */
+  bbox?: [number, number, number, number];
   limit?: number;
   language?: string;
 }
@@ -108,6 +111,7 @@ export async function suggest(req: SuggestRequest): Promise<SearchSuggestion[]> 
   if (req.proximity) {
     params.set("proximity", `${req.proximity.lng},${req.proximity.lat}`);
   }
+  if (req.bbox) params.set("bbox", req.bbox.join(","));
 
   try {
     const res = await fetch(`${SEARCH_BASE}/suggest?${params.toString()}`);

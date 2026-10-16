@@ -183,6 +183,7 @@ export function InstagramImportPanel({
   const { data: view, isError: loadFailed } = useInstagramImport(jobId);
   const [removing, setRemoving] = useState<string | null>(null);
   const [pickingId, setPickingId] = useState<string | null>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
 
   // Start once per URL. React may mount this twice in development; the server
   // also hands back the same job when the post was shared minutes ago.
@@ -228,8 +229,11 @@ export function InstagramImportPanel({
 
   /** Swap between the list and a branch picker; the dialog reads from the top again. */
   function showPicker(itemId: string | null) {
+    // Focus first: the focused button is about to unmount, and the dialog
+    // would park focus on itself instead of the title.
+    titleRef?.current?.focus();
+    bodyRef.current?.scrollTo({ top: 0 });
     setPickingId(itemId);
-    requestAnimationFrame(() => titleRef?.current?.focus());
   }
 
   function choose(item: InstagramImportItemView, option: PlaceOption) {
@@ -257,6 +261,10 @@ export function InstagramImportPanel({
   const failed = phase === "failed" || loadFailed || !!startError;
   const working = !failed && (!view || phase === "reading" || phase === "adding");
   const empty = phase === "done" && placeRows.length === 0;
+  // An empty result isn't always an empty post: the user may have removed
+  // what was added, or every venue may be waiting for a pick.
+  const removedItems = items.filter((i) => i.status === "removed");
+  const allRemoved = empty && shown.length === 0 && removedItems.length > 0;
   // Closes by itself once the picked item stops being "skipped".
   const picking =
     shown.find((i) => i.id === pickingId && i.status === "skipped" && i.options.length > 0) ?? null;
@@ -273,15 +281,19 @@ export function InstagramImportPanel({
   if (failed) title = "Couldn't add from this post";
   else if (picking) {
     title =
-      picking.reason === "chain_branch_unknown"
-        ? `Which ${picking.searchName || picking.name}?`
-        : `Which ${picking.name}?`;
+      picking.options.length === 1
+        ? `Is this ${picking.name}?`
+        : picking.reason === "chain_branch_unknown"
+          ? `Which ${picking.searchName || picking.name}?`
+          : `Which ${picking.name}?`;
   } else if (phase === "adding") {
     title = pending > 0 && pendingItems.every((i) => i.evidence.includes(PICKED))
       ? `Adding ${pendingItems.map((i) => i.name).join(", ")}…`
       : `Adding ${pending + landed} place${pending + landed === 1 ? "" : "s"}…`;
   } else if (single) title = single.status === "already_saved" ? "Already in your places" : `${single.name} added`;
-  else if (empty) title = "No places in this post";
+  else if (allRemoved) {
+    title = removedItems.length === 1 ? `${removedItems[0].name} removed` : `${removedItems.length} places removed`;
+  } else if (empty) title = shown.length > 0 ? "Nothing added yet" : "No places in this post";
   else if (phase === "done") {
     const added = placeRows.filter((i) => i.status === "added").length;
     title = added > 0 ? `${added} place${added === 1 ? "" : "s"} added` : "Already in your places";
@@ -289,7 +301,9 @@ export function InstagramImportPanel({
 
   const post = view?.post;
   const description = picking
-    ? `${picking.options.length} ${picking.reason === "chain_branch_unknown" ? "branches" : picking.options.length === 1 ? "place" : "places"} · pick the one in the post`
+    ? picking.options.length === 1
+      ? "One match on Google · tap it if it's the place in the post"
+      : `${picking.options.length} ${picking.reason === "chain_branch_unknown" ? "branches" : "places"} · pick the one in the post`
     : post
       ? `@${post.owner}${post.caption ? ` · "${post.caption.split("\n")[0].slice(0, 90)}${post.caption.length > 90 ? "…" : ""}"` : ""}`
       : view?.postUrl || url
@@ -316,7 +330,7 @@ export function InstagramImportPanel({
         <DialogDescription className="truncate">{description}</DialogDescription>
       </DialogHeader>
 
-      <div className="flex-1 overflow-y-auto min-h-0 space-y-3">
+      <div ref={bodyRef} className="flex-1 overflow-y-auto min-h-0 space-y-3">
         {failed && (
           <p role="alert" className="text-sm text-muted-foreground">
             {startError ??
@@ -457,7 +471,9 @@ export function InstagramImportPanel({
 
         {!picking && empty && shown.length === 0 && (
           <p className="text-sm text-muted-foreground">
-            No account, location tag or address in this post points to one specific place.
+            {allRemoved
+              ? "Nothing from this post is on your map now. If it was the wrong match, search for the right place."
+              : "No account, location tag or address in this post points to one specific place."}
           </p>
         )}
       </div>
@@ -502,7 +518,14 @@ export function InstagramImportPanel({
               Close
             </Button>
             {onSearch && (
-              <Button className="flex-1 h-10 cursor-pointer" onClick={() => searchFor("", null)}>
+              <Button
+                className="flex-1 h-10 cursor-pointer"
+                onClick={() =>
+                  allRemoved && removedItems.length === 1
+                    ? searchFor(removedItems[0].searchName || removedItems[0].name, null)
+                    : searchFor("", null)
+                }
+              >
                 <Search className="h-4 w-4 mr-1" aria-hidden="true" />
                 Search manually
               </Button>

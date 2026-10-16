@@ -10,9 +10,16 @@ import type { SearchSuggestion } from "@/lib/mapbox/search-box";
 
 export interface SearchBoxHandle {
   /** Fill the box with `text`, open the suggestions and focus it — used by the
-   *  Instagram import's "Search" / "Search manually". `proximity` aims this
-   *  search at the post's area until the box is cleared. */
+   *  Instagram import's "Search" / "Search manually". `proximity` keeps this
+   *  search within ~30 km of the post's area until the box is cleared. */
   search: (text: string, opts?: { proximity?: { lng: number; lat: number } | null }) => void;
+}
+
+/** About 30 km each way — a city and its suburbs. */
+function boxAround(p: { lng: number; lat: number }): [number, number, number, number] {
+  const dLat = 0.27;
+  const dLng = dLat / Math.max(0.2, Math.cos((p.lat * Math.PI) / 180));
+  return [p.lng - dLng, p.lat - dLat, p.lng + dLng, p.lat + dLat];
 }
 
 interface SearchBoxProps {
@@ -34,7 +41,11 @@ interface SearchBoxProps {
 export function SearchBox({ proximity, onSelect, className, ref }: SearchBoxProps) {
   const [aimedAt, setAimedAt] = useState<{ lng: number; lat: number } | null>(null);
   const { query, setQuery, suggestions, isSearching, retrieve, isRetrieving, clear } =
-    usePlaceSearch({ proximity: aimedAt ?? proximity });
+    usePlaceSearch(
+      // An aimed search stays in that city: proximity alone only ranks, and a
+      // strong name match on another continent still comes first.
+      aimedAt ? { proximity: aimedAt, bbox: boxAround(aimedAt) } : { proximity }
+    );
   const [open, setOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
