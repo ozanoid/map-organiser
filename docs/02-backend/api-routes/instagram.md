@@ -30,10 +30,10 @@ places — runs after the response (`after()`), and the places are created by th
 shared import queue (`/api/cron/drain-imports`). Full sequence:
 [[../../05-flows/instagram-import-flow]].
 
-> **Needs the pending migration** in [[../schema/import-jobs#pending-migration]]
-> (`import_jobs.kind`, `import_jobs.meta`, `places.source = 'instagram'`) — **not
-> yet applied to the live DB** (16.10.2026). Before it, `POST` fails with 500
-> (the insert names columns that do not exist) and `GET` answers 404.
+> **Database:** relies on the Instagram migration in
+> [[../schema/import-jobs#instagram-migration]] (`import_jobs.kind`,
+> `import_jobs.meta`, `places.source = 'instagram'`), applied to the live DB on
+> 16.10.2026.
 
 ## At a glance
 

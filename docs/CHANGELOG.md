@@ -19,13 +19,11 @@ that hands the name to the map search box. Closing the dialog keeps the job
 running and the map toasts when it ends; `?ig=<jobId>` keeps the dialog across a
 refresh.
 
-**State.** Code on the `feat/instagram-import` branch, not merged. **The DB migration it
-needs is NOT applied to the live database** — verified 16.10.2026: no
-`import_jobs.kind` / `meta`, and `places_source_check` without `instagram`. The
-exact SQL and the deploy order are in
-[[02-backend/schema/import-jobs#pending-migration]]. Before it lands, the
-Instagram routes fail (POST 500, GET 404) and `GET /api/places/import-jobs`
-answers `{ job: null }` even while a Takeout import runs.
+**State.** Code on the `feat/instagram-import` branch, not merged. The DB
+migration it needs was **applied to the live database on 16.10.2026** as
+`instagram_import_job_kind_and_place_source` and verified (SQL and the reasoning in
+[[02-backend/schema/import-jobs#instagram-migration]]). `HIKERAPI_KEY` still has
+to be set on Vercel before the import runs there.
 
 - **Server.** An Instagram import is an `import_jobs` row with
   `kind = 'instagram'`, created in `status = 'reading'` so the drain's
@@ -85,8 +83,8 @@ answers `{ job: null }` even while a Takeout import runs.
 - Docs: new [[05-flows/instagram-import-flow]], [[04-integrations/hikerapi]],
   [[02-backend/api-routes/instagram]], [[03-frontend/hooks/use-instagram-import]];
   `InstagramImportPanel` documented in [[03-frontend/components/places]].
-  Updated: schema `import-jobs` (kind / meta / `reading`, pending migration),
-  `places` (source `instagram`, pending migration), `api_usage` (SKUs),
+  Updated: schema `import-jobs` (kind / meta / `reading`, the migration),
+  `places` (source `instagram`, the migration), `api_usage` (SKUs),
   schema `_README`; api-routes `_README` (Instagram group, counts, helpers),
   `places` (Takeout-only GET, drain job kinds); `02-backend/_README`,
   `supabase-clients`; domain `places`, `categories-and-tags`,

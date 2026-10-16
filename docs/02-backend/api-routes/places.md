@@ -46,8 +46,8 @@ Route handler files under `/api/places/*`, plus the import drain under `/api/cro
 > (`import_jobs.kind = 'instagram'`, created by [[instagram|`/api/instagram/import`]]).
 > The import-jobs `GET` reports Takeout jobs only, the drain writes
 > `places.source = 'instagram'` for Instagram items, and `kickDrain` moved to
-> `src/lib/import/kick-drain.ts`. Needs the pending migration in
-> [[../schema/import-jobs#pending-migration]] — not yet applied.
+> `src/lib/import/kick-drain.ts`. Relies on the Instagram migration in
+> [[../schema/import-jobs#instagram-migration]] (applied 16.10.2026).
 
 ## At a glance
 
@@ -183,7 +183,7 @@ All require auth except `drain-imports`, which is bearer-authed with `CRON_SECRE
 - **Source:** same file.
 - **DB:** `import_jobs` SELECT (newest with `kind = 'takeout'`), `import_job_items` SELECT.
 - **Response:** `{ job: { …, counts, settled, pending_import, enriching, problems[] } | null }`.
-- **Notes:** Takes no id — the store is transient, so a user reopening the page has none to give. Polled every 3 s while `status = running`. Since v1.28.0 it filters `kind = 'takeout'`: Instagram imports run through the same queue but report in their own dialog. **Before the pending migration** that filter names a missing column; the route reads only `data`, so it answers `{ job: null }` even while a Takeout import runs.
+- **Notes:** Takes no id — the store is transient, so a user reopening the page has none to give. Polled every 3 s while `status = running`. Since v1.28.0 it filters `kind = 'takeout'`: Instagram imports run through the same queue but report in their own dialog. The `kind` column it filters on came with the Instagram migration (applied 16.10.2026, [[../schema/import-jobs#instagram-migration]]).
 
 ### `PATCH /api/places/import-jobs/[id]`
 

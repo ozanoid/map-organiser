@@ -83,7 +83,7 @@ a **Remove** so the removed item drops out at once.
   panel invalidates that key as items reach `added`, and `MapContent` does it when
   a watched job finishes.
 - **A job that never loads keeps polling.** With no data there is no phase, so a
-  404 (wrong id, another user's job, or before the pending migration) is re-tried
+  404 (wrong id, or another user's job) is re-tried
   every 1.5 s for as long as the component is mounted; the panel shows
   "Couldn't load this import." meanwhile.
 - **Stalled jobs end the poll.** The route turns a job stuck in `reading` for

@@ -104,7 +104,7 @@ Before promoting to production:
 - [ ] `.env.local.example` matches what Vercel needs (add missing keys before deploy — currently `SUPABASE_SERVICE_ROLE_KEY` is one such gap).
 - [ ] Any schema changes are applied to the Supabase project AND visible via `list_migrations`.
 - [ ] If a new external integration: env vars added to Vercel for Production AND Preview (v1.28.0: `HIKERAPI_KEY` for the Instagram import).
-- [ ] Branch `feat/instagram-import`: its migration is applied **before** the code deploys — see [[../02-backend/schema/import-jobs#pending-migration]]. Not applied as of 16.10.2026.
+- [x] Branch `feat/instagram-import`: its migration had to land **before** the code deployed — applied 16.10.2026, see [[../02-backend/schema/import-jobs#instagram-migration]].
 
 ## Post-deploy checks
 

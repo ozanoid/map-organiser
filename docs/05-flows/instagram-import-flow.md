@@ -64,9 +64,9 @@ the user's `instagram` tag, the canonical post URL as the note. Places the user
 already had: the tag added and the post URL appended to their notes (once).
 
 > **Deployment state (16.10.2026).** The code is on the `feat/instagram-import`
-> branch, not merged. It needs a DB migration that is **not yet applied to the live
-> database** — see [[../02-backend/schema/import-jobs#pending-migration]].
-> Until it is applied the import cannot create jobs.
+> branch, not merged. Its DB migration was applied to the live database on
+> 16.10.2026 — see [[../02-backend/schema/import-jobs#instagram-migration]].
+> `HIKERAPI_KEY` has to be set in the Vercel environment for it to run there.
 
 ## Trigger
 
@@ -395,7 +395,7 @@ The monthly `instagram` budget (300 posts per user) bounds the first three.
 | B | 503 "Instagram import isn't set up on this server." | `HIKERAPI_KEY` or `GOOGLE_GENERATIVE_AI_API_KEY` missing. |
 | B | 400 "Instagram import reads the post with AI. Turn on AI features in Settings." | `profiles.ai_features_enabled` is off. |
 | B | 400 "…needs a Google Places API key. Add one in Settings." | No per-user key and not an admin. The `google_places_enabled` toggle (it scopes Maps-link lookups) is deliberately not consulted — see Open questions. |
-| B | 500 with the database error text | Before the pending migration: the insert names `kind`/`meta`, which do not exist yet. |
+| B | 500 with the database error text | The tag or the job insert failed. |
 | C | "You've used this month's Instagram imports." | `budget_exceeded`; no Try again. |
 | C | "Couldn't open this post. It may be private or deleted." | `post_unavailable` (HikerAPI 404). |
 | C | "Something went wrong while reading this post." | `service_error`: HikerAPI still failing after its retries, a Google Text Search failing twice, the Gemini call failing, or the item insert failing. Try again starts a new job. |
@@ -403,7 +403,7 @@ The monthly `instagram` budget (300 posts per user) bounds the first three.
 | C | "No places in this post" | Nothing could be pinned. When no skipped venue is listed either, the dialog says no account, location tag or address points to one specific place; on `/map`, "Search manually" opens the map search. |
 | D | An item ends `failed` | As in [[place-import-flow]] — DataForSEO / insert errors, 3 failed attempts. |
 | D | Items stay "Adding…" | The drain never runs: `CRON_SECRET` unset (the kick no-ops; locally there is no cron at all) or no DataForSEO credentials. |
-| E | "Couldn't load this import." | `GET` 404 (not this user's job, not an Instagram job, or before the migration). The hook keeps polling while the dialog is open. |
+| E | "Couldn't load this import." | `GET` 404 (not this user's job, or not an Instagram job). The hook keeps polling while the dialog is open. |
 
 ## Known limits
 

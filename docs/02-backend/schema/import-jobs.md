@@ -35,9 +35,8 @@ The durable work list behind both imports. Two tables and one claim function tur
 a Takeout upload — or, since v1.28.0, the venues of an Instagram post — into a
 queue the server drains on its own schedule.
 
-> **Pending migration (16.10.2026).** `kind` and `meta` below, and the
-> `instagram` job kind, come from a migration that is written but **not yet
-> applied to the live DB**. See [[#pending-migration]].
+> **Instagram migration (applied 16.10.2026).** `kind` and `meta` below, and the
+> `instagram` job kind, come from `instagram_import_job_kind_and_place_source`. See [[#instagram-migration]].
 
 ## Why it exists
 
@@ -58,14 +57,14 @@ One row per upload (Takeout) or per shared post (Instagram).
 |---|---|---|
 | `id` | `uuid` pk | |
 | `user_id` | `uuid` → `auth.users` | cascade delete |
-| `kind` | `text` not null, default `'takeout'`, CHECK `takeout` \| `instagram` | **pending migration.** Decides `places.source` in the drain and which UI reports the job. |
+| `kind` | `text` not null, default `'takeout'`, CHECK `takeout` \| `instagram` | Since 16.10.2026 ([[#instagram-migration]]). Decides `places.source` in the drain and which UI reports the job. |
 | `file_name` | `text` | Takeout: the file name, shown in the UI. Instagram: the canonical post URL (`https://www.instagram.com/p/<shortcode>/`) — the 10-minute reuse check matches on it. |
 | `total` | `int` | Takeout: places parsed out of the file. Instagram: places queued + places already saved, written once the post is read. |
 | `status` | `text` | `running` \| `done` \| `cancelled`, plus `reading` for an Instagram job while its post is being read. No CHECK constraint (verified 16.10.2026). |
 | `visit_status` | `text` | import-time default applied to every place (Instagram: always `want_to_go`) |
 | `list_ids` | `uuid[]` | ditto (Instagram: none) |
 | `tag_ids` | `uuid[]` | ditto (Instagram: the user's `instagram` tag) |
-| `meta` | `jsonb` not null, default `'{}'` | **pending migration.** Instagram only: `{ phase, shortcode, post?: { owner, ownerFullName, caption (≤ 280 chars), locationName }, error? }` — `InstagramJobMeta` in `src/lib/instagram/types.ts`. |
+| `meta` | `jsonb` not null, default `'{}'` | Since 16.10.2026. Instagram only: `{ phase, shortcode, post?: { owner, ownerFullName, caption (≤ 280 chars), locationName }, error? }` — `InstagramJobMeta` in `src/lib/instagram/types.ts`. |
 | `created_at` | `timestamptz` | |
 | `finished_at` | `timestamptz` | set when the job closes |
 
@@ -184,7 +183,7 @@ role.
 | `import_job_items_claimable_idx` | `(created_at) where stage in ('import','photo','reviews','profile')` | the claim scan; partial so terminal rows never widen it |
 | `import_job_items_job_idx` | `(job_id)` | progress counts |
 | `import_jobs_user_idx` | `(user_id, created_at desc)` | "my latest job" |
-| `idx_import_jobs_user_kind_created` | `(user_id, kind, created_at desc)` | **pending migration.** "My latest Takeout job" and the Instagram reuse check, both of which now filter on `kind` |
+| `idx_import_jobs_user_kind_created` | `(user_id, kind, created_at desc)` | Since 16.10.2026. "My latest Takeout job" and the Instagram reuse check, both of which now filter on `kind` |
 
 ## RLS
 
@@ -201,12 +200,14 @@ body. Building the route on the caller's client instead fails with
 The Instagram import follows the same rule: the job row is inserted on the
 session client, its items by the `after()` job on the service-role client.
 
-## Pending migration
+## Instagram migration
 
 Written for the Instagram import (v1.28.0, branch `feat/instagram-import`) and
-**NOT yet applied to the live DB** as of 16.10.2026 — verified that day:
-`import_jobs` has no `kind` / `meta` column and `places_source_check` does not
-allow `instagram`.
+**applied to the live DB on 16.10.2026** as `instagram_import_job_kind_and_place_source` (Supabase MCP
+`apply_migration`). Verified right after: `places_source_check` lists
+`instagram`; `import_jobs.kind` (default `'takeout'`, CHECK) and `meta` exist;
+the index exists; the 6 jobs already in the table read `kind = 'takeout'`;
+`places` kept its 905 rows.
 
 ```sql
 alter table public.places drop constraint places_source_check;
@@ -221,9 +222,9 @@ create index if not exists idx_import_jobs_user_kind_created on public.import_jo
 Existing rows become `kind = 'takeout'` through the default; the Takeout create
 route does not set `kind` and relies on it.
 
-**Apply it before the branch's code serves anyone** — a preview deployment
-included, since the vault documents a single Supabase project
-(`hukppmaevcapvbrvxtph`) behind every environment. Until then:
+It had to land before the branch's code served anyone — a preview deployment
+included, since one Supabase project (`hukppmaevcapvbrvxtph`) backs every
+environment. Without it:
 
 - `POST /api/instagram/import` → 500: the insert names `kind` and `meta`;
 - `GET /api/instagram/import/[id]` → 404: its `kind` filter errors;
@@ -233,8 +234,9 @@ included, since the vault documents a single Supabase project
 - the drain is safe — it reads job defaults with `select("*")` and treats a
   missing `kind` as `takeout`.
 
-Apply all four statements together: with `kind` but without the wider
-`places_source_check`, every Instagram place would fail at the drain's insert.
+The four statements went in as one migration: with `kind` but without the wider
+`places_source_check`, every Instagram place would have failed at the drain's
+insert.
 
 ## Related code
 
