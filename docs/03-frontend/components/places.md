@@ -205,7 +205,7 @@ Twenty files under `src/components/places/`. All `"use client"`. The Place-relat
   - **Branch picker** (`PlacePicker`, v1.28.1) — replaces the body for one
     skipped item: title "Which <name>?" (a chain uses its `searchName`),
     description "N branches · pick the one in the post" ("N places" for other
-    reasons; one option: "Is this <name>?" / "One match on Google · tap it if
+    reasons; one option: "Is it <option name>?" / "One match on Google · tap it if
     it's the place in the post"), one 44 px row per option (pin icon, name, address up to
     two lines), and from 7 options a filter input ("Filter by street or
     district") that matches name + address with the Turkish-aware `fold`;

@@ -88,7 +88,8 @@ the pick writes existing `import_jobs` / `import_job_items` columns.
 - **Panel copy (from the preview test).** After the user removes the only added
   place the dialog said "No places in this post"; it now says "<name> removed"
   and offers a search for it. A result where every venue was skipped reads
-  "Nothing added yet". A single option reads "Is this <name>?". Switching to
+  "Nothing added yet". A single option reads "Is it <option name>?", and a
+  chain row counts the branches the picker lists. Switching to
   the picker moves focus to the title before the view swaps and scrolls to the
   top (the dialog had kept focus on itself and the filter box was scrolled out
   of view).

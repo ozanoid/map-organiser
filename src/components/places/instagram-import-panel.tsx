@@ -71,10 +71,11 @@ const PICKED = "Picked by you";
 
 function skipCopy(item: InstagramImportItemView): string {
   switch (item.reason) {
-    case "chain_branch_unknown":
-      return item.sameNameCount > 1
-        ? `${item.sameNameCount} branches · the post doesn't say which`
-        : "Several branches · the post doesn't say which";
+    case "chain_branch_unknown": {
+      // The picker's count when there is one, so the row and the picker agree.
+      const n = item.options.length > 1 ? item.options.length : item.sameNameCount;
+      return n > 1 ? `${n} branches · the post doesn't say which` : "Several branches · the post doesn't say which";
+    }
     case "ambiguous":
       return "More than one place matches";
     case "closed":
@@ -282,7 +283,7 @@ export function InstagramImportPanel({
   else if (picking) {
     title =
       picking.options.length === 1
-        ? `Is this ${picking.name}?`
+        ? `Is it ${picking.options[0].name}?`
         : picking.reason === "chain_branch_unknown"
           ? `Which ${picking.searchName || picking.name}?`
           : `Which ${picking.name}?`;

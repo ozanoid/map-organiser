@@ -259,7 +259,7 @@ sequenceDiagram
 20. **Pick branch** / **Choose** turns the dialog body into the picker: title
     "Which <name>?" (for a chain, the shared `searchName`: "Which Caffè Nero?"),
     description "N branches · pick the one in the post" ("N places" for the
-    other reasons; a single option reads "Is this <name>?" / "One match on
+    other reasons; a single option reads "Is it <option name>?" / "One match on
     Google · tap it if it's the place in the post"), one row per option with
     its name and address, and
     a filter box from 7 options ("Filter by street or district" — a
