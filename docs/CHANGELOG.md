@@ -77,9 +77,10 @@ to be set on Vercel before the import runs there.
   again skips a stalled job; the import requires `profiles.ai_features_enabled`;
   `?ig` is kept out of the filter-persist mirror; a **Pick branch** pick starts
   with the post link and the `instagram` tag (`SearchResultPanel` `prefill`); a
-  failed profile read or Text Search is retried once. Still open (owner's call):
-  the `google_places_enabled` toggle is not consulted by this import. See
-  [[05-flows/instagram-import-flow]].
+  failed profile read or Text Search is retried once. Decided by the owner
+  (16.10.2026): the import keeps using Google Places whatever the
+  `google_places_enabled` toggle says — the toggle still scopes Maps-link
+  lookups. See [[05-flows/instagram-import-flow#decisions]].
 - Docs: new [[05-flows/instagram-import-flow]], [[04-integrations/hikerapi]],
   [[02-backend/api-routes/instagram]], [[03-frontend/hooks/use-instagram-import]];
   `InstagramImportPanel` documented in [[03-frontend/components/places]].

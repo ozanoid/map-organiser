@@ -66,7 +66,8 @@ shared import queue (`/api/cron/drain-imports`). Full sequence:
   5. 400 "Instagram import needs a Google Places API key. Add one in Settings." —
      `getUserApiKeys` returned no Google key (the user's own key; admins get
      `GOOGLE_PLACES_API_KEY`). The `google_places_enabled` toggle scopes Maps-link
-     lookups and is deliberately not consulted here.
+     lookups and is deliberately not consulted here (owner's decision,
+     16.10.2026).
 - **Reuse:** the user's newest `import_jobs` row with `kind = 'instagram'`,
   `file_name` = the canonical URL and `created_at` in the last 10 minutes
   (`REUSE_WINDOW_MS`) is returned as **`200 { jobId, reused: true }`** unless its

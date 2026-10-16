@@ -394,7 +394,7 @@ The monthly `instagram` budget (300 posts per user) bounds the first three.
 | B | 400 "That isn't an Instagram post or reel link." | Profile, story or other non-post URL. |
 | B | 503 "Instagram import isn't set up on this server." | `HIKERAPI_KEY` or `GOOGLE_GENERATIVE_AI_API_KEY` missing. |
 | B | 400 "Instagram import reads the post with AI. Turn on AI features in Settings." | `profiles.ai_features_enabled` is off. |
-| B | 400 "…needs a Google Places API key. Add one in Settings." | No per-user key and not an admin. The `google_places_enabled` toggle (it scopes Maps-link lookups) is deliberately not consulted — see Open questions. |
+| B | 400 "…needs a Google Places API key. Add one in Settings." | No per-user key and not an admin. The `google_places_enabled` toggle (it scopes Maps-link lookups) is deliberately not consulted — see Decisions. |
 | B | 500 with the database error text | The tag or the job insert failed. |
 | C | "You've used this month's Instagram imports." | `budget_exceeded`; no Try again. |
 | C | "Couldn't open this post. It may be private or deleted." | `post_unavailable` (HikerAPI 404). |
@@ -442,12 +442,18 @@ The monthly `instagram` budget (300 posts per user) bounds the first three.
 - `src/components/map/map-content.tsx` — `?ig`, background watcher, toasts, hand-offs; `map-view.tsx#fitToCoords`; `search-box.tsx#SearchBoxHandle`.
 - `scripts/instagram-eval/` — `run.ts`, `labels.json`, `README.md`, `tsconfig.json`.
 
+## Decisions
+
+- **Google Places for the candidate search, whatever the toggle says** (owner,
+  16.10.2026). The import uses Google Text Search even when the user's
+  `google_places_enabled` toggle ("Use Google for fast place lookup when adding
+  links") is off: the toggle keeps scoping Maps-link lookups, and the evidence
+  rules were built and measured on Google results. Another path (e.g. a
+  DataForSEO candidate search) is to be considered only if cost or the toggle's
+  meaning calls for it.
+- **Entry points** (owner, 16.10.2026): the iOS Shortcut and pasting a link.
+  `/api/share-target` keeps forwarding only Google Maps links.
+
 ## Open questions
 
-- **Google Places toggle.** The import uses Google Text Search even when the
-  user's `google_places_enabled` toggle ("Use Google for fast place lookup when
-  adding links") is off — the evidence rules were built and measured on Google
-  results. Whether the toggle should also govern this import (or a DataForSEO
-  candidate search should exist) is the owner's call.
-- **PWA share sheet.** `/api/share-target` still forwards only Google Maps links;
-  Instagram arrives through the iOS Shortcut or a pasted link, by decision.
+- None at the moment.

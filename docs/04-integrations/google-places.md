@@ -33,8 +33,10 @@ Otherwise the app falls back to [[dataforseo|DataForSEO]].
 
 **Exception — the Instagram import (v1.28.0).** Its candidate search always uses
 Google Text Search on the key `getUserApiKeys` returns (the user's own, or
-`GOOGLE_PLACES_API_KEY` for an admin). `google_places_enabled` is not consulted,
-and without a key the import refuses to start (400). See
+`GOOGLE_PLACES_API_KEY` for an admin). `google_places_enabled` is not consulted —
+the owner's decision (16.10.2026): the toggle keeps scoping Maps-link lookups,
+and the import's evidence rules were measured on Google results. Without a key
+the import refuses to start (400). See
 [[../05-flows/instagram-import-flow]].
 
 ## Account & access
