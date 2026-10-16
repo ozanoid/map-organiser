@@ -16,8 +16,9 @@ user taps is added exactly like an automatic place: through the import queue,
 options, or a branch the searches did not return, goes to the map search, which
 is now aimed at where the post puts the venue.
 
-**State.** Code on the `feat/instagram-import` branch, not merged. No DB change:
-the pick writes existing `import_jobs` / `import_job_items` columns.
+**State.** Merged to `main` on 16.10.2026 together with v1.28.0 (one merge
+commit). No DB change: the pick writes existing `import_jobs` /
+`import_job_items` columns.
 
 - **Options.** When `resolveCandidate` picks nothing, `optionsFor` keeps up to 20
   of the candidates the searches already returned — no extra request:
@@ -137,11 +138,12 @@ that hands the name to the map search box. Closing the dialog keeps the job
 running and the map toasts when it ends; `?ig=<jobId>` keeps the dialog across a
 refresh.
 
-**State.** Code on the `feat/instagram-import` branch, not merged. The DB
+**State.** Merged to `main` on 16.10.2026. The DB
 migration it needs was **applied to the live database on 16.10.2026** as
 `instagram_import_job_kind_and_place_source` and verified (SQL and the reasoning in
-[[02-backend/schema/import-jobs#instagram-migration]]). `HIKERAPI_KEY` still has
-to be set on Vercel before the import runs there.
+[[02-backend/schema/import-jobs#instagram-migration]]). `HIKERAPI_KEY` has to be
+set in each Vercel environment the import runs in (previews had it on
+16.10.2026; Production was not checked from the repo).
 
 - **Server.** An Instagram import is an `import_jobs` row with
   `kind = 'instagram'`, created in `status = 'reading'` so the drain's

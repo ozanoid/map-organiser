@@ -2,7 +2,7 @@
 title: Instagram Import Flow
 type: flow
 domain: places
-version: 1.1.0
+version: 1.1.1
 last_updated: 16.10.2026
 status: stable
 sources:
@@ -69,10 +69,11 @@ where the post puts the venue.
 the user's `instagram` tag, the canonical post URL as the note. Places the user
 already had: the tag added and the post URL appended to their notes (once).
 
-> **Deployment state (16.10.2026).** The code is on the `feat/instagram-import`
-> branch, not merged. Its DB migration was applied to the live database on
-> 16.10.2026 — see [[../02-backend/schema/import-jobs#instagram-migration]].
-> `HIKERAPI_KEY` has to be set in the Vercel environment for it to run there.
+> **Deployment state (16.10.2026).** Merged to `main` on 16.10.2026 (v1.28.0
+> and v1.28.1). Its DB migration was applied to the live database the same day
+> — see [[../02-backend/schema/import-jobs#instagram-migration]].
+> `HIKERAPI_KEY` has to be set in each Vercel environment the import runs in
+> (previews had it on 16.10.2026; Production was not checked from the repo).
 
 ## Trigger
 
