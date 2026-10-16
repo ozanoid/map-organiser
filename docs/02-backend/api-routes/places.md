@@ -2,7 +2,7 @@
 title: Places routes
 type: route-group
 domain: backend
-version: 2.1.0
+version: 2.1.1
 last_updated: 16.10.2026
 status: stable
 sources:
@@ -195,11 +195,11 @@ All require auth except `drain-imports`, which is bearer-authed with `CRON_SECRE
 ### `GET /api/cron/drain-imports`
 
 - **Source:** `src/app/api/cron/drain-imports/route.ts`
-- **Auth:** `Authorization: Bearer ${CRON_SECRET}` — Vercel Cron (every minute), the kick from both create paths (Takeout route, Instagram job) and its own self-chain.
+- **Auth:** `Authorization: Bearer ${CRON_SECRET}` — Vercel Cron (every minute), the kick from both create paths (Takeout route, Instagram job) and from the Instagram branch pick (v1.28.1), and its own self-chain.
 - **DB:** `claim_import_items` RPC; `import_job_items` UPDATE; `places`/`list_places`/`place_tags` writes via `importPlace`.
 - **External:** DataForSEO business-info + reviews, Gemini via `generatePlaceProfile`.
 - **Response:** `{ ok, claimed, processed, released, chained, imported, photographed, skipped, failed, reviewed, profiled, done, elapsed_ms }`.
-- **Job kinds (v1.28.0):** per-job defaults (visit status, lists, tags, `kind`) are read with `select("*")` — naming `kind` would make a deploy that lands before the column exists lose a Takeout job's defaults to a select error; a missing `kind` counts as `takeout`. Items of an `instagram` job are inserted with `source: "instagram"` (`ImportDefaults.source`). When such an item turns out to be a place the user already has (`skipped / Already exists` with a `place_id`), the drain runs `attachInstagramSource` on that place: the job's tag(s) are upserted and the post URL is appended to its notes if not already there.
+- **Job kinds (v1.28.0):** per-job defaults (visit status, lists, tags, `kind`) are read with `select("*")` — naming `kind` would make a deploy that lands before the column exists lose a Takeout job's defaults to a select error; a missing `kind` counts as `takeout`. Items of an `instagram` job are inserted with `source: "instagram"` (`ImportDefaults.source`). When such an item turns out to be a place the user already has (`skipped / Already exists` with a `place_id`), the drain runs `attachInstagramSource` on that place: the job's tag(s) are upserted and the post URL is appended to its notes if not already there. `finalizeJobs` selects `*` for the same reason; when it closes an `instagram` job it also writes `meta.phase = 'done'` (v1.28.1), so the stored phase follows the job.
 - **Notes:** `maxDuration` 300, soft deadline 240 s, 2 workers, 24 items per claim. Overlapping runs are safe (`FOR UPDATE SKIP LOCKED`); exits early above 60 in-flight items to bound spend. See [[../../05-flows/place-import-flow]].
 
 ### `POST /api/places/migrate-photos`

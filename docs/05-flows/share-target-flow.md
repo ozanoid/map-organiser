@@ -2,7 +2,7 @@
 title: Share Target Flow
 type: flow
 domain: places
-version: 1.1.0
+version: 1.1.1
 last_updated: 16.10.2026
 status: stable
 sources:
@@ -29,7 +29,10 @@ How a Google Maps URL shared from a mobile share sheet ends up as a saved Place.
 > `/map?add=<url-encoded link>` directly — no share-target route involved — and it
 > carries Instagram links too. When the link is an Instagram post or reel, the Add
 > Place dialog switches to the Instagram import instead of the parse-link preview:
-> see [[instagram-import-flow]].
+> see [[instagram-import-flow]]. Any other Instagram link (a profile) gets an
+> inline "not a post" hint instead of the parser. Since v1.28.1 the header's Add
+> Place also lands here: it hands a pasted Instagram post link to
+> `/map?add=` so the map page runs the import.
 
 ## Trigger
 
@@ -59,9 +62,12 @@ User is on mobile, viewing a Google Maps place, taps the OS share button, picks 
 4. /map page loads. MapContent reads `?add=` from searchParams.
        │
        ▼
-5. AddPlaceDialog opens with initialUrl = <decoded url>; MapContent replaces the URL with /map
+5. AddPlaceDialog opens with initialUrl = <decoded url>; MapContent removes `add`
+   from the URL (the rest of the query string, the filters, stays)
        │  • Instagram post/reel link (parseInstagramPostUrl)? → Instagram mode,
        │    see [[instagram-import-flow]]; the steps below do not run
+       │  • Any other Instagram link (isInstagramUrl)? → inline "not a post"
+       │    hint; the steps below do not run
        ▼
 6. AddPlaceDialog auto-fires useParseLink (same as [[manual-place-create-flow|manual create]] from step 3 onward)
        │
@@ -114,8 +120,8 @@ The PWA spec requires the share target to accept POST without authentication —
 - `src/app/manifest.ts` — manifest declaration.
 - `src/app/api/share-target/route.ts` — the public POST handler.
 - `src/app/(app)/map/page.tsx` — reads `?add=`.
-- `src/components/map/map-content.tsx` — opens the dialog with `initialUrl`.
-- `src/components/places/add-place-dialog.tsx` — auto-fires parse on mount when `initialUrl` is present and is not an Instagram link; an Instagram link renders `InstagramImportPanel` instead.
+- `src/components/map/map-content.tsx` — opens the dialog with `initialUrl` whenever `?add=` appears (the same link may come again once the param is gone), then removes only `add`.
+- `src/components/places/add-place-dialog.tsx` — auto-fires parse on mount when `initialUrl` is present and is not an Instagram link; an Instagram post link renders `InstagramImportPanel` instead, any other Instagram link the "not a post" hint.
 
 ## Open questions
 

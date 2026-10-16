@@ -2,7 +2,7 @@
 title: Manual Place Create Flow
 type: flow
 domain: places
-version: 1.2.0
+version: 1.2.1
 last_updated: 16.10.2026
 status: stable
 sources:
@@ -29,7 +29,7 @@ related:
 
 How a single place is added — by pasting a Google Maps URL into the Add Place dialog. The same flow handles places coming in via the PWA share target (see [[share-target-flow]]).
 
-> **Instagram links branch off (v1.28.0).** The same dialog accepts an Instagram post or reel link — pasted, or arriving as `/map?add=` from the iOS Shortcut. It never reaches `parse-link`: the dialog switches to the Instagram import, which adds every venue it can pin with no preview or save step. See [[instagram-import-flow]].
+> **Instagram links branch off (v1.28.0).** The same dialog accepts an Instagram post or reel link — pasted, or arriving as `/map?add=` from the iOS Shortcut. It never reaches `parse-link`: the dialog switches to the Instagram import, which adds every venue it can pin with no preview or save step. Pasted into the header's dialog, the link is handed to `/map?add=` and the map page runs the import (v1.28.1). Any other Instagram link (a profile) gets an inline hint and is not sent anywhere. See [[instagram-import-flow]].
 
 ## Trigger
 
@@ -47,7 +47,10 @@ User opens the Add Place dialog from:
        ▼
 2. User pastes Google Maps URL (or initialUrl is set)
        │  • Instagram post/reel link (parseInstagramPostUrl)? → the dialog renders
-       │    InstagramImportPanel instead; see [[instagram-import-flow]]
+       │    InstagramImportPanel instead (the header's dialog hands the link
+       │    to /map?add= first); see [[instagram-import-flow]]
+       │  • Any other Instagram link (isInstagramUrl)? → inline hint "That's an
+       │    Instagram profile or page, not a post. …"; nothing is sent
        ▼
 3. useParseLink → POST /api/places/parse-link  { url }
        │  • src/lib/google/parse-maps-url.ts extracts identifiers:
@@ -126,6 +129,7 @@ The preview UI shows which provider was used and the fetch time (`_provider`, `_
 
 ## Failure modes
 
+- **Instagram link that is not a post (step 2):** caught in the dialog — an inline hint asks for a post or reel, and `parse-link` is not called.
 - **Invalid URL (step 3):** `400` with the parse error. Dialog shows toast.
 - **Place not found (step 3):** `404`. Dialog shows toast.
 - **Both providers down (step 3):** `500`. Dialog shows generic error.

@@ -2,8 +2,8 @@
 title: AI Search Flow (LLM-as-judge, Phase 6.5)
 type: flow
 domain: places
-version: 2.8.0
-last_updated: 16.07.2026
+version: 2.8.1
+last_updated: 16.10.2026
 status: stable
 sources:
   - src/lib/places/query-places.ts

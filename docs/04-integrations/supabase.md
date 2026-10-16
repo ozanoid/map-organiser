@@ -2,7 +2,7 @@
 title: Supabase
 type: integration
 domain: integrations
-version: 1.0.1
+version: 1.0.2
 last_updated: 16.10.2026
 status: stable
 sources:
@@ -69,7 +69,7 @@ See [[../02-backend/supabase-clients]] for the canonical breakdown. In one line:
 
 - **Browser** — `src/lib/supabase/client.ts` (Client Components).
 - **Server** — `src/lib/supabase/server.ts` (Server Components, route handlers).
-- **Service-role** — `src/lib/supabase/server.ts#createServiceClient` (only where no session can do the job — see [[../02-backend/supabase-clients]] for the six callers).
+- **Service-role** — `src/lib/supabase/server.ts#createServiceClient` (only where no session can do the job — see [[../02-backend/supabase-clients]] for the seven callers).
 - **Middleware** — `src/lib/supabase/middleware.ts` (refreshes session on every request).
 
 ## Failure modes

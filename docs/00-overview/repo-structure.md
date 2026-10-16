@@ -2,7 +2,7 @@
 title: Repo Structure
 type: overview
 domain: overview
-version: 1.8.0
+version: 1.8.1
 last_updated: 16.10.2026
 status: stable
 sources:
@@ -88,7 +88,7 @@ src/
 │       ├── ai/                parse-query + rank-results (Phase 6) + compare (v1.19.0) + chat (v1.21.0, streaming) + trip-plan (v1.22.0, writes trip tables)
 │       ├── cron/              refresh-places — daily periodic-refresh sweep (CRON_SECRET, service-role, opt-in per user);
 │       │                      drain-imports — every minute, the import queue (Takeout + Instagram jobs)
-│       ├── instagram/         import (POST — start from a post URL, work in after()) + import/[id] (GET — dialog progress) — v1.28.0
+│       ├── instagram/         import (POST — start from a post URL, work in after()) + import/[id] (GET — dialog progress) — v1.28.0; import/[id]/pick (POST — add the place picked for a skipped venue) — v1.28.1
 │       ├── trips/             CRUD + auto-plan + day PATCH (routing_profile/notes, v1.22.0) + day reorder + day places (move/update shapes) + swap-days
 │       ├── lists/[id]/reorder
 │       ├── subcategories/     CRUD (per-user; default seed via signup trigger)
@@ -193,7 +193,7 @@ Counts (approximate, as of `last_updated`):
 | Area | Files |
 |---|---|
 | App routes (`src/app/**/page.tsx`) | 12 page files |
-| API route handlers (`src/app/api/**/route.ts`) | 42 routes (v1.22.0 added `/api/ai/trip-plan` + `/api/trips/[id]/days/[dayId]`; v1.28.0 added `/api/instagram/import` + `/api/instagram/import/[id]`) |
+| API route handlers (`src/app/api/**/route.ts`) | 43 routes (v1.22.0 added `/api/ai/trip-plan` + `/api/trips/[id]/days/[dayId]`; v1.28.0 added `/api/instagram/import` + `/api/instagram/import/[id]`; v1.28.1 added `/api/instagram/import/[id]/pick`) |
 | Feature components (`src/components/{assistant,filters,layout,map,places,settings}`) | ~27 |
 | shadcn UI (`src/components/ui/`) | 19 primitives |
 | Custom hooks (`src/lib/hooks/`) | 19 files (v1.20.0 added useSavedFilters; later useImportJob, useIsDesktop; v1.28.0 useInstagramImport) |

@@ -2,7 +2,7 @@
 title: Place Import Flow
 type: flow
 domain: places
-version: 2.1.0
+version: 2.1.1
 last_updated: 16.10.2026
 status: stable
 sources:
@@ -31,7 +31,7 @@ related:
 
 Server-driven bulk import of saved Google Maps places from a Takeout export. The work list lives in the database, so a run survives a closed tab, a sleeping laptop, and a dropped connection.
 
-> **Shared queue (v1.28.0).** The Instagram import feeds the same `import_jobs` / `import_job_items` queue and the same drain — its jobs carry `kind = 'instagram'` and their places get `source = 'instagram'`. This page's progress (`GET /api/places/import-jobs`) shows Takeout jobs only. See [[instagram-import-flow]]; the `kind` column came with the Instagram migration, applied 16.10.2026 — [[../02-backend/schema/import-jobs#instagram-migration]].
+> **Shared queue (v1.28.0).** The Instagram import feeds the same `import_jobs` / `import_job_items` queue and the same drain — its jobs carry `kind = 'instagram'` and their places get `source = 'instagram'`; when `finalizeJobs` closes such a job it also sets its `meta.phase` to `done`, and a branch picked in the Instagram dialog re-opens it with one more `import` item (v1.28.1). This page's progress (`GET /api/places/import-jobs`) shows Takeout jobs only. See [[instagram-import-flow]]; the `kind` column came with the Instagram migration, applied 16.10.2026 — [[../02-backend/schema/import-jobs#instagram-migration]].
 
 ## Trigger
 

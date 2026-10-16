@@ -2,7 +2,7 @@
 title: Place
 type: entity
 domain: places
-version: 1.6.0
+version: 1.6.1
 last_updated: 16.10.2026
 status: stable
 sources:
@@ -19,6 +19,7 @@ sources:
   - src/app/api/cron/drain-imports/route.ts
   - src/lib/import/process-place.ts
   - src/app/api/instagram/import/route.ts
+  - src/app/api/instagram/import/[id]/pick/route.ts
   - src/lib/instagram/provenance.ts
   - src/app/api/places/migrate-photos/route.ts
   - src/app/api/places/parse-link/route.ts
@@ -216,6 +217,7 @@ All `/api/places/*` routes live in `src/app/api/places/`. See [[../02-backend/ap
 | `GET` | `/api/cron/drain-imports` | Drains the import queue (Takeout and Instagram jobs): insert → photo → reviews → profile. |
 | `POST` | `/api/instagram/import` | Start an Instagram import for a post URL — see [[../02-backend/api-routes/instagram]]. |
 | `GET` | `/api/instagram/import/[id]` | Progress and result of one Instagram import. |
+| `POST` | `/api/instagram/import/[id]/pick` | Add the place the user picked for a venue the import skipped — queued like the automatic ones (v1.28.1). |
 | `POST` | `/api/places/migrate-photos` | Backfill: download Google photo URLs into Supabase Storage. |
 
 ## Frontend code surface
@@ -228,7 +230,7 @@ All `/api/places/*` routes live in `src/app/api/places/`. See [[../02-backend/ap
 | Bulk action bar | `src/components/places/bulk-action-bar.tsx`. |
 | Visit status toggle | `src/components/places/visit-status-toggle.tsx`. |
 | Map rendering | `src/components/map/map-content.tsx` + `src/lib/map/category-icons.ts`. |
-| Instagram import | `src/lib/hooks/use-instagram-import.ts` (start + poll), `src/components/places/instagram-import-panel.tsx` — see [[../05-flows/instagram-import-flow]] (v1.28.0). |
+| Instagram import | `src/lib/hooks/use-instagram-import.ts` (start, poll, pick), `src/components/places/instagram-import-panel.tsx` (incl. the branch picker) — see [[../05-flows/instagram-import-flow]] (v1.28.0). |
 
 ## Open questions
 

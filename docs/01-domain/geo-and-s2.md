@@ -2,8 +2,8 @@
 title: Geo & S2
 type: entity
 domain: geo
-version: 1.1.0
-last_updated: 12.05.2026
+version: 1.1.1
+last_updated: 16.10.2026
 status: stable
 sources:
   - src/lib/geo.ts
@@ -168,6 +168,8 @@ S2 stays scoped to the one decode path. If the app grows broader spatial feature
 ## Map rendering
 
 `src/components/map/map-view.tsx` and `map-content.tsx` consume `{lat, lng}` arrays directly. Mapbox handles projection internally. The map doesn't talk to PostGIS — it only consumes what the API returned.
+
+The viewport center travels the other way, toward search: `map-content.tsx` reads `MapViewHandle.getCenter()` after every move, rounds it to 0.01° (about 1 km) and passes it to the search box as the Mapbox Search Box `proximity` bias (v1.28.1).
 
 ## Open questions
 

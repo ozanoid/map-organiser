@@ -2,7 +2,7 @@
 title: Supabase Clients
 type: overview
 domain: backend
-version: 1.1.0
+version: 1.1.1
 last_updated: 16.10.2026
 status: stable
 sources:
@@ -76,7 +76,7 @@ import { createServiceClient } from "@/lib/supabase/server";
 const supabase = createServiceClient(); // bypasses RLS — use with care
 ```
 
-**Used only where no session can do the job** (checked 16.10.2026 — `createServiceClient` is imported by these six files):
+**Used only where no session can do the job** (checked 16.10.2026 — `createServiceClient` is imported by these seven files):
 
 | File | Why the service role |
 |---|---|
@@ -86,9 +86,11 @@ const supabase = createServiceClient(); // bypasses RLS — use with care
 | `src/app/api/cron/drain-imports/route.ts` | Drains the import queue across users — no cookie (v1.26.0). |
 | `src/app/api/places/import-jobs/route.ts` | Inserts `import_job_items`, which has no INSERT policy on purpose (v1.26.0). |
 | `src/app/api/instagram/import/route.ts` | The `after()` job that reads the post and writes the job's items, after the response has gone (v1.28.0). |
+| `src/app/api/instagram/import/[id]/pick/route.ts` | Moves a skipped item back into the queue (or marks it `Already exists`) after the session client has read the job and the item under RLS — `import_job_items` has no UPDATE policy (v1.28.1). |
 
 Every query on this client filters by `user_id` (or by an id the server itself
-created) explicitly — RLS is not there to catch a mistake.
+created, or has just read through the session client) explicitly — RLS is not
+there to catch a mistake.
 
 **Hard rules:**
 

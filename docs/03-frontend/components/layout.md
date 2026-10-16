@@ -2,8 +2,8 @@
 title: Layout components
 type: component
 domain: frontend
-version: 1.1.0
-last_updated: 16.07.2026
+version: 1.2.0
+last_updated: 16.10.2026
 status: stable
 sources:
   - src/components/layout/app-header.tsx
@@ -13,6 +13,8 @@ sources:
 related:
   - "[[_README]]"
   - "[[../layouts]]"
+  - "[[places]]"
+  - "[[../../05-flows/instagram-import-flow]]"
 ---
 
 # Layout components
@@ -31,6 +33,13 @@ App chrome. All `"use client"`. Rendered by `src/app/(app)/layout.tsx` (header/s
 - **Shadcn used:** `Button`, `DropdownMenu` family, `Avatar`/`AvatarFallback`/`AvatarImage`.
 - **Renders:** mobile-only logo + title; Add Place button; theme cycle button (Sun → Moon → Monitor); user avatar dropdown with initials, name, email, sign-out.
 - **Composes:** `AddPlaceDialog` from `places/`.
+- **Instagram links (v1.28.1):** the header's `AddPlaceDialog` gets
+  `onInstagramLink`, so it never runs an Instagram import itself. A pasted post
+  link closes the dialog and `router.push`es `/map?add=<canonical post URL>` —
+  the same entry the iOS Shortcut uses — keeping the current query string (the
+  filters) when already on `/map` and dropping `ig`. The map page then runs the
+  import with its progress, `?ig` refresh, map search, Show on map and
+  background toast. See [[../../05-flows/instagram-import-flow]].
 - **Used by:** `(app)/layout.tsx`.
 
 ## `AppSidebar`

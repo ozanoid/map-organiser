@@ -2,7 +2,7 @@
 title: Google Places API
 type: integration
 domain: integrations
-version: 1.2.0
+version: 1.2.1
 last_updated: 16.10.2026
 status: stable
 sources:
@@ -78,7 +78,7 @@ Implementations in `src/lib/google/`:
 |---|---|---|
 | `/api/places/parse-link` | Place Details or Find Place | Primary preview path when Google is enabled. |
 | `/api/places/migrate-photos` | direct `fetch` Google photo URL | Photo downloads to Supabase Storage. |
-| Instagram import (`analyzeInstagramPost`, run by `POST /api/instagram/import` in `after()`) | Text Search (New), Enterprise field mask | Candidate places for each venue in a post, plus one geocode per verified area hint. ≈ 3 searches per post on the eval set (110 for 35 posts). |
+| Instagram import (`analyzeInstagramPost`, run by `POST /api/instagram/import` in `after()`) | Text Search (New), Enterprise field mask | Candidate places for each venue in a post, plus one geocode per verified area hint. ≈ 3 searches per post on the eval set (110 for 35 posts). A venue it skips keeps up to 20 of the candidates these searches already returned as the dialog's branch-picker options (v1.28.1) — no extra request; a picked place is then added by the import queue (DataForSEO `cid:` lookup), not by Google. |
 
 DataForSEO has replaced Google for bulk import flow — see [[../05-flows/place-import-flow]].
 

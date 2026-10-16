@@ -2,7 +2,7 @@
 title: Place Search Flow
 type: flow
 domain: places
-version: 1.1.0
+version: 1.2.0
 last_updated: 16.10.2026
 status: stable
 sources:
@@ -30,15 +30,21 @@ Search-on-map → save. The user types into the search box on `/map`, picks a Ma
 
 User focuses the search input that sits on top of the map view (top-left, beside the mobile filter button).
 
-**Hand-off from the Instagram import (v1.28.0).** A venue the import could not
-pin has a **Pick branch** (chain) or **Search** button, and an empty result has
-**Search manually**. Each closes the Add Place dialog and calls
-`SearchBoxHandle.search(name)` (`src/components/map/search-box.tsx`), which puts
-the venue name in the box, opens the suggestions and focuses the input — the
-flow continues from step 1 as if the name had been typed ("Search manually"
-passes an empty name and only focuses the box). A place saved this way is an ordinary search save
-(`source: "mapbox_search"`): it gets neither the `instagram` tag nor the post
-link. See [[instagram-import-flow]].
+**Hand-off from the Instagram import (v1.28.0).** A skipped venue without
+options has a **Search** button, the dialog's branch picker has **Search the
+map**, and an empty result has **Search manually**. Each closes the Add Place
+dialog and calls `SearchBoxHandle.search(name, { proximity })`
+(`src/components/map/search-box.tsx`), which puts the venue name in the box,
+opens the suggestions and focuses the input — the flow continues from step 1 as
+if the name had been typed ("Search manually" passes an empty name and only
+focuses the box). When the import knows where the venue is (v1.28.1 — its
+`near`: the post's area, the profile's coordinates or the location tag; else the
+centre of its options or of the post's other places), the map first flies there
+at zoom 12 and the suggestions are biased to that point until the box is
+cleared or a result is picked. A place saved this
+way is an ordinary search save (`source: "mapbox_search"`), but its form starts
+with the post link as the note and the `instagram` tag selected
+(`SearchResultPanel` `prefill`), both editable. See [[instagram-import-flow]].
 
 ## Steps
 
@@ -46,9 +52,11 @@ link. See [[instagram-import-flow]].
 1. User types in SearchBox (≥ 2 chars)
        │  usePlaceSearch debounces 300ms
        ▼
-2. GET /api/search/suggest?q=…&session_token=<uuidv4>
+2. GET /api/search/suggest?q=…&session_token=<uuidv4>&proximity=<lng,lat>
+       │  • proximity (v1.28.1) = the viewport center, rounded to 0.01°
+       │    (≈ 1 km), or the point an Instagram hand-off aimed the search at
        │  • Server proxies Mapbox /searchbox/v1/suggest
-       │  • types=poi, language=en
+       │  • types=poi, language=en; proximity biases, it does not filter
        │  • Returns up to 8 SearchSuggestion[]
        │
        ▼ Dropdown shows results
@@ -146,8 +154,8 @@ For one suggest→retrieve→save:
 
 - `src/components/map/search-box.tsx` — search input + dropdown.
 - `src/components/map/search-result-panel.tsx` — preview + save form.
-- `src/components/map/map-content.tsx` — orchestrator + temporary marker wiring.
-- `src/components/map/map-view.tsx` — `flyToCoords`, `searchMarker` prop.
+- `src/components/map/map-content.tsx` — orchestrator + temporary marker wiring; the viewport center for the proximity bias.
+- `src/components/map/map-view.tsx` — `flyToCoords`, `getCenter`, `searchMarker` prop.
 - `src/lib/hooks/use-place-search.ts` — debounce, session token, mutations.
 - `src/lib/mapbox/search-box.ts` — server-side suggest/retrieve.
 - `src/app/api/search/suggest/route.ts`, `src/app/api/search/retrieve/[id]/route.ts` — proxies.
@@ -155,6 +163,5 @@ For one suggest→retrieve→save:
 
 ## Open questions
 
-- **Proximity bias not wired.** The hook accepts a `proximity` opt but `SearchBox` doesn't supply one yet. Plumbing `MapView.getCenter()` would localize results to the current viewport — natural UX next step.
 - **Tıklanabilir POI labels.** Mapbox `streets-v12` style already renders POI labels visually but clicking them does nothing. A future iteration could attach click handlers (or migrate to Mapbox Standard's `addInteraction` API) — out of scope for v1 of this feature.
 - **Search-from-anywhere.** Today the search box lives only on `/map`. If `/places` or `/lists/[id]` ever need a "find a new place to add" widget, this hook is reusable; the SearchBox component is map-page-specific.

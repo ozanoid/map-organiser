@@ -2,16 +2,19 @@
 title: Instagram Import Flow
 type: flow
 domain: places
-version: 1.0.0
+version: 1.1.0
 last_updated: 16.10.2026
 status: stable
 sources:
   - src/components/map/map-content.tsx
+  - src/components/map/search-box.tsx
+  - src/components/layout/app-header.tsx
   - src/components/places/add-place-dialog.tsx
   - src/components/places/instagram-import-panel.tsx
   - src/lib/hooks/use-instagram-import.ts
   - src/app/api/instagram/import/route.ts
   - src/app/api/instagram/import/[id]/route.ts
+  - src/app/api/instagram/import/[id]/pick/route.ts
   - src/lib/instagram/url.ts
   - src/lib/instagram/types.ts
   - src/lib/instagram/import-job.ts
@@ -57,7 +60,10 @@ be pinned **on evidence** lands on their map — no confirmation step. The serve
 reads the post, decides deterministically which Google place each venue is, and
 hands the new places to the same durable queue that runs Takeout imports, so
 they get the full photo → reviews → AI-profile enrichment. Venues that cannot be
-pinned are listed with the reason and a one-tap hand-off to the map search.
+pinned are listed with the reason. When Google returned places a venue could be
+(a chain's branches, near-matches), the user picks one in the dialog and it is
+added the same way; otherwise a one-tap hand-off to the map search, aimed at
+where the post puts the venue.
 
 **End state.** New places: `source = 'instagram'`, visit status `want_to_go`,
 the user's `instagram` tag, the canonical post URL as the note. Places the user
@@ -74,8 +80,14 @@ already had: the tag added and the post URL appended to their notes (once).
   `/map?add=<url-encoded link>`. `MapContent` opens the Add Place dialog with
   that URL as `initialUrl`; when it is an Instagram post/reel link the dialog
   switches to Instagram mode.
-- **Paste:** an Instagram link pasted into the Add Place dialog (map FAB or
-  header button) does the same.
+- **Paste on `/map`:** an Instagram post link pasted into the map FAB's Add
+  Place dialog does the same.
+- **Paste in the header:** the header's Add Place dialog (`AppHeader`, any page)
+  does not run the import itself. Its `onInstagramLink` closes the dialog and
+  navigates to `/map?add=<canonical post URL>` — keeping the query string (the
+  filters) when already on `/map`, minus any `ig` — so an import started there
+  runs on the map page with everything the map page adds: progress, `?ig`
+  refresh, the map search, Show on map, the background toast.
 - **Not** the PWA share sheet: `/api/share-target` only forwards Google Maps
   links (its regex), so an Instagram link shared that way lands on plain `/map`.
   See [[share-target-flow]].
@@ -87,6 +99,13 @@ link in text. The result is canonicalised to
 `https://www.instagram.com/p/<shortcode>/`, which is what HikerAPI is asked for,
 what the job stores in `file_name`, and what becomes the note.
 
+Any other Instagram link — a profile, a story; `isInstagramUrl` matches any
+whitespace-separated `http(s)://` token on `instagram.com` or `instagr.am`,
+subdomains included — never reaches the Maps parser.
+The dialog shows "That's an Instagram profile or page, not a post. Share a post
+or reel to add the places in it." under the input (`role="alert"`), whether the
+link was pasted or arrived as `initialUrl`, and sends nothing.
+
 ## Steps
 
 ```mermaid
@@ -96,28 +115,38 @@ sequenceDiagram
   participant J as after() job (runInstagramImportJob)
   participant X as HikerAPI / Gemini / Google Text Search
   participant Q as drain-imports (queue)
+  participant P as POST /api/instagram/import/[id]/pick
   D->>R: { url }
   R-->>D: 202 { jobId }  (or 200 { jobId, reused: true })
   R->>J: after(): read the post
   J->>X: post + profiles → one Gemini read → candidate searches
   J->>Q: import_job_items (stage import / skipped) + kickDrain
   Q->>Q: import → photo → reviews → profile (same as Takeout)
-  loop every 1.5 s while reading / adding
+  loop every 1.5 s while reading / adding, every 3 s while a photo is pending
     D->>R: GET /api/instagram/import/[id]
+  end
+  opt the user picks a place for a skipped venue
+    D->>P: { itemId, placeId }
+    P->>Q: the item back at stage import + kickDrain
   end
 ```
 
 ### A. Dialog
 
-1. `AddPlaceDialog` sees an Instagram URL — in `initialUrl` or via `handlePaste`
-   — and renders [[../03-frontend/components/places#instagramimportpanel|`InstagramImportPanel`]]
-   instead of the parse-link preview. `parse-link` is never called for it.
+1. `AddPlaceDialog` sees an Instagram post URL — in `initialUrl` or via
+   `handlePaste` — and renders [[../03-frontend/components/places#instagramimportpanel|`InstagramImportPanel`]]
+   instead of the parse-link preview (the header's dialog hands the link over
+   instead — Trigger). `parse-link` is never called for it.
 2. The panel starts the job once per URL through
    [[../03-frontend/hooks/use-instagram-import|`useStartInstagramImport`]]
    (`POST /api/instagram/import`; a ref guards React's development double
    mount). On `/map` the returned id goes up to `MapContent`, which writes
    `?ig=<jobId>` into the URL with `router.replace`, keeping every other param
-   (the filters).
+   (the filters). The id is reported from the mutation's own `onSuccess`, not
+   from `mutate()`'s callbacks, which TanStack drops once the panel unmounts — so
+   it still arrives when the dialog was closed before the server answered. In
+   that case `MapContent` (`handleInstagramJob`) has no dialog to show it in and
+   watches the job in the background instead (step 26).
 
 ### B. Request — `POST /api/instagram/import`
 
@@ -156,13 +185,23 @@ sequenceDiagram
     |---|---|---|---|---|
     | Pinned, not yet saved | `import` | — | — | `name`, `address`, `lat`, `lng`, `googleMapsUrl` = `https://maps.google.com/?cid=<cid>` (or `?q=place_id:<id>` without a CID), `note` = post URL, `instagram` (below) |
     | Pinned, already saved (`findExisting` by place_id / CID) | `skipped` | `Already exists` | the existing place | same as above; `attachInstagramSource` has already added the tag + note |
-    | Not pinned: `chain_branch_unknown`, `no_evidence`, `ambiguous`, `closed` | `skipped` | the code | — | `name`, `instagram` |
+    | Not pinned: `chain_branch_unknown`, `no_evidence`, `ambiguous`, `closed` | `skipped` | the code | — | `name`, `instagram` (with `options` and `near`) |
     | `not_a_venue`, `not_featured`, `unverified_name` | not written | | | |
 
     `payload.instagram` (`InstagramItemInfo`): the candidate label, its sources,
     the rule that accepted it, human evidence labels ("Tagged in photo",
-    "Phone matches", "Only one nearby", …), the skip code, how many same-name
-    places were seen, and `searchName` — the prefill for the manual search.
+    "Phone matches", "Location matches", "Only one nearby", …), the skip code,
+    how many same-name places were seen, and `searchName` — the prefill for the
+    map search. A venue that was not pinned also stores:
+    - `options` — the places it could be, at most 20, each
+      `{ id, name, address, lat, lng, cid }` (which ones and in what order:
+      [[#7-options-for-a-skipped-venue]]); a candidate without a CID is left
+      out, because the queue resolves a place by CID;
+    - `near` — where the post puts the venue: the area's centre, else the
+      profile's coordinates, else the location tag's pin; `null` when none is
+      known;
+    - `searchName` = the name at least two options share — "Caffè Nero" rather
+      than the account's "Caffè Nero Türkiye" — else the display name.
 12. Close the reading phase: `meta = { phase: 'adding' | 'done', shortcode,
     post: { owner, ownerFullName, caption (≤ 280 chars), locationName } }`,
     `total` = new + already-saved places, `status 'running'` when there is
@@ -188,9 +227,12 @@ sequenceDiagram
 
 17. [[../03-frontend/hooks/use-instagram-import|`useInstagramImport`]] polls
     `GET /api/instagram/import/[id]` every 1.5 s while the phase is `reading` or
-    `adding` (or nothing has loaded yet).
-18. The route computes what the dialog shows — the stored `meta.phase` is not
-    updated by the drain:
+    `adding` (or nothing has loaded yet), then every 3 s while any item's photo
+    is still pending — the new places' pictures land a stage later. The map
+    page's background watcher stops at the first part (`waitForPhotos: false`).
+18. The route computes what the dialog shows. The drain's `finalizeJobs` writes
+    `meta.phase = 'done'` when it closes the job and a pick writes `adding`, but
+    the phase shown is derived:
     - stored `reading` older than 3 min → `failed` / `stalled` (the background run
       was lost);
     - stored `adding` or `done` → `adding` while any item is still at stage
@@ -199,32 +241,91 @@ sequenceDiagram
       (`removed` when its place has since been deleted); `skipped` +
       `Already exists` → `already_saved`; `failed` → `failed`; other `skipped` →
       `skipped`.
+    - Each item also carries `options` (skipped items only, without the CID),
+      `near`, and `photoPending`: at stage `photo` and an `updated_at` — which the
+      drain stamps on every stage change — under 10 minutes old
+      (`PHOTO_WAIT_MS`), so a photo that never comes stops counting as pending
+      and the polling ends.
 19. The panel invalidates `["places"]` as items land, so pins appear during the
-    run. Finished, it shows a single-place card or a list; each added place has
-    **Remove** (`DELETE /api/places/[id]` — deletes the place), and on `/map`
-    each unpinned venue has a **Pick branch** (chain) or **Search** button.
+    run. Finished, it shows a single-place card (a spinner where the photo goes
+    while `photoPending`) or a list. Each added place has **Remove**
+    (`DELETE /api/places/[id]` — deletes the place). A skipped venue with options
+    has **Pick branch** (`chain_branch_unknown`) or **Choose** (any other reason),
+    which opens the picker (section F); one without options has **Search**, on `/map`
+    only (step 29).
 
-### F. Leaving and coming back (map page)
+### F. Picking a place for a skipped venue
 
-20. **Close mid-way** ("Continue in background" or ✕) → `closeAddDialog` drops
+20. **Pick branch** / **Choose** turns the dialog body into the picker: title
+    "Which <name>?" (for a chain, the shared `searchName`: "Which Caffè Nero?"),
+    description "N branches · pick the one in the post" ("N places" / "1 place"
+    for the other reasons), one row per option with its name and address, and
+    a filter box from 7 options ("Filter by street or district" — a
+    Turkish-aware match on name and address, `fold`). Footer: **Back** to the
+    list and, on `/map`, **Search the map** (step 29). Focus moves to the dialog
+    title on each switch.
+21. Tapping a row calls [[../03-frontend/hooks/use-instagram-import|`usePickInstagramPlace`]]
+    → `POST /api/instagram/import/[id]/pick { itemId, placeId }`. Every row is
+    disabled and the tapped one spins until the answer.
+22. The route reads the job (`kind = 'instagram'`, the user's own) and the item
+    (in that job) on the session client, so RLS proves both are the user's. It
+    answers 409 "This place can't be picked for that item." unless the item is
+    still `skipped`, is not `Already exists`, and `placeId` is one of its stored
+    options — only a place the import itself offered can be picked. The lookup
+    and writes below run on the service role (`import_job_items` has no UPDATE
+    policy).
+23. **Already saved** (`findExisting` by place id / CID finds it):
+    `attachInstagramSource` adds the job's tag and the post link to that place;
+    the item becomes `skipped` / `Already exists` with its `place_id`; the job's
+    `total` grows by one; the answer is `{ status: "already_saved" }` and the
+    panel toasts "<name> is already in your places · tag and link added".
+24. **Otherwise** the item goes back into the queue: `stage 'import'`,
+    `attempts 0`, `claimed_at null`, and a payload built from the option —
+    `name`, `address`, `lat`, `lng`, `googleMapsUrl` =
+    `https://maps.google.com/?cid=<cid>`, `note` = the post URL, and `instagram`
+    with `rule 'picked'`, `evidence ["Picked by you"]`, no skip code and the
+    options dropped. The update is guarded by `stage = 'skipped'`, so a double
+    tap queues the place once — the second gets 409 "Already picked.". The job
+    goes back to `status 'running'` (the claim only reads running jobs),
+    `finished_at null`, `meta.phase 'adding'`, `total + 1`; `kickDrain`; the
+    answer is `{ status: "pending" }`.
+25. The drain adds the place exactly like an automatic one (steps 14–15):
+    `want_to_go`, the `instagram` tag, the post link as the note,
+    `source 'instagram'`, the full enrichment, and `finalizeJobs` closes the job
+    again. The panel is back on the list (the pick invalidates the job's query);
+    while only picked places are pending the title reads "Adding <name>…", and
+    the row ends as "Picked by you · <address>".
+
+### G. Leaving and coming back (map page)
+
+26. **Close mid-way** ("Continue in background" or ✕) → `closeAddDialog` drops
     `?ig`; if the last phase seen was not `done`/`failed`, `MapContent` keeps
     polling that job in the background and toasts once when it ends —
     "N places added from Instagram", "No new places from that Instagram post" or
     "Couldn't add from that Instagram post" — with a **View** action that
-    reopens the dialog on the job.
-21. **Refresh** with `?ig=<jobId>` → `MapContent` reopens the dialog in
+    reopens the dialog on the job; the toast stays 10 s. A job whose id arrives
+    after the dialog closed (step 2) is watched the same way.
+27. **Refresh** with `?ig=<jobId>` → `MapContent` reopens the dialog in
     Instagram mode for that job; no post URL is needed.
-22. **Show on map** → the dialog closes and `MapView.fitToCoords` frames every
+28. **Show on map** → the dialog closes and `MapView.fitToCoords` frames every
     added and already-saved place (one place: fly to zoom 16; several: fit bounds,
     padding 80, max zoom 15).
-23. **Pick branch / Search** → the dialog closes and `SearchBoxHandle.search`
-    puts the venue name into the map search box with the suggestions open — the
-    user continues in [[place-search-flow]].
+29. **Search** / **Search the map** → the dialog closes and
+    `SearchBoxHandle.search(name, { proximity })` puts the venue name (its
+    `searchName`) in the box with the suggestions open. The point is the
+    venue's `near`, else the centre of its options, else the centre of the
+    places this post already put on the map (added or already saved); when there
+    is one, the map flies there (zoom 12) and the suggestions stay biased to it
+    until the box is cleared or a result is picked. Without one — and always for
+    **Search manually**, which an empty result offers — the search keeps the
+    viewport bias. The result panel starts with the post link as the note and
+    the `instagram` tag (`SearchResultPanel` `prefill`). The user continues in
+    [[place-search-flow]].
 
-Steps 20–23 exist only on `/map`. The header's and `SimilarPlaces`' dialogs
-pass none of these callbacks: the import still runs and reports in the dialog,
-but there is no `?ig`, no completion toast after closing, no Show on map and no
-search hand-off.
+Steps 26–29 exist only on `/map`, which is why the header hands a pasted post
+link to `/map?add=` (Trigger). `SimilarPlaces`' dialog still runs an import in
+place: it reports in the dialog and the picker works, but there is no `?ig`, no
+completion toast after closing, no Show on map and no map search.
 
 ## How a venue is pinned
 
@@ -339,6 +440,26 @@ Nothing accepted → `no_evidence` (`chain_branch_unknown` for a chain).
 Finally, one decision per Google place: a second candidate that resolves to the
 same place only adds its sources.
 
+### 7. Options for a skipped venue
+
+When no place is decided, `optionsFor` (`resolve.ts`) keeps what the searches
+already returned for the user to pick from — no extra request:
+
+- every place the candidate's queries found that is an establishment or point
+  of interest, has a CID and is not permanently closed;
+- of those, the ones named like the venue (name ≥ 0.6) or sharing its identity —
+  phone, website, Instagram handle, the Maps link's CID / place id;
+- when none qualify (a library service whose branches each carry their own
+  name), the places returned by the queries that did not carry an address — the
+  profile's / location tag's or the post's; a brand's profile address is usually
+  its head office;
+- nearest first to the candidate's area or, without one, its profile
+  coordinates; otherwise in the order the searches first returned them; at most
+  20 (`MAX_OPTIONS`).
+
+`near` (step 11) comes from the same candidate: the area's centre, else the
+profile coordinates, else the location tag's pin.
+
 ## Inputs / outputs
 
 | Step | Input | Output |
@@ -346,7 +467,8 @@ same place only adds its sources.
 | B | `{ url }` | 1 `import_jobs` row (`kind 'instagram'`, `status 'reading'`), the `instagram` tag if new |
 | C | the post URL | `import_job_items` rows; `meta.post`; tag + note on already-saved places; `api_usage` rows (`hikerapi_request`, `text_search_enterprise`, `ai_instagram_read`) |
 | D | `import` items | `places` rows (`source 'instagram'`) + `place_tags`, then photo, reviews, profile |
-| E | job id | `InstagramImportView` — phase, error, post summary, item views with place coordinates and photo |
+| E | job id | `InstagramImportView` — phase, error, post summary, item views with place coordinates and photo, `options`, `near`, `photoPending` |
+| F | `{ itemId, placeId }` | the item back at stage `import` and the job `running` again — or, for a place the user already has, the item `skipped / Already exists` and the tag + note on that place |
 
 ## Measured quality
 
@@ -391,7 +513,8 @@ The monthly `instagram` budget (300 posts per user) bounds the first three.
 
 | Where | Symptom | Cause / behaviour |
 |---|---|---|
-| B | 400 "That isn't an Instagram post or reel link." | Profile, story or other non-post URL. |
+| A | "That's an Instagram profile or page, not a post. Share a post or reel to add the places in it." under the input | An Instagram link that is not a post or reel (`isInstagramUrl` without `parseInstagramPostUrl`). Nothing is sent. |
+| B | 400 "That isn't an Instagram post or reel link." | A non-post URL sent to the route directly — the dialog stops those first (row above). |
 | B | 503 "Instagram import isn't set up on this server." | `HIKERAPI_KEY` or `GOOGLE_GENERATIVE_AI_API_KEY` missing. |
 | B | 400 "Instagram import reads the post with AI. Turn on AI features in Settings." | `profiles.ai_features_enabled` is off. |
 | B | 400 "…needs a Google Places API key. Add one in Settings." | No per-user key and not an admin. The `google_places_enabled` toggle (it scopes Maps-link lookups) is deliberately not consulted — see Decisions. |
@@ -404,14 +527,26 @@ The monthly `instagram` budget (300 posts per user) bounds the first three.
 | D | An item ends `failed` | As in [[place-import-flow]] — DataForSEO / insert errors, 3 failed attempts. |
 | D | Items stay "Adding…" | The drain never runs: `CRON_SECRET` unset (the kick no-ops; locally there is no cron at all) or no DataForSEO credentials. |
 | E | "Couldn't load this import." | `GET` 404 (not this user's job, or not an Instagram job). The hook keeps polling while the dialog is open. |
+| F | Toast "This place can't be picked for that item." (409) | The item is no longer a skipped venue (it was added, or is `Already exists`), or the place is not one of the options stored for it. |
+| F | Toast "Already picked." (409) | Another tap or tab queued the item first; the guarded update matched nothing. |
+| F | Toast "Not found" (404) | The job is not this user's Instagram job, or the item is not in it. |
 
 ## Known limits
 
 - **Chains pinned only by photos** are skipped as `chain_branch_unknown`, with
-  "N branches · the post doesn't say which" and **Pick branch**.
-- **A place picked through Pick branch / Search** is saved by the normal search
-  flow (`source 'mapbox_search'`); its form starts with the post link as the note
-  and the `instagram` tag selected (`SearchResultPanel` `prefill`), both editable.
+  "N branches · the post doesn't say which" and **Pick branch**. The picker
+  lists only what the import's searches returned (at most 20); a branch outside
+  that set is reached through **Search the map**.
+- **A place picked in the dialog** goes through the queue like an automatic one
+  (`source 'instagram'`, evidence "Picked by you"). **A place found through
+  Search** is saved by the normal search flow (`source 'mapbox_search'`); its
+  form starts with the post link as the note and the `instagram` tag selected
+  (`SearchResultPanel` `prefill`), both editable.
+- **Testing on a preview deployment.** The drain kick cannot pass Vercel
+  Deployment Protection there, so the items a preview creates — a pick included
+  — are drained by production's minute cron, i.e. `main`'s code, which has no
+  Instagram handling yet (it inserts them as `source 'import'`). The owner
+  decided to verify the drain after the merge.
 - **Gemini output varies between runs.** The precision guard held in every run;
   recall moves by about one place.
 - **Telemetry.** The read emits `ai.instagram-read-post` spans
@@ -422,14 +557,15 @@ The monthly `instagram` budget (300 posts per user) bounds the first three.
 
 ## Related code
 
-- `src/lib/instagram/url.ts` — `parseInstagramPostUrl`, `isInstagramPostUrl` (client-safe).
-- `src/lib/instagram/types.ts` — job meta, item info and the dialog's view shapes (client-safe).
+- `src/lib/instagram/url.ts` — `parseInstagramPostUrl`, `isInstagramUrl` (client-safe).
+- `src/lib/instagram/types.ts` — job meta, item info (incl. `InstagramPlaceOption`) and the dialog's view shapes (client-safe).
 - `src/app/api/instagram/import/route.ts` — create / reuse a job, `after()`.
 - `src/app/api/instagram/import/[id]/route.ts` — the dialog's progress view.
-- `src/lib/instagram/import-job.ts` — `runInstagramImportJob`: budget, usage, item rows, finish.
-- `src/lib/instagram/analyze.ts` — `analyzeInstagramPost`: accounts, verification, candidates, area.
+- `src/app/api/instagram/import/[id]/pick/route.ts` — add the place picked for a skipped venue.
+- `src/lib/instagram/import-job.ts` — `runInstagramImportJob`: budget, usage, item rows (options, `near`, `searchName`), finish.
+- `src/lib/instagram/analyze.ts` — `analyzeInstagramPost`: accounts, verification, candidates, area, `near`.
 - `src/lib/instagram/read-post.ts` — the Gemini read and `PostReadingSchema`.
-- `src/lib/instagram/resolve.ts` — evidence, acceptance rules, tie-breaks, query plan.
+- `src/lib/instagram/resolve.ts` — evidence, acceptance rules, tie-breaks, query plan, `optionsFor`.
 - `src/lib/instagram/normalize.ts` — Turkish-aware name, phone, website, address and distance helpers.
 - `src/lib/instagram/maps-link.ts` — find and follow a venue's own Maps link.
 - `src/lib/instagram/provenance.ts` — `ensureInstagramTag`, `attachInstagramSource`.
@@ -437,9 +573,10 @@ The monthly `instagram` budget (300 posts per user) bounds the first three.
 - `src/lib/google/place-candidates.ts` — Text Search (Enterprise field mask).
 - `src/lib/import/kick-drain.ts` — shared with the Takeout import.
 - `src/app/api/cron/drain-imports/route.ts`, `src/lib/import/process-place.ts` — the queue.
-- `src/lib/hooks/use-instagram-import.ts` — start + poll.
-- `src/components/places/instagram-import-panel.tsx`, `src/components/places/add-place-dialog.tsx` — the UI.
-- `src/components/map/map-content.tsx` — `?ig`, background watcher, toasts, hand-offs; `map-view.tsx#fitToCoords`; `search-box.tsx#SearchBoxHandle`.
+- `src/lib/hooks/use-instagram-import.ts` — start, poll, pick.
+- `src/components/places/instagram-import-panel.tsx` (incl. the picker), `src/components/places/add-place-dialog.tsx` — the UI.
+- `src/components/layout/app-header.tsx` — hands a pasted post link to `/map?add=`.
+- `src/components/map/map-content.tsx` — `?add=`, `?ig`, background watcher, toasts, hand-offs; `map-view.tsx#fitToCoords`; `search-box.tsx#SearchBoxHandle`.
 - `scripts/instagram-eval/` — `run.ts`, `labels.json`, `README.md`, `tsconfig.json`.
 
 ## Decisions
@@ -453,6 +590,11 @@ The monthly `instagram` budget (300 posts per user) bounds the first three.
   meaning calls for it.
 - **Entry points** (owner, 16.10.2026): the iOS Shortcut and pasting a link.
   `/api/share-target` keeps forwarding only Google Maps links.
+- **Pick branch lists Google's candidates in the dialog; the map search is the
+  fallback** (16.10.2026). The options are what the import's own searches
+  returned, so picking costs no extra search and the place is added through the
+  queue like an automatic one; a venue with no options, or a branch the searches
+  did not return, goes to the map search aimed at the post's area.
 
 ## Open questions
 

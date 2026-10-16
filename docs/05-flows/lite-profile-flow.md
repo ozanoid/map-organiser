@@ -2,7 +2,7 @@
 title: Lite Profile Flow
 type: flow
 domain: places
-version: 1.2.1
+version: 1.2.2
 last_updated: 16.10.2026
 status: stable
 sources:
@@ -35,9 +35,10 @@ reviews are fetched.
 
 User pastes a Google Maps URL into `AddPlaceDialog`, OR PWA share-target
 opens the dialog with `initialUrl`. Either way, `parseLink.mutate()` runs —
-unless the URL is an Instagram post/reel link (v1.28.0): the dialog then runs
-the Instagram import instead, `parse-link` is never called, and no lite profile
-is built (see [[instagram-import-flow]]).
+unless the URL is an Instagram link: a post or reel runs the Instagram import
+instead (v1.28.0), any other Instagram link gets an inline "not a post" hint
+(v1.28.1); `parse-link` is never called and no lite profile is built (see
+[[instagram-import-flow]]).
 
 ## Steps
 

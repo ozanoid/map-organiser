@@ -2,7 +2,7 @@
 title: Env Vars
 type: overview
 domain: ops
-version: 1.5.0
+version: 1.5.1
 last_updated: 16.10.2026
 status: stable
 sources:
@@ -42,7 +42,7 @@ Every environment variable the app reads, where it lives, and who depends on it.
 |---|---|---|---|---|
 | `NEXT_PUBLIC_SUPABASE_URL` | ✅ public | yes | Supabase project | Browser + server clients |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | ✅ public | yes | Supabase project | Browser + server clients |
-| `SUPABASE_SERVICE_ROLE_KEY` | ❌ server-only | yes | Supabase project → Settings → API | `createServiceClient()` — public share reads, both cron routes, the import-queue writes and the Instagram import's background job ([[../02-backend/supabase-clients]] lists the six callers). Without it sharing, both imports and the crons break. |
+| `SUPABASE_SERVICE_ROLE_KEY` | ❌ server-only | yes | Supabase project → Settings → API | `createServiceClient()` — public share reads, both cron routes, the import-queue writes, the Instagram import's background job and its branch pick ([[../02-backend/supabase-clients]] lists the seven callers). Without it sharing, both imports and the crons break. |
 | `NEXT_PUBLIC_MAPBOX_TOKEN` | ✅ public (URL-restricted) | yes | Mapbox account → tokens | MapView + server-side Directions fallback |
 | `MAPBOX_SERVER_TOKEN` | ❌ server-only | optional (recommended) | Mapbox account → secret token (no URL restriction) | `src/lib/mapbox/search-box.ts` proxy for Search Box `/suggest` and `/retrieve`. Falls back to public token if absent. |
 | `GOOGLE_PLACES_API_KEY` | ❌ server-only | optional (admin fallback) | Google Cloud Console | `getUserApiKeys` returns it to admins (`profiles.is_admin`) instead of a per-user key. The Instagram import's Text Search runs on whatever key `getUserApiKeys` returns, so for an admin it bills this key. `npm run eval:instagram` also requires it. |
@@ -50,7 +50,7 @@ Every environment variable the app reads, where it lives, and who depends on it.
 | `DATAFORSEO_LOGIN` | ❌ server-only | yes | DataForSEO account | Default enrichment provider basic auth |
 | `DATAFORSEO_PASSWORD` | ❌ server-only | yes | DataForSEO account | Same |
 | `GOOGLE_GENERATIVE_AI_API_KEY` | ❌ server-only | optional (required for AI features) | https://aistudio.google.com/apikey | `src/lib/ai/client.ts#getAiClient` — Gemini Flash for AI-01/AI-03/AI-04/AI-05 and the Instagram import's post read. When absent, `/api/user/ai-settings` reports `available: false` and the Settings AI toggle is disabled, and `POST /api/instagram/import` answers 503 (`isAiAvailable`). |
-| `CRON_SECRET` | ❌ server-only | **yes** | Generated; set in Vercel | Bearer auth for BOTH cron routes: `refresh-places` (daily) and `drain-imports` (every minute). Absent → both return 500, **and imports silently never start** — `kickDrain`, fired when a Takeout job is created and when an Instagram job has queued places, no-ops without it. An Instagram import then reads its post but its places sit at "Adding…". Not present in `.env.local` by default, so imports do not drain locally. See [[runbooks/periodic-refresh]], [[../05-flows/place-import-flow]] and [[../05-flows/instagram-import-flow]]. |
+| `CRON_SECRET` | ❌ server-only | **yes** | Generated; set in Vercel | Bearer auth for BOTH cron routes: `refresh-places` (daily) and `drain-imports` (every minute). Absent → both return 500, **and imports silently never start** — `kickDrain`, fired when a Takeout job is created, when an Instagram job has queued places and when a branch picked in the Instagram dialog is queued, no-ops without it. An Instagram import then reads its post but its places sit at "Adding…". Not present in `.env.local` by default, so imports do not drain locally. See [[runbooks/periodic-refresh]], [[../05-flows/place-import-flow]] and [[../05-flows/instagram-import-flow]]. |
 | `HIKERAPI_KEY` | ❌ server-only | optional (required for the Instagram import) | HikerAPI account (hikerapi.com) | `src/lib/hikerapi/client.ts` — header `x-access-key` on every HikerAPI call. `POST /api/instagram/import` checks it before creating a job and answers 503 "Instagram import isn't set up on this server." without it. Read from `.env.local` by `npm run eval:instagram`. See [[../04-integrations/hikerapi]]. v1.28.0. |
 | `HONEYCOMB_API_KEY` | ❌ server-only | optional (required for the Honeycomb pipe) | Honeycomb → ingest key | `src/instrumentation-node.ts` — OTel trace + log exporters. Absent → Honeycomb pipe dark, console pipe unaffected. |
 | `HONEYCOMB_DATASET` | ❌ server-only | optional | — | Dataset name; defaults to `map-organiser`. |
@@ -114,7 +114,7 @@ Practical rules:
 | `ENCRYPTION_SECRET` | `process.env.ENCRYPTION_SECRET` in the AES-256-GCM helpers |
 | `DATAFORSEO_LOGIN` / `DATAFORSEO_PASSWORD` | `process.env.DATAFORSEO_*` in `src/lib/dataforseo/client.ts` |
 | `GOOGLE_GENERATIVE_AI_API_KEY` | `process.env.GOOGLE_GENERATIVE_AI_API_KEY` in `src/lib/ai/client.ts#getAiClient` |
-| `CRON_SECRET` | `process.env.CRON_SECRET` in `src/app/api/cron/refresh-places/route.ts` and `src/app/api/cron/drain-imports/route.ts` (bearer check, and the drain's self-chain), plus `kickDrain` in `src/lib/import/kick-drain.ts` (moved there from the import-jobs route in v1.28.0; called by the Takeout create route and the Instagram import job) |
+| `CRON_SECRET` | `process.env.CRON_SECRET` in `src/app/api/cron/refresh-places/route.ts` and `src/app/api/cron/drain-imports/route.ts` (bearer check, and the drain's self-chain), plus `kickDrain` in `src/lib/import/kick-drain.ts` (moved there from the import-jobs route in v1.28.0; called by the Takeout create route, the Instagram import job and, since v1.28.1, the Instagram pick route) |
 | `HIKERAPI_KEY` | `process.env.HIKERAPI_KEY` in `src/lib/hikerapi/client.ts#get` and the presence check in `src/app/api/instagram/import/route.ts` |
 | `HONEYCOMB_API_KEY` / `HONEYCOMB_DATASET` / `HONEYCOMB_API_URL` | `process.env.HONEYCOMB_*` in `src/instrumentation-node.ts` |
 | `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` | `process.env.LANGFUSE_*` in `src/lib/telemetry/langfuse.ts` (presence gate) |

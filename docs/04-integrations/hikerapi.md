@@ -2,7 +2,7 @@
 title: HikerAPI (Instagram data)
 type: integration
 domain: integrations
-version: 1.0.0
+version: 1.0.1
 last_updated: 16.10.2026
 status: stable
 sources:
@@ -84,9 +84,11 @@ Only by the Instagram import, inside `analyzeInstagramPost`
    @mentioned in the caption, **and the owner, always** — by pk when known,
    otherwise by username. Five at a time (`PROFILE_CONCURRENCY`).
 
-A failed profile read is swallowed (`profile = null`): it only removes evidence
-(no phone, website, address or coordinates for that account), so the account is
-more likely to be skipped, never more likely to be mis-pinned.
+A failed profile read is retried once (on top of the transport's own retries;
+a `null` answer — no such account — is not retried), then swallowed
+(`profile = null`): it only removes evidence (no phone, website, address or
+coordinates for that account), so the account is more likely to be skipped,
+never more likely to be mis-pinned.
 
 ## Cost & limits
 
