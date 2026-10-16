@@ -2,8 +2,8 @@
 title: Supabase
 type: integration
 domain: integrations
-version: 1.0.0
-last_updated: 12.05.2026
+version: 1.0.1
+last_updated: 16.10.2026
 status: stable
 sources:
   - src/lib/supabase/
@@ -44,7 +44,7 @@ Postgres + Auth + Storage + (optionally) Vault, Edge Functions, Realtime — all
 |---|---|---|
 | `NEXT_PUBLIC_SUPABASE_URL` | public | All three clients |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | public | Browser + server (cookie-scoped) clients |
-| `SUPABASE_SERVICE_ROLE_KEY` | **server only** | `createServiceClient()` for `/api/shared/[slug]` GET |
+| `SUPABASE_SERVICE_ROLE_KEY` | **server only** | `createServiceClient()` — the public share read, both cron routes, the import-queue writes and the Instagram import's background job (list in [[../02-backend/supabase-clients]]) |
 
 > **Gap:** `.env.local.example` is missing `SUPABASE_SERVICE_ROLE_KEY`. See [[../06-ops/env-vars]].
 
@@ -69,7 +69,7 @@ See [[../02-backend/supabase-clients]] for the canonical breakdown. In one line:
 
 - **Browser** — `src/lib/supabase/client.ts` (Client Components).
 - **Server** — `src/lib/supabase/server.ts` (Server Components, route handlers).
-- **Service-role** — `src/lib/supabase/server.ts#createServiceClient` (only `/api/shared/[slug]` GET).
+- **Service-role** — `src/lib/supabase/server.ts#createServiceClient` (only where no session can do the job — see [[../02-backend/supabase-clients]] for the six callers).
 - **Middleware** — `src/lib/supabase/middleware.ts` (refreshes session on every request).
 
 ## Failure modes

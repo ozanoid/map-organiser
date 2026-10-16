@@ -2,8 +2,8 @@
 title: Places routes
 type: route-group
 domain: backend
-version: 2.0.0
-last_updated: 05.08.2026
+version: 2.1.0
+last_updated: 16.10.2026
 status: stable
 sources:
   - src/lib/places/query-places.ts
@@ -17,14 +17,19 @@ sources:
   - src/app/api/places/import-jobs/[id]/route.ts
   - src/app/api/cron/drain-imports/route.ts
   - src/lib/import/process-place.ts
+  - src/lib/import/kick-drain.ts
+  - src/lib/instagram/provenance.ts
   - src/app/api/places/migrate-photos/route.ts
   - src/app/api/places/parse-link/route.ts
 related:
   - "[[_README]]"
+  - "[[instagram]]"
   - "[[../../01-domain/places]]"
   - "[[../schema/places]]"
+  - "[[../schema/import-jobs]]"
   - "[[../../04-integrations/google-places]]"
   - "[[../../04-integrations/dataforseo]]"
+  - "[[../../05-flows/instagram-import-flow]]"
 ---
 
 # Places routes
@@ -36,6 +41,13 @@ Route handler files under `/api/places/*`, plus the import drain under `/api/cro
 > **Import rewrite (v2.0.0, 05.08.2026).** `import-parse`, `import-batch` and
 > `bulk-enrich-reviews` were removed. Bulk import is now a durable server-side
 > queue — see [[../../05-flows/place-import-flow]] and [[../schema/import-jobs]].
+
+> **v1.28.0 (Instagram import).** The queue now also carries Instagram jobs
+> (`import_jobs.kind = 'instagram'`, created by [[instagram|`/api/instagram/import`]]).
+> The import-jobs `GET` reports Takeout jobs only, the drain writes
+> `places.source = 'instagram'` for Instagram items, and `kickDrain` moved to
+> `src/lib/import/kick-drain.ts`. Needs the pending migration in
+> [[../schema/import-jobs#pending-migration]] — not yet applied.
 
 ## At a glance
 
@@ -50,7 +62,7 @@ Route handler files under `/api/places/*`, plus the import drain under `/api/cro
 | `POST` | `/api/places/[id]/refresh-google-data` | Full re-fetch: info + `newest` reviews merged into the corpus (not replace) + photo, then chains to `step=profile`. Core logic in `src/lib/places/refresh-google-data.ts` (shared with the cron). |
 | `POST` | `/api/places/bulk` | Bulk update_category / add_tags / add_to_list / update_status / delete / check_trips. |
 | `POST` | `/api/places/import-jobs` | Queue a Takeout file as a durable import job. |
-| `GET` | `/api/places/import-jobs` | Progress of the newest job. |
+| `GET` | `/api/places/import-jobs` | Progress of the newest **Takeout** job. |
 | `PATCH` | `/api/places/import-jobs/[id]` | Cancel a running job. |
 | `GET` | `/api/cron/drain-imports` | Drain the queue (cron-authed, not a user route). |
 | `POST` | `/api/places/migrate-photos` | Backfill: Google photo URLs → Supabase Storage. |
@@ -164,14 +176,14 @@ All require auth except `drain-imports`, which is bearer-authed with `CRON_SECRE
 - **Body:** multipart `file` + `options` (JSON: `visit_status`, `list_ids`, `tag_ids`).
 - **DB:** `import_jobs` INSERT (user client); `import_job_items` INSERT in chunks of 500 (**service client** — the table has no INSERT policy, see [[../schema/import-jobs]]).
 - **Response:** `{ jobId, total }`. `400` on parse error, `500` on insert failure.
-- **Notes:** No enrichment and no API spend in the request. Fires a non-awaited kick at `/api/cron/drain-imports` so work starts before the next cron minute.
+- **Notes:** No enrichment and no API spend in the request. Fires a non-awaited kick at `/api/cron/drain-imports` (`kickDrain`, `src/lib/import/kick-drain.ts` — shared with the Instagram import since v1.28.0) so work starts before the next cron minute. Does not set `kind`; the column default makes the job `takeout`.
 
 ### `GET /api/places/import-jobs`
 
 - **Source:** same file.
-- **DB:** `import_jobs` SELECT (newest), `import_job_items` SELECT.
+- **DB:** `import_jobs` SELECT (newest with `kind = 'takeout'`), `import_job_items` SELECT.
 - **Response:** `{ job: { …, counts, settled, pending_import, enriching, problems[] } | null }`.
-- **Notes:** Takes no id — the store is transient, so a user reopening the page has none to give. Polled every 3 s while `status = running`.
+- **Notes:** Takes no id — the store is transient, so a user reopening the page has none to give. Polled every 3 s while `status = running`. Since v1.28.0 it filters `kind = 'takeout'`: Instagram imports run through the same queue but report in their own dialog. **Before the pending migration** that filter names a missing column; the route reads only `data`, so it answers `{ job: null }` even while a Takeout import runs.
 
 ### `PATCH /api/places/import-jobs/[id]`
 
@@ -183,10 +195,11 @@ All require auth except `drain-imports`, which is bearer-authed with `CRON_SECRE
 ### `GET /api/cron/drain-imports`
 
 - **Source:** `src/app/api/cron/drain-imports/route.ts`
-- **Auth:** `Authorization: Bearer ${CRON_SECRET}` — Vercel Cron (every minute) and the create-route kick.
+- **Auth:** `Authorization: Bearer ${CRON_SECRET}` — Vercel Cron (every minute), the kick from both create paths (Takeout route, Instagram job) and its own self-chain.
 - **DB:** `claim_import_items` RPC; `import_job_items` UPDATE; `places`/`list_places`/`place_tags` writes via `importPlace`.
 - **External:** DataForSEO business-info + reviews, Gemini via `generatePlaceProfile`.
-- **Response:** `{ ok, claimed, processed, released, imported, skipped, failed, reviewed, profiled, done, elapsed_ms }`.
+- **Response:** `{ ok, claimed, processed, released, chained, imported, photographed, skipped, failed, reviewed, profiled, done, elapsed_ms }`.
+- **Job kinds (v1.28.0):** per-job defaults (visit status, lists, tags, `kind`) are read with `select("*")` — naming `kind` would make a deploy that lands before the column exists lose a Takeout job's defaults to a select error; a missing `kind` counts as `takeout`. Items of an `instagram` job are inserted with `source: "instagram"` (`ImportDefaults.source`). When such an item turns out to be a place the user already has (`skipped / Already exists` with a `place_id`), the drain runs `attachInstagramSource` on that place: the job's tag(s) are upserted and the post URL is appended to its notes if not already there.
 - **Notes:** `maxDuration` 300, soft deadline 240 s, 2 workers, 24 items per claim. Overlapping runs are safe (`FOR UPDATE SKIP LOCKED`); exits early above 60 in-flight items to bound spend. See [[../../05-flows/place-import-flow]].
 
 ### `POST /api/places/migrate-photos`

@@ -2,8 +2,8 @@
 title: Manual Place Create Flow
 type: flow
 domain: places
-version: 1.1.2
-last_updated: 15.07.2026
+version: 1.2.0
+last_updated: 16.10.2026
 status: stable
 sources:
   - src/components/places/add-place-dialog.tsx
@@ -13,6 +13,7 @@ sources:
 related:
   - "[[place-import-flow]]"
   - "[[share-target-flow]]"
+  - "[[instagram-import-flow]]"
   - "[[lite-profile-flow]]"
   - "[[full-profile-flow]]"
   - "[[../01-domain/places]]"
@@ -28,13 +29,15 @@ related:
 
 How a single place is added — by pasting a Google Maps URL into the Add Place dialog. The same flow handles places coming in via the PWA share target (see [[share-target-flow]]).
 
+> **Instagram links branch off (v1.28.0).** The same dialog accepts an Instagram post or reel link — pasted, or arriving as `/map?add=` from the iOS Shortcut. It never reaches `parse-link`: the dialog switches to the Instagram import, which adds every venue it can pin with no preview or save step. See [[instagram-import-flow]].
+
 ## Trigger
 
 User opens the Add Place dialog from:
 
 - `AppHeader` → Add Place button.
 - `MapContent` → FAB.
-- Share-target redirect to `/map?add=<url>` (the dialog opens automatically with `initialUrl`).
+- Share-target redirect — or the iOS Shortcut — to `/map?add=<url>` (the dialog opens automatically with `initialUrl`).
 
 ## Steps
 
@@ -43,7 +46,8 @@ User opens the Add Place dialog from:
        │
        ▼
 2. User pastes Google Maps URL (or initialUrl is set)
-       │
+       │  • Instagram post/reel link (parseInstagramPostUrl)? → the dialog renders
+       │    InstagramImportPanel instead; see [[instagram-import-flow]]
        ▼
 3. useParseLink → POST /api/places/parse-link  { url }
        │  • src/lib/google/parse-maps-url.ts extracts identifiers:

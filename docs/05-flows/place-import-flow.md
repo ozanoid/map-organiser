@@ -2,14 +2,15 @@
 title: Place Import Flow
 type: flow
 domain: places
-version: 2.0.0
-last_updated: 05.08.2026
+version: 2.1.0
+last_updated: 16.10.2026
 status: stable
 sources:
   - src/app/api/places/import-jobs/route.ts
   - src/app/api/places/import-jobs/[id]/route.ts
   - src/app/api/cron/drain-imports/route.ts
   - src/lib/import/process-place.ts
+  - src/lib/import/kick-drain.ts
   - src/lib/hooks/use-import-job.ts
   - src/lib/stores/import-store.ts
   - src/app/(app)/import/page.tsx
@@ -19,6 +20,7 @@ sources:
 related:
   - "[[../01-domain/places]]"
   - "[[../02-backend/schema/import-jobs]]"
+  - "[[instagram-import-flow]]"
   - "[[../03-frontend/stores/import-store]]"
   - "[[../02-backend/api-routes/places]]"
   - "[[../04-integrations/dataforseo]]"
@@ -28,6 +30,8 @@ related:
 # Place Import Flow
 
 Server-driven bulk import of saved Google Maps places from a Takeout export. The work list lives in the database, so a run survives a closed tab, a sleeping laptop, and a dropped connection.
+
+> **Shared queue (v1.28.0).** The Instagram import feeds the same `import_jobs` / `import_job_items` queue and the same drain — its jobs carry `kind = 'instagram'` and their places get `source = 'instagram'`. This page's progress (`GET /api/places/import-jobs`) shows Takeout jobs only. See [[instagram-import-flow]]; the `kind` column is part of a migration not yet applied — [[../02-backend/schema/import-jobs#pending-migration]].
 
 ## Trigger
 
@@ -42,7 +46,7 @@ User goes to `/import`, picks a CSV or GeoJSON file (typically from Google Takeo
 2. POST /api/places/import-jobs  (multipart: file + options JSON)
        │  • Parses CSV / GeoJSON server-side
        │  • INSERT import_jobs (1 row) + import_job_items (1 row per place)
-       │  • Fires a non-awaited kick at the drain
+       │  • Fires a non-awaited kick at the drain (kickDrain, src/lib/import/kick-drain.ts)
        │  • Returns { jobId, total } and the request is over
        ▼
 3. Drain runs — GET /api/cron/drain-imports
@@ -58,7 +62,7 @@ User goes to `/import`, picks a CSV or GeoJSON file (typically from Google Takeo
        │       ├─► skipped (already exists / no coordinates)
        │       └─► failed  (insert error / 3 failed attempts)
        ▼
-4. UI polls GET /api/places/import-jobs every 3 s
+4. UI polls GET /api/places/import-jobs every 3 s  (newest job with kind = 'takeout')
        │  Counts per stage → progress bar, "waiting to be added",
        │  "on the map, collecting reviews & tags"
        ▼
@@ -136,7 +140,8 @@ Neither constraint holds now. Vercel's default timeout is 300 s, and `cron/refre
 - `src/app/(app)/import/page.tsx` — the page. Reports on the job; does not drive it.
 - `src/lib/hooks/use-import-job.ts` — `useImportJob` / `useCreateImportJob` / `useCancelImportJob`.
 - `src/lib/stores/import-store.ts` — file choice and options; see [[../03-frontend/stores/import-store]].
-- `src/app/api/places/import-jobs/route.ts` — create (POST) and progress (GET).
+- `src/app/api/places/import-jobs/route.ts` — create (POST) and progress (GET, Takeout jobs only).
+- `src/lib/import/kick-drain.ts` — `kickDrain`, the non-awaited nudge; shared with the Instagram import.
 - `src/app/api/places/import-jobs/[id]/route.ts` — cancel (PATCH).
 - `src/app/api/cron/drain-imports/route.ts` — the drain.
 - `src/lib/import/process-place.ts` — `resolveIdentity`, `findExisting`, `importPlace`.

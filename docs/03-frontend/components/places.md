@@ -2,11 +2,12 @@
 title: Places components
 type: component
 domain: frontend
-version: 1.6.0
-last_updated: 17.07.2026
+version: 1.7.0
+last_updated: 16.10.2026
 status: stable
 sources:
   - src/components/places/add-place-dialog.tsx
+  - src/components/places/instagram-import-panel.tsx
   - src/components/places/ai-compare-card.tsx
   - src/components/places/ai-summary-card.tsx
   - src/components/places/amenities-grid.tsx
@@ -31,12 +32,19 @@ related:
   - "[[../hooks/use-categories]]"
   - "[[../hooks/use-tags]]"
   - "[[../hooks/use-lists]]"
+  - "[[../hooks/use-instagram-import]]"
   - "[[../../01-domain/places]]"
+  - "[[../../05-flows/instagram-import-flow]]"
 ---
 
 # Places components
 
-Nineteen files under `src/components/places/`. All `"use client"`. The Place-related UI surface.
+Twenty files under `src/components/places/`. All `"use client"`. The Place-related UI surface.
+
+> **v1.28.0:** `AddPlaceDialog` gained an **Instagram mode** — an Instagram
+> post/reel link (pasted, or arriving as `/map?add=`) renders the new
+> `InstagramImportPanel` instead of the parse-link preview. See below and
+> [[../../05-flows/instagram-import-flow]].
 
 > **v1.17.0 (S1-PR1):** seven detail-page widgets extracted out of the
 > 1,155-line `places/[id]/page.tsx` into standalone components (below) —
@@ -83,7 +91,16 @@ Nineteen files under `src/components/places/`. All `"use client"`. The Place-rel
 ## `AddPlaceDialog`
 
 - **File:** `src/components/places/add-place-dialog.tsx`
-- **Props:** `{ open, onOpenChange, initialUrl? }`.
+- **Props:** `{ open, onOpenChange, initialUrl?, source? }` plus five optional
+  Instagram props (v1.28.0), passed only by `MapContent`:
+  - `instagramJob?: { url: string | null; id: string } | null` — a job the page
+    already knows (after a refresh from `/map?ig=<id>`, `url` is `null`).
+  - `onInstagramJob?(job)` — a job started; the page keeps its id in the URL.
+  - `onInstagramPhase?(phase)` — the latest phase seen, so the page knows whether
+    a close happened mid-way.
+  - `onShowOnMap?(points)` — frame these coordinates on the map.
+  - `onSearchPlaces?(query, { postUrl, tagId })` — hand a venue name to the map
+    search box, with the post it came from.
 - **Hooks:** `useState`, `useEffect`, `useMemo`, `useQueryClient`, [[../hooks/use-places|`useParseLink`/`useCreatePlace`]], [[../hooks/use-categories|`useCategories`]], [[../hooks/use-subcategories|`useSubcategories`]], [[../hooks/use-lists|`useLists`]], [[../hooks/use-tags|`useTags`]].
 - **API calls:**
   - `useParseLink` mutation (`POST /api/places/parse-link` — now returns `lite_profile` inline when AI is enabled).
@@ -100,8 +117,83 @@ Nineteen files under `src/components/places/`. All `"use client"`. The Place-rel
   5. User picks category, sub-category, lists, tags, visit status, optional rating + notes.
   6. `useCreatePlace` runs → place is saved.
   7. Two-phase enrichment after save: `info` (await) → `reviews` (fire-and-forget). When AI is enabled, the reviews route chains into `step=profile` (Phase 4) which populates `google_data.place_profile` and runs the 4-band auto-apply for tags + sub-cat + category-change.
-- **Used by:** `AppHeader` (Add Place button), `MapContent` (FAB + share-target intake).
+- **Instagram mode (v1.28.0):** when the pasted URL (`handlePaste`) or
+  `initialUrl` is an Instagram post/reel link (`parseInstagramPostUrl`), or when
+  `instagramJob` is set without an `initialUrl`, the dialog renders only
+  `<InstagramImportPanel>` (`sm:max-w-lg`, `max-h-[90vh]`). The parse-link
+  auto-fire skips Instagram URLs, so `parse-link` is never called for them. The
+  panel receives the job whose `url` matches the canonical post URL (any job when
+  there is no URL — the refresh case). Closing resets the Instagram state with
+  the rest of the form.
+- **Placeholder / hint:** "Paste a Google Maps or Instagram link..." and "Paste a
+  Google Maps link to fill in the place, or an Instagram post to add the places
+  in it".
+- **Used by:** `AppHeader` (Add Place button), `MapContent` (FAB + `?add=` intake +
+  `?ig=` restore — the only caller that passes the Instagram props),
+  `SimilarPlaces` (`source="similar"`).
 - **Notes:** Auto-resolves category from Google `types` via `resolveCategoryId` (lite path). Preview surfaces a free **View on Google Maps** link (`placeData.googleMapsUrl` already fetched by the parse — zero extra cost; v1.18.0). Displays which provider served the parse (Google vs DataForSEO) + fetch time. Sticky action buttons at the bottom. The AI Suggestions panel is hidden when no chips are produced (handles AI-off cleanly).
+
+## `InstagramImportPanel`
+
+- **File:** `src/components/places/instagram-import-panel.tsx` (v1.28.0)
+- **Props:**
+
+  | Prop | Type | Required | Notes |
+  |---|---|---|---|
+  | `url` | `string \| null` | yes | Canonical post URL. With no `jobId`, a job is started for it. `null` after a refresh — the job id is all there is. |
+  | `jobId` | `string \| null` | yes | The job to show. |
+  | `onJobId` | `(jobId: string) => void` | yes | A job was started (or reused, or retried). |
+  | `onPhase` | `(phase) => void` | no | Fires on every phase change. |
+  | `onClose` | `() => void` | yes | Close / Continue in background / Done. |
+  | `onShowOnMap` | `(points) => void` | no | Map page only — enables **Show on map**. |
+  | `onSearch` | `(query, { postUrl, tagId }) => void` | no | Map page only — enables **Pick branch** / **Search** / **Search manually**; the context lets the place saved from the search carry the post link and the `instagram` tag. |
+
+- **Hooks:** [[../hooks/use-instagram-import|`useStartInstagramImport` / `useInstagramImport`]], `useQueryClient`, `useState`, `useRef`, `useEffect`.
+- **Behavior:** there is no confirmation step — the server adds every venue it
+  can pin on evidence and the panel reports what happened.
+  - **Start once per URL.** A ref (`startedFor`) guards against React's
+    development double mount; the server also hands back the same job for a
+    repeat share within 10 minutes.
+  - **Reading** — two-step progress ("Reading the post and finding places" →
+    "Adding them to your map") and "You can close this. It keeps going and lets
+    you know when it's done." Footer: **Continue in background**.
+  - **Adding** — title "Adding N places…", rows with spinners. `["places"]` is
+    invalidated whenever the count of `added` items changes and when the job is
+    done, so pins appear while it runs.
+  - **Done, one place** — photo (Storage URL), name, address, evidence badges
+    (emerald), `# instagram`, `Want to go` (new places), the note
+    (`Note: instagram.com/p/…`) and "Wrong place? Remove it". Footer: **Edit**
+    (link to `/places/[id]`) + **Show on map** (or **Done** without
+    `onShowOnMap`).
+  - **Done, several** — one row per item, sorted added/pending → already saved →
+    skipped/failed: thumbnail or icon, name, and "evidence · address" (added),
+    "Already in your places · tag and link added", the skip reason (e.g.
+    "3 branches · the post doesn't say which", "More than one place matches",
+    "Permanently closed on Google", "Couldn't confirm which place this is"), or
+    "Couldn't add · <reason>". Added rows have **Remove**; skipped rows
+    **Pick branch** (`chain_branch_unknown`) or **Search**, prefilled with the
+    item's `searchName`. Footer: **Close** + **Show all on map** (or **Done**
+    without `onShowOnMap`).
+  - **Empty** — "No places in this post"; if no skipped venue is listed either,
+    "No account, location tag or address in this post points to one specific
+    place." Footer: **Close** + **Search manually** (with `onSearch`).
+  - **Failed** — error copy per code (`post_unavailable`, `budget_exceeded`,
+    `not_configured`, `service_error`, `stalled`, `invalid_url`), a start error's
+    message, or "Couldn't load this import." **Try again** re-posts the URL,
+    except for `budget_exceeded` and `not_configured`.
+  - **Remove** — `DELETE /api/places/[id]` (deletes the place), then invalidates
+    `["instagram-import", jobId]` and `["places"]` and toasts. The row becomes
+    `removed` and disappears.
+- **Accessibility:** progress list is `role="status"` + `aria-live="polite"`,
+  the result list `aria-live="polite"`, errors `role="alert"`; decorative icons
+  are `aria-hidden`.
+- **Composition:** rendered by `AddPlaceDialog` inside its `DialogContent`;
+  uses shadcn `DialogHeader` / `DialogTitle` / `DialogDescription`, `Badge`,
+  `Button` (+ `buttonVariants` for the Edit link), lucide icons and a local
+  inline SVG for the Instagram glyph (`InstagramGlyph`).
+- **Styling:** body scrolls (`flex-1 overflow-y-auto min-h-0`); fixed footer with
+  `border-t`; pink-600 glyph while working, emerald check when done, destructive
+  alert icon on failure.
 
 ## `AiSummaryCard`
 

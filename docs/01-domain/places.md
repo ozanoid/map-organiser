@@ -2,12 +2,13 @@
 title: Place
 type: entity
 domain: places
-version: 1.5.0
-last_updated: 05.08.2026
+version: 1.6.0
+last_updated: 16.10.2026
 status: stable
 sources:
   - src/lib/types/index.ts
   - src/lib/hooks/use-places.ts
+  - src/lib/hooks/use-instagram-import.ts
   - src/lib/geo.ts
   - src/app/api/places/route.ts
   - src/app/api/places/[id]/route.ts
@@ -17,12 +18,15 @@ sources:
   - src/app/api/places/import-jobs/route.ts
   - src/app/api/cron/drain-imports/route.ts
   - src/lib/import/process-place.ts
+  - src/app/api/instagram/import/route.ts
+  - src/lib/instagram/provenance.ts
   - src/app/api/places/migrate-photos/route.ts
   - src/app/api/places/parse-link/route.ts
   - src/app/(app)/places/page.tsx
   - src/app/(app)/places/[id]/page.tsx
   - src/components/places/place-card.tsx
   - src/components/places/add-place-dialog.tsx
+  - src/components/places/instagram-import-panel.tsx
   - src/components/places/ai-summary-card.tsx
   - src/lib/ai/schemas/place-profile.ts
   - src/lib/ai/apply-suggestions.ts
@@ -40,9 +44,12 @@ related:
   - "[[../04-integrations/gemini]]"
   - "[[../05-flows/lite-profile-flow]]"
   - "[[../05-flows/full-profile-flow]]"
+  - "[[../05-flows/instagram-import-flow]]"
 ---
 
 # Place
+
+> **v1.28.0:** new place `source: "instagram"` — places the Instagram import creates (tagged `instagram`, `want_to_go`, the post URL as the note). The DB constraint allows it only once the pending migration is applied — see [[../02-backend/schema/places#pending-migration]].
 
 > **v1.18.0:** `google_data` gains `work_timetable` + `tz` (open-now raw material); `PlaceFilters` gains `open_now` (dynamic, request-time evaluation — unknown places excluded); new place `source: "similar"` for NF-05 adds.
 
@@ -71,7 +78,7 @@ Source of truth: `public.places` table + `Place` interface in `src/lib/types/ind
 | `rating` | smallint | no | User's own 1–5 rating. Check constraint `rating >= 1 AND rating <= 5`. |
 | `notes` | text | no | Free-form. |
 | `google_data` | jsonb | no | Rich data from Google Places or DataForSEO (see [[#google_data shape]] below). |
-| `source` | text | no | `manual` / `import` / `link` / `mapbox_search` / `similar` (v1.18.0, NF-05) / `shared` (v1.20.0, NF-18 — copies saved from a share link). Default `manual`. DB CHECK constraint `places_source_check` enforces the set. |
+| `source` | text | no | `manual` / `import` / `link` / `mapbox_search` / `similar` (v1.18.0, NF-05) / `shared` (v1.20.0, NF-18 — copies saved from a share link) / `instagram` (v1.28.0 — the Instagram import; **pending migration**). Default `manual`. DB CHECK constraint `places_source_check` enforces the set — the live constraint does not yet include `instagram`. |
 | `visit_status` | text | no | One of `want_to_go` / `booked` / `visited` / `favorite`. Check constraint enforces. |
 | `visited_at` | timestamptz | no | Set when status transitions to `visited`. |
 | `booked_at` | timestamptz | no | Set when status transitions to `booked`. |
@@ -140,6 +147,7 @@ Schema definition: `src/lib/ai/schemas/place-profile.ts` (Zod). See [[../05-flow
    │  • PWA share_target → /api/share-target → /api/places         │
    │  • URL paste → /api/places/parse-link                         │
    │  • Bulk import: /api/places/import-jobs → drain queue         │
+   │  • Instagram post: /api/instagram/import → drain queue        │
    └────────────────────┬─────────────────────────────────────────┘
                         │
                         ▼
@@ -168,7 +176,7 @@ Schema definition: `src/lib/ai/schemas/place-profile.ts` (Zod). See [[../05-flow
    └──────────────────────────────────────────────────────────────┘
 ```
 
-See [[../05-flows/place-import-flow]] (when written) for the import path, [[../05-flows/manual-place-create]] for the manual path.
+See [[../05-flows/place-import-flow]] for the import path, [[../05-flows/instagram-import-flow]] for the Instagram path, [[../05-flows/manual-place-create-flow]] for the manual path.
 
 ## Relationships
 
@@ -203,9 +211,11 @@ All `/api/places/*` routes live in `src/app/api/places/`. See [[../02-backend/ap
 | `POST` | `/api/places/[id]/refresh-google-data` | Force re-fetch from Google. |
 | `POST` | `/api/places/parse-link` | Parse a Google Maps URL → `ParsedPlaceData`. |
 | `POST` | `/api/places/import-jobs` | Queue a Takeout file as a durable import job. |
-| `GET` | `/api/places/import-jobs` | Progress of the newest job. |
+| `GET` | `/api/places/import-jobs` | Progress of the newest Takeout job. |
 | `POST` | `/api/places/bulk` | Bulk operations (delete, list assignment, tag assignment, category, visit status; `check_trips` pre-check). |
-| `GET` | `/api/cron/drain-imports` | Drains the import queue: insert → reviews → profile. |
+| `GET` | `/api/cron/drain-imports` | Drains the import queue (Takeout and Instagram jobs): insert → photo → reviews → profile. |
+| `POST` | `/api/instagram/import` | Start an Instagram import for a post URL — see [[../02-backend/api-routes/instagram]]. |
+| `GET` | `/api/instagram/import/[id]` | Progress and result of one Instagram import. |
 | `POST` | `/api/places/migrate-photos` | Backfill: download Google photo URLs into Supabase Storage. |
 
 ## Frontend code surface
@@ -214,12 +224,13 @@ All `/api/places/*` routes live in `src/app/api/places/`. See [[../02-backend/ap
 |---|---|
 | Server-state hook | `src/lib/hooks/use-places.ts` — query key `["places", filters]`. |
 | Card / detail UI | `src/components/places/place-card.tsx`, `src/app/(app)/places/[id]/page.tsx`. |
-| Add / inline creators | `src/components/places/add-place-dialog.tsx`, `src/components/places/inline-{category,list,tag}-{creator,input}.tsx`. |
+| Add / inline creators | `src/components/places/add-place-dialog.tsx` (+ its Instagram mode, `instagram-import-panel.tsx`), `src/components/places/inline-{category,list,tag}-{creator,input}.tsx`. |
 | Bulk action bar | `src/components/places/bulk-action-bar.tsx`. |
 | Visit status toggle | `src/components/places/visit-status-toggle.tsx`. |
 | Map rendering | `src/components/map/map-content.tsx` + `src/lib/map/category-icons.ts`. |
+| Instagram import | `src/lib/hooks/use-instagram-import.ts` (start + poll), `src/components/places/instagram-import-panel.tsx` — see [[../05-flows/instagram-import-flow]] (v1.28.0). |
 
 ## Open questions
 
 - **Photo migration completeness.** `place_photos` has 0 rows but `places.google_data.photo_storage_url` is the canonical photo path. Worth checking whether `place_photos` is dormant or still wired to a flow.
-- **`source` enum.** Text with default `'manual'`; values: `manual`, `import`, `link`, `mapbox_search`, `similar`, `shared`. Enforced by the `places_source_check` DB constraint (widened 15.07.2026 twice via MCP migrations: `similar` for NF-05, `shared` for NF-18 — the latter also unblocked the April-era share-save copiers that had never been able to insert).
+- **`source` enum.** Text with default `'manual'`; values: `manual`, `import`, `link`, `mapbox_search`, `similar`, `shared`, and `instagram` in the code since v1.28.0. Enforced by the `places_source_check` DB constraint (widened 15.07.2026 twice via MCP migrations: `similar` for NF-05, `shared` for NF-18 — the latter also unblocked the April-era share-save copiers that had never been able to insert). The `instagram` widening is written but **not yet applied** — [[../02-backend/schema/places#pending-migration]].

@@ -2,8 +2,8 @@
 title: Place Search Flow
 type: flow
 domain: places
-version: 1.0.0
-last_updated: 13.05.2026
+version: 1.1.0
+last_updated: 16.10.2026
 status: stable
 sources:
   - src/components/map/search-box.tsx
@@ -15,6 +15,7 @@ sources:
   - src/app/api/places/route.ts
 related:
   - "[[manual-place-create-flow]]"
+  - "[[instagram-import-flow]]"
   - "[[../01-domain/places]]"
   - "[[../02-backend/api-routes/search]]"
   - "[[../04-integrations/mapbox]]"
@@ -28,6 +29,16 @@ Search-on-map → save. The user types into the search box on `/map`, picks a Ma
 ## Trigger
 
 User focuses the search input that sits on top of the map view (top-left, beside the mobile filter button).
+
+**Hand-off from the Instagram import (v1.28.0).** A venue the import could not
+pin has a **Pick branch** (chain) or **Search** button, and an empty result has
+**Search manually**. Each closes the Add Place dialog and calls
+`SearchBoxHandle.search(name)` (`src/components/map/search-box.tsx`), which puts
+the venue name in the box, opens the suggestions and focuses the input — the
+flow continues from step 1 as if the name had been typed ("Search manually"
+passes an empty name and only focuses the box). A place saved this way is an ordinary search save
+(`source: "mapbox_search"`): it gets neither the `instagram` tag nor the post
+link. See [[instagram-import-flow]].
 
 ## Steps
 

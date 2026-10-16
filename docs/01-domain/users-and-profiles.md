@@ -2,8 +2,8 @@
 title: User & Profile
 type: entity
 domain: users
-version: 1.2.0
-last_updated: 15.07.2026
+version: 1.3.0
+last_updated: 16.10.2026
 status: stable
 sources:
   - src/lib/supabase/client.ts
@@ -27,6 +27,7 @@ related:
   - "[[../04-integrations/google-places]]"
   - "[[../04-integrations/dataforseo]]"
   - "[[../06-ops/encryption]]"
+  - "[[../05-flows/instagram-import-flow]]"
 ---
 
 # User & Profile
@@ -44,7 +45,7 @@ Auth credentials, password hashes, and OAuth identities all live in `auth.*` (ma
 | `id` | uuid | yes | **PK + FK** → `auth.users.id`. Matches the auth user 1:1. |
 | `full_name` | text | no | Pulled from `raw_user_meta_data.full_name`/`name` on signup. |
 | `avatar_url` | text | no | Pulled from `raw_user_meta_data.avatar_url`. |
-| `is_admin` | boolean | yes | Default `false`. Not currently checked anywhere in the repo. Reserved. |
+| `is_admin` | boolean | yes | Default `false`. Read by `getUserApiKeys` (`src/lib/google/get-user-api-keys.ts`): an admin — or a user with no profile row — gets the server's env keys (`GOOGLE_PLACES_API_KEY`, `NEXT_PUBLIC_MAPBOX_TOKEN`) instead of their own encrypted ones. `GET /api/user/api-keys` also returns it, and Settings → API shows "Admin account — using system API keys". |
 | `google_api_key_enc` | text | no | AES-256-GCM-encrypted Google Places API key. Never returned to client. |
 | `mapbox_token_enc` | text | no | Encrypted personal Mapbox token (if user opts to use their own). |
 | `dataforseo_login_enc` | text | no | Encrypted DataForSEO username. |
@@ -70,7 +71,7 @@ The repo gets the current user via `supabase.auth.getUser()` (server-side) or vi
 
 - **1:1 with auth.** Every `auth.users` row triggers a `profiles` row via the `on_auth_user_created` trigger. The reverse is enforced by the FK + `id` being the same UUID.
 - **Encrypted columns are write-only via API.** `*_enc` columns are never returned to the client. The API key manager flow is "set / clear / show last 4" — never "fetch back the raw value".
-- **`google_places_enabled` is a soft toggle.** Even when `true`, enrichment still falls back to DataForSEO if no Google API key is configured for the user.
+- **`google_places_enabled` is a soft toggle.** Even when `true`, enrichment still falls back to DataForSEO if no Google API key is configured for the user. The Instagram import (v1.28.0) ignores the toggle: its candidate search always runs on the Google key `getUserApiKeys` returns, and the import refuses to start (400) when there is none.
 - **Default categories are seeded once.** The `on_profile_created_default_categories` trigger fires on profile INSERT and creates 12 default rows. Re-running it would duplicate them, so it relies on never firing twice (no reset path exists today).
 
 ## Signup → first-use flow
@@ -115,7 +116,7 @@ See [[../02-backend/auth]] (when written) for the deeper version. Summary:
 1. **Browser** uses `createBrowserClient` (`src/lib/supabase/client.ts`) — reads session from cookies.
 2. **Middleware** (`src/middleware.ts` → `src/lib/supabase/middleware.ts#updateSession`) runs on every request: refreshes session cookies, redirects unauthenticated users to `/login`, redirects logged-in users away from `/login` and `/signup`.
 3. **Server Components & API routes** use `createClient` (`src/lib/supabase/server.ts`) — reads cookies via `next/headers`.
-4. **Service-role client** (`createServiceClient`) bypasses RLS and is used exclusively for public shared-link reads.
+4. **Service-role client** (`createServiceClient`) bypasses RLS. It is used only where no session can do the job — public shared-link reads, the cron routes, the import-queue writes and the Instagram import's background job; see [[../02-backend/supabase-clients]].
 5. **OAuth callback** at `src/app/auth/callback/route.ts` — exchanges the OAuth code for a session.
 
 Public routes (middleware exempt): `/`, `/auth/callback/*`, `/shared/*`, `/api/shared/*`. Everything else requires auth.
@@ -145,7 +146,7 @@ The encryption layer is documented in [[../06-ops/encryption]] (when written).
 |---|---|---|
 | `id` | uuid | — |
 | `user_id` | uuid | FK → `auth.users.id` |
-| `sku` | text | Identifier like `google.text_search`, `dataforseo.business_info`. |
+| `sku` | text | A key of `SKU_CONFIG` / `AI_SKU_CONFIG`, e.g. `text_search_pro`, `dataforseo_business_info_live`, `ai_place_profile`. Full list: [[../02-backend/schema/api_usage]]. |
 | `count` | int | Default 1. Incremented via the `increment_api_usage` RPC. |
 | `cost_per_1k` | numeric | Provider's quoted price per 1000 calls. |
 | `created_at` | date | `default CURRENT_DATE` (day granularity). |
@@ -183,6 +184,6 @@ Profile rows are SELECT-only for their owner and the service role. There's no "l
 
 ## Open questions
 
-- **`is_admin` is unused.** Reserved but no code checks it. Likely a future hook for admin tools.
+- **`is_admin` only switches key source.** Besides `getUserApiKeys`, only the Settings → API banner reads it; there are no admin-only routes.
 - **Account deletion.** No documented self-serve delete path. Cascading would require RLS-friendly cleanup of places/lists/trips. Worth a runbook.
 - **Multi-account scenarios.** The model is strictly per-user. Shared workspaces / teams would require schema changes.

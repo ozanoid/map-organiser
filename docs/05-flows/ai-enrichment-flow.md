@@ -2,8 +2,8 @@
 title: AI Enrichment Flow
 type: flow
 domain: places
-version: 1.7.0
-last_updated: 05.08.2026
+version: 1.8.0
+last_updated: 16.10.2026
 status: stable
 sources:
   - src/app/api/places/[id]/enrich/route.ts
@@ -16,6 +16,7 @@ related:
   - "[[full-profile-flow]]"
   - "[[manual-place-create-flow]]"
   - "[[place-import-flow]]"
+  - "[[instagram-import-flow]]"
   - "[[ai-search-flow]]"
   - "[[../06-ops/runbooks/profile-backfill]]"
   - "[[../04-integrations/gemini]]"
@@ -85,6 +86,7 @@ automatically.**
 |---|---|---|---|---|
 | **Manual create** — paste a Maps URL | ✅ inline in `parse-link` | ✅ `step=reviews` auto | ✅ chained auto | [[manual-place-create-flow]] |
 | **Bulk import** — Takeout file | ❌ the drain skips lite | ✅ `reviews` stage | ✅ `profile` stage | [[place-import-flow]] |
+| **Instagram import** — a shared post (v1.28.0) | ❌ the drain skips lite | ✅ `reviews` stage | ✅ `profile` stage | [[instagram-import-flow]] — the same queue; its own Gemini call (reading the post) happens before any place exists |
 | **Backfill** — Settings → AI | — | ✅ if missing | ✅ that's the point | [[../06-ops/runbooks/profile-backfill]] |
 | **Refresh cron** — daily, stalest ≤14 places of OPT-IN users (`cron_refresh_enabled`, default off) | — | ✅ newest, merged (relevant in Jan/Jul → backbone rebuild) | ✅ only past >15 new reviews | [[../06-ops/runbooks/periodic-refresh]] |
 
@@ -133,6 +135,13 @@ buckets added as those features shipped):
   add-place chain, manual refresh chain, backfill, and the cron sweep
   together. Ceiling ≈ $9.5/month. A full ~470-place backfill fits within
   a single month alongside normal usage.
+- **INSTAGRAM — `AI_MONTHLY_INSTAGRAM_CAP = 300` post reads** (v1.28.0, SKU
+  `ai_instagram_read`, $1.5/1k). One unit per imported post; checked inside
+  the import's background job, so going over it ends the job with
+  `budget_exceeded` (shown in the dialog) rather than a 429. The unit also
+  bounds the import's HikerAPI and Google Text Search calls. The profiles of
+  the places it adds are charged to PROFILE as usual. See
+  [[instagram-import-flow]].
 
 All buckets fail open (a tracking outage must never 429 a legitimate request).
 - It **fails open**: if the cap check itself errors, the request proceeds.
@@ -172,7 +181,7 @@ Both AI layers are gated. A place skips them silently when a gate fails:
 ## Related code
 
 - `src/app/api/places/[id]/enrich/route.ts` — the cascade (`step=info|reviews|profile`).
-- `src/lib/ai/track-usage.ts` — `trackAiUsage`, `checkAiBudget`, `AI_MONTHLY_SEARCH_CAP` / `AI_MONTHLY_PROFILE_CAP` / `AI_MONTHLY_COMPARE_CAP`.
+- `src/lib/ai/track-usage.ts` — `trackAiUsage`, `checkAiBudget`, `AI_MONTHLY_SEARCH_CAP` / `AI_MONTHLY_PROFILE_CAP` / `AI_MONTHLY_COMPARE_CAP` / `AI_MONTHLY_CHAT_CAP` / `AI_MONTHLY_TRIP_PLAN_CAP` / `AI_MONTHLY_INSTAGRAM_CAP`.
 - `src/lib/ai/extract/lite-profile.ts` — `buildLiteProfile` (layer 3). See [[lite-profile-flow]].
 - `src/lib/ai/prompts/place-profile-full.ts`, `src/lib/ai/apply-suggestions.ts` — layer 5. See [[full-profile-flow]].
 - `src/app/api/cron/drain-imports/route.ts`, `src/lib/import/process-place.ts` — bulk import path.
@@ -184,5 +193,6 @@ Both AI layers are gated. A place skips them silently when a gate fails:
 - [[full-profile-flow]] — layer 5 detail (Gemini call, auto-apply, moderation).
 - [[manual-place-create-flow]] — the auto-cascade entry point.
 - [[place-import-flow]] — the bulk entry point + the backfill panel.
+- [[instagram-import-flow]] — the Instagram entry point (same queue).
 - [[ai-search-flow]] — consumes the `place_profile` this flow produces.
 - [[../06-ops/runbooks/profile-backfill]] — the backfill, ops view.

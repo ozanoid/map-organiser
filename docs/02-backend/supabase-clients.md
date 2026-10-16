@@ -2,8 +2,8 @@
 title: Supabase Clients
 type: overview
 domain: backend
-version: 1.0.0
-last_updated: 12.05.2026
+version: 1.1.0
+last_updated: 16.10.2026
 status: stable
 sources:
   - src/lib/supabase/client.ts
@@ -76,7 +76,19 @@ import { createServiceClient } from "@/lib/supabase/server";
 const supabase = createServiceClient(); // bypasses RLS — use with care
 ```
 
-**Used in exactly one place:** `src/app/api/shared/[slug]/route.ts`, the public-read endpoint for shared links. Because the viewer is anonymous, the user-scoped client wouldn't be able to read the underlying list/trip rows. The service-role client bypasses RLS so the route can carefully assemble a public payload.
+**Used only where no session can do the job** (checked 16.10.2026 — `createServiceClient` is imported by these six files):
+
+| File | Why the service role |
+|---|---|
+| `src/app/api/shared/[slug]/route.ts` | Public read of a shared list/trip/place — the viewer is anonymous, so the user-scoped client can't read the underlying rows; the route assembles a whitelisted public payload. |
+| `src/app/api/shared/[slug]/save/route.ts` | Reads the shared **originals** only (they belong to another user); every insert stays on the viewer's cookie client. |
+| `src/app/api/cron/refresh-places/route.ts` | Daily sweep across users — no cookie. |
+| `src/app/api/cron/drain-imports/route.ts` | Drains the import queue across users — no cookie (v1.26.0). |
+| `src/app/api/places/import-jobs/route.ts` | Inserts `import_job_items`, which has no INSERT policy on purpose (v1.26.0). |
+| `src/app/api/instagram/import/route.ts` | The `after()` job that reads the post and writes the job's items, after the response has gone (v1.28.0). |
+
+Every query on this client filters by `user_id` (or by an id the server itself
+created) explicitly — RLS is not there to catch a mistake.
 
 **Hard rules:**
 
@@ -140,7 +152,8 @@ If you change the middleware matcher or shortcut it for a path, **make sure the 
 │                          (cookies via next/headers)           │
 │                          OR                                   │
 │                         server.ts#createServiceClient()       │
-│                          (only in /api/shared/[slug] GET)     │
+│                          (share reads, crons, import queue,   │
+│                           Instagram job — table above)        │
 │                                                               │
 │ Client Components ────► client.ts#createClient()              │
 │                          (browser cookies, anon → auth)       │
@@ -151,7 +164,7 @@ If you change the middleware matcher or shortcut it for a path, **make sure the 
 
 - **Importing `client.ts` into a Server Component.** Works locally (no error) but uses the wrong cookie strategy — auth state can drift.
 - **Importing `server.ts` into a Client Component.** Fails at build with "next/headers can't be used in client component".
-- **Using `createServiceClient()` outside `/api/shared/[slug]` GET.** Bypasses RLS — every query returns every row across all users. Hard to detect, easy to ship.
+- **Using `createServiceClient()` where the cookie client would do, or without a `user_id` filter.** Bypasses RLS — every query returns every row across all users. Hard to detect, easy to ship. Add a new caller to the table in the `createServiceClient()` section above only with a reason no session can serve.
 - **Forgetting to `await createClient()`** in `server.ts`. The function is `async` because `cookies()` is async in Next.js 16.
 
 See [[../_agent/pitfalls#supabase-supabase-ssr]] for the canonical list.

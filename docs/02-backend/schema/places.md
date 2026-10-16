@@ -2,13 +2,17 @@
 title: places
 type: table
 domain: backend
-version: 1.3.0
-last_updated: 15.07.2026
+version: 1.4.0
+last_updated: 16.10.2026
 status: stable
 sources:
   - Supabase project hukppmaevcapvbrvxtph (live)
+  - src/lib/types/index.ts
+  - src/lib/import/process-place.ts
 related:
   - "[[_README]]"
+  - "[[import-jobs]]"
+  - "[[../../05-flows/instagram-import-flow]]"
   - "[[../../01-domain/places]]"
   - "[[../../01-domain/geo-and-s2]]"
   - "[[categories]]"
@@ -44,7 +48,7 @@ The core entity — user-saved locations. 458 rows in the current snapshot. Geog
 | `rating` | smallint | yes | — | User's 1–5 rating. Check `rating >= 1 AND rating <= 5`. |
 | `notes` | text | yes | — | Free-form. |
 | `google_data` | jsonb | yes | `'{}'::jsonb` | Provider data (see [[../../01-domain/places#google_data-shape]]). |
-| `source` | text | yes | `'manual'::text` | CHECK enum: `manual` / `import` / `link` / `mapbox_search` / `similar` / `shared`. Added 13.05.2026 (`add_source_check_with_mapbox_search`); widened 15.07.2026 (`widen_places_source_check_add_similar` v1.18.0, `widen_places_source_check_add_shared` v1.20.0). |
+| `source` | text | yes | `'manual'::text` | CHECK enum (live): `manual` / `import` / `link` / `mapbox_search` / `similar` / `shared`. Added 13.05.2026 (`add_source_check_with_mapbox_search`); widened 15.07.2026 (`widen_places_source_check_add_similar` v1.18.0, `widen_places_source_check_add_shared` v1.20.0). The code also writes **`instagram`** (v1.28.0 — places the Instagram import creates; `Place.source` in `src/lib/types/index.ts`, `ImportDefaults.source` in the drain) — **not allowed by the live constraint until the [[#pending-migration]] is applied.** |
 | `visit_status` | text | yes | — | Check enum: `want_to_go` / `booked` / `visited` / `favorite`. |
 | `visited_at` | timestamptz | yes | — | Set when status flips to `visited` (app-side). |
 | `booked_at` | timestamptz | yes | — | Set when status flips to `booked` (app-side). |
@@ -95,13 +99,30 @@ When a place is deleted, all four junction/child rows go with it.
 
 None on this table directly.
 
+## Pending migration
+
+**NOT yet applied to the live DB** (verified 16.10.2026: `places_source_check`
+still lists the six values above). Part of the single Instagram-import migration
+whose full text — including the `import_jobs.kind` / `meta` columns — is in
+[[import-jobs#pending-migration]]; apply it as one unit. The `places` part:
+
+```sql
+alter table public.places drop constraint places_source_check;
+alter table public.places add constraint places_source_check
+  check (source = any (array['manual','import','link','mapbox_search','similar','shared','instagram']));
+```
+
+Until it lands, a drain insert with `source = 'instagram'` violates the CHECK and
+the item ends `failed` — in practice unreachable, because an Instagram job cannot
+be created before the same migration adds `import_jobs.kind`.
+
 ## Notes
 
 - **Migration history.** `create_places` (2026-04-09), `add_visit_status` (2026-04-10), `create_place_categories_junction` (2026-04-14) then `drop_place_categories_junction` (2026-04-14) — the team briefly experimented with M:N category before reverting to single-category, `add_cascade_delete_trip_day_places_place_id` (2026-04-15), `add_source_check_with_mapbox_search` (2026-05-13), `add_subcategory_id_to_places` (2026-05-13).
 - **`google_data` size discipline.** API routes strip `reviews`, `editorialSummary`, `editorial_summary`, and `photos` from the inbound payload before insert. Reviews come back later via the enrichment step. Photos are replaced by `photo_storage_url` after download. This keeps the row size sane.
 - **`google_data.place_profile` (Phase 4).** AI pivot data nested under `google_data`. Schema in `src/lib/ai/schemas/place-profile.ts`. Two completeness levels (`"lite"` / `"full"`). Written by `POST /api/places/[id]/enrich?step=profile`. Detail page renders via `AiSummaryCard`. See [[../../01-domain/places#google_dataplace_profile-shape-phase-4]] for the field-by-field shape.
 - **`location` is canonical.** Frontend `Place.location` of type `{ lat, lng }` is the post-parser shape; raw EWKB comes back from PostgREST and is parsed by `src/lib/geo.ts#parsePostgisPoint` on every read.
-- Consumed by: every `/api/places/*` route, `/api/trips/*` (via join), `/api/shared/[slug]` (via join), `/api/stats`.
+- Consumed by: every `/api/places/*` route, `/api/trips/*` (via join), `/api/shared/[slug]` (via join), `/api/stats`, the import drain `/api/cron/drain-imports` (inserts), and `/api/instagram/import` (duplicate check, tag + note on already-saved places) / `/api/instagram/import/[id]` (reads).
 
 ## Open questions
 

@@ -2,8 +2,8 @@
 title: Integrations
 type: overview
 domain: integrations
-version: 1.2.0
-last_updated: 15.07.2026
+version: 1.3.0
+last_updated: 16.10.2026
 status: stable
 related:
   - "[[supabase]]"
@@ -11,6 +11,7 @@ related:
   - "[[google-places]]"
   - "[[dataforseo]]"
   - "[[gemini]]"
+  - "[[hikerapi]]"
   - "[[s2-geometry]]"
   - "[[react-query]]"
   - "[[zustand]]"
@@ -29,7 +30,8 @@ Third-party services and runtime libraries that materially shape how this app wo
 | **Mapbox** | Map rendering (GL JS) + Directions API for trip routes | [[mapbox]] |
 | **Google Places API** | Authoritative place data when the user provides a key | [[google-places]] |
 | **DataForSEO Business Data** | Default enrichment provider (no per-user key) | [[dataforseo]] |
-| **Google Gemini** (Generative Language API) | AI feature provider — `gemini-3-flash-preview`. Phase 4 full place_profile, Phase 6 NL search (both shipped) | [[gemini]] |
+| **Google Gemini** (Generative Language API) | AI feature provider — `gemini-3-flash-preview`. Phase 4 full place_profile, Phase 6 NL search (both shipped); since v1.28.0 also the one read per Instagram post | [[gemini]] |
+| **HikerAPI** | Instagram data — the post, its tagged/mentioned accounts and their profiles, for the Instagram import (v1.28.0). System-level key `HIKERAPI_KEY` | [[hikerapi]] |
 
 ## Runtime libraries (architecturally significant)
 
@@ -51,25 +53,24 @@ When parsing a Google Maps URL or importing places, the app picks an enrichment 
 
 The user can disable Google explicitly in Settings → API (`googlePlacesEnabled = false`) even with a key, forcing DataForSEO.
 
+The Instagram import (v1.28.0) is different on the matching side: it always finds candidates with Google Text Search on the user's key — the toggle is not consulted, and without a key it does not start — and then enriches the places it adds through DataForSEO in the import queue, like any import. See [[../05-flows/instagram-import-flow]].
+
 ## Cost-tracked SKUs
 
 Every external API call that costs money goes through one of two trackers, both writing to the same `api_usage` table via `increment_api_usage` RPC:
 
-- **`trackUsage`** in `src/lib/google/track-usage.ts` — for Google + DataForSEO.
+- **`trackUsage`** in `src/lib/google/track-usage.ts` — for Google, DataForSEO, Mapbox (search sessions, Directions) and HikerAPI.
 - **`trackAiUsage`** in `src/lib/ai/track-usage.ts` — for AI/LLM calls.
 
-Observed SKUs (see [[../02-backend/schema/api_usage#sku-naming-convention]]):
+SKUs — the keys of `SKU_CONFIG` and `AI_SKU_CONFIG`; the canonical list with prices is [[../02-backend/schema/api_usage]]:
 
-- `google.text_search`
-- `google.place_details`
-- `google.place_photo`
-- `dataforseo.business_info`
-- `dataforseo.reviews`
-- `ai_place_profile` (Phase 4) — one Gemini call per place_profile generation/refresh.
-- `ai_parse_query` (Phase 6) — NL search parse; one per search (also the search-budget unit).
-- `ai_rank_results` (Phase 6) — LLM-as-judge rerank when a query needs semantic ranking.
+- Google Places: `text_search_pro`, `place_details_pro`, `reviews_enterprise`, `photos`, and `text_search_enterprise` (v1.28.0 — the Instagram import's candidate search, on the user's own key).
+- DataForSEO: `dataforseo_business_info_live`, `dataforseo_reviews`.
+- Mapbox: `mapbox_search_session`, `mapbox_directions` (v1.22.0); `mapbox_load` is registered but nothing tracks map loads.
+- HikerAPI: `hikerapi_request` (v1.28.0).
+- AI: `ai_place_profile`, `ai_parse_query`, `ai_rank_results`, `ai_compare`, `ai_chat`, `ai_trip_plan`, `ai_instagram_read` (v1.28.0), plus the unused `ai_embedding` placeholder.
 
-Mapbox calls (map tile loads, Directions) are **not** tracked through `api_usage` — Mapbox tracks them on their dashboard.
+Map tile loads are not counted — Mapbox shows them on its own dashboard.
 
 ## Adding a new integration
 

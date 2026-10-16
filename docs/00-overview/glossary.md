@@ -2,8 +2,8 @@
 title: Glossary
 type: overview
 domain: overview
-version: 1.2.0
-last_updated: 05.08.2026
+version: 1.3.0
+last_updated: 16.10.2026
 status: stable
 related:
   - "[[system-overview]]"
@@ -14,6 +14,7 @@ related:
   - "[[../01-domain/users-and-profiles]]"
   - "[[../01-domain/categories-and-tags]]"
   - "[[../01-domain/geo-and-s2]]"
+  - "[[../05-flows/instagram-import-flow]]"
 ---
 
 # Glossary
@@ -43,6 +44,8 @@ Single source of truth for every domain term, abbreviation, and acronym used in 
 | **Auto-plan** | The trip-day distribution algorithm: K-means++ clustering by lat/lng → category ordering → nearest-neighbor routing. Lives in `src/lib/trip/auto-plan.ts`. |
 | **Enrichment** | Fetching rich data (rating, photos, opening hours, reviews) for a Place from Google Places API or DataForSEO. Stored in `places.google_data` (jsonb). |
 | **Batch import** | The server-driven flow that parses a Google Takeout file into `import_job_items`, then advances each row through insert → reviews → profile in `/api/cron/drain-imports`. Survives a closed tab. See [[../05-flows/place-import-flow]]. |
+| **Instagram import** | v1.28.0. Shares of an Instagram post or reel (iOS Shortcut → `/map?add=`, or a pasted link) become an `import_jobs` row of `kind = 'instagram'`. The server reads the post through HikerAPI, classifies its accounts with one Gemini call, and pins each featured venue to a Google place only on evidence (same phone or website, its own Maps link, a matching address, close to its own coordinates or the location tag, or the only same-name place in an area the post itself names); the places then go through the same queue as a batch import, tagged `instagram`, `want_to_go`, the post URL as the note. See [[../05-flows/instagram-import-flow]]. |
+| **HikerAPI** | Hosted Instagram data API the Instagram import reads posts and profiles through. Server key `HIKERAPI_KEY`; SKU `hikerapi_request`. See [[../04-integrations/hikerapi]]. |
 | **Share target** | The PWA `share_target` declaration in `src/app/manifest.ts` that lets mobile browsers send `url`/`text`/`title` to `/api/share-target`. |
 
 ## AI
@@ -76,7 +79,7 @@ Single source of truth for every domain term, abbreviation, and acronym used in 
 | Term | Meaning |
 |---|---|
 | **RLS** | Row-Level Security. Postgres policies that gate row visibility per role. Every user-owned table here has `auth.uid() = user_id` policies. |
-| **Service role** | A Supabase API key that bypasses RLS. Used only by `createServiceClient()` in `src/lib/supabase/server.ts`, exclusively for serving public share content. Env: `SUPABASE_SERVICE_ROLE_KEY`. |
+| **Service role** | A Supabase API key that bypasses RLS. Used only by `createServiceClient()` in `src/lib/supabase/server.ts`, only where no session can do the job — public share reads, the cron routes, the import-queue writes and the Instagram import's background job; see [[../02-backend/supabase-clients]]. Env: `SUPABASE_SERVICE_ROLE_KEY`. |
 | **SSR auth** | `@supabase/ssr`'s cookie-based session, refreshed by middleware on every request. See [[../02-backend/auth]] when written. |
 | **`auth.uid()`** | Postgres function exposed by Supabase Auth that returns the current authenticated user's UUID. Used in every RLS policy. |
 | **SECURITY DEFINER** | Postgres function attribute making it run as the function owner instead of the caller. Custom DEFINER functions in this repo: `handle_new_user`, `create_default_categories`, `increment_api_usage`. |
@@ -112,7 +115,7 @@ Single source of truth for every domain term, abbreviation, and acronym used in 
 |---|---|
 | **PWA** | Progressive Web App. This repo ships a manifest, service worker, offline route, and `share_target`. |
 | **Service worker** | `public/sw.js` — registered by `src/components/sw-register.tsx`. Handles offline fallback. |
-| **`api_usage` SKU** | A short string identifying which external API operation was billed (e.g. `google.text_search`, `dataforseo.business_info`). Tracked via `increment_api_usage()` RPC. |
+| **`api_usage` SKU** | A short string identifying which external API operation was billed — a key of `SKU_CONFIG` / `AI_SKU_CONFIG` (e.g. `text_search_pro`, `dataforseo_business_info_live`, `ai_place_profile`). Tracked via `increment_api_usage()` RPC. Full list: [[../02-backend/schema/api_usage]]. |
 | **Vault** | The Obsidian-style docs structure under `docs/`. See [[../README]]. |
 | **Frontmatter** | The YAML block at the top of every vault doc. Schema: [[../_meta/frontmatter-schema]]. |
 | **Wiki-link** | The `[[Target]]` syntax for cross-doc links inside the vault. |

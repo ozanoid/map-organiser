@@ -6,6 +6,100 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 16.10.2026 — v1.28.0 — Add the places in an Instagram post
+
+**What it does.** Sharing an Instagram post or reel — the iOS Shortcut "Add to
+MapOrganiser" opens `/map?add=<link>`, or the link is pasted into Add Place —
+adds every venue the post features that can be pinned on evidence, with no
+confirmation step: visit status `want_to_go`, a per-user `instagram` tag
+(created on first use, `#E4405F`), the canonical post URL as the note. A place
+the user already has gets the tag and the link appended to its notes. Venues it
+cannot pin are listed with the reason and a **Pick branch** / **Search** button
+that hands the name to the map search box. Closing the dialog keeps the job
+running and the map toasts when it ends; `?ig=<jobId>` keeps the dialog across a
+refresh.
+
+**State.** Code on the `feat/instagram-import` branch, not merged. **The DB migration it
+needs is NOT applied to the live database** — verified 16.10.2026: no
+`import_jobs.kind` / `meta`, and `places_source_check` without `instagram`. The
+exact SQL and the deploy order are in
+[[02-backend/schema/import-jobs#pending-migration]]. Before it lands, the
+Instagram routes fail (POST 500, GET 404) and `GET /api/places/import-jobs`
+answers `{ job: null }` even while a Takeout import runs.
+
+- **Server.** An Instagram import is an `import_jobs` row with
+  `kind = 'instagram'`, created in `status = 'reading'` so the drain's
+  `finalizeJobs` does not close it before it has items, with
+  `meta = { phase, shortcode, post, error }`. `POST /api/instagram/import`
+  returns at once (202, or the same job for a repeat share within 10 minutes)
+  and runs `runInstagramImportJob` in `after()` (`maxDuration = 120`): monthly
+  budget → `analyzeInstagramPost` → one `import_job_items` row per decision →
+  `kickDrain`. The existing drain then creates and enriches the places exactly
+  like a Takeout import, with `places.source = 'instagram'`.
+- **Pinning.** HikerAPI reads the post (plus `/gql/media/usertags` for reels,
+  whose usertags v1 omits) and the profile of every tagged, coauthor and
+  @mentioned account and — always — the owner. One Gemini 3 Flash call
+  (`read-post.ts`, structured output, `thinkingLevel: "low"`) classifies the
+  accounts and quotes branch hints, addresses, plain-text venues and the area;
+  every quote is checked against the post text. Google Text Search (New, an
+  Enterprise field mask) supplies candidates, and `resolve.ts` decides with
+  fixed rules: add only on evidence, chains only with evidence for the exact
+  branch, "only one in the area" only for non-chains and only when the post
+  itself names the area. A wrong place on the map costs more than a missing one.
+- **Measured** on 35 hand-labelled public posts (16.10.2026). Production code,
+  three full `npm run eval:instagram` runs: **0 wrong or spurious places** in
+  every run; recall 37–38 / 43 (86–88 %), holdout 8 / 9. Per post ≈ 4 HikerAPI
+  requests, ≈ 3 Text Searches, 1 Gemini call. Misses: chain branches only the
+  photos identify; Walter's Coffee (only a bio area hint, other branch in the
+  post — correctly skipped); a café inside a cultural complex (the complex was
+  added instead, labelled optional). New devDependency `tsx` runs the script.
+- **Cost tracking.** New SKUs `text_search_enterprise` ($35/1K after 1K free —
+  the field mask asks for website + phone), `hikerapi_request` ($1/1K) and
+  `ai_instagram_read` ($1.5/1K); new budget kind `instagram`, 300 posts per user
+  per month. The Google search runs on the user's key (`getUserApiKeys`); without
+  one the POST returns 400. New env var `HIKERAPI_KEY` (server-only), added to
+  `.env.local.example`.
+- **Correction to v1.25.0.** Its "7 `experimental_telemetry.metadata` type
+  errors from the AI SDK v7 bump, present on `main`" were not on `main`: the
+  local `node_modules` held `ai@7.0.31` / `@ai-sdk/google@4.0.18` while the
+  lockfile pins `6.0.228` / `3.0.75`, and `npm install` re-synced them.
+  `package.json` has never left `ai@6`. Recorded in
+  [[00-overview/tech-stack#lockfile--install]].
+- **Vault statements found false while updating** (verified in code or the live
+  DB, fixed everywhere they appeared): the service-role client is "only for the
+  public share read" (it has six callers — 8 docs);
+  the `api_usage` SKU names (`google.text_search`, `dataforseo.business_info`…
+  are not the real keys — 6 docs); the `claim_import_items` SQL in
+  [[02-backend/schema/import-jobs]] lacked the `photo` stage; "every LLM route
+  flushes Langfuse" (`drain-imports` and the new Instagram route do not);
+  `profiles.is_admin` "is not checked anywhere" (it switches `getUserApiKeys`
+  to the env keys); deployment's "no route exports `maxDuration`" and "no cron
+  jobs".
+- **Review fixes before commit:** the background run flushes Langfuse; Try
+  again skips a stalled job; the import requires `profiles.ai_features_enabled`;
+  `?ig` is kept out of the filter-persist mirror; a **Pick branch** pick starts
+  with the post link and the `instagram` tag (`SearchResultPanel` `prefill`); a
+  failed profile read or Text Search is retried once. Still open (owner's call):
+  the `google_places_enabled` toggle is not consulted by this import. See
+  [[05-flows/instagram-import-flow]].
+- Docs: new [[05-flows/instagram-import-flow]], [[04-integrations/hikerapi]],
+  [[02-backend/api-routes/instagram]], [[03-frontend/hooks/use-instagram-import]];
+  `InstagramImportPanel` documented in [[03-frontend/components/places]].
+  Updated: schema `import-jobs` (kind / meta / `reading`, pending migration),
+  `places` (source `instagram`, pending migration), `api_usage` (SKUs),
+  schema `_README`; api-routes `_README` (Instagram group, counts, helpers),
+  `places` (Takeout-only GET, drain job kinds); `02-backend/_README`,
+  `supabase-clients`; domain `places`, `categories-and-tags`,
+  `users-and-profiles`; components `places`, `map`, `_README`; hooks `_README`;
+  `routing` (`?add=` Instagram, `?ig=`); integrations `_README`,
+  `google-places`, `gemini`, `dataforseo`, `supabase`; flows `_README`,
+  `share-target-flow`, `manual-place-create-flow`, `place-import-flow`,
+  `lite-profile-flow`, `place-search-flow`, `ai-enrichment-flow`,
+  `observability-flow`; ops `env-vars`, `deployment`; overview `tech-stack`,
+  `repo-structure`, `system-overview`, `glossary`.
+
+---
+
 ## 06.08.2026 — v1.27.2 — Fall back to a name search when a CID draws a blank
 
 - Two Lisbon places out of 286 landed carrying only `cid` and a coordinate.

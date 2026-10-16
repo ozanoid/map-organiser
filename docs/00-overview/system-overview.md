@@ -2,8 +2,8 @@
 title: System Overview
 type: overview
 domain: overview
-version: 1.1.0
-last_updated: 18.05.2026
+version: 1.2.0
+last_updated: 16.10.2026
 status: stable
 sources:
   - AGENTS.md
@@ -13,6 +13,7 @@ sources:
   - src/app/manifest.ts
   - src/app/layout.tsx
   - src/lib/ai/
+  - src/lib/instagram/
 related:
   - "[[tech-stack]]"
   - "[[repo-structure]]"
@@ -40,10 +41,11 @@ The model in one sentence: **users collect Places, group them into Lists, lay th
 Typical session:
 
 1. Paste a Google Maps link from mobile share menu (PWA `share_target`) → place is parsed, enriched, saved.
-2. Bulk-import a Google Takeout file → batched enrichment + insert.
-3. Tag and categorize, set visit status, drop into lists.
-4. Build a trip from a list → auto-plan distributes places across days, draws Mapbox routes.
-5. Share a list or trip → copy slug URL.
+2. Share an Instagram post (iOS Shortcut → `/map?add=`) → every venue it features that can be pinned on evidence is added automatically, tagged `instagram` (v1.28.0).
+3. Bulk-import a Google Takeout file → server-side queue: insert, photo, reviews, AI profile.
+4. Tag and categorize, set visit status, drop into lists.
+5. Build a trip from a list → auto-plan distributes places across days, draws Mapbox routes.
+6. Share a list or trip → copy slug URL.
 
 ## High-level architecture
 
@@ -86,7 +88,8 @@ Typical session:
 | Filters & search | `src/components/filters/`, `src/lib/hooks/use-filters.ts` | Country/city, category, tag, list, rating, visit status, sort. |
 | Map | `src/components/map/`, `src/lib/map/` | Mapbox GL view with cluster, popups, route polylines, custom markers. |
 | Stats | `src/app/api/stats/`, `src/app/(app)/stats/` | Recharts dashboard backed by aggregate queries. |
-| Import | `src/app/api/places/import-*`, `src/app/(app)/import/`, `src/lib/stores/import-store.ts` | Client-driven batched import with Zustand progress. |
+| Import | `src/app/api/places/import-jobs/`, `src/app/api/cron/drain-imports/`, `src/lib/import/`, `src/app/(app)/import/` | Server-drained queue (`import_jobs` / `import_job_items`); the page only polls. See [[../05-flows/place-import-flow]]. |
+| Instagram import | `src/app/api/instagram/`, `src/lib/instagram/`, `src/lib/hikerapi/`, `src/components/places/instagram-import-panel.tsx` | Post → HikerAPI + one Gemini read + Google Text Search → deterministic pinning → the same import queue (v1.28.0; DB migration pending). See [[../05-flows/instagram-import-flow]]. |
 | Settings | `src/app/(app)/settings/`, `src/components/settings/` | Categories, sub-categories (per parent), tags, encrypted API keys, theme, AI master toggle, AI moderation queue. |
 | Theme | `src/lib/providers.tsx`, `src/lib/hooks/use-map-style.ts` | next-themes light/dark/system; map style and marker style preferences. |
 | PWA | `src/app/manifest.ts`, `public/sw.js`, `src/components/sw-register.tsx`, `src/app/offline/` | `share_target` POST to `/api/share-target`, offline fallback. |
@@ -97,7 +100,7 @@ Typical session:
 
 - **Server state** lives in TanStack Query (`useQueryClient` configured in `src/lib/providers.tsx`, `staleTime: 60s`, `refetchOnWindowFocus: false`). All entity hooks (`usePlaces`, `useTrips`, `useLists`, …) wrap React Query.
 - **Client state** that spans pages lives in Zustand (currently only `src/lib/stores/import-store.ts`).
-- **Row-Level Security** is the security spine: every user-owned table has `auth.uid() = user_id` policies. The only public read is on `shared_links` (active links only). The service-role client bypasses RLS and is used exclusively for serving public share content.
+- **Row-Level Security** is the security spine: every user-owned table has `auth.uid() = user_id` policies. The only public read is on `shared_links` (active links only). The service-role client bypasses RLS and is used only where no session can do the job — public share reads, the cron routes, the import-queue writes and the Instagram import's background job ([[../02-backend/supabase-clients]]).
 - **PostGIS geography** stores place coordinates; `src/lib/geo.ts` parses EWKB/WKT/GeoJSON into `{lat, lng}` once for every API route. See [[../01-domain/geo-and-s2]].
 
 ## Roadmap fingerprints in code

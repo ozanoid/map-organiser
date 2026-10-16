@@ -2,8 +2,8 @@
 title: Map components
 type: component
 domain: frontend
-version: 1.2.0
-last_updated: 16.07.2026
+version: 1.3.0
+last_updated: 16.10.2026
 status: stable
 sources:
   - src/components/map/map-view.tsx
@@ -15,7 +15,9 @@ related:
   - "[[_README]]"
   - "[[../hooks/use-map-style]]"
   - "[[../hooks/use-places]]"
+  - "[[../hooks/use-instagram-import]]"
   - "[[../../04-integrations/mapbox]]"
+  - "[[../../05-flows/instagram-import-flow]]"
   - "[[../design-system/_README#custom-map-markers]]"
 ---
 
@@ -44,9 +46,11 @@ Two components. `MapView` is a self-contained Mapbox renderer; `MapContent` is t
   }
   ```
 
-- **Ref API:**
+- **Ref API (`MapViewHandle`):**
   - `flyToPlace(placeId)` — pan + zoom to a saved place (and trigger `onPlaceClick`).
+  - `openPlacePopup(placeId)` — fly to a saved place and open its marker balloon, as if the pin was clicked (v1.23.2 — a search that resolves to an already-saved place).
   - `flyToCoords({ lng, lat, zoom? })` — pan + zoom to arbitrary coordinates (search results).
+  - `fitToCoords(points)` — frame a set of `{ lng, lat }`: one point flies to it at zoom 16, several fit their bounds (`padding: 80`, `maxZoom: 15`); empty is a no-op. Used by the Instagram import's **Show on map** (v1.28.0).
   - `getCenter()` — current viewport center, returns `{ lng, lat } | null`.
 - **Hooks:** `useRef`, `useEffect`, `useState`, `useCallback`, `useImperativeHandle`.
 - **State:** `mapLoaded` (boolean), refs to the map instance and stable callback identities.
@@ -71,7 +75,7 @@ Two components. `MapView` is a self-contained Mapbox renderer; `MapContent` is t
 - **File:** `src/components/map/map-content.tsx`
 - **`"use client"`**.
 - **Props:** `{ mapboxToken: string }`.
-- **Hooks:** `useState`, `useEffect`, `useCallback`, `useRef`, `useSearchParams`, `useRouter`, `useQueryClient`, `useFilters`, `usePlaces`, `useCategories`, `useMapStyle`. (Search lifecycle owned by `SearchBox`'s internal `usePlaceSearch`.)
+- **Hooks:** `useState`, `useEffect`, `useCallback`, `useRef`, `useSearchParams`, `useRouter`, `useQueryClient`, `useFilters`, `usePlaces`, `useCategories`, `useMapStyle`, [[../hooks/use-instagram-import|`useInstagramImport`]] (background watcher). (Search lifecycle owned by `SearchBox`'s internal `usePlaceSearch`.)
 - **State managed:**
   - `addOpen` (Add Place dialog).
   - `filterOpen` (mobile filter sheet).
@@ -80,6 +84,13 @@ Two components. `MapView` is a self-contained Mapbox renderer; `MapContent` is t
   - `selectedPlace` (currently focused place — drives detail panel).
   - `detailData` / `detailLoading` (fetched full detail).
   - `sharedUrl` (parsed from `?add=` query param).
+  - Instagram import (v1.28.0): `igJob` (`{ url, id }` of the job shown in the
+    dialog — seeded from `?ig=<jobId>` on mount), `igDialogOpen` (the dialog is
+    open for that job; the dialog's `open` is `addOpen || igDialogOpen`),
+    `igWatchId` (a job closed mid-way, watched in the background), and refs
+    `igPhaseRef` (last phase the panel reported) and `igNotified` (toast once per
+    job).
+  - `searchBoxRef` (`SearchBoxHandle`) — lets the Instagram panel fill the search box.
 - **API calls (inline, not via hooks):**
   - `GET /api/places/[id]` to fetch detail panel data.
   - `PATCH /api/places/[id]` to update visit status / rating from the detail panel.
@@ -93,7 +104,13 @@ Two components. `MapView` is a self-contained Mapbox renderer; `MapContent` is t
     (full detail bottom-sheet) on mobile — gated by `useIsDesktop` (v1.24.0).
   - Skeletons, badges, buttons from shadcn.
 - **Behavior:**
-  - Reads `?add=<url>` on mount and opens Add Place dialog with `initialUrl`.
+  - Reads `?add=<url>` on mount and opens Add Place dialog with `initialUrl` (then `router.replace("/map")`). An Instagram post/reel link puts the dialog in Instagram mode — see [[../../05-flows/instagram-import-flow]].
+  - **Instagram import wiring (v1.28.0):**
+    - `onInstagramJob` stores the job and writes `?ig=<jobId>` via `setIgParam`, which edits only `ig` and keeps the rest of the query string (the filters). A refresh with `?ig=` reopens the dialog on that job.
+    - `closeAddDialog` (every close path) clears `?ig` when a job is shown; if the last phase seen was not `done`/`failed` it sets `igWatchId`, so `useInstagramImport` keeps polling. When that job ends it invalidates `["places"]` and toasts once — "N places added from Instagram" / "No new places from that Instagram post" / "Couldn't add from that Instagram post" — with a **View** action (`reopenInstagram`) that reopens the dialog on the job.
+    - `onShowOnMap(points)` → close the dialog, `mapRef.fitToCoords(points)`.
+    - `onSearchPlaces(query, context)` → close the dialog, keep `context` as `igSearchContext`, `searchBoxRef.search(query)`. The next `SearchResultPanel` gets `prefill = { notes: postUrl, tagIds: [tagId] }`; the context clears when that panel closes or the pick is an already-saved place.
+    - The filter-persist mirror drops `ig` from the query string it stores, so nav links back to `/map` never reopen an import dialog.
   - Manages browser history (pushState/popState) so the mobile back button
     closes the detail panel/sheet (the mobile sheet's `onClose` calls
     `history.back()` to stay in sync).
@@ -112,9 +129,11 @@ Two components. `MapView` is a self-contained Mapbox renderer; `MapContent` is t
     proximity?: { lng: number; lat: number };
     onSelect: (place: RetrievedPlaceData) => void;
     className?: string;
+    ref?: Ref<SearchBoxHandle>; // v1.28.0 — React 19 ref-as-prop, no forwardRef
   }
   ```
-- **Hooks:** [[../hooks/use-place-search|`usePlaceSearch`]], `useState`, `useEffect`, `useRef`.
+- **Ref API (`SearchBoxHandle`, v1.28.0):** `search(text)` — sets the query, opens the suggestions dropdown and focuses the input, as if the user had typed it. Used by `MapContent` for the Instagram import's **Pick branch** / **Search** / **Search manually** hand-off ([[../../05-flows/place-search-flow]] takes over from there).
+- **Hooks:** [[../hooks/use-place-search|`usePlaceSearch`]], `useState`, `useEffect`, `useRef`, `useImperativeHandle`.
 - **UI:** Pill-shaped input with `Search` icon and `Loader2` spinner while suggest/retrieve is in flight. Absolute-positioned dropdown beneath shows up to 8 Mapbox POI suggestions; each row has `MapPin` icon + name + place_formatted address. Click outside or pick a result closes the dropdown.
 - **Behavior:**
   - Min 2 chars to fire suggest (handled in the hook).
@@ -131,6 +150,8 @@ Two components. `MapView` is a self-contained Mapbox renderer; `MapContent` is t
   {
     place: RetrievedPlaceData;
     onClose: () => void;
+    /** v1.28.0 — starting notes/tags (Instagram "Pick branch"); initial state only. */
+    prefill?: { notes?: string; tagIds?: string[] };
   }
   ```
 - **Hooks:** `useState`, `useEffect`, `useMemo`, `useQueryClient`, [[../hooks/use-places|`useCreatePlace`]], [[../hooks/use-categories|`useCategories`]], [[../hooks/use-subcategories|`useSubcategories`]], [[../hooks/use-lists|`useLists`]], [[../hooks/use-tags|`useTags`]].
