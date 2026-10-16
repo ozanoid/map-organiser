@@ -79,6 +79,19 @@ the pick writes existing `import_jobs` / `import_job_items` columns.
   in it." under the input. It used to go to the Maps parser, which answered
   "Could not parse this URL. Please try a different Google Maps link."
   `isInstagramPostUrl` lost its last caller and was removed.
+- **Map search box (from the preview test).** An aimed search also sends a
+  `bbox` of about 30 km around the point (`/api/search/suggest` and
+  `suggest()` accept `bbox`; `usePlaceSearch` keys on it): with London as the
+  proximity, Mapbox still ranked Indonesian and US archives first for
+  "Westminster Libraries and Archives"; inside the box it answers "No places
+  found". Unaimed searches keep the viewport bias only.
+- **Panel copy (from the preview test).** After the user removes the only added
+  place the dialog said "No places in this post"; it now says "<name> removed"
+  and offers a search for it. A result where every venue was skipped reads
+  "Nothing added yet". A single option reads "Is this <name>?". Switching to
+  the picker moves focus to the title before the view swaps and scrolls to the
+  top (the dialog had kept focus on itself and the filter box was scrolled out
+  of view).
 - **Drain.** `finalizeJobs` writes `meta.phase = 'done'` when it closes an
   Instagram job; the stored phase used to stay `adding` (the status route already
   derived `done`).
@@ -101,6 +114,7 @@ the pick writes existing `import_jobs` / `import_job_items` columns.
   header hand-off). Smaller: flows `place-search-flow`, `share-target-flow`,
   `manual-place-create-flow`, `lite-profile-flow`, `place-import-flow`,
   `ai-search-flow` (version only); hooks `use-place-search`, `_README`;
+  api-routes `search` (`bbox`); integrations `mapbox` (`bbox`);
   `routing`; domain `places`, `geo-and-s2`; api-routes `places`, `_README`
   (counts, service-role list); schema `places`; `supabase-clients` (the new
   caller); integrations `google-places`, `hikerapi`, `supabase`; ops

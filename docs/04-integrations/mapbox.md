@@ -2,8 +2,8 @@
 title: Mapbox
 type: integration
 domain: integrations
-version: 1.2.0
-last_updated: 16.07.2026
+version: 1.2.1
+last_updated: 16.10.2026
 status: stable
 sources:
   - src/components/map/map-view.tsx
@@ -82,7 +82,7 @@ Called from (both pass `day.routing_profile ?? "walking"` and track usage):
 
 `src/lib/mapbox/search-box.ts` exports three thin fetch wrappers:
 
-- `suggest({ q, sessionToken, proximity?, limit?, language? })` →  `GET https://api.mapbox.com/search/searchbox/v1/suggest`. Hard-codes `types=poi`. Returns autocomplete `SearchSuggestion[]`.
+- `suggest({ q, sessionToken, proximity?, bbox?, limit?, language? })` →  `GET https://api.mapbox.com/search/searchbox/v1/suggest`. Hard-codes `types=poi`. `proximity` ranks nearby results first; `bbox` (v1.28.1) keeps only results inside it. Returns autocomplete `SearchSuggestion[]`.
 - `retrieve({ mapboxId, sessionToken, language? })` → `GET https://api.mapbox.com/search/searchbox/v1/retrieve/{id}`. Returns a single `RetrievedPlace` with coords, address, POI categories, brand, external IDs.
 - `reverseGeocode({ lng, lat, language? })` → `GET https://api.mapbox.com/search/searchbox/v1/reverse`. Per-request endpoint. Used to pad DataForSEO keywords with address context when only `name + coords` are available (parse-link's `/maps/place/Name/@lat,lng/` branch).
 

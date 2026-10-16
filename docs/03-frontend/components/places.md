@@ -204,8 +204,9 @@ Twenty files under `src/components/places/`. All `"use client"`. The Place-relat
     **Close** + **Show all on map** (or **Done** without `onShowOnMap`).
   - **Branch picker** (`PlacePicker`, v1.28.1) — replaces the body for one
     skipped item: title "Which <name>?" (a chain uses its `searchName`),
-    description "N branches · pick the one in the post" ("N places" / "1 place"
-    for other reasons), one 44 px row per option (pin icon, name, address up to
+    description "N branches · pick the one in the post" ("N places" for other
+    reasons; one option: "Is this <name>?" / "One match on Google · tap it if
+    it's the place in the post"), one 44 px row per option (pin icon, name, address up to
     two lines), and from 7 options a filter input ("Filter by street or
     district") that matches name + address with the Turkish-aware `fold`;
     "Nothing matches “…”." when it filters everything out. Tapping a row runs
@@ -214,9 +215,13 @@ Twenty files under `src/components/places/`. All `"use client"`. The Place-relat
     and link added" when the user had it), on error it toasts the route's
     message. Footer: **Back** + **Search the map** (with `onSearch`). The picker
     closes by itself once its item is no longer a skipped venue with options.
-  - **Empty** — "No places in this post"; if no skipped venue is listed either,
-    "No account, location tag or address in this post points to one specific
-    place." Footer: **Close** + **Search manually** (with `onSearch`).
+  - **Empty** — "No places in this post" with "No account, location tag or
+    address in this post points to one specific place." when nothing is listed;
+    "Nothing added yet" above the rows when every venue was skipped; and
+    "<name> removed" (or "N places removed") with "Nothing from this post is on
+    your map now. If it was the wrong match, search for the right place." after
+    the user removed what was added. Footer: **Close** + **Search manually**
+    (with `onSearch`; after a single removal it starts with that place's name).
   - **Failed** — error copy per code (`post_unavailable`, `budget_exceeded`,
     `not_configured`, `service_error`, `stalled`, `invalid_url`), a start error's
     message, or "Couldn't load this import." **Try again** re-posts the URL,
@@ -227,8 +232,10 @@ Twenty files under `src/components/places/`. All `"use client"`. The Place-relat
 - **Accessibility:** progress list is `role="status"` + `aria-live="polite"`,
   the result list `aria-live="polite"`, errors `role="alert"`; decorative icons
   are `aria-hidden`. The dialog opens with focus on the title, and switching
-  between the list and the picker moves focus back to it, so a screen reader
-  starts from the top of the new view.
+  between the list and the picker moves focus back to it — before the view
+  changes, since the button that had focus unmounts and the dialog would
+  otherwise keep focus on itself — and scrolls the body to the top, so a screen
+  reader (and the eye) starts from the top of the new view.
 - **Composition:** rendered by `AddPlaceDialog` inside its `DialogContent`;
   uses shadcn `DialogHeader` / `DialogTitle` / `DialogDescription`, `Badge`,
   `Button` (+ `buttonVariants` for the Edit link), `Input` (the picker's

@@ -135,11 +135,11 @@ Two components. `MapView` is a self-contained Mapbox renderer; `MapContent` is t
     ref?: Ref<SearchBoxHandle>; // v1.28.0 — React 19 ref-as-prop, no forwardRef
   }
   ```
-- **Ref API (`SearchBoxHandle`, v1.28.0):** `search(text, { proximity }?)` — sets the query, opens the suggestions dropdown and focuses the input, as if the user had typed it. `proximity` (v1.28.1) aims this search at a point: it overrides the `proximity` prop (internal `aimedAt`) until the box is cleared or a result is picked. Used by `MapContent` for the Instagram import's **Search** / **Search the map** / **Search manually** hand-off ([[../../05-flows/place-search-flow]] takes over from there).
+- **Ref API (`SearchBoxHandle`, v1.28.0):** `search(text, { proximity }?)` — sets the query, opens the suggestions dropdown and focuses the input, as if the user had typed it. `proximity` (v1.28.1) aims this search at a point: it overrides the `proximity` prop (internal `aimedAt`) and adds a `bbox` of about 30 km around it (`boxAround`) until the box is cleared or a result is picked. Used by `MapContent` for the Instagram import's **Search** / **Search the map** / **Search manually** hand-off ([[../../05-flows/place-search-flow]] takes over from there).
 - **Hooks:** [[../hooks/use-place-search|`usePlaceSearch`]], `useState`, `useEffect`, `useRef`, `useImperativeHandle`.
 - **UI:** Pill-shaped input with `Search` icon and `Loader2` spinner while suggest/retrieve is in flight. Absolute-positioned dropdown beneath shows up to 8 Mapbox POI suggestions; each row has `MapPin` icon + name + place_formatted address. Click outside or pick a result closes the dropdown.
 - **Behavior:**
-  - Calls `usePlaceSearch({ proximity: aimedAt ?? proximity })` — the hand-off's point, else the viewport center `MapContent` passes (v1.28.1).
+  - Calls `usePlaceSearch(aimedAt ? { proximity: aimedAt, bbox: boxAround(aimedAt) } : { proximity })` — the hand-off's point and box, else the viewport center `MapContent` passes (v1.28.1).
   - Min 2 chars to fire suggest (handled in the hook).
   - On select → calls `onSelect(retrievedData)` with the enriched `RetrievedPlaceData`; clears the input.
   - "No places found" message after a non-empty query yields zero suggestions.

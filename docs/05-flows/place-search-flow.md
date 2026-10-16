@@ -40,8 +40,11 @@ if the name had been typed ("Search manually" passes an empty name and only
 focuses the box). When the import knows where the venue is (v1.28.1 — its
 `near`: the post's area, the profile's coordinates or the location tag; else the
 centre of its options or of the post's other places), the map first flies there
-at zoom 12 and the suggestions are biased to that point until the box is
-cleared or a result is picked. A place saved this
+at zoom 12 and the suggestions stay inside a box of about 30 km around that
+point until the box is cleared or a result is picked — proximity alone only
+ranks, and Mapbox put Indonesian and US archives first for "Westminster
+Libraries and Archives" even with London as the proximity; with the box the
+answer is an honest "No places found". A place saved this
 way is an ordinary search save (`source: "mapbox_search"`), but its form starts
 with the post link as the note and the `instagram` tag selected
 (`SearchResultPanel` `prefill`), both editable. See [[instagram-import-flow]].
@@ -52,11 +55,12 @@ with the post link as the note and the `instagram` tag selected
 1. User types in SearchBox (≥ 2 chars)
        │  usePlaceSearch debounces 300ms
        ▼
-2. GET /api/search/suggest?q=…&session_token=<uuidv4>&proximity=<lng,lat>
+2. GET /api/search/suggest?q=…&session_token=<uuidv4>&proximity=<lng,lat>[&bbox=…]
        │  • proximity (v1.28.1) = the viewport center, rounded to 0.01°
        │    (≈ 1 km), or the point an Instagram hand-off aimed the search at
+       │  • bbox (v1.28.1) only for an aimed search: ~30 km around that point
        │  • Server proxies Mapbox /searchbox/v1/suggest
-       │  • types=poi, language=en; proximity biases, it does not filter
+       │  • types=poi, language=en; proximity biases, bbox filters
        │  • Returns up to 8 SearchSuggestion[]
        │
        ▼ Dropdown shows results

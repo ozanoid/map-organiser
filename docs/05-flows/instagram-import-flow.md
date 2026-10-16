@@ -258,12 +258,16 @@ sequenceDiagram
 
 20. **Pick branch** / **Choose** turns the dialog body into the picker: title
     "Which <name>?" (for a chain, the shared `searchName`: "Which Caffè Nero?"),
-    description "N branches · pick the one in the post" ("N places" / "1 place"
-    for the other reasons), one row per option with its name and address, and
+    description "N branches · pick the one in the post" ("N places" for the
+    other reasons; a single option reads "Is this <name>?" / "One match on
+    Google · tap it if it's the place in the post"), one row per option with
+    its name and address, and
     a filter box from 7 options ("Filter by street or district" — a
     Turkish-aware match on name and address, `fold`). Footer: **Back** to the
-    list and, on `/map`, **Search the map** (step 29). Focus moves to the dialog
-    title on each switch.
+    list and, on `/map`, **Search the map** (step 29). On each switch the focus
+    moves to the dialog title before the view changes (the button that had it
+    unmounts, and the dialog would otherwise keep focus on itself) and the body
+    scrolls back to the top, so the filter box is in view.
 21. Tapping a row calls [[../03-frontend/hooks/use-instagram-import|`usePickInstagramPlace`]]
     → `POST /api/instagram/import/[id]/pick { itemId, placeId }`. Every row is
     disabled and the tapped one spins until the answer.
@@ -315,8 +319,10 @@ sequenceDiagram
     `searchName`) in the box with the suggestions open. The point is the
     venue's `near`, else the centre of its options, else the centre of the
     places this post already put on the map (added or already saved); when there
-    is one, the map flies there (zoom 12) and the suggestions stay biased to it
-    until the box is cleared or a result is picked. Without one — and always for
+    is one, the map flies there (zoom 12) and the suggestions stay inside a box of
+    about 30 km around it until the box is cleared or a result is picked — a
+    proximity bias alone still put Indonesian archives first for "Westminster
+    Libraries and Archives" with London as the point. Without one — and always for
     **Search manually**, which an empty result offers — the search keeps the
     viewport bias. The result panel starts with the post link as the note and
     the `instagram` tag (`SearchResultPanel` `prefill`). The user continues in
@@ -523,7 +529,9 @@ The monthly `instagram` budget (300 posts per user) bounds the first three.
 | C | "Couldn't open this post. It may be private or deleted." | `post_unavailable` (HikerAPI 404). |
 | C | "Something went wrong while reading this post." | `service_error`: HikerAPI still failing after its retries, a Google Text Search failing twice, the Gemini call failing, or the item insert failing. Try again starts a new job. |
 | C | "This took too long and stopped." | `stalled`: still `reading` after 3 min — the `after()` run died (e.g. hit `maxDuration`). Try again starts a new job (the reuse check skips stalled jobs). |
-| C | "No places in this post" | Nothing could be pinned. When no skipped venue is listed either, the dialog says no account, location tag or address points to one specific place; on `/map`, "Search manually" opens the map search. |
+| C | "No places in this post" | Nothing could be pinned and no skipped venue is listed: the dialog says no account, location tag or address points to one specific place; on `/map`, "Search manually" opens the map search. |
+| C | "Nothing added yet" | Every venue was skipped; the rows below offer **Pick branch** / **Choose** / **Search**. |
+| C | "<name> removed" | The user removed the only place the import added: "Nothing from this post is on your map now. If it was the wrong match, search for the right place."; **Search manually** starts with that name. |
 | D | An item ends `failed` | As in [[place-import-flow]] — DataForSEO / insert errors, 3 failed attempts. |
 | D | Items stay "Adding…" | The drain never runs: `CRON_SECRET` unset (the kick no-ops; locally there is no cron at all) or no DataForSEO credentials. |
 | E | "Couldn't load this import." | `GET` 404 (not this user's job, or not an Instagram job). The hook keeps polling while the dialog is open. |

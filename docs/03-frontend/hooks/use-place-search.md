@@ -25,6 +25,7 @@ Mapbox Search Box client hook. Backs the search-on-map flow: debounced autocompl
 ```ts
 function usePlaceSearch(opts?: {
   proximity?: { lng: number; lat: number };
+  bbox?: [number, number, number, number]; // v1.28.1 — only results inside
 }): {
   query: string;
   setQuery: (q: string) => void;
@@ -55,12 +56,12 @@ export interface RetrievedPlaceData extends ParsedPlaceData {
   - **Rotated after 180s inactivity** (Mapbox session expiry, checked by interval timer).
   - **Rotated after 50 consecutive suggest calls** (Mapbox cap).
 - **React Query keys:**
-  - Suggest: `["place-search", "suggest", debouncedQuery, proximity]`, `staleTime: 30s`.
+  - Suggest: `["place-search", "suggest", debouncedQuery, proximity, bbox]`, `staleTime: 30s`.
   - Retrieve: mutation, no cache key.
 
 ## Endpoints called
 
-- `GET /api/search/suggest?q=...&session_token=...&proximity=...`
+- `GET /api/search/suggest?q=...&session_token=...&proximity=...[&bbox=...]`
 - `GET /api/search/retrieve/{mapboxId}?session_token=...`
 
 See [[../../02-backend/api-routes/search]].
@@ -69,7 +70,9 @@ See [[../../02-backend/api-routes/search]].
 
 - `src/components/map/search-box.tsx` (only consumer today). It passes
   `proximity` (v1.28.1): the point an Instagram hand-off aimed the search at,
-  else the viewport center `MapContent` hands it.
+  else the viewport center `MapContent` hands it. An aimed search also passes
+  `bbox`, about 30 km around that point: proximity only ranks, so a strong name
+  match on another continent would still come first.
 
 ## Edge cases
 
