@@ -48,8 +48,12 @@ export interface VenueDecision {
   place: PlaceCandidate | null;
   evidence: Evidence | null;
   sameNameCount: number;
-  /** Venue name for display and for the manual "Pick branch" search. */
+  /** Venue name for display and for the manual map search. */
   displayName: string;
+  /** Skipped by the resolver: the places it could be, for the user to pick. */
+  options: PlaceCandidate[];
+  /** Where the post puts the venue (area, profile or location tag), if anywhere. */
+  near: { lat: number; lng: number } | null;
 }
 
 export interface PostAnalysis {
@@ -264,6 +268,8 @@ export async function analyzeInstagramPost(url: string, deps: AnalyzeDeps): Prom
       place: null,
       evidence: null,
       sameNameCount: 0,
+      options: [],
+      near: null,
     });
 
   const cands: VenueCandidate[] = [];
@@ -400,6 +406,14 @@ export async function analyzeInstagramPost(url: string, deps: AnalyzeDeps): Prom
       evidence: r.evidence,
       sameNameCount: r.sameNameCount,
       displayName: r.place?.name ?? c.names[0],
+      options: r.options,
+      near: c.area
+        ? { lat: c.area.lat, lng: c.area.lng }
+        : c.lat != null && c.lng != null
+          ? { lat: c.lat, lng: c.lng }
+          : c.tag && isCoord(c.tag.lat, c.tag.lng)
+            ? { lat: c.tag.lat!, lng: c.tag.lng! }
+            : null,
     };
     if (r.place) seen.set(r.place.id, d);
     decisions.push(d);

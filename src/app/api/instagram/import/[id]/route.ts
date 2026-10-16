@@ -17,6 +17,9 @@ import type {
 
 /** A job still "reading" after this long lost its background run. */
 const STALL_MS = 3 * 60 * 1000;
+/** A photo still missing this long after the drain last touched the item
+ *  (it stamps `updated_at` on every claim and stage change) isn't coming. */
+const PHOTO_WAIT_MS = 10 * 60 * 1000;
 
 const ENRICHING = new Set(["photo", "reviews", "profile", "done"]);
 
@@ -26,6 +29,8 @@ interface ItemRow {
   reason: string | null;
   place_id: string | null;
   payload: { name?: string; instagram?: InstagramItemInfo } | null;
+  /** The drain stamps it on every stage change. */
+  updated_at: string;
 }
 
 interface PlaceRow {
@@ -65,7 +70,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 
   const { data: itemRows } = await supabase
     .from("import_job_items")
-    .select("id, stage, reason, place_id, payload")
+    .select("id, stage, reason, place_id, payload, updated_at")
     .eq("job_id", id)
     .order("created_at", { ascending: true });
   const items = (itemRows ?? []) as ItemRow[];
@@ -85,14 +90,22 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     const info = item.payload?.instagram;
     const place = item.place_id ? places.get(item.place_id) : undefined;
     const point = place?.location ? parsePostgisPoint(place.location) : null;
+    const status = statusOf(item);
     return {
       id: item.id,
-      status: statusOf(item),
+      status,
       name: place?.name ?? item.payload?.name ?? info?.label ?? "Unknown place",
       reason: item.stage === "skipped" || item.stage === "failed" ? item.reason : null,
       evidence: info?.evidence ?? [],
       sameNameCount: info?.sameNameCount ?? 0,
       searchName: info?.searchName ?? item.payload?.name ?? "",
+      options:
+        status === "skipped"
+          ? (info?.options ?? []).map((o) => ({ id: o.id, name: o.name, address: o.address, lat: o.lat, lng: o.lng }))
+          : [],
+      near: info?.near ?? null,
+      // The drain fetches the photo right after creating the place.
+      photoPending: item.stage === "photo" && Date.now() - Date.parse(item.updated_at) < PHOTO_WAIT_MS,
       place:
         place && point
           ? { id: place.id, name: place.name, address: place.address, lat: point.lat, lng: point.lng, photoUrl: place.photo }

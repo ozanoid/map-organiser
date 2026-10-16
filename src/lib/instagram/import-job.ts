@@ -6,9 +6,15 @@ import { trackUsage } from "@/lib/google/track-usage";
 import { findExisting } from "@/lib/import/process-place";
 import { kickDrain } from "@/lib/import/kick-drain";
 import { analyzeInstagramPost, InstagramImportError, type VenueDecision } from "@/lib/instagram/analyze";
+import { fold } from "@/lib/instagram/normalize";
 import { attachInstagramSource } from "@/lib/instagram/provenance";
 import type { Evidence } from "@/lib/instagram/resolve";
-import type { InstagramItemInfo, InstagramJobError, InstagramJobMeta } from "@/lib/instagram/types";
+import type {
+  InstagramItemInfo,
+  InstagramJobError,
+  InstagramJobMeta,
+  InstagramPlaceOption,
+} from "@/lib/instagram/types";
 
 /**
  * An Instagram import is an `import_jobs` row of kind "instagram".
@@ -37,13 +43,26 @@ function evidenceLabels(e: Evidence | null, sources: string[]): string[] {
   else if (e.phone) out.push("Phone matches");
   else if (e.web || e.handle) out.push("Website matches");
   else if (e.addr || e.postAddr) out.push("Address matches");
-  else if ((e.distM ?? Infinity) <= 300 || (e.distTagM ?? Infinity) <= 300) out.push("Same spot");
+  else if ((e.distM ?? Infinity) <= 300 || (e.distTagM ?? Infinity) <= 300) out.push("Location matches");
   else if (e.inArea) out.push("Only one nearby");
   return out;
 }
 
+/** A chain's account is often "Brand Türkiye" while its branches carry the
+ *  plain brand name — search the map for the name the branches share. */
+function searchNameFor(d: VenueDecision): string {
+  const byName = new Map<string, { name: string; n: number }>();
+  for (const o of d.options) {
+    const cur = byName.get(fold(o.name)) ?? { name: o.name, n: 0 };
+    cur.n++;
+    byName.set(fold(o.name), cur);
+  }
+  const top = [...byName.values()].sort((a, b) => b.n - a.n)[0];
+  return top && top.n >= 2 ? top.name : d.displayName;
+}
+
 function itemInfo(d: VenueDecision): InstagramItemInfo {
-  return {
+  const info: InstagramItemInfo = {
     label: d.label,
     sources: d.sources,
     rule: d.rule,
@@ -52,6 +71,14 @@ function itemInfo(d: VenueDecision): InstagramItemInfo {
     sameNameCount: d.sameNameCount,
     searchName: d.displayName,
   };
+  if (d.outcome === "skip") {
+    info.options = d.options.flatMap((o): InstagramPlaceOption[] =>
+      o.cid ? [{ id: o.id, name: o.name, address: o.address, lat: o.lat, lng: o.lng, cid: o.cid }] : []
+    );
+    info.near = d.near;
+    info.searchName = searchNameFor(d);
+  }
+  return info;
 }
 
 function errorCode(e: unknown): InstagramJobError {

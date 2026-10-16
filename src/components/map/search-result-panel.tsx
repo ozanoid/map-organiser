@@ -44,8 +44,8 @@ import { BottomSheet } from "@/components/ui/bottom-sheet";
 interface SearchResultPanelProps {
   place: RetrievedPlaceData;
   onClose: () => void;
-  /** Starting notes/tags — an Instagram "Pick branch" search passes the post
-   *  link and the "instagram" tag so the chosen branch carries them too. */
+  /** Starting notes/tags — an Instagram "Search" passes the post link and the
+   *  "instagram" tag so the place saved from the map search carries them too. */
   prefill?: { notes?: string; tagIds?: string[] };
 }
 

@@ -85,8 +85,12 @@ export interface Resolution {
   reason: SkipReason | null;
   /** Same-name places seen — shown as "N branches" when the branch is unknown. */
   sameNameCount: number;
+  /** No place picked: the places it could be, for the user to choose from. */
+  options: PlaceCandidate[];
   queries: string[];
 }
+
+const MAX_OPTIONS = 20;
 
 const HINT_STOP = new Set([
   "the", "and", "ve", "of", "de", "la", "le", "da", "di", "via", "rue", "street", "st", "cad", "caddesi", "cd",
@@ -221,6 +225,33 @@ function decide(c: VenueCandidate, scored: Scored[]): Pick<Resolution, "place" |
   return { place: pick.g, rule, evidence: pick.ev, reason: null };
 }
 
+/**
+ * What a skipped venue could be: places named like it, or sharing its phone,
+ * website or Instagram handle. When nothing does — a library service whose
+ * branches each have their own name — what Google returned for the venue's
+ * name itself; never what an address search returned (a brand's profile
+ * address is usually its head office). Nearest to where the post puts the
+ * venue first; Google's order otherwise.
+ */
+function optionsFor(c: VenueCandidate, pool: PlaceCandidate[], foundByName: Set<string>): PlaceCandidate[] {
+  const center = c.area ?? (c.lat != null && c.lng != null ? { lat: c.lat, lng: c.lng } : null);
+  const places = pool
+    .filter(
+      (g) =>
+        !!g.cid &&
+        g.status !== "CLOSED_PERMANENTLY" &&
+        (g.types.includes("establishment") || g.types.includes("point_of_interest"))
+    )
+    .map((g) => ({ g, ev: evidenceFor(c, g) }));
+  const named = places.filter(({ ev }) => ev.name >= 0.6 || idEv(ev));
+  const options = named.length ? named : places.filter(({ g }) => foundByName.has(g.id));
+  if (center) {
+    const d = (g: PlaceCandidate) => distanceM(center.lat, center.lng, g.lat, g.lng);
+    options.sort((a, b) => d(a.g) - d(b.g));
+  }
+  return options.slice(0, MAX_OPTIONS).map((o) => o.g);
+}
+
 function queriesFor(c: VenueCandidate, city: string | null): CandidateQuery[] {
   const q: CandidateQuery[] = [];
   const name = c.names[0];
@@ -255,6 +286,9 @@ export async function resolveCandidate(
   search: (q: CandidateQuery) => Promise<PlaceCandidate[]>
 ): Promise<Resolution> {
   const pool = new Map<string, PlaceCandidate>();
+  const foundByName = new Set<string>();
+  const byAddress = (q: CandidateQuery) =>
+    (!!c.addr && q.textQuery.includes(c.addr)) || (!!c.postAddr && q.textQuery.includes(c.postAddr));
   const tried: string[] = [];
   let last: Pick<Resolution, "place" | "rule" | "evidence" | "reason"> = {
     place: null,
@@ -265,7 +299,10 @@ export async function resolveCandidate(
   const qs = queriesFor(c, city);
   for (let i = 0; i < qs.length; i++) {
     tried.push(qs[i].textQuery);
-    for (const g of await search(qs[i])) pool.set(g.id, g);
+    for (const g of await search(qs[i])) {
+      pool.set(g.id, g);
+      if (!byAddress(qs[i])) foundByName.add(g.id);
+    }
     const scored = [...pool.values()].map((g) => ({ g, ev: evidenceFor(c, g) }));
     last = decide(c, scored);
     // The uniqueness rule must see the city-wide query before it may decide.
@@ -275,5 +312,6 @@ export async function resolveCandidate(
   const sameNameCount = [...pool.values()].filter(
     (g) => Math.max(0, ...c.names.map((n) => nameScore(n, g.name))) >= 0.85
   ).length;
-  return { ...last, sameNameCount, queries: tried };
+  const options = last.place ? [] : optionsFor(c, [...pool.values()], foundByName);
+  return { ...last, sameNameCount, options, queries: tried };
 }

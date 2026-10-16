@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useParseLink, useCreatePlace } from "@/lib/hooks/use-places";
 import { useCategories } from "@/lib/hooks/use-categories";
@@ -10,7 +10,7 @@ import { useTags } from "@/lib/hooks/use-tags";
 import { resolveCategoryId } from "@/lib/google/category-mapping";
 import type { PlaceProfile } from "@/lib/ai/schemas/place-profile";
 import { googleMapsPlaceUrl } from "@/lib/google/maps-url";
-import { isInstagramPostUrl, parseInstagramPostUrl } from "@/lib/instagram/url";
+import { isInstagramUrl, parseInstagramPostUrl } from "@/lib/instagram/url";
 import type { InstagramJobPhase } from "@/lib/instagram/types";
 import {
   Dialog,
@@ -68,9 +68,19 @@ interface AddPlaceDialogProps {
   onInstagramPhase?: (phase: InstagramJobPhase) => void;
   /** Instagram results: fit the map to these points (map page only). */
   onShowOnMap?: (points: { lat: number; lng: number }[]) => void;
-  /** Instagram results: hand a venue name (and the post it came from) to the map's search box. */
-  onSearchPlaces?: (query: string, context: { postUrl: string; tagId: string | null }) => void;
+  /** Instagram results: hand a venue name (and the post it came from) to the
+   *  map's search box, aimed at `near` when the post says where it is. */
+  onSearchPlaces?: (
+    query: string,
+    context: { postUrl: string; tagId: string | null; near: { lat: number; lng: number } | null }
+  ) => void;
+  /** Set where Instagram imports aren't run in place (the header): a pasted
+   *  post link is handed over — to the map page — instead. */
+  onInstagramLink?: (url: string) => void;
 }
+
+const INSTAGRAM_NOT_A_POST =
+  "That's an Instagram profile or page, not a post. Share a post or reel to add the places in it.";
 
 export function AddPlaceDialog({
   open,
@@ -82,11 +92,15 @@ export function AddPlaceDialog({
   onInstagramPhase,
   onShowOnMap,
   onSearchPlaces,
+  onInstagramLink,
 }: AddPlaceDialogProps) {
   const [url, setUrl] = useState("");
   // Instagram links skip the single-place preview: they run as an import job.
   const [pastedInstagramUrl, setPastedInstagramUrl] = useState<string | null>(null);
   const [localInstagramJob, setLocalInstagramJob] = useState<{ url: string | null; id: string } | null>(null);
+  const [linkError, setLinkError] = useState<string | null>(null);
+  // The Instagram view opens on its title, not on the first "Remove" button.
+  const igTitleRef = useRef<HTMLHeadingElement>(null);
   const [placeData, setPlaceData] = useState<ParsedPlaceData | null>(null);
   const [liteProfile, setLiteProfile] = useState<PlaceProfile | null>(null);
   const [providerInfo, setProviderInfo] = useState<{ name: string; timeMs: number } | null>(null);
@@ -141,9 +155,10 @@ export function AddPlaceDialog({
     );
   }, [aiSuggestions, categoryId, subcategories]);
 
-  // Auto-parse when opened via share target with initialUrl
+  // Auto-parse when opened via share target with initialUrl. Instagram links
+  // never go to the Maps parser: posts import, anything else gets a hint.
   useEffect(() => {
-    if (open && initialUrl && !isInstagramPostUrl(initialUrl) && !placeData && !parseLink.isPending) {
+    if (open && initialUrl && !isInstagramUrl(initialUrl) && !placeData && !parseLink.isPending) {
       setUrl(initialUrl);
       parseLink.mutate(initialUrl, {
         onSuccess: (data: any) => {
@@ -198,6 +213,7 @@ export function AddPlaceDialog({
     setUrl("");
     setPastedInstagramUrl(null);
     setLocalInstagramJob(null);
+    setLinkError(null);
     setPlaceData(null);
     setLiteProfile(null);
     setProviderInfo(null);
@@ -216,7 +232,16 @@ export function AddPlaceDialog({
     if (!url.trim()) return;
     const instagram = parseInstagramPostUrl(url);
     if (instagram) {
+      if (onInstagramLink) {
+        reset();
+        onInstagramLink(instagram.canonicalUrl);
+        return;
+      }
       setPastedInstagramUrl(instagram.canonicalUrl);
+      return;
+    }
+    if (isInstagramUrl(url)) {
+      setLinkError(INSTAGRAM_NOT_A_POST);
       return;
     }
 
@@ -323,7 +348,10 @@ export function AddPlaceDialog({
           onOpenChange(v);
         }}
       >
-        <DialogContent className="sm:max-w-lg max-h-[90vh] flex flex-col overflow-hidden">
+        <DialogContent
+          className="sm:max-w-lg max-h-[90vh] flex flex-col overflow-hidden"
+          initialFocus={igTitleRef}
+        >
           <InstagramImportPanel
             url={instagramUrl}
             jobId={knownJob?.id ?? null}
@@ -339,11 +367,16 @@ export function AddPlaceDialog({
             }}
             onShowOnMap={onShowOnMap}
             onSearch={onSearchPlaces}
+            titleRef={igTitleRef}
           />
         </DialogContent>
       </Dialog>
     );
   }
+
+  // Opened with an Instagram link that isn't a post (a profile shared by the Shortcut).
+  const shownLinkError =
+    linkError ?? (initialUrl && !url && isInstagramUrl(initialUrl) ? INSTAGRAM_NOT_A_POST : null);
 
   return (
     <Dialog
@@ -371,9 +404,13 @@ export function AddPlaceDialog({
                 inputMode="url"
                 placeholder="Paste a Google Maps or Instagram link..."
                 value={url}
-                onChange={(e) => setUrl(e.target.value)}
+                onChange={(e) => {
+                  setUrl(e.target.value);
+                  setLinkError(null);
+                }}
                 onKeyDown={(e) => e.key === "Enter" && handlePaste()}
                 disabled={parseLink.isPending}
+                aria-invalid={!!shownLinkError}
               />
               <Button
                 onClick={handlePaste}
@@ -387,6 +424,12 @@ export function AddPlaceDialog({
                 )}
               </Button>
             </div>
+
+            {shownLinkError && (
+              <p role="alert" className="text-sm text-destructive">
+                {shownLinkError}
+              </p>
+            )}
 
             {parseLink.isPending && (
               <div className="space-y-3">

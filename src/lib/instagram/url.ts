@@ -22,6 +22,10 @@ export function parseInstagramPostUrl(input: string | null | undefined): Instagr
   return null;
 }
 
-export function isInstagramPostUrl(input: string | null | undefined): boolean {
-  return parseInstagramPostUrl(input) !== null;
+const INSTAGRAM_RE = /^https?:\/\/(?:[a-z0-9-]+\.)*(?:instagram\.com|instagr\.am)(?:[/?#]|$)/i;
+
+/** Any Instagram link — a profile, a story, a post. Tells "share a post
+ *  instead" apart from "not a link we know". */
+export function isInstagramUrl(input: string | null | undefined): boolean {
+  return !!input && input.trim().split(/\s+/).some((token) => INSTAGRAM_RE.test(token));
 }

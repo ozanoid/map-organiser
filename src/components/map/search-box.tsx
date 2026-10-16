@@ -10,8 +10,9 @@ import type { SearchSuggestion } from "@/lib/mapbox/search-box";
 
 export interface SearchBoxHandle {
   /** Fill the box with `text`, open the suggestions and focus it — used by the
-   *  Instagram import's "Pick branch" / "Search manually". */
-  search: (text: string) => void;
+   *  Instagram import's "Search" / "Search manually". `proximity` aims this
+   *  search at the post's area until the box is cleared. */
+  search: (text: string, opts?: { proximity?: { lng: number; lat: number } | null }) => void;
 }
 
 interface SearchBoxProps {
@@ -31,8 +32,9 @@ interface SearchBoxProps {
  * - On select, hides the dropdown and delegates retrieved data to parent.
  */
 export function SearchBox({ proximity, onSelect, className, ref }: SearchBoxProps) {
+  const [aimedAt, setAimedAt] = useState<{ lng: number; lat: number } | null>(null);
   const { query, setQuery, suggestions, isSearching, retrieve, isRetrieving, clear } =
-    usePlaceSearch({ proximity });
+    usePlaceSearch({ proximity: aimedAt ?? proximity });
   const [open, setOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -40,7 +42,8 @@ export function SearchBox({ proximity, onSelect, className, ref }: SearchBoxProp
   useImperativeHandle(
     ref,
     () => ({
-      search: (text: string) => {
+      search: (text, opts) => {
+        setAimedAt(opts?.proximity ?? null);
         setQuery(text);
         setOpen(true);
         inputRef.current?.focus();
@@ -68,6 +71,7 @@ export function SearchBox({ proximity, onSelect, className, ref }: SearchBoxProp
       const data = await retrieve(s.mapbox_id);
       onSelect(data);
       clear();
+      setAimedAt(null);
     } catch {
       // Hook surfaces error; just keep input intact
     }
@@ -75,6 +79,7 @@ export function SearchBox({ proximity, onSelect, className, ref }: SearchBoxProp
 
   function handleClear() {
     clear();
+    setAimedAt(null);
     setOpen(false);
     inputRef.current?.focus();
   }

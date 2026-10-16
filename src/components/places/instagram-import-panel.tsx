@@ -1,16 +1,18 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import Link from "next/link";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Bookmark, Check, CircleAlert, Loader2, MapPin, MapPinOff, Pencil, Search } from "lucide-react";
-import { useInstagramImport, useStartInstagramImport } from "@/lib/hooks/use-instagram-import";
+import { Bookmark, Check, ChevronLeft, CircleAlert, Loader2, MapPin, MapPinOff, Pencil, Search } from "lucide-react";
+import { useInstagramImport, usePickInstagramPlace, useStartInstagramImport } from "@/lib/hooks/use-instagram-import";
+import { fold } from "@/lib/instagram/normalize";
 import type { InstagramImportItemView, InstagramJobError, InstagramJobPhase } from "@/lib/instagram/types";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 
 /**
  * Instagram mode of the Add Place dialog.
@@ -19,9 +21,15 @@ import { DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/di
  * evidence (tag "instagram", status "want to go", post link as the note) and
  * this panel reports what happened — progress while it works, then the added
  * places with a per-place Remove, places already saved, and venues it could
- * not pin with the reason and a manual search. The job lives on the server,
- * so closing the dialog or refreshing the page loses nothing.
+ * not pin with the reason. For those, "Pick branch" lists the places Google
+ * returned for them (a chain's branches) and adds the one the user picks the
+ * same way; "Search" hands the name to the map search, aimed at the post's
+ * area. The job lives on the server, so closing the dialog or refreshing the
+ * page loses nothing.
  */
+
+type LatLng = { lat: number; lng: number };
+type PlaceOption = InstagramImportItemView["options"][number];
 
 interface InstagramImportPanelProps {
   /** Post URL to import; a job is started for it when there is no jobId yet. */
@@ -30,10 +38,13 @@ interface InstagramImportPanelProps {
   onJobId: (jobId: string) => void;
   onPhase?: (phase: InstagramJobPhase) => void;
   onClose: () => void;
-  onShowOnMap?: (points: { lat: number; lng: number }[]) => void;
-  /** Hand a venue name to the map search; the context lets the place saved
-   *  from there carry the post link and the "instagram" tag too. */
-  onSearch?: (query: string, context: { postUrl: string; tagId: string | null }) => void;
+  onShowOnMap?: (points: LatLng[]) => void;
+  /** Hand a venue name to the map search, aimed at `near`; the context lets the
+   *  place saved from there carry the post link and the "instagram" tag too. */
+  onSearch?: (query: string, context: { postUrl: string; tagId: string | null; near: LatLng | null }) => void;
+  /** The dialog opens on the title (not on the first "Remove"); switching
+   *  between the list and a branch picker moves focus back to it. */
+  titleRef?: RefObject<HTMLHeadingElement | null>;
 }
 
 function InstagramGlyph({ className }: { className?: string }) {
@@ -54,6 +65,9 @@ const ERROR_COPY: Record<InstagramJobError, string> = {
   service_error: "Something went wrong while reading this post.",
   stalled: "This took too long and stopped.",
 };
+
+/** Picked by the user in the branch picker (see the pick route). */
+const PICKED = "Picked by you";
 
 function skipCopy(item: InstagramImportItemView): string {
   switch (item.reason) {
@@ -76,6 +90,14 @@ function shortUrl(url: string) {
   return url.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "");
 }
 
+function centroid(points: LatLng[]): LatLng | null {
+  if (points.length === 0) return null;
+  return {
+    lat: points.reduce((sum, p) => sum + p.lat, 0) / points.length,
+    lng: points.reduce((sum, p) => sum + p.lng, 0) / points.length,
+  };
+}
+
 const ORDER: Record<InstagramImportItemView["status"], number> = {
   added: 0,
   pending: 0,
@@ -85,6 +107,61 @@ const ORDER: Record<InstagramImportItemView["status"], number> = {
   failed: 3,
 };
 
+/** A filter box appears above this many options. */
+const FILTER_FROM = 7;
+
+function PlacePicker({
+  options,
+  pendingId,
+  onPick,
+}: {
+  options: PlaceOption[];
+  pendingId: string | null;
+  onPick: (option: PlaceOption) => void;
+}) {
+  const [filter, setFilter] = useState("");
+  const q = fold(filter);
+  const visible = q ? options.filter((o) => fold(`${o.name} ${o.address}`).includes(q)) : options;
+
+  return (
+    <div className="space-y-2">
+      {options.length >= FILTER_FROM && (
+        <Input
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          placeholder="Filter by street or district"
+          aria-label="Filter places"
+          className="h-10"
+        />
+      )}
+      <ul className="divide-y">
+        {visible.map((o) => (
+          <li key={o.id}>
+            <button
+              type="button"
+              onClick={() => onPick(o)}
+              disabled={pendingId !== null}
+              className="w-full min-h-11 flex items-start gap-3 px-1 py-2.5 text-left rounded-md cursor-pointer transition-colors duration-200 hover:bg-accent disabled:cursor-default disabled:opacity-60"
+            >
+              <MapPin className="h-4 w-4 mt-0.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-medium truncate">{o.name}</span>
+                <span className="block text-xs text-muted-foreground line-clamp-2">{o.address}</span>
+              </span>
+              {pendingId === o.id && (
+                <Loader2 className="h-4 w-4 mt-0.5 shrink-0 animate-spin text-muted-foreground" aria-label="Adding" />
+              )}
+            </button>
+          </li>
+        ))}
+      </ul>
+      {visible.length === 0 && (
+        <p className="py-2 text-sm text-muted-foreground">Nothing matches &ldquo;{filter}&rdquo;.</p>
+      )}
+    </div>
+  );
+}
+
 export function InstagramImportPanel({
   url,
   jobId,
@@ -93,11 +170,19 @@ export function InstagramImportPanel({
   onClose,
   onShowOnMap,
   onSearch,
+  titleRef,
 }: InstagramImportPanelProps) {
   const queryClient = useQueryClient();
-  const start = useStartInstagramImport();
+  // Read through a ref: the start can answer after this panel has unmounted.
+  const onJobIdRef = useRef(onJobId);
+  useEffect(() => {
+    onJobIdRef.current = onJobId;
+  }, [onJobId]);
+  const start = useStartInstagramImport((id) => onJobIdRef.current(id));
+  const pick = usePickInstagramPlace(jobId);
   const { data: view, isError: loadFailed } = useInstagramImport(jobId);
   const [removing, setRemoving] = useState<string | null>(null);
+  const [pickingId, setPickingId] = useState<string | null>(null);
 
   // Start once per URL. React may mount this twice in development; the server
   // also hands back the same job when the post was shared minutes ago.
@@ -105,8 +190,8 @@ export function InstagramImportPanel({
   useEffect(() => {
     if (jobId || !url || startedFor.current === url) return;
     startedFor.current = url;
-    start.mutate(url, { onSuccess: (d) => onJobId(d.jobId) });
-  }, [jobId, url, start, onJobId]);
+    start.mutate(url);
+  }, [jobId, url, start]);
 
   const phase = view?.phase ?? null;
   useEffect(() => {
@@ -122,7 +207,7 @@ export function InstagramImportPanel({
   function retry() {
     const postUrl = view?.postUrl || url;
     if (!postUrl) return;
-    start.mutate(postUrl, { onSuccess: (d) => onJobId(d.jobId) });
+    start.mutate(postUrl);
   }
 
   async function remove(item: InstagramImportItemView) {
@@ -141,13 +226,30 @@ export function InstagramImportPanel({
     }
   }
 
-  const searchFor = (query: string) =>
-    onSearch?.(query, { postUrl: view?.postUrl || url || "", tagId: view?.tagId ?? null });
+  /** Swap between the list and a branch picker; the dialog reads from the top again. */
+  function showPicker(itemId: string | null) {
+    setPickingId(itemId);
+    requestAnimationFrame(() => titleRef?.current?.focus());
+  }
+
+  function choose(item: InstagramImportItemView, option: PlaceOption) {
+    pick.mutate(
+      { itemId: item.id, placeId: option.id },
+      {
+        onSuccess: (r) => {
+          showPicker(null);
+          if (r.status === "already_saved") toast.success(`${option.name} is already in your places · tag and link added`);
+        },
+        onError: (e) => toast.error(e.message),
+      }
+    );
+  }
 
   // ---------- derived state ----------
   const items = [...(view?.items ?? [])].sort((a, b) => ORDER[a.status] - ORDER[b.status]);
   const onMap = items.filter((i) => (i.status === "added" || i.status === "already_saved") && i.place);
-  const pending = items.filter((i) => i.status === "pending").length;
+  const pendingItems = items.filter((i) => i.status === "pending");
+  const pending = pendingItems.length;
   const shown = items.filter((i) => i.status !== "removed");
   const placeRows = shown.filter((i) => i.status !== "skipped" && i.status !== "failed");
   const single = phase === "done" && placeRows.length === 1 && shown.length === 1 ? placeRows[0] : null;
@@ -155,11 +257,30 @@ export function InstagramImportPanel({
   const failed = phase === "failed" || loadFailed || !!startError;
   const working = !failed && (!view || phase === "reading" || phase === "adding");
   const empty = phase === "done" && placeRows.length === 0;
+  // Closes by itself once the picked item stops being "skipped".
+  const picking =
+    shown.find((i) => i.id === pickingId && i.status === "skipped" && i.options.length > 0) ?? null;
+  const pickPendingId = pick.isPending ? (pick.variables?.placeId ?? null) : null;
+
+  /** Where to aim a map search for a skipped venue: where the post puts it,
+   *  else among the places it could be, else among the post's other places. */
+  const nearOf = (item: InstagramImportItemView | null): LatLng | null =>
+    item?.near ?? centroid(item?.options ?? []) ?? centroid(onMap.map((i) => i.place!));
+  const searchFor = (query: string, near: LatLng | null) =>
+    onSearch?.(query, { postUrl: view?.postUrl || url || "", tagId: view?.tagId ?? null, near });
 
   let title = "Adding from Instagram";
   if (failed) title = "Couldn't add from this post";
-  else if (phase === "adding") title = `Adding ${pending + landed} place${pending + landed === 1 ? "" : "s"}…`;
-  else if (single) title = single.status === "already_saved" ? "Already in your places" : `${single.name} added`;
+  else if (picking) {
+    title =
+      picking.reason === "chain_branch_unknown"
+        ? `Which ${picking.searchName || picking.name}?`
+        : `Which ${picking.name}?`;
+  } else if (phase === "adding") {
+    title = pending > 0 && pendingItems.every((i) => i.evidence.includes(PICKED))
+      ? `Adding ${pendingItems.map((i) => i.name).join(", ")}…`
+      : `Adding ${pending + landed} place${pending + landed === 1 ? "" : "s"}…`;
+  } else if (single) title = single.status === "already_saved" ? "Already in your places" : `${single.name} added`;
   else if (empty) title = "No places in this post";
   else if (phase === "done") {
     const added = placeRows.filter((i) => i.status === "added").length;
@@ -167,18 +288,22 @@ export function InstagramImportPanel({
   }
 
   const post = view?.post;
-  const description = post
-    ? `@${post.owner}${post.caption ? ` · "${post.caption.split("\n")[0].slice(0, 90)}${post.caption.length > 90 ? "…" : ""}"` : ""}`
-    : view?.postUrl || url
-      ? shortUrl(view?.postUrl || url || "")
-      : "Instagram post";
+  const description = picking
+    ? `${picking.options.length} ${picking.reason === "chain_branch_unknown" ? "branches" : picking.options.length === 1 ? "place" : "places"} · pick the one in the post`
+    : post
+      ? `@${post.owner}${post.caption ? ` · "${post.caption.split("\n")[0].slice(0, 90)}${post.caption.length > 90 ? "…" : ""}"` : ""}`
+      : view?.postUrl || url
+        ? shortUrl(view?.postUrl || url || "")
+        : "Instagram post";
 
   return (
     <>
       <DialogHeader>
-        <DialogTitle className="flex items-center gap-2">
+        <DialogTitle ref={titleRef} tabIndex={-1} className="flex items-center gap-2 outline-none">
           {failed ? (
             <CircleAlert className="h-5 w-5 text-destructive" aria-hidden="true" />
+          ) : picking ? (
+            <MapPin className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
           ) : working ? (
             <InstagramGlyph className="h-5 w-5 text-pink-600" />
           ) : empty ? (
@@ -217,12 +342,23 @@ export function InstagramImportPanel({
           </ol>
         )}
 
-        {single && single.place && (
+        {!failed && picking && (
+          <PlacePicker
+            key={picking.id}
+            options={picking.options}
+            pendingId={pickPendingId}
+            onPick={(o) => choose(picking, o)}
+          />
+        )}
+
+        {!picking && single && single.place && (
           <div className="space-y-3">
             <div className="relative h-36 rounded-lg overflow-hidden bg-muted flex items-center justify-center">
               {single.place.photoUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element -- Storage URL, same as the other place cards
                 <img src={single.place.photoUrl} alt={single.name} className="w-full h-full object-cover" />
+              ) : single.photoPending ? (
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" aria-label="Loading photo" />
               ) : (
                 <MapPin className="h-6 w-6 text-muted-foreground" aria-hidden="true" />
               )}
@@ -248,7 +384,7 @@ export function InstagramImportPanel({
                 type="button"
                 onClick={() => remove(single)}
                 disabled={removing === single.id}
-                className="text-xs text-muted-foreground underline underline-offset-2 cursor-pointer hover:text-foreground"
+                className="min-h-11 text-xs text-muted-foreground underline underline-offset-2 cursor-pointer hover:text-foreground"
               >
                 {removing === single.id ? "Removing…" : "Wrong place? Remove it"}
               </button>
@@ -256,7 +392,7 @@ export function InstagramImportPanel({
           </div>
         )}
 
-        {!single && view && (phase === "adding" || phase === "done") && shown.length > 0 && (
+        {!picking && !single && view && (phase === "adding" || phase === "done") && shown.length > 0 && (
           <ul className="divide-y" aria-live="polite">
             {shown.map((item) => (
               <li key={item.id} className="flex items-center gap-3 py-2.5">
@@ -274,7 +410,7 @@ export function InstagramImportPanel({
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium truncate">{item.name}</p>
-                  <p className="text-xs text-muted-foreground truncate">
+                  <p className="text-xs text-muted-foreground line-clamp-2">
                     {item.status === "pending" && "Adding…"}
                     {item.status === "added" && [item.evidence.join(" · "), item.place?.address].filter(Boolean).join(" · ")}
                     {item.status === "already_saved" && "Already in your places · tag and link added"}
@@ -289,21 +425,29 @@ export function InstagramImportPanel({
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="shrink-0 h-9 cursor-pointer text-muted-foreground"
+                    className="shrink-0 h-11 sm:h-9 cursor-pointer text-muted-foreground"
                     onClick={() => remove(item)}
                     disabled={removing === item.id}
                   >
                     {removing === item.id ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : "Remove"}
                   </Button>
                 )}
-                {item.status === "skipped" && onSearch && (
+                {item.status === "skipped" && (item.options.length > 0 || onSearch) && (
                   <Button
                     variant="outline"
                     size="sm"
-                    className="shrink-0 h-9 cursor-pointer"
-                    onClick={() => searchFor(item.searchName || item.name)}
+                    className="shrink-0 h-11 sm:h-9 cursor-pointer"
+                    onClick={() =>
+                      item.options.length > 0
+                        ? showPicker(item.id)
+                        : searchFor(item.searchName || item.name, nearOf(item))
+                    }
                   >
-                    {item.reason === "chain_branch_unknown" ? "Pick branch" : "Search"}
+                    {item.options.length === 0
+                      ? "Search"
+                      : item.reason === "chain_branch_unknown"
+                        ? "Pick branch"
+                        : "Choose"}
                   </Button>
                 )}
               </li>
@@ -311,7 +455,7 @@ export function InstagramImportPanel({
           </ul>
         )}
 
-        {empty && shown.length === 0 && (
+        {!picking && empty && shown.length === 0 && (
           <p className="text-sm text-muted-foreground">
             No account, location tag or address in this post points to one specific place.
           </p>
@@ -319,7 +463,24 @@ export function InstagramImportPanel({
       </div>
 
       <div className="flex gap-2 pt-3 border-t shrink-0">
-        {working ? (
+        {picking ? (
+          <>
+            <Button variant="outline" className="flex-1 h-10 cursor-pointer" onClick={() => showPicker(null)}>
+              <ChevronLeft className="h-4 w-4 mr-1" aria-hidden="true" />
+              Back
+            </Button>
+            {onSearch && (
+              <Button
+                variant="outline"
+                className="flex-1 h-10 cursor-pointer"
+                onClick={() => searchFor(picking.searchName || picking.name, nearOf(picking))}
+              >
+                <Search className="h-4 w-4 mr-1" aria-hidden="true" />
+                Search the map
+              </Button>
+            )}
+          </>
+        ) : working ? (
           <Button variant="outline" className="flex-1 h-10 cursor-pointer" onClick={onClose}>
             Continue in background
           </Button>
@@ -341,7 +502,7 @@ export function InstagramImportPanel({
               Close
             </Button>
             {onSearch && (
-              <Button className="flex-1 h-10 cursor-pointer" onClick={() => searchFor("")}>
+              <Button className="flex-1 h-10 cursor-pointer" onClick={() => searchFor("", null)}>
                 <Search className="h-4 w-4 mr-1" aria-hidden="true" />
                 Search manually
               </Button>

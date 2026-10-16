@@ -119,7 +119,19 @@ export function AppHeader() {
         </DropdownMenu>
       </div>
 
-      <AddPlaceDialog open={addOpen} onOpenChange={setAddOpen} />
+      <AddPlaceDialog
+        open={addOpen}
+        onOpenChange={setAddOpen}
+        // Instagram imports run on the map page — progress, the new pins, the
+        // branch picker — so hand the link over the way the iOS Shortcut does.
+        onInstagramLink={(link) => {
+          setAddOpen(false);
+          const params = new URLSearchParams(window.location.pathname === "/map" ? window.location.search : "");
+          params.delete("ig");
+          params.set("add", link);
+          router.push(`/map?${params.toString()}`);
+        }}
+      />
     </header>
   );
 }

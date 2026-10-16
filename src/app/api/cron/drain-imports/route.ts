@@ -428,7 +428,8 @@ function kickSelf(origin: string, secret: string) {
 async function finalizeJobs(admin: ReturnType<typeof createServiceClient>) {
   const { data: running } = await admin
     .from("import_jobs")
-    .select("id")
+    // `*` rather than naming `kind`/`meta`, as in defaultsFor.
+    .select("*")
     .eq("status", "running");
   for (const job of running ?? []) {
     const { count } = await admin
@@ -437,9 +438,12 @@ async function finalizeJobs(admin: ReturnType<typeof createServiceClient>) {
       .eq("job_id", job.id as string)
       .in("stage", ACTIVE_STAGES);
     if ((count ?? 0) === 0) {
+      // An Instagram job's stored phase follows it, so the row reads "done" too.
+      const meta =
+        job.kind === "instagram" && job.meta ? { ...(job.meta as Record<string, unknown>), phase: "done" } : null;
       await admin
         .from("import_jobs")
-        .update({ status: "done", finished_at: new Date().toISOString() })
+        .update({ status: "done", finished_at: new Date().toISOString(), ...(meta && { meta }) })
         .eq("id", job.id as string);
     }
   }
