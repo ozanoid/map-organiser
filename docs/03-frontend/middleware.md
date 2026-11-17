@@ -2,8 +2,8 @@
 title: Middleware
 type: overview
 domain: frontend
-version: 1.0.0
-last_updated: 12.05.2026
+version: 1.3.0
+last_updated: 17.11.2026
 status: stable
 sources:
   - src/middleware.ts
@@ -35,7 +35,7 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|sw\\.js$|manifest\\.webmanifest$|offline$|api/mcp$|\\.well-known/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
 ```
@@ -49,14 +49,15 @@ Two pieces:
 
 `src/lib/supabase/middleware.ts`. See [[../02-backend/auth#middleware-gate]] for the full annotated source. Summary:
 
-1. Construct an SSR Supabase client backed by request cookies.
-2. Call `supabase.auth.getUser()` — this triggers a token refresh if needed.
-3. Write refreshed cookies onto the response.
-4. Decide:
+1. `/signup` → redirect to `/login` and stop (sign-ups closed, 17.11.2026). No Supabase client is built for it.
+2. Construct an SSR Supabase client backed by request cookies.
+3. Call `supabase.auth.getUser()` — this triggers a token refresh if needed.
+4. Write refreshed cookies onto the response.
+5. Decide:
    - Public path → continue.
-   - Auth path (`/login`, `/signup`) with a logged-in user → redirect to `/map`.
+   - Auth path (`/login`) with a logged-in user → redirect to `/map`.
    - Any other path without a user → redirect to `/login`.
-5. Return the response.
+6. Return the response.
 
 ## Public paths
 
@@ -66,6 +67,10 @@ Hard-coded list in `updateSession`:
 - `/auth/callback/*` (OAuth handshake)
 - `/shared/*` (public share pages)
 - `/api/shared/*` (public share APIs)
+- `/api/cron/*` (cron routes — they authenticate themselves with `CRON_SECRET`)
+- `/oauth/*` (the OAuth consent page — it redirects signed-out visitors to `/login?next=…` itself, so the authorization request survives sign-in)
+
+Not in the middleware at all (matcher exclusions, 17.11.2026): `/api/mcp` — the MCP endpoint authenticates bearer tokens and must answer 401 with a challenge, not a redirect — and `/.well-known/*` metadata documents.
 
 Everything else requires auth.
 
@@ -79,11 +84,16 @@ This is why the matcher only excludes static assets — every dynamic path goes 
 
 ### The matcher in plain English
 
-`/((?!_next/static|_next/image|favicon.ico|.*\.(?:svg|png|jpg|jpeg|gif|webp)$).*)`
+`/((?!_next/static|_next/image|favicon.ico|sw\.js$|manifest\.webmanifest$|offline$|api/mcp$|\.well-known/|.*\.(?:svg|png|jpg|jpeg|gif|webp)$).*)`
 
 - `?!` is a negative lookahead.
-- Excludes `_next/static`, `_next/image`, `favicon.ico`, and any URL ending in `.svg / .png / .jpg / .jpeg / .gif / .webp`.
+- Excludes `_next/static`, `_next/image`, `favicon.ico`, any URL ending in `.svg / .png / .jpg / .jpeg / .gif / .webp`, and three public files a signed-out visitor must be able to load: `/sw.js` (service worker), `/manifest.webmanifest` (PWA manifest) and `/offline` (the page the service worker precaches). Until 17.11.2026 these three went through the session check and were redirected to `/login`, so on the public share pages and the login page the service worker never registered (console: "The script resource is behind a redirect").
 - Everything else matches.
+- Next.js needs the matcher as a literal constant (it is analysed at build time), so a new exclusion goes into this string, not into a variable.
+
+### Next.js 16: `middleware` → `proxy`
+
+The dev server warns that the `middleware` file convention is deprecated in favour of `proxy` (seen 17.11.2026). `src/middleware.ts` still runs; renaming it is a separate change — see `node_modules/next/dist/docs/01-app/01-getting-started/16-proxy.md`.
 
 ### Adding a new public route
 

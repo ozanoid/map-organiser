@@ -2,11 +2,17 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
+import { AUTH_NEXT_COOKIE, safeNextPath } from "@/lib/auth/safe-next";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { MapPin } from "lucide-react";
+
+/** Where to go after signing in: a same-site `next` (e.g. the OAuth
+ *  consent page) or the map. Read at submit time — no useSearchParams. */
+function nextPath(): string | null {
+  return safeNextPath(new URLSearchParams(window.location.search).get("next"));
+}
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -30,12 +36,19 @@ export default function LoginPage() {
       setError(error.message);
       setLoading(false);
     } else {
-      router.push("/map");
+      router.push(nextPath() ?? "/map");
       router.refresh();
     }
   }
 
   async function handleGoogleLogin() {
+    // The Google round trip ends at /auth/callback; a short-lived cookie
+    // carries `next` there without changing the registered redirect URL.
+    const next = nextPath();
+    const secure = window.location.protocol === "https:" ? "; Secure" : "";
+    document.cookie = next
+      ? `${AUTH_NEXT_COOKIE}=${encodeURIComponent(next)}; Path=/; Max-Age=600; SameSite=Lax${secure}`
+      : `${AUTH_NEXT_COOKIE}=; Path=/; Max-Age=0; SameSite=Lax${secure}`;
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
@@ -120,13 +133,6 @@ export default function LoginPage() {
           {loading ? "Signing in..." : "Sign in"}
         </Button>
       </form>
-
-      <p className="text-center text-sm text-muted-foreground">
-        Don&apos;t have an account?{" "}
-        <Link href="/signup" className="text-emerald-600 hover:underline">
-          Sign up
-        </Link>
-      </p>
     </div>
   );
 }

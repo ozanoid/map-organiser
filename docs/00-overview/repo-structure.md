@@ -2,8 +2,8 @@
 title: Repo Structure
 type: overview
 domain: overview
-version: 1.8.1
-last_updated: 16.10.2026
+version: 1.9.0
+last_updated: 17.11.2026
 status: stable
 sources:
   - src/
@@ -48,7 +48,8 @@ What every top-level directory contains, why it exists, and where to dig further
 ├── .github/                   Workflows (dependabot only)
 ├── docs/                      This vault
 ├── public/                    Static assets (PWA icons, service worker)
-├── scripts/                   Dev scripts — instagram-eval/ (v1.28.0): the Instagram import's
+├── scripts/                   Dev scripts — assistant-check/ (17.11.2026): `npm run check:assistant` runs the Claude connector's tools
+│                              against the live DB; instagram-eval/ (v1.28.0): the Instagram import's
 │                              regression run (run.ts, labels.json, README.md, tsconfig.json)
 └── src/                       Application source
 ```
@@ -77,8 +78,7 @@ src/
 │   │   └── settings/page.tsx  Categories (with sub-cat manage) / Tags / API & Usage / AI / Theme tabs
 │   ├── (auth)/                Public auth pages (route group)
 │   │   ├── layout.tsx
-│   │   ├── login/page.tsx
-│   │   └── signup/page.tsx
+│   │   └── login/page.tsx     Sign-in only (sign-ups closed 17.11.2026)
 │   ├── auth/callback/route.ts OAuth callback handler
 │   ├── shared/[slug]/page.tsx Public share view (no auth)
 │   ├── shared/layout.tsx
@@ -108,6 +108,10 @@ src/
 │   ├── sw-register.tsx        Service worker registration (client component)
 │   └── ui/                    shadcn primitives (avatar, badge, button, card, command, dialog, dropdown-menu, input, input-group, popover, select, separator, sheet, skeleton, sonner, tabs, textarea)
 └── lib/
+    ├── assistant/             The Claude connector (17.11.2026): tools/ (six transport-free tool definitions), library.ts (light
+    │                          place projection, name resolution, time + busyness helpers), place-filters.ts, mcp.ts (MCP server),
+    │                          verify-token.ts, oauth.ts (resource paths, redirect allowlist), owner.ts — see [[../04-integrations/claude-mcp]]
+    ├── auth/                  safe-next.ts — same-site `next` validation for login and the OAuth callback (17.11.2026)
     ├── ai/                    AI SDK v6 wiring (Gemini 3 Flash). client.ts, context-builder.ts,
     │                          dedup.ts, normalize.ts, track-usage.ts (budgets), generate-profile.ts,
     │                          chat-tools.ts (assistant tool belt, v1.21.0; +rank_places v1.23.0); rank-engine.ts (server-side LLM-as-judge twin, v1.23.0);
@@ -115,6 +119,7 @@ src/
     │                          trip-plan.ts v1.22.0); extract/ (lite-profile.ts,
     │                          category-resolver.ts, features-extractor.ts,
     │                          suggestions-from-profile.ts); apply-suggestions.ts.
+    ├── text/                  fold.ts — Turkish-aware text folding for matching (17.11.2026; moved from instagram/normalize.ts)
     ├── places/                refresh-google-data.ts — service-client-safe full re-lookup + review merge (shared by refresh route + cron);
     │                          open-now.ts (tz-aware render-time isOpenNow, v1.18.0; +day-granular isOpenOnDate for the AI trip planner, v1.22.0);
     │                          attribute-icons.ts (NF-04 group/icon map);

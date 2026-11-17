@@ -10,7 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useSaveSharedContent } from "@/lib/hooks/use-shared-links";
 import { useMapStyle } from "@/lib/hooks/use-map-style";
 import {
-  MapPin, Calendar, Compass, Star, Save, Loader2, ExternalLink,
+  MapPin, Calendar, Star, Save, Loader2, ExternalLink,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { Place, TripDay } from "@/lib/types";
@@ -175,7 +175,6 @@ function SharedListView({
       </div>
 
       {/* Footer CTA */}
-      <SharedFooter isLoggedIn={isLoggedIn} />
     </div>
   );
 }
@@ -291,7 +290,6 @@ function SharedTripView({
         </div>
       </div>
 
-      <SharedFooter isLoggedIn={isLoggedIn} />
     </div>
   );
 }
@@ -465,26 +463,6 @@ function SharedPlaceView({
         </div>
       </div>
 
-      <SharedFooter isLoggedIn={isLoggedIn} />
     </div>
-  );
-}
-
-function SharedFooter({ isLoggedIn }: { isLoggedIn: boolean }) {
-  if (isLoggedIn) return null;
-
-  return (
-    <footer className="border-t p-6 text-center">
-      <p className="text-sm text-muted-foreground mb-2">
-        Organize your own saved places
-      </p>
-      <a
-        href="/signup"
-        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 transition-colors cursor-pointer"
-      >
-        <Compass className="h-4 w-4" />
-        Create your free account
-      </a>
-    </footer>
   );
 }

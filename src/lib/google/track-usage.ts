@@ -40,6 +40,13 @@ export const SKU_CONFIG = {
     costPer1k: 2.0,
     freeMonthly: 100000,
   },
+  // Assistant tools: an area name ("Shoreditch, London") → a point for
+  // "near" searches. Mapbox temporary geocoding: 100k free, then $0.75/1k.
+  mapbox_geocoding: {
+    name: "Mapbox Geocoding",
+    costPer1k: 0.75,
+    freeMonthly: 100000,
+  },
   // Instagram import: candidate search asks for website + phone, which puts
   // Text Search on the Enterprise SKU ($35/1K after 1K free per month).
   text_search_enterprise: {

@@ -2,8 +2,8 @@
 title: Auth
 type: overview
 domain: auth
-version: 1.0.0
-last_updated: 12.05.2026
+version: 1.2.0
+last_updated: 17.11.2026
 status: stable
 sources:
   - src/middleware.ts
@@ -12,8 +12,10 @@ sources:
   - src/lib/supabase/client.ts
   - src/app/auth/callback/route.ts
   - src/app/(auth)/login/page.tsx
-  - src/app/(auth)/signup/page.tsx
   - src/app/(auth)/layout.tsx
+  - src/app/(auth)/oauth/consent/page.tsx
+  - src/app/(auth)/oauth/consent/actions.ts
+  - src/lib/auth/safe-next.ts
 related:
   - "[[supabase-clients]]"
   - "[[../01-domain/users-and-profiles]]"
@@ -33,7 +35,7 @@ Cookie-based session via `@supabase/ssr`. Provider options: Google OAuth (primar
 | Session refresh | `src/middleware.ts` on every request |
 | OAuth provider | Google (via Supabase Auth) |
 | OAuth callback | `src/app/auth/callback/route.ts` |
-| Email/password | `src/app/(auth)/login/page.tsx`, `signup/page.tsx` |
+| Email/password | `src/app/(auth)/login/page.tsx` — sign-in only; sign-ups are closed (see [[#Sign-ups closed]]) |
 | Public routes | `/`, `/auth/callback/*`, `/shared/*`, `/api/shared/*` |
 | Default landing | `/map` (after login) |
 | Logout | `supabase.auth.signOut()` from header dropdown |
@@ -78,9 +80,32 @@ Cookie-based session via `@supabase/ssr`. Provider options: Google OAuth (primar
 
 Same as OAuth from step 4 onward, but step 1-3 are replaced by:
 
-- `supabase.auth.signUp({ email, password })` (`signup/page.tsx`).
 - `supabase.auth.signInWithPassword({ email, password })` (`login/page.tsx`).
-- Email confirmation may be enabled in Supabase Auth settings (verify via dashboard).
+
+The app has no sign-up call any more — see the next section.
+
+## Sign-ups closed
+
+Since 17.11.2026 the app has a single owner (see [[../_plans/personal-assistant]]), so public sign-up is closed:
+
+- The `/signup` page is gone. The middleware sends any `/signup` URL to `/login` before it builds a Supabase client.
+- The login page and the public share page no longer link to sign-up.
+- The gate that actually stops new accounts is Supabase Auth's **Allow new users to sign up** setting (dashboard → Authentication → Sign In / Providers), which must stay off. Taking the page down alone would leave `supabase.auth.signUp()` callable by anyone holding the public anon key.
+- New accounts are added by the owner in the Supabase dashboard (Authentication → Users). The [[../05-flows/signup-flow|account-creation cascade]] still runs for them.
+
+## Return path after sign-in (`next`)
+
+Since 17.11.2026 a page can send a signed-out visitor to `/login?next=<path>` and get them back after sign-in — the OAuth consent page does. `next` is followed only through `safeNextPath` (`src/lib/auth/safe-next.ts`): one leading slash, no backslash or control characters, same origin after URL parsing.
+
+- Email/password: the login page pushes `next` (or `/map`).
+- Google: the login page stores `next` in the short-lived `auth_next` cookie (10 min, SameSite=Lax) so the registered `/auth/callback` redirect URL stays unchanged; the callback reads `?next=` or the cookie, validates it, redirects and clears the cookie.
+- Before this, `/auth/callback` appended any `next` to the origin — `next=@evil.com` produced `https://<origin>@evil.com`, an open redirect. Closed by the same validation.
+
+## OAuth 2.1 server (Claude connector)
+
+Supabase Auth also acts as an OAuth 2.1 authorization server for the MCP endpoint `/api/mcp`, so Claude can get a token for the user's library. The app hosts only the consent page, `/oauth/consent` (Supabase's Authorization Path, joined to the Site URL). Only `ASSISTANT_OWNER_EMAILS` accounts can approve, and only for Claude's callback or loopback redirect URIs. Full flow: [[../05-flows/claude-connector-flow]]; the server and its tools: [[../04-integrations/claude-mcp]].
+
+Dashboard state checked on 17.11.2026: sign-ups off (`/auth/v1/settings` → `disable_signup: true`), OAuth server on, signing key ES256 (JWKS), dynamic client registration off.
 
 ## Middleware gate
 
@@ -89,29 +114,33 @@ Same as OAuth from step 4 onward, but step 1-3 are replaced by:
 ```ts
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|sw\\.js$|manifest\\.webmanifest$|offline$|api/mcp$|\\.well-known/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
 ```
 
 It delegates to `updateSession()` in `src/lib/supabase/middleware.ts`, which:
 
-1. Reads cookies from `request.cookies`.
-2. Constructs a server Supabase client.
-3. Calls `supabase.auth.getUser()` — this triggers cookie refresh if the access token is near expiry.
-4. Writes refreshed cookies onto the response.
-5. Decides the redirect:
+1. `/signup` → redirect to `/login` and stop (sign-ups closed, 17.11.2026).
+2. Reads cookies from `request.cookies`.
+3. Constructs a server Supabase client.
+4. Calls `supabase.auth.getUser()` — this triggers cookie refresh if the access token is near expiry.
+5. Writes refreshed cookies onto the response.
+6. Decides the redirect:
 
 ```ts
-const isAuthRoute =
-  request.nextUrl.pathname.startsWith("/login") ||
-  request.nextUrl.pathname.startsWith("/signup");
+if (pathname.startsWith("/signup")) {
+  return NextResponse.redirect(/login);   // step 1, before the client exists
+}
+
+const isAuthRoute = pathname.startsWith("/login");
 
 const isPublicRoute =
-  request.nextUrl.pathname === "/" ||
-  request.nextUrl.pathname.startsWith("/auth/callback") ||
-  request.nextUrl.pathname.startsWith("/shared/") ||
-  request.nextUrl.pathname.startsWith("/api/shared/");
+  pathname === "/" ||
+  pathname.startsWith("/auth/callback") ||
+  pathname.startsWith("/shared/") ||
+  pathname.startsWith("/api/shared/") ||
+  pathname.startsWith("/api/cron/");      // cron authenticates itself
 
 if (!user && !isAuthRoute && !isPublicRoute) {
   return NextResponse.redirect(/login);
@@ -128,9 +157,13 @@ if (user && isAuthRoute) {
 |---|---|
 | `/` | Landing page (currently redirects). |
 | `/auth/callback/*` | OAuth handshake — must run before session exists. |
-| `/login`, `/signup` | Inverse — authenticated users get redirected AWAY from these to `/map`. |
+| `/login` | Inverse — authenticated users get redirected AWAY from it to `/map`. |
+| `/signup` | Closed (17.11.2026) — always redirects to `/login`. |
 | `/shared/*` | Slug-based public share view. See [[../01-domain/sharing]]. |
 | `/api/shared/*` | The matching API endpoints for the share view. |
+| `/api/cron/*` | Cron runs with no cookie; each route authenticates itself with `CRON_SECRET`. |
+| `/oauth/*` | The OAuth consent page; it sends signed-out visitors to `/login?next=…` itself. |
+| `/api/mcp`, `/.well-known/*` | Not in the middleware at all (matcher): the MCP endpoint checks its own bearer tokens and must answer 401; the metadata documents are public. |
 
 Anything else requires an authenticated user.
 

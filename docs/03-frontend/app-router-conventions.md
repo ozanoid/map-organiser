@@ -2,8 +2,8 @@
 title: App Router Conventions
 type: overview
 domain: frontend
-version: 1.1.0
-last_updated: 05.08.2026
+version: 1.1.1
+last_updated: 17.11.2026
 status: stable
 sources:
   - src/app/
@@ -47,10 +47,9 @@ src/app/
 │   ├── stats/
 │   ├── import/
 │   └── settings/
-├── (auth)/       ← /login, /signup
+├── (auth)/       ← /login (sign-ups closed 17.11.2026)
 │   ├── layout.tsx   ← minimal centered layout
-│   ├── login/
-│   └── signup/
+│   └── login/
 └── shared/       ← /shared/<slug> (NOT a group — visible in URL)
     └── layout.tsx
 ```

@@ -6,6 +6,156 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 17.11.2026 — v1.32.1 — Record the Claude connector as merged
+
+- `feat/personal-assistant` merged to main (Ozan approved): sign-ups closed,
+  the service-worker fix and Phase 0's Claude connector.
+- Status lines updated in [[04-integrations/claude-mcp]],
+  [[05-flows/claude-connector-flow]] and [[_plans/personal-assistant]]: Ozan
+  set `ASSISTANT_OWNER_EMAILS` in Vercel; Supabase still refused client
+  registration at merge time (`oauth_dynamic_client_registration_disabled`),
+  so the end-to-end test is pending.
+
+---
+
+## 17.11.2026 — v1.32.0 — Claude connector: MCP server, OAuth consent, six tools (Phase 0)
+
+**What it does.** The user's library becomes an MCP server Claude can use
+from claude.ai (web, desktop, mobile) and Claude Code — Phase 0 of
+[[_plans/personal-assistant]]. Code on `feat/personal-assistant`; not yet
+connected (needs dynamic client registration in Supabase and a production
+deploy).
+
+- `/api/mcp` (`mcp-handler` 2 + `@modelcontextprotocol/server` 2, stateless
+  Streamable HTTP) behind `withMcpAuth`: no token → 401 whose challenge names
+  `/.well-known/oauth-protected-resource/api/mcp`, which lists Supabase Auth
+  (OAuth 2.1 server) as the authorization server.
+- `/oauth/consent` (Supabase's Authorization Path): owner accounts only
+  (`ASSISTANT_OWNER_EMAILS`), redirect URIs limited to Claude's callback and
+  loopback, every check repeated in the server actions.
+- Six tools in `src/lib/assistant/tools/` (transport-free, reused by the
+  in-app assistant in Phase 2): `get_library_overview`, `search_places`,
+  `rank_places`, `get_places`, `read_reviews`, `update_places`. Filters take
+  names; text matching is Turkish-aware (`src/lib/text/fold.ts`, moved from
+  the Instagram helpers); rows are a light projection because `google_data`
+  averages ~69 KB per place.
+- Login now honours a same-site `next` (password: pushed; Google: carried in
+  the `auth_next` cookie). `/auth/callback` validates `next` — before, any
+  value was appended to the origin (`next=@evil.com` → open redirect).
+- Middleware: `/oauth/*` public; `/api/mcp` and `/.well-known/*` skip it.
+- New SKU `mapbox_geocoding` (Mapbox Geocoding v6 for `near.area`).
+- `npm run check:assistant` runs every tool against the live DB (29 checks
+  passed 17.11.2026; the write on the admin test account undone). Measured:
+  searches 0.4–0.7 s; `rank_places` 41–64 s (Gemini) — `maxDuration` 120.
+- Found while measuring: city search for "Istanbul" matched 0 places,
+  "İstanbul" 39 (ILIKE folds ASCII only) — fixed in the assistant tools; the
+  shared `queryPlaces` keeps the gap and its ~20 MB payload (plan, open
+  question 9). Country stored both as "Türkiye" (35) and "Turkey" (17) —
+  merged in the tools.
+- Supabase state checked: sign-ups off, OAuth server on, ES256 signing key;
+  dynamic client registration off.
+- Docs: new [[04-integrations/claude-mcp]], [[05-flows/claude-connector-flow]];
+  updated [[02-backend/auth]], [[05-flows/auth-flow]] (`next` question
+  resolved), [[03-frontend/middleware]], [[03-frontend/routing]],
+  [[06-ops/env-vars]], [[02-backend/schema/api_usage]],
+  [[04-integrations/mapbox]], [[02-backend/api-routes/_README]],
+  [[04-integrations/_README]], [[05-flows/_README]],
+  [[00-overview/system-overview]], [[00-overview/repo-structure]],
+  [[_plans/personal-assistant]] v1.2.0.
+
+---
+
+## 17.11.2026 — v1.31.0 — Tool design for the Claude connector (Phase 0)
+
+- [[_plans/personal-assistant]] v1.1.0: Phase 0's tool list re-derived after
+  Ozan asked whether it came from a single example (it did). His library was
+  measured (291 places; ~50 stored reviews per place, AI profiles, hours,
+  busyness and booking links on most of them; personal signals almost empty —
+  no own ratings, visit status on 5 places, no lists or trips), twelve
+  scenarios were mapped (his own words plus general planning) and the in-app
+  assistant's eight existing tools were reviewed. Proposed: five read tools
+  (`get_library_overview`, `search_places`, `rank_places`, `get_places`,
+  `read_reviews`) and the later write / plan tools; the earlier
+  `taste_profile` was dropped. Awaiting Ozan's approval.
+- Found: a city search for "Istanbul" (dotless I) matches 0 places and
+  "İstanbul" 39 — the shared place query does not fold Turkish "İ". The fix
+  is part of Phase 0.
+- The Claude API key is `ANTHROPIC_API_KEY` (the SDK's default name), not
+  `ANTHROPIC_KEY`; [[06-ops/env-vars]] lists it as reserved for Phase 2. Ozan
+  sets the $100 monthly limit at organization level in the Claude Console.
+
+---
+
+## 17.11.2026 — v1.30.1 — Let signed-out visitors load the service worker, manifest and offline page
+
+- The middleware matcher (`src/middleware.ts`) now skips `/sw.js`,
+  `/manifest.webmanifest` and `/offline`. For a signed-out visitor — the
+  public share pages, the login page — the session check redirected all three
+  to `/login`: the service worker never registered (console: "The script
+  resource is behind a redirect"), so `/offline` was never precached for
+  them, and the PWA manifest did not load. Pre-existing on main; found while
+  checking the sign-up change.
+- Checked on the local dev server, signed out: the three answer 200; `/map`,
+  `/places` and `/api/places` still redirect to `/login`. A fresh tab on a
+  share page and on `/login` logs no console errors, and the service worker
+  is registered and active.
+- Docs: [[03-frontend/middleware]] (matcher explained; Next 16's
+  `middleware` → `proxy` deprecation noted), [[03-frontend/pwa-and-offline]],
+  [[03-frontend/routing]], [[02-backend/auth]], [[02-backend/supabase-clients]].
+
+---
+
+## 17.11.2026 — v1.30.0 — Close public sign-up
+
+**What it does.** The app has a single owner now
+([[_plans/personal-assistant]]), so nobody can create an account from the
+site.
+
+- `src/app/(auth)/signup/page.tsx` removed. The login page no longer links to
+  sign-up, and the public share page lost its "Create your free account"
+  footer (`SharedFooter`).
+- `updateSession` (`src/lib/supabase/middleware.ts`) sends any `/signup` URL
+  to `/login` (query string kept) before it builds a Supabase client;
+  `/login` is the only auth route left.
+- The gate that actually stops new accounts is Supabase Auth's "Allow new
+  users to sign up" setting — removing the page alone leaves `signUp()` open
+  to anyone holding the public anon key. Ozan switches it off in the
+  dashboard.
+- Checked on the local dev server: `/signup` and `/signup?next=/map` → 307 to
+  `/login` (`next` kept); `/login` renders with no sign-up link; shared list,
+  place and trip pages render without the footer.
+- Docs: [[02-backend/auth]] (new "Sign-ups closed" section; the middleware
+  snippet and public-route table brought up to date — `/api/cron/*` was
+  missing), [[02-backend/supabase-clients]], [[05-flows/auth-flow]],
+  [[05-flows/signup-flow]] (owner-created accounts; the sub-category seeding
+  step was missing), [[05-flows/_README]], [[01-domain/users-and-profiles]],
+  [[03-frontend/routing]] (`/api/cron/*` was missing here too),
+  [[03-frontend/middleware]], [[03-frontend/layouts]],
+  [[03-frontend/app-router-conventions]], [[00-overview/system-overview]],
+  [[00-overview/repo-structure]], [[_agent/conventions]].
+
+---
+
+## 17.11.2026 — v1.29.0 — New direction: a personal places & outings assistant
+
+- New [[_plans/personal-assistant]], the canonical plan from now on. Map
+  Organiser stops growing as a multi-user product and becomes Ozan's personal
+  places & outings assistant built on Claude — "one brain, many doors": one
+  MCP tool layer over the Supabase DB, used from claude.ai (web, desktop,
+  mobile), Claude Code, the in-app assistant, a scheduled discovery agent and
+  the notification channels. It records Ozan's decisions of 17.11.2026, the
+  phases (0 Claude door → 1 planning → 2 in-app assistant on Claude →
+  3 communication → 4 feedback → 5 Instagram saved collection with
+  image/video → 6 weekly London discovery) and the open questions.
+- `_plans/feature-suggestions_v4.md` moved to `_archive/` (`status:
+  superseded`, `superseded_by: [[personal-assistant]]`). Its maintenance
+  items and the backlog items that join the new phases are carried into the
+  new plan.
+- [[_archive/_README]] now lists every archived roadmap (v1, v3, v3-ai-first
+  were missing too); [[README]] points at the current plan.
+
+---
+
 ## 17.11.2026 — v1.28.2 — Retry an unusable Gemini read of an Instagram post
 
 - `readPost` (`src/lib/instagram/read-post.ts`) asks Gemini once more when the

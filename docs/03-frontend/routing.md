@@ -2,8 +2,8 @@
 title: Routing
 type: overview
 domain: frontend
-version: 1.3.1
-last_updated: 16.10.2026
+version: 1.5.0
+last_updated: 17.11.2026
 status: stable
 sources:
   - src/app/
@@ -39,16 +39,19 @@ Every route in the app — pages, API handlers, and special routes — in one pl
 | `/import` | `src/app/(app)/import/page.tsx` | `(app)/layout.tsx` | Required | Batch import with Zustand progress. |
 | `/settings` | `src/app/(app)/settings/page.tsx` | `(app)/layout.tsx` | Required | Categories / Tags / API / Theme tabs. |
 | `/login` | `src/app/(auth)/login/page.tsx` | `(auth)/layout.tsx` | **Public** (redirect if signed in) | Google OAuth + email/password. |
-| `/signup` | `src/app/(auth)/signup/page.tsx` | `(auth)/layout.tsx` | **Public** (redirect if signed in) | Account creation. |
+| `/signup` | — (page removed 17.11.2026) | — | Redirect | Sign-ups are closed; the middleware sends it to `/login`. |
 | `/shared/[slug]` | `src/app/shared/[slug]/page.tsx` | `shared/layout.tsx` | **Public** | Public read view of a list, trip, or single place (v1.20.0). |
-| `/offline` | `src/app/offline/page.tsx` | root | Public | PWA offline fallback. |
+| `/oauth/consent` | `src/app/(auth)/oauth/consent/page.tsx` | `(auth)/layout.tsx` | **Public** — the page itself sends signed-out visitors to `/login?next=…` | OAuth consent for the Claude connector (17.11.2026). See [[../05-flows/claude-connector-flow]]. |
+| `/offline` | `src/app/offline/page.tsx` | root | Public — skips the middleware | PWA offline fallback; the service worker precaches it. |
 
 ## Special routes
 
 | Path | Source | Purpose |
 |---|---|---|
 | `/auth/callback` | `src/app/auth/callback/route.ts` | OAuth code exchange. Public. See [[../02-backend/api-routes/auth-callback]]. |
-| `/manifest.webmanifest` | `src/app/manifest.ts` | PWA manifest (Next.js native). |
+| `/manifest.webmanifest` | `src/app/manifest.ts` | PWA manifest (Next.js native). Skips the middleware, so signed-out visitors get it too. |
+| `/api/mcp` | `src/app/api/mcp/route.ts` | MCP endpoint for Claude (Streamable HTTP, bearer tokens). Skips the middleware. See [[../04-integrations/claude-mcp]]. |
+| `/.well-known/oauth-protected-resource[/api/mcp]` | `src/app/.well-known/oauth-protected-resource/[[...path]]/route.ts` | RFC 9728 metadata naming Supabase as the MCP endpoint's authorization server. Skips the middleware. |
 
 ## API routes (summary)
 
@@ -72,12 +75,12 @@ All under `/api/*`. Full detail in [[../02-backend/api-routes/_README]].
 ```ts
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|sw\\.js$|manifest\\.webmanifest$|offline$|api/mcp$|\\.well-known/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
 ```
 
-Translation: runs on **every path except** static assets and image files. So pages, API routes, the manifest, and the auth callback all go through the middleware before reaching their handler.
+Translation: runs on **every path except** static assets, image files, the service worker / manifest / offline page, the MCP endpoint and `.well-known` documents. So pages, API routes, the manifest, and the auth callback all go through the middleware before reaching their handler.
 
 ## Auth gating (from middleware)
 
@@ -87,9 +90,13 @@ Public routes (no auth required):
   /auth/callback/*
   /shared/*
   /api/shared/*
+  /api/cron/*      (the cron route authenticates itself)
+  /oauth/*         (consent page; redirects to /login?next=… itself)
 
 Auth routes (redirect AWAY to /map if signed in):
   /login
+
+Closed (always redirect to /login):
   /signup
 
 Everything else:

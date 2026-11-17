@@ -13,11 +13,13 @@ This is the canonical documentation vault for **map-organiser**. It's an Obsidia
 | Adding a new doc | [[_meta/vault-guide]] + [[_meta/frontmatter-schema]] |
 | Touching the DB | [[02-backend/schema/_README]] |
 | Touching auth | [[02-backend/auth]] + [[05-flows/auth-flow]] |
+| Deciding what to build next | [[_plans/personal-assistant]] — the current direction and phases |
 
 ## Folder map
 
 - `_agent/` — guidance for Claude Code (conventions, common tasks, pitfalls)
 - `_meta/` — vault-level meta (schema, templates, this guide)
+- `_plans/` — plans; the current direction is [[_plans/personal-assistant]]
 - `_archive/` — superseded docs kept for historical reference
 - `00-overview/` — high-level system, tech stack, glossary
 - `01-domain/` — domain entities (places, trips, lists, sharing, …)

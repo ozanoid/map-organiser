@@ -2,8 +2,8 @@
 title: Signup Flow
 type: flow
 domain: auth
-version: 1.0.0
-last_updated: 12.05.2026
+version: 1.1.0
+last_updated: 17.11.2026
 status: stable
 sources:
   - src/app/auth/callback/route.ts
@@ -17,11 +17,13 @@ related:
 
 # Signup Flow
 
-What happens the **first** time a user authenticates. Distinct from sign-in only by the cascade of DB triggers that fire as `auth.users` gets its first row.
+What happens when a new account is created: the cascade of DB triggers that fires as `auth.users` gets the account's row.
 
 ## Trigger
 
-A user not previously in `auth.users` completes either:
+**Since 17.11.2026 public sign-up is closed** (single-owner app; [[../02-backend/auth#Sign-ups closed]]). The `/signup` page is gone and Supabase Auth's "Allow new users to sign up" setting, which must stay off, is the gate. A row now reaches `auth.users` only when the owner adds an account in the Supabase dashboard (Authentication → Users).
+
+Before that date, a user not previously in `auth.users` reached this flow by completing either:
 
 - Google OAuth handshake (most common), OR
 - Email signup with confirmation (if enabled).
@@ -45,11 +47,16 @@ A user not previously in `auth.users` completes either:
        Nightlife, Hotel & Accommodation, Shopping, Museum & Culture, Park
        & Nature, Beach, Gym & Sports, Health & Medical, Entertainment, Other
        │
+       ▼  trigger from migration create_subcategories_signup_trigger
+3b. seed_default_subcategories_for_user() seeds the default sub-categories
+       (~62 rows; see [[../02-backend/schema/subcategories]])
+       │
        ▼
 4. Session is set; user is redirected to /map by middleware
+   (a dashboard-created account gets its session at its first sign-in)
 ```
 
-The whole cascade happens inside the Supabase Auth side of the OAuth callback. The app's code doesn't run any signup-specific logic.
+The whole cascade runs inside Supabase Auth's INSERT — at creation time for a dashboard-created account; inside the OAuth callback for the old self sign-up. The app's code doesn't run any signup-specific logic.
 
 ## Inputs / outputs
 

@@ -2,6 +2,15 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 export async function updateSession(request: NextRequest) {
+  // Sign-ups are closed (the app has a single owner): old /signup links land
+  // on the login page. Checked before the Supabase client is built — the
+  // redirect needs no session work.
+  if (request.nextUrl.pathname.startsWith("/signup")) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/login";
+    return NextResponse.redirect(url);
+  }
+
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(
@@ -30,14 +39,15 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   // Redirect unauthenticated users to login
-  const isAuthRoute =
-    request.nextUrl.pathname.startsWith("/login") ||
-    request.nextUrl.pathname.startsWith("/signup");
+  const isAuthRoute = request.nextUrl.pathname.startsWith("/login");
   const isPublicRoute =
     request.nextUrl.pathname === "/" ||
     request.nextUrl.pathname.startsWith("/auth/callback") ||
     request.nextUrl.pathname.startsWith("/shared/") ||
     request.nextUrl.pathname.startsWith("/api/shared/") ||
+    // OAuth consent page: it sends signed-out visitors to /login with a
+    // `next` that brings them back to the same authorization request.
+    request.nextUrl.pathname.startsWith("/oauth/") ||
     // Cron runs with no cookie (Vercel sends CRON_SECRET as a bearer);
     // the route authenticates itself, so skip the session-redirect here.
     // Without this the cron 307-redirects to /login and never executes.

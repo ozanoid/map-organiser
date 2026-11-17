@@ -2,8 +2,8 @@
 title: System Overview
 type: overview
 domain: overview
-version: 1.2.1
-last_updated: 16.10.2026
+version: 1.3.0
+last_updated: 17.11.2026
 status: stable
 sources:
   - AGENTS.md
@@ -55,7 +55,7 @@ Typical session:
 │   Next.js 16 App Router                                                     │
 │   ┌───────────────┬────────────────┬─────────────┬─────────────────────┐   │
 │   │  (app)/       │  (auth)/       │  /api/      │  /shared/<slug>     │   │
-│   │  authed UI    │  login,signup  │  handlers   │  public read view   │   │
+│   │  authed UI    │  login         │  handlers   │  public read view   │   │
 │   └───────┬───────┴────────┬───────┴──────┬──────┴──────────┬──────────┘   │
 │           │                │              │                  │              │
 │   ┌───────┴────────────────┴──────────────┴──────────────────┴──────────┐   │
@@ -89,6 +89,7 @@ Typical session:
 | Map | `src/components/map/`, `src/lib/map/` | Mapbox GL view with cluster, popups, route polylines, custom markers. |
 | Stats | `src/app/api/stats/`, `src/app/(app)/stats/` | Recharts dashboard backed by aggregate queries. |
 | Import | `src/app/api/places/import-jobs/`, `src/app/api/cron/drain-imports/`, `src/lib/import/`, `src/app/(app)/import/` | Server-drained queue (`import_jobs` / `import_job_items`); the page only polls. See [[../05-flows/place-import-flow]]. |
+| Claude connector (MCP) | `src/app/api/mcp/`, `src/lib/assistant/`, `src/app/(auth)/oauth/consent/`, `src/app/.well-known/` | Six tools over the user's library for claude.ai and Claude Code; Supabase Auth as OAuth 2.1 server (17.11.2026). [[../04-integrations/claude-mcp]] |
 | Instagram import | `src/app/api/instagram/`, `src/lib/instagram/`, `src/lib/hikerapi/`, `src/components/places/instagram-import-panel.tsx` | Post → HikerAPI + one Gemini read + Google Text Search → deterministic pinning → the same import queue (v1.28.0; DB migration applied 16.10.2026). See [[../05-flows/instagram-import-flow]]. |
 | Settings | `src/app/(app)/settings/`, `src/components/settings/` | Categories, sub-categories (per parent), tags, encrypted API keys, theme, AI master toggle, AI moderation queue. |
 | Theme | `src/lib/providers.tsx`, `src/lib/hooks/use-map-style.ts` | next-themes light/dark/system; map style and marker style preferences. |
