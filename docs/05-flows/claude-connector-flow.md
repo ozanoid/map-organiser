@@ -2,7 +2,7 @@
 title: "Claude Connector Flow"
 type: flow
 domain: auth
-version: 1.0.0
+version: 1.0.1
 last_updated: 17.11.2026
 status: draft
 sources:
@@ -23,7 +23,7 @@ related:
 
 # Claude Connector Flow
 
-How claude.ai (or Claude Code) gets a token for the user's library and uses it. Supabase Auth is the OAuth 2.1 authorization server; the app is the protected resource and hosts the consent page. Not yet run end to end — it needs the production deploy and dynamic client registration (see [[../04-integrations/claude-mcp#Setup]]).
+How claude.ai (or Claude Code) gets a token for the user's library and uses it. Supabase Auth is the OAuth 2.1 authorization server; the app is the protected resource and hosts the consent page. Merged to main on 17.11.2026; not yet run end to end — dynamic client registration was still off at merge time (see [[../04-integrations/claude-mcp#Setup]]).
 
 ## Trigger
 

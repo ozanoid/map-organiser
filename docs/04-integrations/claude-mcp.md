@@ -2,7 +2,7 @@
 title: "Claude connector (MCP server)"
 type: integration
 domain: integrations
-version: 1.0.0
+version: 1.0.1
 last_updated: 17.11.2026
 status: draft
 sources:
@@ -34,7 +34,7 @@ related:
 
 > Phase 0 of [[../_plans/personal-assistant]]: the user's library as an MCP server, so claude.ai (web, desktop, mobile) and Claude Code can search, read and update saved places. One tool layer, many doors — the in-app assistant moves onto the same tools in Phase 2.
 
-**Status (17.11.2026):** code on `feat/personal-assistant`; checked against the live database with `npm run check:assistant`. Not yet merged or connected — the end-to-end OAuth test runs on production after the merge (see [Setup](#setup)).
+**Status (17.11.2026):** merged to main (Ozan approved); checked against the live database with `npm run check:assistant`. Not yet connected: at merge time Supabase still refused client registration (`oauth_dynamic_client_registration_disabled`), and the end-to-end OAuth test on production is pending (see [Setup](#setup)).
 
 ## Shape
 

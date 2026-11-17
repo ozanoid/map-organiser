@@ -6,6 +6,18 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 17.11.2026 — v1.32.1 — Record the Claude connector as merged
+
+- `feat/personal-assistant` merged to main (Ozan approved): sign-ups closed,
+  the service-worker fix and Phase 0's Claude connector.
+- Status lines updated in [[04-integrations/claude-mcp]],
+  [[05-flows/claude-connector-flow]] and [[_plans/personal-assistant]]: Ozan
+  set `ASSISTANT_OWNER_EMAILS` in Vercel; Supabase still refused client
+  registration at merge time (`oauth_dynamic_client_registration_disabled`),
+  so the end-to-end test is pending.
+
+---
+
 ## 17.11.2026 — v1.32.0 — Claude connector: MCP server, OAuth consent, six tools (Phase 0)
 
 **What it does.** The user's library becomes an MCP server Claude can use
