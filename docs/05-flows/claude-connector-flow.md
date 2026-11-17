@@ -2,7 +2,7 @@
 title: "Claude Connector Flow"
 type: flow
 domain: auth
-version: 1.0.1
+version: 1.1.0
 last_updated: 17.11.2026
 status: draft
 sources:
@@ -23,7 +23,7 @@ related:
 
 # Claude Connector Flow
 
-How claude.ai (or Claude Code) gets a token for the user's library and uses it. Supabase Auth is the OAuth 2.1 authorization server; the app is the protected resource and hosts the consent page. Merged to main on 17.11.2026; not yet run end to end — dynamic client registration was still off at merge time (see [[../04-integrations/claude-mcp#Setup]]).
+How claude.ai (or Claude Code) gets a token for the user's library and uses it. Supabase Auth is the OAuth 2.1 authorization server; the app is the protected resource and hosts the consent page. Ran end to end on 17.11.2026 — see [Observed on 17.11.2026](#observed-on-17112026).
 
 ## Trigger
 
@@ -78,11 +78,17 @@ The user adds `https://<production>/api/mcp` as a custom connector in Claude, or
 - The consent decision re-runs every check server-side; the form posts only the id.
 - Claude's callback and loopback are the only redirect targets ever followed — see [[../04-integrations/claude-mcp#Who may connect]].
 
+## Observed on 17.11.2026
+
+- claude.ai registered **two** `Claude` clients 6 s apart (both redirect `https://claude.ai/api/mcp/auth_callback`); one consent exists, so one client is unused.
+- Claude asked for every scope Supabase advertises — `openid profile email phone offline_access` — and Supabase accepted its authorize and token requests, including whatever RFC 8707 `resource` it sent: the flow completed.
+- Consent stored for ozan@maporganiser.com; tool calls with the issued token returned only that account's 291 places.
+
 ## Failure modes
 
 See [[../04-integrations/claude-mcp#Failure modes]].
 
 ## Open questions
 
-- Does Supabase accept the RFC 8707 `resource` parameter Claude sends on authorize and token? Unverified until the end-to-end test.
-- Claude's tool-call timeout versus `rank_places`' 41–64 s.
+- ~~Does Supabase accept the RFC 8707 `resource` parameter?~~ Yes — the flow completed (17.11.2026).
+- claude.ai's tool-call timeout versus `rank_places` (28–64 s measured; Claude Code waited 36 s).

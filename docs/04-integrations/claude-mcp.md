@@ -2,7 +2,7 @@
 title: "Claude connector (MCP server)"
 type: integration
 domain: integrations
-version: 1.0.1
+version: 1.1.0
 last_updated: 17.11.2026
 status: draft
 sources:
@@ -34,7 +34,7 @@ related:
 
 > Phase 0 of [[../_plans/personal-assistant]]: the user's library as an MCP server, so claude.ai (web, desktop, mobile) and Claude Code can search, read and update saved places. One tool layer, many doors — the in-app assistant moves onto the same tools in Phase 2.
 
-**Status (17.11.2026):** merged to main (Ozan approved); checked against the live database with `npm run check:assistant`. Not yet connected: at merge time Supabase still refused client registration (`oauth_dynamic_client_registration_disabled`), and the end-to-end OAuth test on production is pending (see [Setup](#setup)).
+**Status (17.11.2026):** on main and connected. Ozan added the connector in claude.ai; Claude registered itself through dynamic client registration and Ozan approved on `/oauth/consent`. The connector's tools were then called through the real OAuth token from a Claude Code session on the same account: `get_library_overview` returned the owner's 291 places (so the owner gate and RLS work), plus `search_places` with `open_at`, `get_places` with `at`, `read_reviews` and `rank_places`. `update_places` has not been run through the connector yet.
 
 ## Shape
 
@@ -61,7 +61,7 @@ Both new paths are skipped by the session middleware (matcher in `src/middleware
 | `get_library_overview` | read | Countries (spellings merged, e.g. Türkiye + Turkey) with cities, categories with sub-categories, tags and lists — each with counts; visit-status counts (unknown included), closed counts, sources, recently saved, notes on data gaps. |
 | `search_places` | read | Filters: keyword, city/country, near (saved place, lat/lng or a neighbourhood geocoded by Mapbox) + radius, category, sub-category, tags (all must apply), list, visit status (incl. `unknown`), Google rating and review floor, max price, open at a place-local time or now, source, saved since. Closed places out unless `include_closed`. Sort: rating, popularity, distance, recent. ≤ 25 compact rows + total. |
 | `rank_places` | read, AI call | Same filters, then the AI-search judge (Gemini, `rank-engine`) scores up to 30 profiles against an English `intent`. SKU `ai_rank_results`, budget `rank_backstop`; degrades to rating order with a notice. |
-| `get_places` | read | 1–5 places in full: profile (summary, pros, cons, top themes with a quote, `good_for` features), weekly hours, `at` → open?, closes at, busyness at that hour and the day's busiest hours, links (long Google links cut to their path), user status/rating/notes/tags/lists, the Instagram post in the notes, up to 3 "people also search" places not in the library. |
+| `get_places` | read | 1–5 places in full: profile (summary, pros, cons, top themes with a quote, `good_for` features), weekly hours, `at` → open?, closes at, busyness at that hour and the day's busiest hours, links (long Google links cut to their path), user status/rating/notes/tags/lists, the Instagram post in the notes, up to 3 "people also search" places not in the library — only listings with ≥ 4.0 and ≥ 20 reviews (a 1-review, 1★ listing showed up in the first live check). |
 | `read_reviews` | read | Stored Google reviews (~50 per place) filtered by words (`about`, any match, folded), min rating; sorted by relevance or date; ≤ 20 quotes cut to 450 chars around the hit. Without `about`, also the review themes. |
 | `update_places` | write | 1–25 places: visit status (stamps `visited_at` / `booked_at` like `PATCH /api/places/[id]`), user rating 1–5 or null, a note appended as `[YYYY-MM-DD] …` (existing notes kept), tags to add (created if missing) or remove. Annotated destructive, so clients ask before running it. |
 
@@ -81,19 +81,19 @@ Filters take **names**, not ids (`resolveNames`): exact folded match, then a uni
 
 ## Limits and known issues
 
-- `rank_places` took 41 s (50 profiles) and 64 s (30 profiles) in testing — Gemini latency, not the pool size. `/api/mcp` has `maxDuration = 120`; whether claude.ai waits that long is untested.
+- `rank_places` took 41 s (50 profiles), 64 s and 28 s (30 profiles) from the check script and 36 s through the connector — Gemini latency varies, the pool size barely matters. `/api/mcp` has `maxDuration = 120`; Claude Code waited 36 s, claude.ai's own limit is untested.
 - The shared `queryPlaces` (places page, in-app assistant) still has the ILIKE folding gap and selects all of `google_data`. Not changed here; see the plan's open items.
 - `ASSISTANT_OWNER_EMAILS` must be set in each environment, or every connection is refused.
 
 ## Setup
 
-1. Supabase → Authentication → OAuth Server: server enabled (on, 17.11.2026), **Allow dynamic client registration** (off on 17.11.2026 — `registration_endpoint` is null), Authorization Path `/oauth/consent`. Site URL (Authentication → URL Configuration) must be the production URL — the consent page is reached through it.
+1. Supabase → Authentication → OAuth Server: server enabled (on, 17.11.2026), **Allow dynamic client registration** (turned on 17.11.2026 — it only takes effect after Save), Authorization Path `/oauth/consent`. Site URL (Authentication → URL Configuration) must be the production URL — the consent page is reached through it.
 2. Vercel env: `ASSISTANT_OWNER_EMAILS` in Production (and Preview if wanted).
 3. After the merge: claude.ai → Settings → Connectors → Add custom connector → `https://<production>/api/mcp`. Claude Code: `claude mcp add --transport http map-organiser https://<production>/api/mcp`.
 
 ## Testing
 
-`npm run check:assistant` (`scripts/assistant-check/run.ts`) runs every tool against the live database with the service-role key — read checks on the owner's library; the paid calls (geocoding, AI ranking) and one write on the admin test account, the write undone afterwards — plus unit checks for `safeNextPath` and the redirect allowlist. The OAuth round trip and real-token RLS are covered only by the production end-to-end test.
+`npm run check:assistant` (`scripts/assistant-check/run.ts`) runs every tool against the live database with the service-role key — read checks on the owner's library; the paid calls (geocoding, AI ranking) and one write on the admin test account, the write undone afterwards — plus unit checks for `safeNextPath` and the redirect allowlist. The OAuth round trip and real-token RLS were covered by the production end-to-end check of 17.11.2026 (read tools only).
 
 ## Failure modes
 

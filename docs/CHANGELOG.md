@@ -6,6 +6,22 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 17.11.2026 — v1.32.2 — Claude connector connected; similar places filtered
+
+- End to end on production: Ozan added the connector in claude.ai, Claude
+  registered through dynamic client registration (two clients, 6 s apart; one
+  unused) and Ozan approved on `/oauth/consent`. Through the real token the
+  read tools returned the owner's 291 places only; `rank_places` took 36 s.
+  `update_places` not yet exercised through the connector.
+- `get_places`: "similar places you haven't saved" now skips near-empty
+  Google listings (needs ≥ 4.0 and ≥ 20 reviews) — the first live check showed
+  a 1-review, 1★ one. `npm run check:assistant` checks it (30 checks).
+- Docs: [[04-integrations/claude-mcp]], [[05-flows/claude-connector-flow]]
+  (observations; the `resource`-parameter question is closed),
+  [[_plans/personal-assistant]] (Phase 0 done).
+
+---
+
 ## 17.11.2026 — v1.32.1 — Record the Claude connector as merged
 
 - `feat/personal-assistant` merged to main (Ozan approved): sign-ups closed,
