@@ -2,7 +2,7 @@
 title: Auth
 type: overview
 domain: auth
-version: 1.1.0
+version: 1.1.1
 last_updated: 17.11.2026
 status: stable
 sources:
@@ -97,7 +97,7 @@ Since 17.11.2026 the app has a single owner (see [[../_plans/personal-assistant]
 ```ts
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|sw\\.js$|manifest\\.webmanifest$|offline$|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
 ```

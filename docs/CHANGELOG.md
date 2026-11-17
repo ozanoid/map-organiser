@@ -6,6 +6,25 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 17.11.2026 — v1.30.1 — Let signed-out visitors load the service worker, manifest and offline page
+
+- The middleware matcher (`src/middleware.ts`) now skips `/sw.js`,
+  `/manifest.webmanifest` and `/offline`. For a signed-out visitor — the
+  public share pages, the login page — the session check redirected all three
+  to `/login`: the service worker never registered (console: "The script
+  resource is behind a redirect"), so `/offline` was never precached for
+  them, and the PWA manifest did not load. Pre-existing on main; found while
+  checking the sign-up change.
+- Checked on the local dev server, signed out: the three answer 200; `/map`,
+  `/places` and `/api/places` still redirect to `/login`. A fresh tab on a
+  share page and on `/login` logs no console errors, and the service worker
+  is registered and active.
+- Docs: [[03-frontend/middleware]] (matcher explained; Next 16's
+  `middleware` → `proxy` deprecation noted), [[03-frontend/pwa-and-offline]],
+  [[03-frontend/routing]], [[02-backend/auth]], [[02-backend/supabase-clients]].
+
+---
+
 ## 17.11.2026 — v1.30.0 — Close public sign-up
 
 **What it does.** The app has a single owner now

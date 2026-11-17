@@ -2,10 +2,11 @@
 title: PWA & Offline
 type: overview
 domain: frontend
-version: 1.0.0
-last_updated: 12.05.2026
+version: 1.1.0
+last_updated: 17.11.2026
 status: stable
 sources:
+  - src/middleware.ts
   - src/app/manifest.ts
   - src/app/offline/page.tsx
   - src/components/sw-register.tsx
@@ -73,6 +74,8 @@ Behavior (verify by reading `public/sw.js`):
 - Registers on first page load.
 - Caches assets for offline use.
 - Falls back to `/offline` when network requests for navigations fail.
+
+**Signed-out visitors.** `/sw.js`, `/manifest.webmanifest` and `/offline` are excluded from the session middleware (the matcher in `src/middleware.ts`), so the public share pages and the login page register the service worker too. Until 17.11.2026 the middleware redirected all three to `/login` for a signed-out visitor and registration failed with "The script resource is behind a redirect".
 
 **Why a hand-rolled SW.** Next.js doesn't generate a service worker on its own. We could pull in `next-pwa` or `serwist` for richer caching strategies, but the current setup keeps the surface tiny.
 

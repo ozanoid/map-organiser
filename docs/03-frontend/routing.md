@@ -2,7 +2,7 @@
 title: Routing
 type: overview
 domain: frontend
-version: 1.4.0
+version: 1.4.1
 last_updated: 17.11.2026
 status: stable
 sources:
@@ -41,14 +41,14 @@ Every route in the app — pages, API handlers, and special routes — in one pl
 | `/login` | `src/app/(auth)/login/page.tsx` | `(auth)/layout.tsx` | **Public** (redirect if signed in) | Google OAuth + email/password. |
 | `/signup` | — (page removed 17.11.2026) | — | Redirect | Sign-ups are closed; the middleware sends it to `/login`. |
 | `/shared/[slug]` | `src/app/shared/[slug]/page.tsx` | `shared/layout.tsx` | **Public** | Public read view of a list, trip, or single place (v1.20.0). |
-| `/offline` | `src/app/offline/page.tsx` | root | Public | PWA offline fallback. |
+| `/offline` | `src/app/offline/page.tsx` | root | Public — skips the middleware | PWA offline fallback; the service worker precaches it. |
 
 ## Special routes
 
 | Path | Source | Purpose |
 |---|---|---|
 | `/auth/callback` | `src/app/auth/callback/route.ts` | OAuth code exchange. Public. See [[../02-backend/api-routes/auth-callback]]. |
-| `/manifest.webmanifest` | `src/app/manifest.ts` | PWA manifest (Next.js native). |
+| `/manifest.webmanifest` | `src/app/manifest.ts` | PWA manifest (Next.js native). Skips the middleware, so signed-out visitors get it too. |
 
 ## API routes (summary)
 
@@ -72,7 +72,7 @@ All under `/api/*`. Full detail in [[../02-backend/api-routes/_README]].
 ```ts
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|sw\\.js$|manifest\\.webmanifest$|offline$|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
 ```

@@ -2,7 +2,7 @@
 title: Middleware
 type: overview
 domain: frontend
-version: 1.1.0
+version: 1.2.0
 last_updated: 17.11.2026
 status: stable
 sources:
@@ -35,7 +35,7 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|sw\\.js$|manifest\\.webmanifest$|offline$|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
 ```
@@ -81,11 +81,16 @@ This is why the matcher only excludes static assets — every dynamic path goes 
 
 ### The matcher in plain English
 
-`/((?!_next/static|_next/image|favicon.ico|.*\.(?:svg|png|jpg|jpeg|gif|webp)$).*)`
+`/((?!_next/static|_next/image|favicon.ico|sw\.js$|manifest\.webmanifest$|offline$|.*\.(?:svg|png|jpg|jpeg|gif|webp)$).*)`
 
 - `?!` is a negative lookahead.
-- Excludes `_next/static`, `_next/image`, `favicon.ico`, and any URL ending in `.svg / .png / .jpg / .jpeg / .gif / .webp`.
+- Excludes `_next/static`, `_next/image`, `favicon.ico`, any URL ending in `.svg / .png / .jpg / .jpeg / .gif / .webp`, and three public files a signed-out visitor must be able to load: `/sw.js` (service worker), `/manifest.webmanifest` (PWA manifest) and `/offline` (the page the service worker precaches). Until 17.11.2026 these three went through the session check and were redirected to `/login`, so on the public share pages and the login page the service worker never registered (console: "The script resource is behind a redirect").
 - Everything else matches.
+- Next.js needs the matcher as a literal constant (it is analysed at build time), so a new exclusion goes into this string, not into a variable.
+
+### Next.js 16: `middleware` → `proxy`
+
+The dev server warns that the `middleware` file convention is deprecated in favour of `proxy` (seen 17.11.2026). `src/middleware.ts` still runs; renaming it is a separate change — see `node_modules/next/dist/docs/01-app/01-getting-started/16-proxy.md`.
 
 ### Adding a new public route
 
