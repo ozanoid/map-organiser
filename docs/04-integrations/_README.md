@@ -2,8 +2,8 @@
 title: Integrations
 type: overview
 domain: integrations
-version: 1.3.0
-last_updated: 16.10.2026
+version: 1.4.0
+last_updated: 17.11.2026
 status: stable
 related:
   - "[[supabase]]"
@@ -12,6 +12,7 @@ related:
   - "[[dataforseo]]"
   - "[[gemini]]"
   - "[[hikerapi]]"
+  - "[[claude-mcp]]"
   - "[[s2-geometry]]"
   - "[[react-query]]"
   - "[[zustand]]"
@@ -31,6 +32,7 @@ Third-party services and runtime libraries that materially shape how this app wo
 | **Google Places API** | Authoritative place data when the user provides a key | [[google-places]] |
 | **DataForSEO Business Data** | Default enrichment provider (no per-user key) | [[dataforseo]] |
 | **Google Gemini** (Generative Language API) | AI feature provider — `gemini-3-flash-preview`. Phase 4 full place_profile, Phase 6 NL search (both shipped); since v1.28.0 also the one read per Instagram post | [[gemini]] |
+| **Claude (MCP connector)** | The user's library as an MCP server for claude.ai and Claude Code; Supabase Auth is the OAuth 2.1 server (17.11.2026) | [[claude-mcp]] |
 | **HikerAPI** | Instagram data — the post, its tagged/mentioned accounts and their profiles, for the Instagram import (v1.28.0). System-level key `HIKERAPI_KEY` | [[hikerapi]] |
 
 ## Runtime libraries (architecturally significant)

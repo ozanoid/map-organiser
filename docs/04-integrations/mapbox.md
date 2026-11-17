@@ -2,14 +2,15 @@
 title: Mapbox
 type: integration
 domain: integrations
-version: 1.2.1
-last_updated: 16.10.2026
+version: 1.3.0
+last_updated: 17.11.2026
 status: stable
 sources:
   - src/components/map/map-view.tsx
   - src/lib/trip/directions.ts
   - src/lib/map/category-icons.ts
   - src/lib/mapbox/search-box.ts
+  - src/lib/mapbox/geocode.ts
   - src/app/api/search/suggest/route.ts
   - src/app/api/search/retrieve/[id]/route.ts
   - src/app/api/places/parse-link/route.ts
@@ -93,6 +94,10 @@ Called from:
 - `POST /api/places/parse-link` — calls `reverseGeocode` for short-name Google Maps URLs to disambiguate DataForSEO search.
 
 **Session model.** A `session_token` (UUIDv4 minted by the client in `usePlaceSearch`) groups all suggest calls plus one retrieve into a single billable session. The hook rotates the token after every successful retrieve or after 180s inactivity / 50 successive suggests. See [[../03-frontend/hooks/use-place-search]].
+
+### Geocoding API (server)
+
+`src/lib/mapbox/geocode.ts` → `geocodeArea(query)`: `GET https://api.mapbox.com/search/geocode/v6/forward`, `limit=1`, types neighbourhood → address. Used only by the assistant tools' `near.area` ("Shoreditch, London" → a point; [[claude-mcp]]). Server token preferred (`MAPBOX_SERVER_TOKEN`). One `mapbox_geocoding` SKU per request, counted whether or not it found something. Added 17.11.2026.
 
 ## Cost & limits
 

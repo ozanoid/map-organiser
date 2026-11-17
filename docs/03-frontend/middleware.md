@@ -2,7 +2,7 @@
 title: Middleware
 type: overview
 domain: frontend
-version: 1.2.0
+version: 1.3.0
 last_updated: 17.11.2026
 status: stable
 sources:
@@ -35,7 +35,7 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|sw\\.js$|manifest\\.webmanifest$|offline$|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|sw\\.js$|manifest\\.webmanifest$|offline$|api/mcp$|\\.well-known/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
 ```
@@ -68,6 +68,9 @@ Hard-coded list in `updateSession`:
 - `/shared/*` (public share pages)
 - `/api/shared/*` (public share APIs)
 - `/api/cron/*` (cron routes — they authenticate themselves with `CRON_SECRET`)
+- `/oauth/*` (the OAuth consent page — it redirects signed-out visitors to `/login?next=…` itself, so the authorization request survives sign-in)
+
+Not in the middleware at all (matcher exclusions, 17.11.2026): `/api/mcp` — the MCP endpoint authenticates bearer tokens and must answer 401 with a challenge, not a redirect — and `/.well-known/*` metadata documents.
 
 Everything else requires auth.
 
@@ -81,7 +84,7 @@ This is why the matcher only excludes static assets — every dynamic path goes 
 
 ### The matcher in plain English
 
-`/((?!_next/static|_next/image|favicon.ico|sw\.js$|manifest\.webmanifest$|offline$|.*\.(?:svg|png|jpg|jpeg|gif|webp)$).*)`
+`/((?!_next/static|_next/image|favicon.ico|sw\.js$|manifest\.webmanifest$|offline$|api/mcp$|\.well-known/|.*\.(?:svg|png|jpg|jpeg|gif|webp)$).*)`
 
 - `?!` is a negative lookahead.
 - Excludes `_next/static`, `_next/image`, `favicon.ico`, any URL ending in `.svg / .png / .jpg / .jpeg / .gif / .webp`, and three public files a signed-out visitor must be able to load: `/sw.js` (service worker), `/manifest.webmanifest` (PWA manifest) and `/offline` (the page the service worker precaches). Until 17.11.2026 these three went through the session check and were redirected to `/login`, so on the public share pages and the login page the service worker never registered (console: "The script resource is behind a redirect").

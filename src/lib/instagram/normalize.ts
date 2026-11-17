@@ -3,16 +3,11 @@
  * place: names, phone numbers, websites, street addresses and distances.
  */
 
-const TR_MAP: Record<string, string> = { ı: "i", ş: "s", ğ: "g", ü: "u", ö: "o", ç: "c", â: "a", î: "i", û: "u" };
+import { fold } from "@/lib/text/fold";
 
-/** Lower-case (Turkish rules), strip diacritics and punctuation → "a b c". */
-export function fold(s: string | null | undefined): string {
-  let t = (s ?? "").toLocaleLowerCase("tr");
-  t = t.replace(/[ışğüöçâîû]/g, (c) => TR_MAP[c] ?? c);
-  t = t.normalize("NFKD").replace(/[̀-ͯ]/g, "");
-  t = t.replace(/&/g, " and ").replace(/['’`´]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
-  return t;
-}
+// fold moved to src/lib/text/fold.ts (shared with the assistant tools);
+// re-exported so existing imports keep working.
+export { fold };
 
 /** Words that say what kind of place it is, not which one. */
 const GENERIC = new Set([

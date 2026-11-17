@@ -2,7 +2,7 @@
 title: Auth
 type: overview
 domain: auth
-version: 1.1.1
+version: 1.2.0
 last_updated: 17.11.2026
 status: stable
 sources:
@@ -13,6 +13,9 @@ sources:
   - src/app/auth/callback/route.ts
   - src/app/(auth)/login/page.tsx
   - src/app/(auth)/layout.tsx
+  - src/app/(auth)/oauth/consent/page.tsx
+  - src/app/(auth)/oauth/consent/actions.ts
+  - src/lib/auth/safe-next.ts
 related:
   - "[[supabase-clients]]"
   - "[[../01-domain/users-and-profiles]]"
@@ -90,6 +93,20 @@ Since 17.11.2026 the app has a single owner (see [[../_plans/personal-assistant]
 - The gate that actually stops new accounts is Supabase Auth's **Allow new users to sign up** setting (dashboard → Authentication → Sign In / Providers), which must stay off. Taking the page down alone would leave `supabase.auth.signUp()` callable by anyone holding the public anon key.
 - New accounts are added by the owner in the Supabase dashboard (Authentication → Users). The [[../05-flows/signup-flow|account-creation cascade]] still runs for them.
 
+## Return path after sign-in (`next`)
+
+Since 17.11.2026 a page can send a signed-out visitor to `/login?next=<path>` and get them back after sign-in — the OAuth consent page does. `next` is followed only through `safeNextPath` (`src/lib/auth/safe-next.ts`): one leading slash, no backslash or control characters, same origin after URL parsing.
+
+- Email/password: the login page pushes `next` (or `/map`).
+- Google: the login page stores `next` in the short-lived `auth_next` cookie (10 min, SameSite=Lax) so the registered `/auth/callback` redirect URL stays unchanged; the callback reads `?next=` or the cookie, validates it, redirects and clears the cookie.
+- Before this, `/auth/callback` appended any `next` to the origin — `next=@evil.com` produced `https://<origin>@evil.com`, an open redirect. Closed by the same validation.
+
+## OAuth 2.1 server (Claude connector)
+
+Supabase Auth also acts as an OAuth 2.1 authorization server for the MCP endpoint `/api/mcp`, so Claude can get a token for the user's library. The app hosts only the consent page, `/oauth/consent` (Supabase's Authorization Path, joined to the Site URL). Only `ASSISTANT_OWNER_EMAILS` accounts can approve, and only for Claude's callback or loopback redirect URIs. Full flow: [[../05-flows/claude-connector-flow]]; the server and its tools: [[../04-integrations/claude-mcp]].
+
+Dashboard state checked on 17.11.2026: sign-ups off (`/auth/v1/settings` → `disable_signup: true`), OAuth server on, signing key ES256 (JWKS), dynamic client registration off.
+
 ## Middleware gate
 
 `src/middleware.ts` runs on every request except static assets:
@@ -97,7 +114,7 @@ Since 17.11.2026 the app has a single owner (see [[../_plans/personal-assistant]
 ```ts
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|sw\\.js$|manifest\\.webmanifest$|offline$|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|sw\\.js$|manifest\\.webmanifest$|offline$|api/mcp$|\\.well-known/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
 ```
@@ -145,6 +162,8 @@ if (user && isAuthRoute) {
 | `/shared/*` | Slug-based public share view. See [[../01-domain/sharing]]. |
 | `/api/shared/*` | The matching API endpoints for the share view. |
 | `/api/cron/*` | Cron runs with no cookie; each route authenticates itself with `CRON_SECRET`. |
+| `/oauth/*` | The OAuth consent page; it sends signed-out visitors to `/login?next=…` itself. |
+| `/api/mcp`, `/.well-known/*` | Not in the middleware at all (matcher): the MCP endpoint checks its own bearer tokens and must answer 401; the metadata documents are public. |
 
 Anything else requires an authenticated user.
 

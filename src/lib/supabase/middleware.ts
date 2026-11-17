@@ -45,6 +45,9 @@ export async function updateSession(request: NextRequest) {
     request.nextUrl.pathname.startsWith("/auth/callback") ||
     request.nextUrl.pathname.startsWith("/shared/") ||
     request.nextUrl.pathname.startsWith("/api/shared/") ||
+    // OAuth consent page: it sends signed-out visitors to /login with a
+    // `next` that brings them back to the same authorization request.
+    request.nextUrl.pathname.startsWith("/oauth/") ||
     // Cron runs with no cookie (Vercel sends CRON_SECRET as a bearer);
     // the route authenticates itself, so skip the session-redirect here.
     // Without this the cron 307-redirects to /login and never executes.

@@ -6,6 +6,53 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 17.11.2026 — v1.32.0 — Claude connector: MCP server, OAuth consent, six tools (Phase 0)
+
+**What it does.** The user's library becomes an MCP server Claude can use
+from claude.ai (web, desktop, mobile) and Claude Code — Phase 0 of
+[[_plans/personal-assistant]]. Code on `feat/personal-assistant`; not yet
+connected (needs dynamic client registration in Supabase and a production
+deploy).
+
+- `/api/mcp` (`mcp-handler` 2 + `@modelcontextprotocol/server` 2, stateless
+  Streamable HTTP) behind `withMcpAuth`: no token → 401 whose challenge names
+  `/.well-known/oauth-protected-resource/api/mcp`, which lists Supabase Auth
+  (OAuth 2.1 server) as the authorization server.
+- `/oauth/consent` (Supabase's Authorization Path): owner accounts only
+  (`ASSISTANT_OWNER_EMAILS`), redirect URIs limited to Claude's callback and
+  loopback, every check repeated in the server actions.
+- Six tools in `src/lib/assistant/tools/` (transport-free, reused by the
+  in-app assistant in Phase 2): `get_library_overview`, `search_places`,
+  `rank_places`, `get_places`, `read_reviews`, `update_places`. Filters take
+  names; text matching is Turkish-aware (`src/lib/text/fold.ts`, moved from
+  the Instagram helpers); rows are a light projection because `google_data`
+  averages ~69 KB per place.
+- Login now honours a same-site `next` (password: pushed; Google: carried in
+  the `auth_next` cookie). `/auth/callback` validates `next` — before, any
+  value was appended to the origin (`next=@evil.com` → open redirect).
+- Middleware: `/oauth/*` public; `/api/mcp` and `/.well-known/*` skip it.
+- New SKU `mapbox_geocoding` (Mapbox Geocoding v6 for `near.area`).
+- `npm run check:assistant` runs every tool against the live DB (29 checks
+  passed 17.11.2026; the write on the admin test account undone). Measured:
+  searches 0.4–0.7 s; `rank_places` 41–64 s (Gemini) — `maxDuration` 120.
+- Found while measuring: city search for "Istanbul" matched 0 places,
+  "İstanbul" 39 (ILIKE folds ASCII only) — fixed in the assistant tools; the
+  shared `queryPlaces` keeps the gap and its ~20 MB payload (plan, open
+  question 9). Country stored both as "Türkiye" (35) and "Turkey" (17) —
+  merged in the tools.
+- Supabase state checked: sign-ups off, OAuth server on, ES256 signing key;
+  dynamic client registration off.
+- Docs: new [[04-integrations/claude-mcp]], [[05-flows/claude-connector-flow]];
+  updated [[02-backend/auth]], [[05-flows/auth-flow]] (`next` question
+  resolved), [[03-frontend/middleware]], [[03-frontend/routing]],
+  [[06-ops/env-vars]], [[02-backend/schema/api_usage]],
+  [[04-integrations/mapbox]], [[02-backend/api-routes/_README]],
+  [[04-integrations/_README]], [[05-flows/_README]],
+  [[00-overview/system-overview]], [[00-overview/repo-structure]],
+  [[_plans/personal-assistant]] v1.2.0.
+
+---
+
 ## 17.11.2026 — v1.31.0 — Tool design for the Claude connector (Phase 0)
 
 - [[_plans/personal-assistant]] v1.1.0: Phase 0's tool list re-derived after

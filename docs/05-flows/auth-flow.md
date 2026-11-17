@@ -2,7 +2,7 @@
 title: Auth Flow
 type: flow
 domain: auth
-version: 1.2.0
+version: 1.3.0
 last_updated: 17.11.2026
 status: stable
 sources:
@@ -109,4 +109,4 @@ Everything else requires auth. See [[../02-backend/auth#middleware-gate]].
 
 ## Open questions
 
-- **`next` param.** `/auth/callback?next=/some/path` — confirm same-origin validation so it can't be used for open-redirect attacks.
+- ~~**`next` param.**~~ Resolved 17.11.2026: `/auth/callback` and the login page follow `next` only through `safeNextPath` (same-origin path); Google sign-in carries it in the `auth_next` cookie. See [[../02-backend/auth#Return path after sign-in (`next`)]].
