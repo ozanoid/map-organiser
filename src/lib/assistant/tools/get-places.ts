@@ -81,6 +81,21 @@ function shortLink(url: string | null | undefined): string | undefined {
   }
 }
 
+/** Google's "people also search" includes near-empty listings (1 review,
+ *  1★ — seen 17.11.2026); only places with a real rating are suggested. */
+const SIMILAR_MIN_RATING = 4.0;
+const SIMILAR_MIN_REVIEWS = 20;
+
+type Similar = NonNullable<DetailRow["g_similar"]>[number];
+
+function worthSuggesting(s: Similar): s is Similar & { cid: string } {
+  return (
+    Boolean(s.cid) &&
+    (s.rating ?? 0) >= SIMILAR_MIN_RATING &&
+    (s.votes_count ?? 0) >= SIMILAR_MIN_REVIEWS
+  );
+}
+
 const INSTAGRAM_POST = /https?:\/\/(?:www\.)?instagram\.com\/(?:p|reel|reels|tv)\/[A-Za-z0-9_-]+\/?/;
 
 export const getPlaces = defineTool({
@@ -120,7 +135,7 @@ export const getPlaces = defineTool({
     }
 
     // Which "people also search" places are already in the library.
-    const similarCids = rows.flatMap((r) => (r.g_similar ?? []).slice(0, 5).map((s) => s.cid).filter(Boolean)) as string[];
+    const similarCids = rows.flatMap((r) => (r.g_similar ?? []).filter(worthSuggesting).slice(0, 8).map((s) => s.cid));
     const savedCids = new Set<string>();
     if (similarCids.length) {
       const { data: saved } = await ctx.supabase
@@ -194,7 +209,8 @@ export const getPlaces = defineTool({
         },
         description: clip(r.g_description, 300),
         similar_not_saved: (r.g_similar ?? [])
-          .filter((s) => s.cid && !savedCids.has(s.cid))
+          .filter(worthSuggesting)
+          .filter((s) => !savedCids.has(s.cid))
           .slice(0, 3)
           .map((s) => ({
             name: s.title,

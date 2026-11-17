@@ -2,7 +2,7 @@
 title: "Kişisel mekan ve gezme asistanı — yön planı"
 type: plan
 domain: overview
-version: 1.2.1
+version: 1.3.0
 last_updated: 17.11.2026
 status: stable
 related:
@@ -32,7 +32,7 @@ related:
 | Faz | Konu | Durum (17.11.2026) |
 |---|---|---|
 | — | Public sign-up'ı kapat | Tamam: kod `feat/personal-assistant` dalında; Supabase'de kayıt kapalı (`disable_signup: true`, doğrulandı 17.11.2026) |
-| 0 | Claude'a kapı: MCP server + OAuth | main'e merge edildi (17.11.2026, Ozan onayı); canlı veriyle test edildi. Vercel'e `ASSISTANT_OWNER_EMAILS` eklendi (Ozan). Kalan: Supabase'de DCR — merge anında hâlâ kapalıydı (kayıt denemesi 403) — ve uçtan uca test |
+| 0 | Claude'a kapı: MCP server + OAuth | **Tamam (17.11.2026):** main'de, claude.ai'a bağlı. Okuma tool'ları connector üzerinden gerçek token'la doğrulandı; `update_places` henüz gerçek kullanımda denenmedi |
 | 1 | Planlama | Sırada |
 | 2 | Platform asistanı Claude'a | Sırada |
 | 3 | İletişim (e-posta, Telegram, WhatsApp linki, davet sayfası) | Sırada |
@@ -99,7 +99,7 @@ Amaç: claude.ai'da (mobil dahil) ve Claude Code'da kayıtlı mekanlarla konuşa
 - **Tool'lar:** [[#Tool tasarımı (öneri)]].
 - **Server instructions:** verinin anlamı (ziyaret durumu, puanlar, tag'ler, kaynak); planlama akışı (önce özet, sonra arama ya da sıralama, detay, yorum); kütüphane dışı önerileri (Claude'un web araması) "kayıtlı değil" diye ayırma; Google Maps linki verme; kullanıcının dilinde cevap.
 - **Şema değişikliği:** yok.
-- **Ozan'ın dashboard adımları** (17.11.2026'da ölçülen durum): kayıt kapalı ✓, OAuth server açık ✓, imza anahtarı ES256 ✓ (JWKS). Kalan: **Dynamic client registration** — Ozan ayarları yaptığını söyledi ama merge anında API hâlâ kapalı diyordu (`registration_endpoint: null`, kayıt denemesi 403); Authorization Path `/oauth/consent` ve Site URL (production) Ozan'da. `ASSISTANT_OWNER_EMAILS` Vercel'e eklendi (Ozan, 17.11.2026).
+- **Ozan'ın dashboard adımları** (17.11.2026'da ölçülen durum): kayıt kapalı ✓, OAuth server açık ✓, imza anahtarı ES256 ✓ (JWKS). Dynamic client registration açık (17.11.2026 — ayar Save'e basınca devreye giriyor). Authorization Path ve Site URL doğru: claude.ai onay ekranına geldi. `ASSISTANT_OWNER_EMAILS` Vercel'de (Ozan).
 - **Test:** tool mantığı dalda test edilir. Uçtan uca OAuth akışı ancak production'da denenebilir: onay ekranı Site URL'de olmalı ve claude.ai preview'a Deployment Protection yüzünden ulaşamaz. Bu yüzden Faz 0 sonunda main merge onayı gerekir (Ozan 17.11.2026'da bu sırayı onayladı).
 - **Bitti tanımı:** claude.ai'da custom connector olarak ekli; mobil ve web'de "Londra'da kaydettiğim, perşembe akşamı açık, yorumlarında yemeği övülen yerlerden üç öneri" gibi sorular gerçek veriyle cevaplanıyor.
 

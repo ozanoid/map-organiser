@@ -107,6 +107,11 @@ async function main() {
     const ids = thursday.places.slice(0, 2).map((p: any) => p.id);
     const details = await call("get_places ×2 at Thu 20:00", owner, "get_places", { place_ids: ids, at: THURSDAY_8PM }, 3500);
     expect("details carry open-at and busyness", details?.places?.[0]?.at?.open === true);
+    const similar = (details?.places ?? []).flatMap((p: any) => p.similar_not_saved ?? []);
+    expect(
+      "similar places are real listings (≥ 4.0, ≥ 20 reviews)",
+      similar.every((s: any) => s.google_rating >= 4 && s.google_reviews >= 20)
+    );
 
     const reviews = await call(`read_reviews ${first.name} about lamb, dessert`, owner, "read_reviews", { place_id: first.id, about: "lamb, dessert", limit: 3 }, 900);
     expect("reviews returned", typeof reviews?.stored_reviews === "number");
