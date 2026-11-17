@@ -2,8 +2,8 @@
 title: Google Gemini (LLM)
 type: integration
 domain: integrations
-version: 1.10.0
-last_updated: 16.10.2026
+version: 1.10.1
+last_updated: 17.11.2026
 status: stable
 sources:
   - src/lib/ai/client.ts
@@ -114,7 +114,7 @@ The output is Zod-validated at the SDK boundary, so route code can treat it as a
 | `POST /api/ai/chat` (S3 AI-02, v1.21.0) | Assistant agent loop: `streamText` + 8 tools (search/**rank**/details/compare/stats + approval-gated add_to_list/create_list/set_visit_status), `stopWhen: stepCountIs(6)`. | Per chat turn (assistant panel) | streaming; 2-15 s/turn | `ai_chat` (1 unit per TURN, charged in onFinish; approval continuations free) |
 | `rank_places` chat tool (v1.23.0, inside /api/ai/chat) | Same LLM-as-judge prompt/schema as rank-results, run server-side via `rank-engine.ts` — agent invokes only for soft/subjective criteria; `functionId: ai.chat.rank`. | Conditional, within a chat turn | ~1-2 s | `ai_rank_results` (behind the 3× `rank_backstop`; the turn's `ai_chat` unit is the charge) |
 | `POST /api/ai/trip-plan` (S4 AI-09, v1.22.0) | AI trip planner: distributes ≤40 candidate places across trip days (idx-referenced `TripPlanSchema`, delete-after-validate write). Input ≈ 15-20k tokens (compact ~350-tok/candidate projection + trip frame). | Deliberate click on the trip page's AI Plan dialog | ~3-8 s | `ai_trip_plan` (1 unit per generation, burned even on LLM failure — but the trip stays untouched) |
-| `readPost` (`src/lib/instagram/read-post.ts`, v1.28.0) — inside the `after()` job of `POST /api/instagram/import` | Instagram import: classifies every account a post points at (venue / venue_brand_multi / person / media_or_creator / brand_or_product / other), marks featured venues, quotes branch hints, addresses, plain-text venues and the area. `Output.object(PostReadingSchema)` with `thinkingLevel: "low"`; caption ≤ 3,000 chars, bios ≤ 200. It never picks a Google place — `resolve.ts` does that deterministically, and every quote is checked against the post text first. `functionId: ai.instagram-read-post`. | One per shared post (a repeat share within 10 min reuses the job) | not measured | `ai_instagram_read` (1 unit per read, charged only when the analysis succeeds) |
+| `readPost` (`src/lib/instagram/read-post.ts`, v1.28.0) — inside the `after()` job of `POST /api/instagram/import` | Instagram import: classifies every account a post points at (venue / venue_brand_multi / person / media_or_creator / brand_or_product / other), marks featured venues, quotes branch hints, addresses, plain-text venues and the area. `Output.object(PostReadingSchema)` with `thinkingLevel: "low"`; caption ≤ 3,000 chars, bios ≤ 200. It never picks a Google place — `resolve.ts` does that deterministically, and every quote is checked against the post text first. `functionId: ai.instagram-read-post`. | One per shared post (a repeat share within 10 min reuses the job); one retry when the answer has no usable object (`NoOutputGeneratedError` / `NoObjectGeneratedError` — 1 of 35 eval reads, v1.28.2) | not measured | `ai_instagram_read` (1 unit per call, retries and failed reads included) |
 
 Phase 6 splits AI calls into two groups by behaviour: **background** (`enrich?step=profile` — fire-and-forget, latency-tolerant; since v1.28.0 also the Instagram read, which runs in `after()` while the dialog polls) and **interactive** (`/api/ai/*` — user is waiting). All share `getAiClient()` / `FLASH_MODEL`; structured calls use Output.object, the chat route streams. They differ only in error handling and observability expectations.
 

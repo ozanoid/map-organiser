@@ -45,6 +45,7 @@ const ids = (v: LabelVenue) => [v.place_id, ...(v.alt_place_ids ?? [])].filter(B
 async function main() {
   const totals = { include: 0, correct: 0, optional: 0, wrong: 0, spurious: 0, unverifiable: 0, errors: 0 };
   const billed = { hikerapi_request: 0, text_search_enterprise: 0 };
+  let aiCalls = 0;
   const lines: string[] = [];
 
   for (const post of posts) {
@@ -55,6 +56,9 @@ async function main() {
         userId: "eval",
         onBilled: (sku) => {
           billed[sku]++;
+        },
+        onAiCall: () => {
+          aiCalls++;
         },
       });
     } catch (e) {
@@ -114,7 +118,7 @@ async function main() {
     `\nposts ${posts.length} (${setArg}${only ? ` only=${only}` : ""}) · errors ${totals.errors}\n` +
       `places to add ${totals.include} · added ${added + totals.optional} = correct ${totals.correct} + optional ${totals.optional} + WRONG ${totals.wrong} + SPURIOUS ${totals.spurious} + UNVERIFIABLE ${totals.unverifiable}\n` +
       `precision ${added ? ((100 * totals.correct) / added).toFixed(1) : "-"}% · recall ${totals.include ? ((100 * totals.correct) / totals.include).toFixed(1) : "-"}%\n` +
-      `billed: HikerAPI ${billed.hikerapi_request} · Google Text Search ${billed.text_search_enterprise} · Gemini ${posts.length - totals.errors}`
+      `billed: HikerAPI ${billed.hikerapi_request} · Google Text Search ${billed.text_search_enterprise} · Gemini ${aiCalls}`
   );
   if (totals.wrong + totals.spurious + totals.unverifiable > 0) process.exit(1);
 }
