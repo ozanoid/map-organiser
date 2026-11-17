@@ -6,6 +6,24 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 17.11.2026 — v1.28.2 — Retry an unusable Gemini read of an Instagram post
+
+- `readPost` (`src/lib/instagram/read-post.ts`) asks Gemini once more when the
+  answer has no usable object: `NoOutputGeneratedError` ("No output
+  generated." — the model stopped before finishing, e.g. `MAX_TOKENS`) or
+  `NoObjectGeneratedError` (the text does not parse against the schema). Both
+  classes were reproduced with the SDK's mock model; the eval of 16.10.2026
+  had lost 1 of 35 reads to the first. Network and 5xx errors stay with the
+  SDK's own retries.
+- Usage: every Gemini call is now one `ai_instagram_read` row, written in the
+  import's `finally` with the HikerAPI and Text Search rows — a retried read
+  counts two, a failed one still counts. `AnalyzeDeps.onAiCall` reports the
+  calls; the eval prints them.
+- Docs: [[05-flows/instagram-import-flow]], [[04-integrations/gemini]],
+  [[05-flows/ai-enrichment-flow]], [[02-backend/schema/api_usage]].
+
+---
+
 ## 16.10.2026 — v1.28.1 — Pick the branch an Instagram import skipped
 
 **What it does.** A venue the Instagram import could not pin now lists, in the

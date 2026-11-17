@@ -1,5 +1,5 @@
 import "server-only";
-import { generateText, Output } from "ai";
+import { generateText, NoObjectGeneratedError, NoOutputGeneratedError, Output } from "ai";
 import { z } from "zod";
 import { getAiClient, FLASH_MODEL } from "@/lib/ai/client";
 
@@ -89,14 +89,21 @@ Also return:
 - text_venues: venues the caption names in plain text WITHOUT an @mention, tag or location tag. Each: name exactly as written in the caption, featured (per the definition), area (neighbourhood/district/city exactly as written, else null), address (street address exactly as written, else null), quote (verbatim, max 12 words, containing the name). Do not include venues represented by an account or by the location tag. Never invent; [] if none.
 - area: the main area of the post {neighbourhood, district, city, country}, only from explicit evidence (location tag, caption, hashtags, profiles); null when unknown.`;
 
-export async function readPost(input: PostReadingInput, meta: { userId: string; shortcode: string }): Promise<PostReading> {
+/**
+ * Gemini now and then answers without a usable object — "No output generated."
+ * on 1 of 35 reads in the 2026-10-16 eval — and the whole import used to fail
+ * on it. Such an answer gets one more call. Network and 5xx errors are not
+ * retried here: the SDK already retries those (maxRetries).
+ */
+const ATTEMPTS = 2;
+
+export async function readPost(
+  input: PostReadingInput,
+  meta: { userId: string; shortcode: string; onAttempt?: () => void }
+): Promise<PostReading> {
   const ai = getAiClient();
   if (!ai) throw new Error("ai_not_configured");
-  const result = await generateText({
-    model: ai(FLASH_MODEL),
-    output: Output.object({ schema: PostReadingSchema }),
-    system: SYSTEM,
-    prompt: `POST DATA (JSON):\n${JSON.stringify(
+  const prompt = `POST DATA (JSON):\n${JSON.stringify(
       {
         caption: input.caption.slice(0, 3000),
         location_tag: input.locationTag,
@@ -114,13 +121,27 @@ export async function readPost(input: PostReadingInput, meta: { userId: string; 
       },
       null,
       1
-    )}`,
-    providerOptions: { google: { thinkingConfig: { thinkingLevel: "low" } } },
-    experimental_telemetry: {
-      isEnabled: true,
-      functionId: "ai.instagram-read-post",
-      metadata: { userId: meta.userId, shortcode: meta.shortcode },
-    },
-  });
-  return result.output;
+    )}`;
+  for (let attempt = 1; ; attempt++) {
+    meta.onAttempt?.();
+    try {
+      const result = await generateText({
+        model: ai(FLASH_MODEL),
+        output: Output.object({ schema: PostReadingSchema }),
+        system: SYSTEM,
+        prompt,
+        providerOptions: { google: { thinkingConfig: { thinkingLevel: "low" } } },
+        experimental_telemetry: {
+          isEnabled: true,
+          functionId: "ai.instagram-read-post",
+          metadata: { userId: meta.userId, shortcode: meta.shortcode, attempt },
+        },
+      });
+      return result.output;
+    } catch (e) {
+      const unusable = NoOutputGeneratedError.isInstance(e) || NoObjectGeneratedError.isInstance(e);
+      if (!unusable || attempt >= ATTEMPTS) throw e;
+      console.warn(`[instagram] post ${meta.shortcode}: Gemini returned no usable reading, asking again`);
+    }
+  }
 }

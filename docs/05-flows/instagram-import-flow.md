@@ -2,8 +2,8 @@
 title: Instagram Import Flow
 type: flow
 domain: places
-version: 1.1.1
-last_updated: 16.10.2026
+version: 1.1.2
+last_updated: 17.11.2026
 status: stable
 sources:
   - src/components/map/map-content.tsx
@@ -178,8 +178,9 @@ sequenceDiagram
    [[#how-a-venue-is-pinned]]: HikerAPI → one Gemini read → Google Text Search →
    deterministic rules. It writes nothing.
 10. Usage: each HikerAPI request → `hikerapi_request`, each Text Search →
-    `text_search_enterprise` (both in a `finally`, so a failed analysis is still
-    counted), then one `ai_instagram_read` once the analysis has succeeded.
+    `text_search_enterprise`, each Gemini call → `ai_instagram_read` (all in a
+    `finally`, so a failed analysis is still counted; a read that needed its
+    retry counts two — v1.28.2).
 11. One `import_job_items` row per decision (service-role insert):
 
     | Decision | `stage` | `reason` | `place_id` | `payload` |
@@ -528,7 +529,7 @@ The monthly `instagram` budget (300 posts per user) bounds the first three.
 | B | 500 with the database error text | The tag or the job insert failed. |
 | C | "You've used this month's Instagram imports." | `budget_exceeded`; no Try again. |
 | C | "Couldn't open this post. It may be private or deleted." | `post_unavailable` (HikerAPI 404). |
-| C | "Something went wrong while reading this post." | `service_error`: HikerAPI still failing after its retries, a Google Text Search failing twice, the Gemini call failing, or the item insert failing. Try again starts a new job. |
+| C | "Something went wrong while reading this post." | `service_error`: HikerAPI still failing after its retries, a Google Text Search failing twice, the Gemini read failing twice (an answer with no usable object gets one more call — v1.28.2), or the item insert failing. Try again starts a new job. |
 | C | "This took too long and stopped." | `stalled`: still `reading` after 3 min — the `after()` run died (e.g. hit `maxDuration`). Try again starts a new job (the reuse check skips stalled jobs). |
 | C | "No places in this post" | Nothing could be pinned and no skipped venue is listed: the dialog says no account, location tag or address points to one specific place; on `/map`, "Search manually" opens the map search. |
 | C | "Nothing added yet" | Every venue was skipped; the rows below offer **Pick branch** / **Choose** / **Search**. |

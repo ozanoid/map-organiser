@@ -83,6 +83,8 @@ export interface AnalyzeDeps {
   userId: string;
   /** One call per billed request, for usage tracking. */
   onBilled?: (sku: "hikerapi_request" | "text_search_enterprise") => void;
+  /** One call per Gemini request (a post read can take two — see read-post.ts). */
+  onAiCall?: () => void;
 }
 
 type Source = "tagged" | "coauthor" | "mention" | "owner";
@@ -213,7 +215,7 @@ export async function analyzeInstagramPost(url: string, deps: AnalyzeDeps): Prom
         bio: a.profile?.biography ?? "",
       })),
     },
-    { userId: deps.userId, shortcode: ref.shortcode }
+    { userId: deps.userId, shortcode: ref.shortcode, onAttempt: deps.onAiCall }
   );
 
   // Text the model may quote from. Bios vouch for names; only the post itself

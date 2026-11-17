@@ -2,8 +2,8 @@
 title: AI Enrichment Flow
 type: flow
 domain: places
-version: 1.8.0
-last_updated: 16.10.2026
+version: 1.8.1
+last_updated: 17.11.2026
 status: stable
 sources:
   - src/app/api/places/[id]/enrich/route.ts
@@ -136,7 +136,8 @@ buckets added as those features shipped):
   together. Ceiling ≈ $9.5/month. A full ~470-place backfill fits within
   a single month alongside normal usage.
 - **INSTAGRAM — `AI_MONTHLY_INSTAGRAM_CAP = 300` post reads** (v1.28.0, SKU
-  `ai_instagram_read`, $1.5/1k). One unit per imported post; checked inside
+  `ai_instagram_read`, $1.5/1k). One unit per Gemini read — one per imported
+  post, two when the read needed its retry (v1.28.2); checked inside
   the import's background job, so going over it ends the job with
   `budget_exceeded` (shown in the dialog) rather than a 429. The unit also
   bounds the import's HikerAPI and Google Text Search calls. The profiles of
