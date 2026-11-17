@@ -2,8 +2,8 @@
 title: Env Vars
 type: overview
 domain: ops
-version: 1.5.1
-last_updated: 16.10.2026
+version: 1.6.0
+last_updated: 17.11.2026
 status: stable
 sources:
   - .env.local.example
@@ -52,6 +52,7 @@ Every environment variable the app reads, where it lives, and who depends on it.
 | `GOOGLE_GENERATIVE_AI_API_KEY` | ❌ server-only | optional (required for AI features) | https://aistudio.google.com/apikey | `src/lib/ai/client.ts#getAiClient` — Gemini Flash for AI-01/AI-03/AI-04/AI-05 and the Instagram import's post read. When absent, `/api/user/ai-settings` reports `available: false` and the Settings AI toggle is disabled, and `POST /api/instagram/import` answers 503 (`isAiAvailable`). |
 | `CRON_SECRET` | ❌ server-only | **yes** | Generated; set in Vercel | Bearer auth for BOTH cron routes: `refresh-places` (daily) and `drain-imports` (every minute). Absent → both return 500, **and imports silently never start** — `kickDrain`, fired when a Takeout job is created, when an Instagram job has queued places and when a branch picked in the Instagram dialog is queued, no-ops without it. An Instagram import then reads its post but its places sit at "Adding…". Not present in `.env.local` by default, so imports do not drain locally. See [[runbooks/periodic-refresh]], [[../05-flows/place-import-flow]] and [[../05-flows/instagram-import-flow]]. |
 | `HIKERAPI_KEY` | ❌ server-only | optional (required for the Instagram import) | HikerAPI account (hikerapi.com) | `src/lib/hikerapi/client.ts` — header `x-access-key` on every HikerAPI call. `POST /api/instagram/import` checks it before creating a job and answers 503 "Instagram import isn't set up on this server." without it. Read from `.env.local` by `npm run eval:instagram`. See [[../04-integrations/hikerapi]]. v1.28.0. |
+| `ANTHROPIC_API_KEY` | ❌ server-only | not used yet | Claude Console → API keys | Reserved for the Claude API — the in-app assistant moves to Claude in Phase 2 of [[../_plans/personal-assistant]]; the Anthropic SDK reads this name by default. Set in Vercel Production + Preview on 17.11.2026; no code reads it yet. Monthly spend is capped at organization level in the Claude Console. |
 | `HONEYCOMB_API_KEY` | ❌ server-only | optional (required for the Honeycomb pipe) | Honeycomb → ingest key | `src/instrumentation-node.ts` — OTel trace + log exporters. Absent → Honeycomb pipe dark, console pipe unaffected. |
 | `HONEYCOMB_DATASET` | ❌ server-only | optional | — | Dataset name; defaults to `map-organiser`. |
 | `HONEYCOMB_API_URL` | ❌ server-only | optional | — | Defaults to `https://api.honeycomb.io` (US). |

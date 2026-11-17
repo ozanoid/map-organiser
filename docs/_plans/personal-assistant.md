@@ -2,7 +2,7 @@
 title: "Kişisel mekan ve gezme asistanı — yön planı"
 type: plan
 domain: overview
-version: 1.0.0
+version: 1.1.0
 last_updated: 17.11.2026
 status: stable
 related:
@@ -32,7 +32,7 @@ related:
 | Faz | Konu | Durum (17.11.2026) |
 |---|---|---|
 | — | Public sign-up'ı kapat | Kod `feat/personal-assistant` dalında; Supabase'deki "Allow new users to sign up" ayarını Ozan kapatacak |
-| 0 | Claude'a kapı: MCP server + OAuth (okuma) | Tasarım onay bekliyor |
+| 0 | Claude'a kapı: MCP server + OAuth | Tasarım ve test sırası onaylı (17.11.2026); tool listesi onay bekliyor |
 | 1 | Planlama | Sırada |
 | 2 | Platform asistanı Claude'a | Sırada |
 | 3 | İletişim (e-posta, Telegram, WhatsApp linki, davet sayfası) | Sırada |
@@ -53,7 +53,7 @@ related:
 | 7 | Geri bildirim | Plan sonrası e-posta: gittin mi, puanın, ne yedin, fotoğraf var mı. |
 | 8 | Instagram | "london" saved koleksiyonu baştan sona taranıp eklenecek (resmi export ile). Koleksiyondaki hesaplar Ozan'ın onayıyla keşif kaynağı olabilir. Etiketsiz postlar için görsel tanıma ve video/ses anlama eklenecek; bu, Instagram importunun v1'deki "video analizi yok" kararını değiştirir. |
 | 9 | Kayıt | Public sign-up kapalı. |
-| 10 | Bütçe | Platform tarafındaki Claude API harcaması için şimdilik aylık $100 tavan. Anahtar Vercel'de `ANTHROPIC_KEY` adıyla (Production + Preview). |
+| 10 | Bütçe | Platform tarafındaki Claude API harcaması için şimdilik aylık $100 tavan; limiti Ozan Console'da organizasyon seviyesinde koyar. Anahtar Vercel'de SDK'nın standart adıyla: `ANTHROPIC_API_KEY` (Production + Preview). |
 
 ## Mimari: tek beyin, çok kapı
 
@@ -88,30 +88,95 @@ related:
 
 Sıra Ozan'ın önceliğidir: önce planlama, sonra iletişim, en son keşif. Her faz başlarken tasarımı bu dokümanda netleşir ve Ozan onaylar.
 
-### Faz 0 — Claude'a kapı: MCP server + OAuth (okuma)
+### Faz 0 — Claude'a kapı: MCP server + OAuth
 
-Amaç: claude.ai'da (mobil dahil) ve Claude Code'da kayıtlı mekanlarla konuşabilmek.
+Amaç: claude.ai'da (mobil dahil) ve Claude Code'da kayıtlı mekanlarla konuşabilmek ve plan kurabilmek.
 
 - **Endpoint:** `/api/mcp` (Streamable HTTP). Paket seçimi (Vercel `mcp-handler` ile resmi MCP TypeScript SDK'nın sürüm uyumu) kurulumda doğrulanır.
 - **Yetkilendirme:** Supabase OAuth 2.1 server (beta; beta süresince ücretsiz). Discovery, dinamik client kaydı (DCR) ve token'ları Supabase yönetir; uygulama yalnız onay ekranını barındırır: `/oauth/consent` (Site URL + Authorization Path). `/.well-known/oauth-protected-resource` metadata'sı MCP istemcisini Supabase'e yönlendirir.
 - **Onay ekranı güvenliği:** DCR herkese açık olduğu için onay yalnız izinli redirect URI'lere verilir (claude.ai callback `https://claude.ai/api/mcp/auth_callback`, Claude Code'un localhost callback'i) ve yalnız sahip hesap(lar) onaylayabilir.
 - **Token doğrulama:** her istekte. Asimetrik JWT anahtarıyla JWKS üzerinden yerel doğrulama (Supabase OAuth için bunu öneriyor; zorunlu olduğu tek yer OIDC ID token'ı); HS256'da Auth sunucusuna sorarak. Tool'lar token'ın kullanıcısıyla, RLS altında çalışır.
-- **Okuma tool'ları v1:**
-  - `search_places` — metin, şehir, kategori, tag, ziyaret durumu, puan
-  - `get_place` — tüm detay: not, yorum özeti, Instagram kaynağı, listeler
-  - `nearby_places` — bir noktanın ya da mekanın çevresi
-  - `taste_profile` — en çok kaydedilen kategoriler, mutfaklar, şehirler; yüksek puanlılar; gidilen / gidilecek sayıları
-  - `list_collections` — listeler, tag'ler, şehirler
-- **Server instructions:** verinin anlamı (`visit_status`, puan, kaynak) ve planlamada nasıl kullanılacağı.
+- **Tool'lar:** [[#Tool tasarımı (öneri)]].
+- **Server instructions:** verinin anlamı (ziyaret durumu, puanlar, tag'ler, kaynak); planlama akışı (önce özet, sonra arama ya da sıralama, detay, yorum); kütüphane dışı önerileri (Claude'un web araması) "kayıtlı değil" diye ayırma; Google Maps linki verme; kullanıcının dilinde cevap.
 - **Şema değişikliği:** yok.
 - **Ozan'ın dashboard adımları:** OAuth Server'ı aç, Authorization Path `/oauth/consent`, DCR açık; (önerilen) asimetrik JWT anahtarına geçiş — legacy secret revoke edilmez, anon ve service_role anahtarları ona bağlı.
-- **Test:** tool mantığı dalda test edilir. Uçtan uca OAuth akışı ancak production'da denenebilir: onay ekranı Site URL'de olmalı ve claude.ai preview'a Deployment Protection yüzünden ulaşamaz. Bu yüzden Faz 0 sonunda main merge onayı gerekir.
-- **Bitti tanımı:** claude.ai'da custom connector olarak ekli; mobil ve web'de "Londra'da kaydettiğim ama gitmediğim yerlerden bu cumartesi için öneri" gibi sorular gerçek veriyle cevaplanıyor.
+- **Test:** tool mantığı dalda test edilir. Uçtan uca OAuth akışı ancak production'da denenebilir: onay ekranı Site URL'de olmalı ve claude.ai preview'a Deployment Protection yüzünden ulaşamaz. Bu yüzden Faz 0 sonunda main merge onayı gerekir (Ozan 17.11.2026'da bu sırayı onayladı).
+- **Bitti tanımı:** claude.ai'da custom connector olarak ekli; mobil ve web'de "Londra'da kaydettiğim, perşembe akşamı açık, yorumlarında yemeği övülen yerlerden üç öneri" gibi sorular gerçek veriyle cevaplanıyor.
+
+#### Tool tasarımı (öneri)
+
+İlk taslak (5 tool) veri modeline ve tek bir örneğe bakılarak yazılmıştı. 17.11.2026'da Ozan'ın sorusu üzerine yeniden türetildi: gerçek veri ölçüldü, uygulama içi asistanın mevcut 8 tool'u incelendi, Ozan'ın bu yöndeki bütün senaryoları eşlendi. **Ozan'ın onayını bekliyor.**
+
+**Ölçülen veri** (ozan@maporganiser.com, 17.11.2026)
+
+- 291 mekan, 7 ülke. Londra 192, Lizbon 22; İstanbul mekanları ilçe adlarıyla kayıtlı (Kadıköy 14, Beyoğlu 9, Fatih 6 …); Amsterdam 7, Brighton 6, Toulouse 5.
+- Google/DataForSEO ve AI verisi zengin: yorum metni 288 mekanda (mekan başına ~50, toplam ~14.400); AI profili 287 (özet, artı/eksi, tema içgörüleri ve alıntılar, uygun olduğu durumlar); Google puanı 289; fiyat 285; haftalık saatler 265; saatlik yoğunluk 217; rezervasyon linki 140; özellikler 288; "people also search" benzer mekanlar 273; alt kategori 245; 90 tag (ör. Accepts Reservations 141, Good Value 73, Sunday Roast 39, Group Gatherings 28, Laptop Friendly 22).
+- Kişisel sinyal neredeyse yok: kendi puanın 0 mekanda, ziyaret durumu yalnız 5 mekanda (hepsi want_to_go), not 2, liste 0, trip 0, fotoğraf 0.
+- 14 mekan kalıcı kapalı, 2 geçici kapalı.
+- Şehir araması "Istanbul" (noktasız I) ile 0 mekan buluyor, "İstanbul" ile 39; Türkiye'de 52 mekan var. Mevcut sorgu katmanı Türkçe "İ"yi eşlemiyor.
+
+**Bulguların tasarıma etkisi**
+
+1. İlk taslaktaki `taste_profile` (puan ve ziyaretten zevk çıkarmak) bugün dayanaksız; çıkarıldı. Neyi kaydettiğin zevkin vekili olarak `get_library_overview`'da. Puan ve ziyaret verisi `update_places` ve Faz 4 geri bildirimiyle dolacak.
+2. Yorumlar en büyük varlık: "beğenilen tabaklar" için ayrı bir yorum okuma tool'u gerekiyor.
+3. "Perşembe akşamı" gibi planlar için `open_now` yetmez: belirli gün ve saatte açık mı, o saatte ne kadar kalabalık.
+4. Kalıcı kapalı mekanlar aramada varsayılan olarak dışarıda.
+5. Global planlama için şehir eşleşmesi Türkçe karakterlere ve ilçe adlarına dayanıklı olmalı (ülke ve yakınlık filtresi de var). "İ" düzeltmesi Faz 0'a dahil; ortak sorgu katmanında yapıldığı için uygulama içi asistan da düzelir.
+6. Uygulama içi asistan aynı veri üzerinde 8 tool'a sahip — okuma: `search_places`, `rank_places`, `get_place_details`, `compare_places`, `get_stats`; onaylı yazma: `add_to_list`, `create_list`, `set_visit_status`. Yeni tool'lar aynı sorgu katmanını (`queryPlaces`) ve sıralama motorunu kullanır.
+
+**Senaryolar** (Ozan'ın söyledikleri ve genel planlama işleri)
+
+| # | Senaryo | Gereken |
+|---|---|---|
+| S1 | "Bu ay tek başıma 3-4 trendy restoran öner, yorumlarına bak, beğenilen tabakları söyle" | arama, popülerlik ya da vibe sıralaması, yorum okuma |
+| S2 | "Perşembe akşamı X'e gidiyorum, gelmek isteyen? şusu güzel" | o saatte açık mı, rezervasyon, yoğunluk, öne çıkanlar |
+| S3 | Londra'da semt bazlı akşam ya da hafta sonu planı (brunch → kahve → akşam) | yakınlık, saat, sıra |
+| S4 | "Barcelona'ya onlarca mekan attık, orada da planla" | şehir ve ülke filtresi, global |
+| S5 | Romantik akşam, laptopla çalışılacak kafe, arkadaş grubuyla pub | anlamsal sıralama, tag |
+| S6 | "X mi Y mi?" | yan yana detay |
+| S7 | "Yemekten sonra yakında ne var?" | bir mekanın çevresinde arama |
+| S8 | "Dün X'e gittim, 4 puan, kuzu çok iyiydi" (Faz 4) | yazma |
+| S9 | "Şu linki, postu ya da mekanı kaydet" | ekleme |
+| S10 | "Bu haftanın önerileri; 2 ve 4'ü ekle" (Faz 6) | öneri kuyruğu |
+| S11 | "Bana benzer yeni yerler" | benzer mekanlar ve Claude'un web araması |
+| S12 | "Gitmediğim yerler" — bugün 286 mekanın ziyaret bilgisi yok | toplu işaretleme |
+
+**Faz 0 tool'ları — okuma**
+
+| Tool | Ne yapar | Senaryo | Kaynak |
+|---|---|---|---|
+| `get_library_overview` | Şehir ve ülkeler (ilçe adlarıyla), kategori, alt kategori, tag ve liste adları sayılarıyla; ziyaret durumu dağılımı (bilinmeyen dahil); kapalı mekanlar; son eklenenler. Claude filtrelerdeki adları buradan öğrenir. | hepsi | `get_stats` ve asistanın taksonomi bloğu |
+| `search_places` | Şehir ya da ülke; yakınlık (bir mekan, koordinat ya da semt adı ve yarıçap); kategori, alt kategori, tag, liste (adla); ziyaret durumu; Google puanı ve yorum sayısı; fiyat; belirli gün ve saatte açık; kaynak (Instagram); eklenme tarihi. Kapalılar varsayılan olarak dışarıda. Sıralama: puan, popülerlik, mesafe, yeni eklenen. Kısa sonuç (en fazla 25) ve toplam sayı. | S1 S3 S4 S7 S12 | mevcut `search_places`, genişletilmiş |
+| `rank_places` | Öznel kritere ("romantik", "laptop dostu", "trendy") göre AI ile puanlayıp gerekçesiyle sıralar. Gemini çağrısı yapar; mevcut aylık bütçe sınırına tabi. | S1 S5 | mevcut `rank_places` |
+| `get_places` | 1–5 mekanın tam detayı: AI profil, haftalık saatler, verilen zamanda açık mı ve ne kadar kalabalık, fiyat, rezervasyon / web / Maps linki, telefon, senin durumun ve notun, tag'ler, listeler, Instagram kaynağı, kaydetmediğin benzer mekanlar. Karşılaştırma da bununla yapılır. | S2 S6 S11 | `get_place_details` ve `compare_places` birleşir |
+| `read_reviews` | Bir mekanın kayıtlı yorumlarından konuya ya da kelimeye göre süzülmüş kısa alıntılar ("ne yenir", "tatlı", "kuzu"), puan ve tarihle. | S1 S2 | yeni; veri hazır |
+
+**Açık karar:** `update_places` (ziyaret durumu, kendi puanın, not) Faz 1 yerine Faz 0'a alınsın mı? 286 mekanın ziyaret bilgisi yok; "gitmediğim yerler" sorusu ancak bu dolunca güvenilir çalışır ve claude.ai'dan "bunlara gittim" diye toplu işaretlemek bunun en hızlı yolu.
+
+**Sonraki fazların tool'ları** (faz başında netleşir)
+
+| Tool | Faz | Ne yapar | Senaryo |
+|---|---|---|---|
+| `update_places` | 1 (ya da 0) | Bir ya da çok mekana ziyaret durumu, kendi puanın, not; tag ekle / çıkar | S8 S12 |
+| `add_place` | 1 | Google Maps linki, Instagram postu ya da "ad + şehir" ile ekler; emin değilse aday listesi döner | S9 S11 |
+| `save_plan`, `get_plans` | 1 | Planı tarih, saat, durak ve notlarla kaydeder; planları getirir | S1–S4 |
+| `manage_lists` | 1 | Liste oluştur, mekan ekle / çıkar | — |
+| `route_between` | 1 (opsiyon) | Duraklar arası yürüme ya da toplu taşıma süresi ve sıra (Mapbox) | S3 S4 |
+| `send_plan` | 3 | Planı e-posta ya da Telegram'a gönderir, davet linki üretir | S2 |
+| `get_suggestions`, `review_suggestions` | 6 | Haftalık önerileri getirir, onaylar ya da reddeder | S10 |
+
+**Tasarım ilkeleri**
+
+- Filtreler adla: Claude kategori, tag ya da liste adını yazar; sunucu ID'ye çevirir, bulamazsa geçerli adları önerir. ID uydurma riski ve fazladan çağrı yok.
+- Kısa çıktı: arama kompakt; detay ve yorum ayrı tool'larda. claude.ai'ın bağlamı şişmez.
+- Okuma tool'ları `readOnlyHint` ile işaretli; yazmalar ayrı tool'larda ve claude.ai her yazmada onay ister.
+- Kütüphane dışı öneriler (Claude'un web araması) "kayıtlı değil" diye ayrılır; Faz 1'de `add_place` ile eklenebilir.
+- Tek tanım: tool'lar tek modülde yazılır; MCP server şimdi, uygulama içi asistan Faz 2'de aynı modülü kullanır. Mevcut `chat-tools.ts` o zamana kadar değişmez.
 
 ### Faz 1 — Planlama
 
 - **Plan veri modeli** faz başında yazılı netleşir ve onaylanır (açık soru 1). Mevcut `trips` / `trip_days` / `trip_day_places` yapısı aday.
-- **Yazma tool'ları:** plan oluştur / güncelle, plana mekan ekle / çıkar, mekanı listeye ekle, ziyaret durumu ve puan güncelle. Yazmalar da RLS altında ve geri alınabilir.
+- **Tool'lar:** `update_places`, `add_place`, `save_plan` / `get_plans`, `manage_lists`, opsiyonel `route_between` ([[#Tool tasarımı (öneri)]]). Yazmalar da RLS altında ve geri alınabilir.
 - **Dış bilgi:** claude.ai kendi web aramasını kullanır; tool'lar kayıtlı yorumları (Google / DataForSEO) ve mekan profilini verir. Platform tarafındaki web araması Faz 2'de.
 - **Bitti tanımı:** "bu ay tek başıma 3-4 trendy restoran" gibi bir istekten kaydedilmiş, platformda görünen bir plan çıkıyor.
 
@@ -153,7 +218,7 @@ Amaç: claude.ai'da (mobil dahil) ve Claude Code'da kayıtlı mekanlarla konuşa
 ## Maliyet ve bütçe
 
 - **claude.ai ve Claude Code kullanımı** Ultra aboneliğinden; MCP çağrıları API kredisi harcamaz. Tool'ların arkasındaki maliyet (Supabase, Google, DataForSEO) bizde ve bugünkü gibi `api_usage`'a yazılır.
-- **Platform tarafı Claude API** (Faz 2 ve sonrası): aylık $100 tavan, iki katman — Console spend limit (organizasyon ya da ayrı workspace) ve uygulama içi bütçe.
+- **Platform tarafı Claude API** (Faz 2 ve sonrası): aylık $100 tavan, iki katman — Console'da organizasyon seviyesinde aylık limit (Ozan koyar) ve uygulama içi bütçe.
 - **Görsel/video ve keşif** maliyetleri ilk partide ölçülüp buraya yazılacak; şu an ölçülmüş rakam yok.
 
 ## v4 yol haritasından devralınanlar
@@ -179,6 +244,7 @@ v4'ün açık backlog'u çok kullanıcılı ürün içindi. Bu yönle:
 4. Arkadaş listesi ve gruplar veri modeli (Faz 3).
 5. Keşif kaynak listesi: hangi hesaplar ve bloglar (Faz 6; saved koleksiyondan aday çıkarılacak).
 6. Instagram export'unun içeriği (koleksiyon adı ve post linkleri) dosya gelince doğrulanacak.
+7. `update_places` Faz 1 yerine Faz 0'a alınsın mı? ([[#Tool tasarımı (öneri)]])
 
 ## Bu dokümanın bakımı
 

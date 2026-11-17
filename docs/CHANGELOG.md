@@ -6,6 +6,27 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 17.11.2026 — v1.31.0 — Tool design for the Claude connector (Phase 0)
+
+- [[_plans/personal-assistant]] v1.1.0: Phase 0's tool list re-derived after
+  Ozan asked whether it came from a single example (it did). His library was
+  measured (291 places; ~50 stored reviews per place, AI profiles, hours,
+  busyness and booking links on most of them; personal signals almost empty —
+  no own ratings, visit status on 5 places, no lists or trips), twelve
+  scenarios were mapped (his own words plus general planning) and the in-app
+  assistant's eight existing tools were reviewed. Proposed: five read tools
+  (`get_library_overview`, `search_places`, `rank_places`, `get_places`,
+  `read_reviews`) and the later write / plan tools; the earlier
+  `taste_profile` was dropped. Awaiting Ozan's approval.
+- Found: a city search for "Istanbul" (dotless I) matches 0 places and
+  "İstanbul" 39 — the shared place query does not fold Turkish "İ". The fix
+  is part of Phase 0.
+- The Claude API key is `ANTHROPIC_API_KEY` (the SDK's default name), not
+  `ANTHROPIC_KEY`; [[06-ops/env-vars]] lists it as reserved for Phase 2. Ozan
+  sets the $100 monthly limit at organization level in the Claude Console.
+
+---
+
 ## 17.11.2026 — v1.30.1 — Let signed-out visitors load the service worker, manifest and offline page
 
 - The middleware matcher (`src/middleware.ts`) now skips `/sw.js`,
