@@ -6,6 +6,21 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 17.11.2026 — v1.33.0 — Phase 1 (planning) design proposal
+
+- New [[_plans/phase-1-planning]] (draft, awaiting Ozan): eight planning
+  scenarios mapped to the existing trip and list models with evidence;
+  recommendation — dated plans are trips (outing = one-day trip), undated
+  goals are lists; add a per-stop status (`planned | done | skipped`) and an
+  `assistant` source/kind; shared trip functions that also fix the date-change
+  bug (`PATCH /api/trips/[id]` never moved `trip_days`); six new tools
+  (`get_plans`, `create_plan`, `update_plan`, `delete_plan`, `save_list`,
+  `add_place`); small UI changes (stop status chip, "Plans" tab). Seven open
+  decisions listed.
+- [[_plans/personal-assistant]] links it from Phase 1.
+
+---
+
 ## 17.11.2026 — v1.32.2 — Claude connector connected; similar places filtered
 
 - End to end on production: Ozan added the connector in claude.ai, Claude
