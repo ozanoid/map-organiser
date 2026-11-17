@@ -1,10 +1,11 @@
 ---
-title: "Feature Suggestions v4"
+title: "Feature Suggestions v4 (archived)"
 type: plan
 domain: overview
 version: 4.10.0
 last_updated: 16.07.2026
-status: stable
+status: superseded
+superseded_by: "[[personal-assistant]]"
 related:
   - "[[../_archive/feature-suggestions_v2]]"
   - "[[../_archive/feature-suggestions_v3]]"
@@ -19,6 +20,8 @@ tags:
 ---
 
 # Map Organiser — Feature Suggestions v4
+
+> **Arşivlendi (17.11.2026).** Yerini [[personal-assistant]] aldı: proje çok kullanıcılı üründen Ozan'ın kişisel mekan ve gezme asistanına döndü. Hâlâ geçerli olan bakım maddeleri ve yeni fazlara katılan işler o plana taşındı.
 
 > **Tarih:** 14.07.2026
 > **Kaynaklar:** `feature-suggestions_v2.md` + `feature-suggestions_v3.md` + `feature-suggestions_v3-ai-first.md` (hepsi `_archive/`), Mayıs 2026 AI sprinti git geçmişi (PR #28–#49), vault v1.11.0.

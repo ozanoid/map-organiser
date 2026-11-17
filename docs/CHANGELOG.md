@@ -6,6 +6,26 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 17.11.2026 — v1.29.0 — New direction: a personal places & outings assistant
+
+- New [[_plans/personal-assistant]], the canonical plan from now on. Map
+  Organiser stops growing as a multi-user product and becomes Ozan's personal
+  places & outings assistant built on Claude — "one brain, many doors": one
+  MCP tool layer over the Supabase DB, used from claude.ai (web, desktop,
+  mobile), Claude Code, the in-app assistant, a scheduled discovery agent and
+  the notification channels. It records Ozan's decisions of 17.11.2026, the
+  phases (0 Claude door → 1 planning → 2 in-app assistant on Claude →
+  3 communication → 4 feedback → 5 Instagram saved collection with
+  image/video → 6 weekly London discovery) and the open questions.
+- `_plans/feature-suggestions_v4.md` moved to `_archive/` (`status:
+  superseded`, `superseded_by: [[personal-assistant]]`). Its maintenance
+  items and the backlog items that join the new phases are carried into the
+  new plan.
+- [[_archive/_README]] now lists every archived roadmap (v1, v3, v3-ai-first
+  were missing too); [[README]] points at the current plan.
+
+---
+
 ## 17.11.2026 — v1.28.2 — Retry an unusable Gemini read of an Instagram post
 
 - `readPost` (`src/lib/instagram/read-post.ts`) asks Gemini once more when the

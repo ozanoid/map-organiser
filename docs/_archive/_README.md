@@ -2,8 +2,8 @@
 title: Archive
 type: meta
 domain: meta
-version: 1.0.0
-last_updated: 12.05.2026
+version: 1.1.0
+last_updated: 17.11.2026
 status: stable
 ---
 
@@ -24,6 +24,10 @@ The original `docs/*_v1.md` and `*_v2.md` files were moved here on **12.05.2026*
 | `design-system_v1.md` | Design philosophy & components (v1) |
 | `design-system_v2.md` | Design philosophy & components (v2, 2026-04-16) |
 | `feature-suggestions_v2.md` | Feature backlog & cross-codebase analysis (v2) |
+| `feature-suggestions_v1.md` | Feature backlog (v1) |
+| `feature-suggestions_v3.md` | Feature backlog (v3, 2026-04-17) |
+| `feature-suggestions_v3-ai-first.md` | Feature backlog, AI-first variant of v3 |
+| `feature-suggestions_v4.md` | Canonical roadmap of the multi-user product (v4, last 16.07.2026). Superseded on 17.11.2026 by [[personal-assistant]]. |
 | `test-plan_v1.md` | Test strategy (v1) |
 | `test-plan_v2.md` | Test strategy (v2, 2026-04-16) |
 | `dataforseo-vs-google-places-analysis.md` | API provider comparison |
