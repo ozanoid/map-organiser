@@ -2,8 +2,8 @@
 title: Auth Flow
 type: flow
 domain: auth
-version: 1.1.0
-last_updated: 15.07.2026
+version: 1.2.0
+last_updated: 17.11.2026
 status: stable
 sources:
   - src/middleware.ts
@@ -12,7 +12,6 @@ sources:
   - src/lib/supabase/client.ts
   - src/app/auth/callback/route.ts
   - src/app/(auth)/login/page.tsx
-  - src/app/(auth)/signup/page.tsx
 related:
   - "[[signup-flow]]"
   - "[[../02-backend/auth]]"
@@ -26,7 +25,7 @@ How a user transitions from anonymous to authenticated. Covers Google OAuth (pri
 
 ## Trigger
 
-User opens any protected path while unauthenticated, or clicks "Sign in" / "Sign up" deliberately.
+User opens any protected path while unauthenticated, or clicks "Sign in" deliberately. There is no sign-up path: sign-ups are closed since 17.11.2026 ([[../02-backend/auth#Sign-ups closed]]).
 
 ## Steps (Google OAuth)
 
@@ -60,8 +59,7 @@ sequenceDiagram
 
 Same path from step 5 onward. Steps 1–4 replaced by:
 
-- `supabase.auth.signInWithPassword({ email, password })` (existing user) or
-- `supabase.auth.signUp({ email, password })` (new user — triggers email confirmation if enabled in Supabase dashboard).
+- `supabase.auth.signInWithPassword({ email, password })` — existing accounts only.
 
 ## Inputs / outputs
 
@@ -69,7 +67,7 @@ Same path from step 5 onward. Steps 1–4 replaced by:
 |---|---|---|
 | OAuth redirect | provider choice | Google session (temporary) |
 | Callback | `code` query param | `sb-access-token`, `sb-refresh-token` cookies on the response |
-| First-time signup | OAuth claims (`full_name`, `avatar_url`) | `auth.users` row → triggers `handle_new_user` → `profiles` row → triggers `create_default_categories` → 12 category rows |
+| New account (added by the owner in the Supabase dashboard since 17.11.2026) | user metadata (`full_name`, `avatar_url`), if any | `auth.users` row → triggers `handle_new_user` → `profiles` row → triggers `create_default_categories` → 12 category rows |
 | Middleware on next request | request cookies | refreshed cookies, redirect decision |
 
 ## Public route table (middleware exempt)
@@ -80,7 +78,7 @@ Same path from step 5 onward. Steps 1–4 replaced by:
 - `/api/shared/*`
 - `/api/cron/*` (15.07.2026) — cron runs with no cookie; it authenticates itself via `CRON_SECRET`. **Without this exemption the middleware 307-redirects the cron to `/login` and it never runs.**
 
-Plus `/login`, `/signup` are "auth routes" — accessible while unauthenticated, redirect to `/map` if authenticated.
+Plus `/login` is the "auth route" — accessible while unauthenticated, redirects to `/map` if authenticated. `/signup` redirects everyone to `/login` (sign-ups closed).
 
 Everything else requires auth. See [[../02-backend/auth#middleware-gate]].
 
@@ -106,11 +104,9 @@ Everything else requires auth. See [[../02-backend/auth#middleware-gate]].
 - `src/app/auth/callback/route.ts` — OAuth code exchange.
 - `src/app/(auth)/layout.tsx` — pre-auth layout.
 - `src/app/(auth)/login/page.tsx` — login form (Google button + email/password).
-- `src/app/(auth)/signup/page.tsx` — signup form.
 - `src/components/layout/app-header.tsx` — sign-out button.
 - `src/lib/supabase/client.ts`, `server.ts` — clients used after auth lands.
 
 ## Open questions
 
 - **`next` param.** `/auth/callback?next=/some/path` — confirm same-origin validation so it can't be used for open-redirect attacks.
-- **Email confirmation.** Verify in Supabase Auth dashboard whether confirmation is required for email/password signups, and document the exact path the user sees.

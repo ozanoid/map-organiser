@@ -2,8 +2,8 @@
 title: Repo Structure
 type: overview
 domain: overview
-version: 1.8.1
-last_updated: 16.10.2026
+version: 1.8.2
+last_updated: 17.11.2026
 status: stable
 sources:
   - src/
@@ -77,8 +77,7 @@ src/
 │   │   └── settings/page.tsx  Categories (with sub-cat manage) / Tags / API & Usage / AI / Theme tabs
 │   ├── (auth)/                Public auth pages (route group)
 │   │   ├── layout.tsx
-│   │   ├── login/page.tsx
-│   │   └── signup/page.tsx
+│   │   └── login/page.tsx     Sign-in only (sign-ups closed 17.11.2026)
 │   ├── auth/callback/route.ts OAuth callback handler
 │   ├── shared/[slug]/page.tsx Public share view (no auth)
 │   ├── shared/layout.tsx

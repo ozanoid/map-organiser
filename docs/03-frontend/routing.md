@@ -2,8 +2,8 @@
 title: Routing
 type: overview
 domain: frontend
-version: 1.3.1
-last_updated: 16.10.2026
+version: 1.4.0
+last_updated: 17.11.2026
 status: stable
 sources:
   - src/app/
@@ -39,7 +39,7 @@ Every route in the app — pages, API handlers, and special routes — in one pl
 | `/import` | `src/app/(app)/import/page.tsx` | `(app)/layout.tsx` | Required | Batch import with Zustand progress. |
 | `/settings` | `src/app/(app)/settings/page.tsx` | `(app)/layout.tsx` | Required | Categories / Tags / API / Theme tabs. |
 | `/login` | `src/app/(auth)/login/page.tsx` | `(auth)/layout.tsx` | **Public** (redirect if signed in) | Google OAuth + email/password. |
-| `/signup` | `src/app/(auth)/signup/page.tsx` | `(auth)/layout.tsx` | **Public** (redirect if signed in) | Account creation. |
+| `/signup` | — (page removed 17.11.2026) | — | Redirect | Sign-ups are closed; the middleware sends it to `/login`. |
 | `/shared/[slug]` | `src/app/shared/[slug]/page.tsx` | `shared/layout.tsx` | **Public** | Public read view of a list, trip, or single place (v1.20.0). |
 | `/offline` | `src/app/offline/page.tsx` | root | Public | PWA offline fallback. |
 
@@ -87,9 +87,12 @@ Public routes (no auth required):
   /auth/callback/*
   /shared/*
   /api/shared/*
+  /api/cron/*      (the cron route authenticates itself)
 
 Auth routes (redirect AWAY to /map if signed in):
   /login
+
+Closed (always redirect to /login):
   /signup
 
 Everything else:

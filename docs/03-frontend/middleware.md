@@ -2,8 +2,8 @@
 title: Middleware
 type: overview
 domain: frontend
-version: 1.0.0
-last_updated: 12.05.2026
+version: 1.1.0
+last_updated: 17.11.2026
 status: stable
 sources:
   - src/middleware.ts
@@ -49,14 +49,15 @@ Two pieces:
 
 `src/lib/supabase/middleware.ts`. See [[../02-backend/auth#middleware-gate]] for the full annotated source. Summary:
 
-1. Construct an SSR Supabase client backed by request cookies.
-2. Call `supabase.auth.getUser()` — this triggers a token refresh if needed.
-3. Write refreshed cookies onto the response.
-4. Decide:
+1. `/signup` → redirect to `/login` and stop (sign-ups closed, 17.11.2026). No Supabase client is built for it.
+2. Construct an SSR Supabase client backed by request cookies.
+3. Call `supabase.auth.getUser()` — this triggers a token refresh if needed.
+4. Write refreshed cookies onto the response.
+5. Decide:
    - Public path → continue.
-   - Auth path (`/login`, `/signup`) with a logged-in user → redirect to `/map`.
+   - Auth path (`/login`) with a logged-in user → redirect to `/map`.
    - Any other path without a user → redirect to `/login`.
-5. Return the response.
+6. Return the response.
 
 ## Public paths
 
@@ -66,6 +67,7 @@ Hard-coded list in `updateSession`:
 - `/auth/callback/*` (OAuth handshake)
 - `/shared/*` (public share pages)
 - `/api/shared/*` (public share APIs)
+- `/api/cron/*` (cron routes — they authenticate themselves with `CRON_SECRET`)
 
 Everything else requires auth.
 

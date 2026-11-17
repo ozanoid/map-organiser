@@ -2,8 +2,8 @@
 title: Layouts
 type: overview
 domain: frontend
-version: 1.0.0
-last_updated: 12.05.2026
+version: 1.0.1
+last_updated: 17.11.2026
 status: stable
 sources:
   - src/app/layout.tsx
@@ -29,7 +29,7 @@ The layout hierarchy. App Router lets each segment own a layout that wraps its c
 src/app/layout.tsx                ← Root: html/body, fonts, Providers
 ├── src/app/(app)/layout.tsx       ← Authenticated shell (sidebar + header)
 │   └── (every /map, /places, /lists, /trips, /stats, /import, /settings)
-├── src/app/(auth)/layout.tsx      ← Centered minimal layout for /login + /signup
+├── src/app/(auth)/layout.tsx      ← Centered minimal layout for /login
 ├── src/app/shared/layout.tsx      ← Standalone public layout for /shared/<slug>
 └── (no group)
     ├── src/app/offline/page.tsx   ← Uses root only (PWA fallback)
@@ -76,7 +76,7 @@ Children: all `(app)/*` routes.
 
 ## `(auth)` layout — pre-auth shell
 
-`src/app/(auth)/layout.tsx`. Wraps `/login` and `/signup`.
+`src/app/(auth)/layout.tsx`. Wraps `/login` — the only auth page since sign-ups closed (17.11.2026).
 
 Children get:
 
@@ -84,7 +84,7 @@ Children get:
 - Logo and brand.
 - Form area.
 
-Children: `/login`, `/signup`.
+Children: `/login`.
 
 ## `shared/` layout — public share view
 

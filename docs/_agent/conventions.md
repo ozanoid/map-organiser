@@ -2,8 +2,8 @@
 title: Coding Conventions
 type: agent-note
 domain: agent
-version: 1.0.0
-last_updated: 12.05.2026
+version: 1.0.1
+last_updated: 17.11.2026
 status: stable
 related:
   - "[[common-tasks]]"
@@ -31,7 +31,7 @@ The rules Claude Code follows when writing or modifying code in this repo. Read 
 src/
   app/
     (app)/         authenticated pages
-    (auth)/        login, signup
+    (auth)/        login (sign-ups closed)
     api/           route handlers
     shared/        public shared views
     offline/       PWA offline fallback

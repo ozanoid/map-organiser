@@ -2,8 +2,8 @@
 title: Flows
 type: overview
 domain: overview
-version: 1.6.0
-last_updated: 16.10.2026
+version: 1.6.1
+last_updated: 17.11.2026
 status: stable
 related:
   - "[[auth-flow]]"
@@ -31,7 +31,7 @@ End-to-end user / data flows that span multiple subsystems. Each doc traces the 
 | Flow | Trigger | Touches |
 |---|---|---|
 | [[auth-flow]] | User clicks "Sign in" | middleware, OAuth callback, Supabase Auth |
-| [[signup-flow]] | New user authenticates for the first time | `auth.users`, `handle_new_user`, `create_default_categories`, 12 categories seeded |
+| [[signup-flow]] | A new account is created (owner-only since 17.11.2026) | `auth.users`, `handle_new_user`, `create_default_categories`, 12 categories seeded |
 | [[place-import-flow]] | User uploads a Takeout file | `/api/places/import-jobs` → `/api/cron/drain-imports` queue |
 | [[instagram-import-flow]] | User shares an Instagram post (iOS Shortcut → `/map?add=`) or pastes its link (v1.28.0) | `/api/instagram/import` → `after()`: HikerAPI + one Gemini read + Google Text Search → `/api/cron/drain-imports` queue; dialog polls `/api/instagram/import/[id]` |
 | [[manual-place-create-flow]] | User pastes a Google Maps URL or hits the FAB | `/api/places/parse-link` (with lite_profile) → `/api/places` → enrich chain |

@@ -2,8 +2,8 @@
 title: System Overview
 type: overview
 domain: overview
-version: 1.2.1
-last_updated: 16.10.2026
+version: 1.2.2
+last_updated: 17.11.2026
 status: stable
 sources:
   - AGENTS.md
@@ -55,7 +55,7 @@ Typical session:
 │   Next.js 16 App Router                                                     │
 │   ┌───────────────┬────────────────┬─────────────┬─────────────────────┐   │
 │   │  (app)/       │  (auth)/       │  /api/      │  /shared/<slug>     │   │
-│   │  authed UI    │  login,signup  │  handlers   │  public read view   │   │
+│   │  authed UI    │  login         │  handlers   │  public read view   │   │
 │   └───────┬───────┴────────┬───────┴──────┬──────┴──────────┬──────────┘   │
 │           │                │              │                  │              │
 │   ┌───────┴────────────────┴──────────────┴──────────────────┴──────────┐   │

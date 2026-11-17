@@ -2,8 +2,8 @@
 title: Supabase Clients
 type: overview
 domain: backend
-version: 1.1.1
-last_updated: 16.10.2026
+version: 1.1.2
+last_updated: 17.11.2026
 status: stable
 sources:
   - src/lib/supabase/client.ts
@@ -122,7 +122,7 @@ Behavior:
 2. Calls `supabase.auth.getUser()` to refresh tokens if expired.
 3. Writes refreshed cookies back to the response.
 4. Redirects unauthenticated users to `/login` (with public-route exceptions).
-5. Redirects logged-in users away from `/login` and `/signup` to `/map`.
+5. Redirects logged-in users away from `/login` to `/map`. (`/signup` never gets this far: sign-ups are closed and the middleware sends it to `/login` first.)
 
 Public routes (no auth required): `/`, `/auth/callback/*`, `/shared/*`, `/api/shared/*`.
 
@@ -177,7 +177,6 @@ All four clients expose the same `auth` namespace. The methods this repo uses:
 
 - `supabase.auth.getUser()` — returns `{ data: { user }, error }`. Use in API routes for auth gating.
 - `supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo } })` — used in `(auth)/login/page.tsx`.
-- `supabase.auth.signUp(...)` — used in `(auth)/signup/page.tsx`.
 - `supabase.auth.exchangeCodeForSession(code)` — used in `src/app/auth/callback/route.ts`.
 - `supabase.auth.signOut()` — used in `AppHeader` logout button.
 

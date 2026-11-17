@@ -6,6 +6,37 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 17.11.2026 — v1.30.0 — Close public sign-up
+
+**What it does.** The app has a single owner now
+([[_plans/personal-assistant]]), so nobody can create an account from the
+site.
+
+- `src/app/(auth)/signup/page.tsx` removed. The login page no longer links to
+  sign-up, and the public share page lost its "Create your free account"
+  footer (`SharedFooter`).
+- `updateSession` (`src/lib/supabase/middleware.ts`) sends any `/signup` URL
+  to `/login` (query string kept) before it builds a Supabase client;
+  `/login` is the only auth route left.
+- The gate that actually stops new accounts is Supabase Auth's "Allow new
+  users to sign up" setting — removing the page alone leaves `signUp()` open
+  to anyone holding the public anon key. Ozan switches it off in the
+  dashboard.
+- Checked on the local dev server: `/signup` and `/signup?next=/map` → 307 to
+  `/login` (`next` kept); `/login` renders with no sign-up link; shared list,
+  place and trip pages render without the footer.
+- Docs: [[02-backend/auth]] (new "Sign-ups closed" section; the middleware
+  snippet and public-route table brought up to date — `/api/cron/*` was
+  missing), [[02-backend/supabase-clients]], [[05-flows/auth-flow]],
+  [[05-flows/signup-flow]] (owner-created accounts; the sub-category seeding
+  step was missing), [[05-flows/_README]], [[01-domain/users-and-profiles]],
+  [[03-frontend/routing]] (`/api/cron/*` was missing here too),
+  [[03-frontend/middleware]], [[03-frontend/layouts]],
+  [[03-frontend/app-router-conventions]], [[00-overview/system-overview]],
+  [[00-overview/repo-structure]], [[_agent/conventions]].
+
+---
+
 ## 17.11.2026 — v1.29.0 — New direction: a personal places & outings assistant
 
 - New [[_plans/personal-assistant]], the canonical plan from now on. Map

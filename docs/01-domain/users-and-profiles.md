@@ -2,8 +2,8 @@
 title: User & Profile
 type: entity
 domain: users
-version: 1.3.0
-last_updated: 16.10.2026
+version: 1.4.0
+last_updated: 17.11.2026
 status: stable
 sources:
   - src/lib/supabase/client.ts
@@ -12,7 +12,6 @@ sources:
   - src/middleware.ts
   - src/app/auth/callback/route.ts
   - src/app/(auth)/login/page.tsx
-  - src/app/(auth)/signup/page.tsx
   - src/app/api/user/api-keys/route.ts
   - src/app/api/user/usage/route.ts
   - src/components/settings/api-keys-manager.tsx
@@ -32,7 +31,7 @@ related:
 
 # User & Profile
 
-A user is an `auth.users` row managed by Supabase Auth. A **Profile** is the per-user `public.profiles` row created automatically on signup. Together they hold identity, display name, encrypted API keys, and feature flags.
+A user is an `auth.users` row managed by Supabase Auth. A **Profile** is the per-user `public.profiles` row created automatically when the auth user is created. Public sign-up is closed since 17.11.2026 (single-owner app): new accounts are added by the owner in the Supabase dashboard. Together they hold identity, display name, encrypted API keys, and feature flags.
 
 Auth credentials, password hashes, and OAuth identities all live in `auth.*` (managed by Supabase). The repo never touches that schema directly — it goes through `@supabase/ssr`.
 
@@ -76,11 +75,13 @@ The repo gets the current user via `supabase.auth.getUser()` (server-side) or vi
 
 ## Signup → first-use flow
 
+> Since 17.11.2026 step 1 is the owner adding the account in the Supabase dashboard — public sign-up is closed ([[../02-backend/auth#Sign-ups closed]]). The cascade from step 2 on is unchanged.
+
 ```
   Auth event                          DB cascade
   ────────────                        ──────────
-  1. User signs in with Google OAuth
-     (or email/password)
+  1. Owner adds the account in the
+     Supabase dashboard (sign-ups closed)
      │
      ▼
   2. INSERT auth.users (Supabase Auth)
@@ -114,7 +115,7 @@ Both trigger functions are `SECURITY DEFINER` so they can write across schemas (
 See [[../02-backend/auth]] (when written) for the deeper version. Summary:
 
 1. **Browser** uses `createBrowserClient` (`src/lib/supabase/client.ts`) — reads session from cookies.
-2. **Middleware** (`src/middleware.ts` → `src/lib/supabase/middleware.ts#updateSession`) runs on every request: refreshes session cookies, redirects unauthenticated users to `/login`, redirects logged-in users away from `/login` and `/signup`.
+2. **Middleware** (`src/middleware.ts` → `src/lib/supabase/middleware.ts#updateSession`) runs on every request: refreshes session cookies, redirects unauthenticated users to `/login`, redirects logged-in users away from `/login`, and sends `/signup` (closed) to `/login`.
 3. **Server Components & API routes** use `createClient` (`src/lib/supabase/server.ts`) — reads cookies via `next/headers`.
 4. **Service-role client** (`createServiceClient`) bypasses RLS. It is used only where no session can do the job — public shared-link reads, the cron routes, the import-queue writes and the Instagram import's background job; see [[../02-backend/supabase-clients]].
 5. **OAuth callback** at `src/app/auth/callback/route.ts` — exchanges the OAuth code for a session.
