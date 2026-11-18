@@ -15,9 +15,15 @@ import { fold } from "@/lib/text/fold";
  * places moves ~20 MB. Only the JSON paths a tool needs are selected.
  */
 
-/** Who the tool runs for — see src/lib/db/context.ts. The MCP server passes
- *  a client carrying the user's access token, so RLS applies. */
-export type AssistantContext = UserContext;
+/** Who the tool runs for — see src/lib/db/context.ts — and where the app
+ *  is. The MCP server passes a client carrying the user's access token, so
+ *  RLS applies. */
+export interface AssistantContext extends UserContext {
+  /** The app's origin, e.g. "https://map-organiser.vercel.app": links in
+   *  tool results (a plan's page) point here. Set by the transport — the MCP
+   *  server uses the address the client reached it at. */
+  appUrl: string;
+}
 
 /** A problem with the caller's input; its message goes back to the model. */
 export class ToolInputError extends Error {}
@@ -86,6 +92,12 @@ export function distanceMeters(
   b: { lat: number; lng: number }
 ): number {
   return Math.round(haversineDistance(a.lat, a.lng, b.lat, b.lng) * 1000);
+}
+
+/** Long text cut to `n` characters for a tool result; empty → undefined
+ *  (the key drops out of the JSON). */
+export function clip(s: string | null | undefined, n: number): string | undefined {
+  return s ? (s.length > n ? `${s.slice(0, n - 1)}…` : s) : undefined;
 }
 
 export function priceLevel(v: string | number | null | undefined): number | null {

@@ -1,5 +1,18 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { safeNextPath } from "@/lib/auth/safe-next";
+
+/**
+ * A redirect that keeps the cookies getUser() just wrote: a refreshed
+ * session (the old refresh token is spent) or a cleared one. A bare
+ * NextResponse.redirect would drop them and leave the browser with tokens
+ * Supabase no longer accepts.
+ */
+function redirectKeepingSession(url: URL, session: NextResponse): NextResponse {
+  const response = NextResponse.redirect(url);
+  for (const cookie of session.cookies.getAll()) response.cookies.set(cookie);
+  return response;
+}
 
 export async function updateSession(request: NextRequest) {
   // Sign-ups are closed (the app has a single owner): old /signup links land
@@ -56,14 +69,21 @@ export async function updateSession(request: NextRequest) {
   if (!user && !isAuthRoute && !isPublicRoute) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
-    return NextResponse.redirect(url);
+    url.search = "";
+    // Come back to this page after signing in — a plan link from Claude, the
+    // iOS Shortcut's /map?add=… The login page and the auth callback follow
+    // a same-site `next` (safeNextPath). Not for API calls: a fetch has no
+    // page to come back to.
+    if (!request.nextUrl.pathname.startsWith("/api/")) {
+      url.searchParams.set("next", `${request.nextUrl.pathname}${request.nextUrl.search}`);
+    }
+    return redirectKeepingSession(url, supabaseResponse);
   }
 
-  // Redirect authenticated users away from auth pages
+  // Signed in already: leave the login page for `next`, or the map.
   if (user && isAuthRoute) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/map";
-    return NextResponse.redirect(url);
+    const next = safeNextPath(request.nextUrl.searchParams.get("next"));
+    return redirectKeepingSession(new URL(next ?? "/map", request.url), supabaseResponse);
   }
 
   return supabaseResponse;

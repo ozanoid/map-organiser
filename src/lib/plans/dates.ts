@@ -31,6 +31,20 @@ export function todayIso(timeZone?: string): string {
   }).format(new Date());
 }
 
+/** Today where something takes place: in its IANA zone, or in UTC when the
+ *  zone is missing or isn't one (a place's stored zone comes from a third
+ *  party). */
+export function todayAt(timeZone: string | null | undefined): string {
+  if (timeZone) {
+    try {
+      return todayIso(timeZone);
+    } catch {
+      // RangeError: not an IANA zone name
+    }
+  }
+  return todayIso("UTC");
+}
+
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"] as const;
 
 export function weekdayName(isoDate: string): (typeof WEEKDAYS)[number] {

@@ -23,6 +23,13 @@ export interface AssistantTool<Schema extends z.ZodObject = z.ZodObject> {
   run(ctx: AssistantContext, input: z.infer<Schema>): Promise<unknown>;
 }
 
+/**
+ * Every tool's input is strict at the top: a key the tool doesn't know is an
+ * error the model sees, not dropped. Otherwise a misnamed field — `date` for
+ * log_visit's `visited_on`, `time` for `start_time` — turns into a call that
+ * quietly does something else (a visit logged today). The JSON Schema
+ * clients see says so too (additionalProperties: false).
+ */
 export function defineTool<Schema extends z.ZodObject>(tool: AssistantTool<Schema>): AssistantTool<Schema> {
-  return tool;
+  return { ...tool, inputSchema: tool.inputSchema.strict() as unknown as Schema };
 }

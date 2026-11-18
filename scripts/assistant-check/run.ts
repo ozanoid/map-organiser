@@ -5,9 +5,10 @@
  * the owner's library; the write check and the paid calls (geocoding, AI
  * ranking) use the admin test account and undo the write afterwards.
  *
- *   npm run check:assistant            everything
- *   npm run check:assistant -- plans   only the plan checks (no paid calls)
- *   npm run check:assistant -- visits  only the visit checks (no paid calls)
+ *   npm run check:assistant                 everything
+ *   npm run check:assistant -- plans        only the plan checks (no paid calls)
+ *   npm run check:assistant -- visits       only the visit checks (no paid calls)
+ *   npm run check:assistant -- plan-tools   only the plan tool checks (no paid calls)
  *
  * Uses the service-role key: RLS is bypassed, so this relies on every tool
  * query also filtering by user_id (which they do).
@@ -16,6 +17,8 @@ import { createClient } from "@supabase/supabase-js";
 import { isAllowedOAuthRedirect } from "@/lib/assistant/oauth";
 import { ASSISTANT_TOOLS } from "@/lib/assistant/tools";
 import { safeNextPath } from "@/lib/auth/safe-next";
+import { CHECK_APP_URL } from "./context";
+import { checkPlanTools } from "./plan-tools";
 import { checkPlans } from "./plans";
 import { checkVisits } from "./visits";
 
@@ -47,7 +50,7 @@ async function call(label: string, userId: string, name: string, input: unknown,
   const started = Date.now();
   try {
     const parsed = t.inputSchema.parse(input);
-    const out = await t.run({ supabase: admin, userId }, parsed as never);
+    const out = await t.run({ supabase: admin, userId, appUrl: CHECK_APP_URL }, parsed as never);
     const text = JSON.stringify(out);
     console.log(`\n## ${label} — ${Date.now() - started} ms, ${Math.round(text.length / 1024)} KB\n${text.slice(0, show)}`);
     return out;
@@ -62,12 +65,48 @@ function expect(label: string, ok: boolean) {
   console.log(`   ${ok ? "PASS" : "FAIL"} ${label}`);
 }
 
+/** No database, no network: the return-path guard and the OAuth redirect
+ *  allowlist. Runs with every suite. */
+function checkPureHelpers() {
+  console.log("\n## pure helpers");
+  for (const [raw, want] of [
+    ["/oauth/consent?authorization_id=abc", "/oauth/consent?authorization_id=abc"],
+    ["/map", "/map"],
+    ["/map?add=https%3A%2F%2Fwww.instagram.com%2Fp%2Fabc%2F", "/map?add=https%3A%2F%2Fwww.instagram.com%2Fp%2Fabc%2F"],
+    ["/plans/7f1c2e8a-0000-4000-8000-000000000000", "/plans/7f1c2e8a-0000-4000-8000-000000000000"],
+    ["//evil.com", null],
+    ["@evil.com", null],
+    ["https://evil.com", null],
+    ["/\\evil.com", null],
+    ["/%2F%2Fevil.com", "/%2F%2Fevil.com"],
+    // Dot segments collapse while parsing; the result must not be "//evil.com".
+    ["/.//evil.com", null],
+    ["/%2e//evil.com", null],
+    ["/a/..//evil.com", null],
+    ["/./plans", "/plans"],
+  ] as const) {
+    expect(`safeNextPath(${raw}) = ${want}`, safeNextPath(raw) === want);
+  }
+  for (const [uri, want] of [
+    ["https://claude.ai/api/mcp/auth_callback", true],
+    ["https://claude.com/api/mcp/auth_callback?code=x&state=y", true],
+    ["http://localhost:54123/callback", true],
+    ["https://claude.ai.evil.com/api/mcp/auth_callback", false],
+    ["https://evil.com/api/mcp/auth_callback", false],
+    ["http://claude.ai/api/mcp/auth_callback", false],
+  ] as const) {
+    expect(`redirect ${uri} → ${want}`, isAllowedOAuthRedirect(uri) === want);
+  }
+}
+
 async function main() {
   const owner = await userIdOf(OWNER);
   const tester = await userIdOf(TESTER);
 
-  if (process.argv[2] === "plans" || process.argv[2] === "visits") {
-    await (process.argv[2] === "plans" ? checkPlans : checkVisits)(admin, expect, tester, owner);
+  const only = { plans: checkPlans, visits: checkVisits, "plan-tools": checkPlanTools }[process.argv[2] ?? ""];
+  if (only) {
+    await only(admin, expect, tester, owner);
+    checkPureHelpers();
     console.log(`\n${failures === 0 ? "ALL CHECKS PASSED" : `${failures} CHECK(S) FAILED`}`);
     process.exit(failures === 0 ? 0 : 1);
   }
@@ -204,29 +243,9 @@ async function main() {
   // ── Plans (src/lib/plans) and visits (src/lib/visits) ─────────────
   await checkPlans(admin, expect, tester, owner);
   await checkVisits(admin, expect, tester, owner);
+  await checkPlanTools(admin, expect, tester, owner);
 
-  // ── Pure helpers ──────────────────────────────────────────────────
-  for (const [raw, want] of [
-    ["/oauth/consent?authorization_id=abc", "/oauth/consent?authorization_id=abc"],
-    ["/map", "/map"],
-    ["//evil.com", null],
-    ["@evil.com", null],
-    ["https://evil.com", null],
-    ["/\\evil.com", null],
-    ["/%2F%2Fevil.com", "/%2F%2Fevil.com"],
-  ] as const) {
-    expect(`safeNextPath(${raw}) = ${want}`, safeNextPath(raw) === want);
-  }
-  for (const [uri, want] of [
-    ["https://claude.ai/api/mcp/auth_callback", true],
-    ["https://claude.com/api/mcp/auth_callback?code=x&state=y", true],
-    ["http://localhost:54123/callback", true],
-    ["https://claude.ai.evil.com/api/mcp/auth_callback", false],
-    ["https://evil.com/api/mcp/auth_callback", false],
-    ["http://claude.ai/api/mcp/auth_callback", false],
-  ] as const) {
-    expect(`redirect ${uri} → ${want}`, isAllowedOAuthRedirect(uri) === want);
-  }
+  checkPureHelpers();
 
   console.log(`\n${failures === 0 ? "ALL CHECKS PASSED" : `${failures} CHECK(S) FAILED`}`);
   process.exit(failures === 0 ? 0 : 1);

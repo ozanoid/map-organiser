@@ -10,6 +10,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getAiClient, FLASH_MODEL } from "@/lib/ai/client";
 import { buildUserContext } from "@/lib/ai/context-builder";
 import { buildChatSystemPrompt } from "@/lib/ai/prompts/chat";
+import { todayAt } from "@/lib/plans/dates";
 import { buildChatTools } from "@/lib/ai/chat-tools";
 import { trackAiUsage, checkAiBudget } from "@/lib/ai/track-usage";
 import { log } from "@/lib/telemetry/logger";
@@ -18,7 +19,10 @@ import { flushLangfuse } from "@/lib/telemetry/langfuse";
 /**
  * POST /api/ai/chat — S3 AI-02 v1 (v1.21.0).
  *
- * Body: { messages: UIMessage[], sessionId?: string }
+ * Body: { messages: UIMessage[], sessionId?: string, timeZone?: string }
+ *
+ * `timeZone` is the browser's (IANA name); the prompt's "today" is the date
+ * there — UTC when it is missing or not a zone.
  *
  * The assistant agent loop: streamText + 7 tools (see chat-tools.ts),
  * stopWhen bounds per-turn fan-out. Follows the standard AI-route gate
@@ -91,6 +95,7 @@ export async function POST(request: NextRequest) {
   }
   const sessionId =
     typeof body.sessionId === "string" ? body.sessionId.slice(0, 64) : "none";
+  const today = todayAt(typeof body.timeZone === "string" ? body.timeZone.slice(0, 64) : null);
 
   const messages = (rawMessages as UIMessage[]).slice(-HISTORY_LIMIT);
 
@@ -146,7 +151,7 @@ export async function POST(request: NextRequest) {
     () =>
       streamText({
         model: aiClient(FLASH_MODEL),
-        system: buildChatSystemPrompt(ctx),
+        system: buildChatSystemPrompt(ctx, today),
         messages: modelMessages,
         tools,
         stopWhen: stepCountIs(STEP_LIMIT),

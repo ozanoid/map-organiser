@@ -2,8 +2,8 @@
 title: "Claude Connector Flow"
 type: flow
 domain: auth
-version: 1.1.0
-last_updated: 17.11.2026
+version: 1.2.0
+last_updated: 18.11.2026
 status: draft
 sources:
   - src/app/api/mcp/route.ts
@@ -59,7 +59,8 @@ The user adds `https://<production>/api/mcp` as a custom connector in Claude, or
 8. Claude → Supabase /oauth/token (code + PKCE verifier) → access + refresh token
 9. Claude → POST /api/mcp  Authorization: Bearer <token>
    withMcpAuth → verifyAssistantToken: getClaims (JWKS, ES256), role, iss, owner email
-   → tools run with a Supabase client carrying the token (RLS)
+   → tools run with a Supabase client carrying the token (RLS) and appUrl =
+     the origin Claude reached the server at (links in results, e.g. a plan's page)
 ```
 
 ## Inputs / outputs

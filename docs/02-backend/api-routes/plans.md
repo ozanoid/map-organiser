@@ -2,7 +2,7 @@
 title: Plans routes
 type: route-group
 domain: backend
-version: 1.1.0
+version: 1.1.1
 last_updated: 18.11.2026
 status: stable
 sources:
@@ -46,7 +46,7 @@ Creates the plan and `day_count` empty days in one transaction. With `list_id` t
 
 ## `PATCH /api/plans/[id]`
 
-The only way the UI changes a plan. The body is `planChangesSchema` (`src/lib/plans/schema.ts`):
+The only way the UI changes a plan. The body is `planChangesSchema` (`src/lib/plans/schema.ts`) — the same definition Claude's `update_plan` takes, so its `.describe()` texts are written for the model too:
 
 ```jsonc
 {
@@ -71,7 +71,8 @@ The only way the UI changes a plan. The body is `planChangesSchema` (`src/lib/pl
 - Limits: 60 days a plan, 200 stops a day (zod and the database).
 - A stop at a saved place can't be set `done` here, and a stop with a visit can't change status here — that goes through its visit ([[visits]]). A free-text stop can.
 - `null` clears (`start_date: null` unschedules the plan; `start_time: null` clears a time); a missing key is left alone.
-- `add_stop` without a `cost_estimate` gets the default for the place's price level; `cost_estimate: null` means "no estimate" and stays empty.
+- `add_stop` without a `cost_estimate` gets the default for the place's price level (US dollars — only when its `currency` is USD or not given); `cost_estimate: null` means "no estimate" and stays empty.
+- Every object in the body is strict: an unknown key is a 400 (v1.39.0). A stop is a `place_id` or a `title`, not both.
 - The change is committed before the plan is read back. If that read fails the response is still 200, with `plan: null` — the client refetches.
 - Errors: 400 with the reason (zod's first issue, or the database's message — "day 2 still has 1 stop(s); move or remove them first", "place … is not one of this user's places"); 404 when the plan isn't the caller's.
 

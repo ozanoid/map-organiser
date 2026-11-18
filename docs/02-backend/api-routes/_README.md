@@ -2,7 +2,7 @@
 title: API Routes
 type: overview
 domain: backend
-version: 1.11.0
+version: 1.11.1
 last_updated: 18.11.2026
 status: stable
 sources:
@@ -90,7 +90,7 @@ These are reused across many routes:
 | `parseTakeoutGeoJson` / `parseTakeoutCsv` | `src/lib/google/takeout-parser.ts` | File import parsing. |
 | `autoPlan` | `src/lib/plans/auto-plan.ts` | K-means + ordering, over anything with a location and a category. |
 | `getRoute` | `src/lib/plans/directions.ts` | Mapbox Directions wrapper — takes the day's `RoutingProfile`. |
-| `defaultCostEstimate` | `src/lib/plans/cost-defaults.ts` | price_level → per-person USD default for a new stop (`createPlan`, `changePlan`). |
+| `defaultCostEstimate` | `src/lib/plans/cost-defaults.ts` | price_level → per-person USD default for a new stop (`createPlan`, `changePlan`) — only for a stop in USD or without a currency. |
 | `createPlan` / `changePlan` / `getPlan` … | `src/lib/plans/write.ts`, `read.ts` | The plan model's shared module — routes and (from slice 3) assistant tools call the same functions. See [[plans]]. |
 | `logVisit` / `editVisit` / `deleteVisit` / `listVisits` | `src/lib/visits/write.ts`, `read.ts` | The visit model's shared module — routes and the `log_visit` / `get_visits` tools. See [[visits]]. |
 | `requestContext` / `unauthorized` / `errorResponse` | `src/lib/api/http.ts` | The signed-in caller as a `UserContext`, and the data modules' errors (`InputError` → 400, `NotFoundError` → 404, else 500) as responses. |

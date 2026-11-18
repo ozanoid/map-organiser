@@ -24,9 +24,13 @@ export const logVisitTool = defineTool({
   name: "log_visit",
   title: "Log a visit",
   description:
-    "Record that the user went to one of their saved places: the date (default: today at the place), their rating 1–5 and notes in their own words — what they had, how it was. It marks the place visited (a favourite stays a favourite), makes this the place's rating when it is the latest rated visit, and ticks off a planned stop for that place on that day. One visit per place per day: logging the same day again updates that visit and keeps what you leave out. To correct a visit pass visit_id (from get_visits or an earlier result); rating or notes null clears them. Use it when the user tells you they went somewhere.",
+    "Record that the user went to one of their saved places: the date (default: today at the place), their rating 1–5 and notes in their own words — what they had, how it was. It marks the place visited (a favourite stays a favourite), makes this the place's rating when it is the latest rated visit, and ticks off a planned stop for that place on that day. When the visit fulfils a stop of a plan, pass its plan_stop_id (from get_plans) instead of place_id: that stop is ticked off whatever its day, and its day is the default date. One visit per place per day: logging the same day again updates that visit and keeps what you leave out. To correct a visit pass visit_id (from get_visits or an earlier result); rating or notes null clears them. A visit that didn't happen is removed with delete_visit. Use it when the user tells you they went somewhere.",
   inputSchema: z.object({
-    place_id: placeId.optional().describe("The saved place; not needed with visit_id"),
+    place_id: placeId.optional().describe("The saved place; not needed with plan_stop_id or visit_id"),
+    plan_stop_id: z
+      .uuid()
+      .optional()
+      .describe("The plan stop this visit fulfils (stop_id from get_plans); its place is the visit's place"),
     visit_id: z.uuid().optional().describe("Correct this visit instead of logging a new one"),
     visited_on: z.iso.date().optional().describe("Local date at the place, YYYY-MM-DD; default today there"),
     rating: visitRating.nullable().optional().describe("The user's rating of this visit, 1–5"),
@@ -34,7 +38,7 @@ export const logVisitTool = defineTool({
   }),
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   async run(ctx, input) {
-    const { place_id, visit_id, visited_on, rating, notes } = input;
+    const { place_id, plan_stop_id, visit_id, visited_on, rating, notes } = input;
     const fields = {
       ...(visited_on ? { visited_on } : {}),
       ...(rating !== undefined ? { rating } : {}),
@@ -47,8 +51,12 @@ export const logVisitTool = defineTool({
       }
       result = await editVisit(ctx, visit_id, fields);
     } else {
-      if (!place_id) throw new ToolInputError("Give place_id (a saved place) or visit_id (to correct a visit).");
-      result = await logVisit(ctx, { place_id, ...fields }, { createdVia: "assistant" });
+      if (!place_id && !plan_stop_id) {
+        throw new ToolInputError(
+          "Give place_id (a saved place), plan_stop_id (a stop from get_plans) or visit_id (to correct a visit)."
+        );
+      }
+      result = await logVisit(ctx, { place_id, plan_stop_id, ...fields }, { createdVia: "assistant" });
     }
     return {
       ...(visit_id ? { corrected: true } : { logged: result.created ? "new visit" : "updated the visit already logged that day" }),

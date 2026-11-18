@@ -2,8 +2,8 @@
 title: Auth Flow
 type: flow
 domain: auth
-version: 1.3.0
-last_updated: 17.11.2026
+version: 1.4.0
+last_updated: 18.11.2026
 status: stable
 sources:
   - src/middleware.ts
@@ -25,7 +25,7 @@ How a user transitions from anonymous to authenticated. Covers Google OAuth (pri
 
 ## Trigger
 
-User opens any protected path while unauthenticated, or clicks "Sign in" deliberately. There is no sign-up path: sign-ups are closed since 17.11.2026 ([[../02-backend/auth#Sign-ups closed]]).
+User opens any protected path while unauthenticated — the middleware sends them to `/login?next=<that path>` and sign-in returns them there (v1.39.0) — or clicks "Sign in" deliberately. There is no sign-up path: sign-ups are closed since 17.11.2026 ([[../02-backend/auth#Sign-ups closed]]).
 
 ## Steps (Google OAuth)
 
@@ -78,7 +78,7 @@ Same path from step 5 onward. Steps 1–4 replaced by:
 - `/api/shared/*`
 - `/api/cron/*` (15.07.2026) — cron runs with no cookie; it authenticates itself via `CRON_SECRET`. **Without this exemption the middleware 307-redirects the cron to `/login` and it never runs.**
 
-Plus `/login` is the "auth route" — accessible while unauthenticated, redirects to `/map` if authenticated. `/signup` redirects everyone to `/login` (sign-ups closed).
+Plus `/login` is the "auth route" — accessible while unauthenticated, redirects to its same-site `next` (or `/map`) if authenticated. `/signup` redirects everyone to `/login` (sign-ups closed).
 
 Everything else requires auth. See [[../02-backend/auth#middleware-gate]].
 

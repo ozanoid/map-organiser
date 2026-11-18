@@ -2,7 +2,7 @@
 title: Supabase Clients
 type: overview
 domain: backend
-version: 1.1.4
+version: 1.1.5
 last_updated: 18.11.2026
 status: stable
 sources:
@@ -121,8 +121,8 @@ Behavior:
 1. Reads cookies from the incoming request.
 2. Calls `supabase.auth.getUser()` to refresh tokens if expired.
 3. Writes refreshed cookies back to the response.
-4. Redirects unauthenticated users to `/login` (with public-route exceptions).
-5. Redirects logged-in users away from `/login` to `/map`. (`/signup` never gets this far: sign-ups are closed and the middleware sends it to `/login` first.)
+4. Redirects unauthenticated users to `/login?next=<path>` (with public-route exceptions; API paths get no `next`).
+5. Redirects logged-in users away from `/login` to its same-site `next`, or `/map`. (`/signup` never gets this far: sign-ups are closed and the middleware sends it to `/login` first.)
 
 Public routes (no auth required): `/`, `/auth/callback/*`, `/shared/*`, `/api/shared/*`.
 
@@ -130,7 +130,7 @@ See [[auth]] for the full flow.
 
 ## Why middleware matters
 
-The browser and server clients on their own can read auth state from cookies, but **only the middleware writes refreshed cookies** back to the response. Without it, expired sessions never refresh — users get unauthenticated mid-session.
+The browser and server clients on their own can read auth state from cookies, but **only the middleware writes refreshed cookies** back to the response — its redirects too (`redirectKeepingSession` copies them, v1.39.0). Without it, expired sessions never refresh — users get unauthenticated mid-session.
 
 If you change the middleware matcher or shortcut it for a path, **make sure the path doesn't need an authenticated Supabase context** — or it'll start failing silently after the token expires.
 

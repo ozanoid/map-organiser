@@ -6,6 +6,102 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 18.11.2026 — v1.39.0 — Plan tools for Claude (Phase 1, slice 3)
+
+Written on the branch `feat/personal-assistant`; not merged yet.
+Claude can now read, save and change the user's plans through the connector.
+
+- **Tools** ([[04-integrations/claude-mcp]]): `get_plans` — a list (by
+  default upcoming and not-yet-scheduled plans; `phase`, date range, name),
+  each with dates, the first stops by name, counts and the plan's link, or
+  one plan in full with day ids, dates, weekdays, stops, times, statuses and
+  visits; `with_routes` adds each day's travel time and legs (Mapbox
+  Directions, recorded as `mapbox_directions`). `create_plan` — a plan in one
+  step (`created_via = assistant`). `update_plan` — `set` and ordered `ops`,
+  all or nothing; no delete, Claude cancels. `log_visit` takes
+  `plan_stop_id` to tick off a stop from `get_plans` whatever its day.
+  `delete_visit` (Ozan's decision, 18.11.2026) removes a visit the user says
+  didn't happen — only when they ask: the stop it ticked off is planned
+  again, the rating recomputed, the place stays visited. A visit has no
+  "cancelled" state, so removing a wrong one is a correction; plans are
+  still only cancelled.
+- **One schema:** the tools' inputs are `planCreateSchema` / `planSetSchema`
+  / `planOpSchema` from `src/lib/plans/schema.ts` (now exported), whose
+  `.describe()` texts the model reads; the API routes validate with the same
+  definitions.
+- **Links:** `AssistantContext` carries `appUrl`, set by the MCP server from
+  the address Claude reached it at (`getPublicOrigin`); plan results link
+  `<appUrl>/plans/<id>`. After a write the tools read the plan back; if that
+  read fails the result still says "saved", so a retry doesn't save twice.
+- **Server instructions:** lay a new plan out and save it once the user
+  agrees; do what the user asked with `update_plan`, ask before changes
+  Claude suggests itself; give the link after saving; cancel, never delete.
+- **Return path after sign-in** ([[03-frontend/middleware]]): a signed-out
+  request for a page now goes to `/login?next=<path and query>` and sign-in
+  returns there — a plan link, `/map?add=…`; before, every sign-in landed on
+  `/map`. A signed-in visit to `/login?next=…` goes straight on. API paths
+  get no `next`. Only same-site paths are followed (`safeNextPath`).
+- **Read helper:** `planOutlines` (`src/lib/plans/read.ts`) — each plan's
+  stops by name and its time zone (the last located stop's), for the plans
+  asked for. `clip` moved into the assistant library; `todayAt` (today in a zone,
+  UTC without one) is shared by plans and visits in `src/lib/plans/dates.ts`.
+- **Review fixes** (an independent review of the first commit, 18.11.2026):
+  - *Open redirect:* `safeNextPath` checked the raw `next` only; parsing
+    collapses dot segments, so `/.//evil.com` came out as `//evil.com` —
+    open on the login page since 17.11.2026, one click through the new
+    signed-in redirect. The parsed path is checked now; unit checks added.
+  - *Session cookies on redirects:* the middleware's redirects copy the
+    cookies `getUser()` wrote (`redirectKeepingSession`); before, a refresh
+    during a redirect was lost.
+  - *Strict inputs:* every tool refuses unknown keys (`defineTool`), the plan
+    schemas are `z.strictObject` throughout, and plan output uses the input's
+    names (`start_time`, `cost_estimate`, `place_id`) — a misnamed field was
+    silently dropped (`date` for `visited_on` logged the visit today). A stop
+    is a place or a text, not both.
+  - *Where "today" is:* a plan's phase in `get_plans` follows the time zone
+    of its last located stop, not the server's UTC date (a New York evening
+    is already tomorrow in UTC). The zone is looked up only for plans whose
+    last day is within a day of today (UTC) — no other plan can change phase
+    by it — and stop names only for the plans shown. The same class, found
+    by the re-review and a scan: `get_places`' upcoming plans now use the
+    place's date, and the in-app chat sends the browser's zone so its prompt
+    carries the user's date. (Client components already used the browser's
+    date; the overview's rolling 30-day visit count is left on UTC.)
+  - *Name search* covers every phase, so a past or cancelled trip is found.
+  - *Currency:* the dollar cost default is no longer written onto a stop in
+    another currency.
+  - *Retries:* an unexpected error in a write tool says the change may have
+    been saved and to check first; the app origin is parsed once (http(s)
+    only), so building a link can't fail after a write.
+  - *Honest descriptions:* a stop with a visit keeps its status until the
+    visit is deleted (the review noted Claude couldn't do that; Ozan then
+    approved `delete_visit`, above); `title` changes only a text stop; costs
+    default in dollars.
+- **Checks:** `npm run check:assistant -- plan-tools` — 51 checks on the
+  live database (test account, everything removed afterwards): every tool's
+  input converts to the JSON Schema clients see and refuses unknown keys;
+  misnamed fields; the time-zone rule; create, list and filters (past and
+  cancelled plans by name), detail with a route, a batch whose day number is
+  read after a swap, the dollar default and none in pounds, the
+  all-or-nothing refusal of "done" at a saved place, a stop with a visit
+  keeping its status, `log_visit` with `plan_stop_id`, `delete_visit`
+  reopening that stop, cancel / restore / unschedule. The 19 pure-helper checks (return path, OAuth redirect
+  allowlist) now run with every suite. The plan and visit suites pass again;
+  `tsc`, `eslint`, `next build`. Signed-out redirects checked on the dev
+  server.
+- **Measured:** the 13 tool definitions are about 33,000 characters;
+  `update_plan` is 9,000 plus a 1,100-character description; 5,600 across
+  all tools are zod's uuid and date patterns.
+- Docs: [[04-integrations/claude-mcp]], [[01-domain/plans]],
+  [[01-domain/visits]], [[05-flows/visit-flow]], [[05-flows/auth-flow]],
+  [[05-flows/claude-connector-flow]], [[02-backend/auth]],
+  [[02-backend/supabase-clients]], [[02-backend/api-routes/plans]],
+  [[03-frontend/middleware]], [[03-frontend/routing]],
+  [[04-integrations/mapbox]], [[_agent/common-tasks]], [[_agent/pitfalls]],
+  [[_plans/phase-1-planning]], [[_plans/personal-assistant]].
+
+---
+
 ## 18.11.2026 — v1.38.1 — Visits on main
 
 - Phase 1, slice 2 merged to main with Ozan's approval (main had not moved

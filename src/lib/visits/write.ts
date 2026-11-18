@@ -2,7 +2,7 @@ import "server-only";
 import type { PostgrestError } from "@supabase/supabase-js";
 import type { UserContext } from "@/lib/db/context";
 import { classifyPostgrestError, InputError, NotFoundError } from "@/lib/db/errors";
-import { dayDate, todayIso } from "@/lib/plans/dates";
+import { dayDate, todayAt } from "@/lib/plans/dates";
 import type { VisitEditInput, VisitLogInput } from "@/lib/visits/schema";
 import { getVisit } from "@/lib/visits/read";
 import type { PlaceVisitSummary, Visit } from "@/lib/types";
@@ -35,15 +35,6 @@ export interface VisitWriteResult {
   /** false when the place already had a visit that day and it was updated. */
   created: boolean;
   place: PlaceVisitSummary;
-}
-
-/** Today in the place's time zone (Google's `tz`), or the server's. */
-function todayAt(timeZone: string | null): string {
-  try {
-    return todayIso(timeZone ?? undefined);
-  } catch {
-    return todayIso();
-  }
 }
 
 /**

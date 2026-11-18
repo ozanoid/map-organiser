@@ -61,7 +61,9 @@ function makeChat(sessionId: string) {
   return new Chat<UIMessage>({
     transport: new DefaultChatTransport({
       api: "/api/ai/chat",
-      body: { sessionId },
+      // The browser's zone: the server tells the model the user's date,
+      // not its own (UTC is already tomorrow on an Istanbul night).
+      body: { sessionId, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone },
     }),
     // MUST live on the Chat instance: useChat silently ignores every
     // ChatInit option (this one included) when a prebuilt `chat` is

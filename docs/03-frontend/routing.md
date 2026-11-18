@@ -2,7 +2,7 @@
 title: Routing
 type: overview
 domain: frontend
-version: 1.6.1
+version: 1.6.2
 last_updated: 18.11.2026
 status: stable
 sources:
@@ -94,14 +94,15 @@ Public routes (no auth required):
   /api/cron/*      (the cron route authenticates itself)
   /oauth/*         (consent page; redirects to /login?next=… itself)
 
-Auth routes (redirect AWAY to /map if signed in):
+Auth routes (redirect AWAY if signed in — to a same-site ?next=…, else /map):
   /login
 
 Closed (always redirect to /login):
   /signup
 
 Everything else:
-  Require auth — redirect to /login if not signed in.
+  Require auth — redirect to /login?next=<path> if not signed in (API paths: no next);
+  sign-in returns to that path.
 ```
 
 See [[../02-backend/auth#middleware-gate]] for the implementation.

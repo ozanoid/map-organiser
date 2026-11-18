@@ -230,6 +230,78 @@ export async function getPlan(ctx: PlanContext, planId: string): Promise<Plan | 
   return shapePlan(row, row.days ?? []);
 }
 
+/** A stop as a list of plans names it. */
+export interface StopOutline {
+  day_number: number;
+  /** The place's name, or the free-text stop's title. */
+  name: string;
+  start_time: string | null;
+  day_part: DayPart | null;
+  status: StopStatus;
+}
+
+/** A plan's stops by name, and the time zone its days are lived in. */
+export interface PlanOutline {
+  stops: StopOutline[];
+  /** IANA zone of the plan's last stop at a located place ("Europe/London"),
+   *  or null when no stop has one — the plan's last day ends there. */
+  timeZone: string | null;
+}
+
+/** These plans' stops in day and visiting order, names only, and each plan's
+ *  time zone — for a list of plans that says what is in each and whether it
+ *  is over (the assistant's get_plans). Reading the zone opens each stop's
+ *  place data, so callers ask only for the plans they need. */
+export async function planOutlines(ctx: PlanContext, planIds: string[]): Promise<Map<string, PlanOutline>> {
+  const out = new Map<string, PlanOutline>();
+  if (planIds.length === 0) return out;
+  const { data, error } = await ctx.supabase
+    .from("plans")
+    .select(
+      "id,days:plan_days(day_number,stops:plan_stops(sort_order,title,start_time,day_part,status,place:places(name,tz:google_data->>tz)))"
+    )
+    .eq("user_id", ctx.userId)
+    .in("id", planIds);
+  if (error) throw new Error(error.message);
+
+  type Row = {
+    id: string;
+    days:
+      | {
+          day_number: number;
+          stops:
+            | {
+                sort_order: number;
+                title: string | null;
+                start_time: string | null;
+                day_part: DayPart | null;
+                status: StopStatus;
+                place: { name: string; tz: string | null } | null;
+              }[]
+            | null;
+        }[]
+      | null;
+  };
+  for (const plan of (data ?? []) as unknown as Row[]) {
+    const stops: StopOutline[] = [];
+    let timeZone: string | null = null;
+    for (const day of [...(plan.days ?? [])].sort((a, b) => a.day_number - b.day_number)) {
+      for (const s of [...(day.stops ?? [])].sort((a, b) => a.sort_order - b.sort_order)) {
+        stops.push({
+          day_number: day.day_number,
+          name: s.place?.name ?? s.title ?? "Stop",
+          start_time: s.start_time ? s.start_time.slice(0, 5) : null,
+          day_part: s.day_part,
+          status: s.status,
+        });
+        if (s.place?.tz) timeZone = s.place.tz;
+      }
+    }
+    out.set(plan.id, { stops, timeZone });
+  }
+  return out;
+}
+
 /** Names of the plans a set of places appears in — for the "this place is
  *  in a plan" warning before a delete. */
 export async function plansUsingPlaces(
