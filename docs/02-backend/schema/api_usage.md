@@ -2,8 +2,8 @@
 title: api_usage
 type: table
 domain: backend
-version: 1.4.0
-last_updated: 17.11.2026
+version: 1.5.0
+last_updated: 18.11.2026
 status: stable
 sources:
   - Supabase project hukppmaevcapvbrvxtph (live)
@@ -84,6 +84,7 @@ The composite UNIQUE constraint makes the UPSERT atomic. App code calls this via
     - `dataforseo_business_info_live`, `dataforseo_reviews` (DataForSEO)
     - `hikerapi_request` (HikerAPI, v1.28.0 — every request the Instagram import makes, $1/1k, no free tier)
     - `mapbox_geocoding` (Mapbox Geocoding v6, 17.11.2026 — one per `near.area` lookup in the assistant's search tools, $0.75/1k past 100k free)
+    - `dataforseo_maps_search` (DataForSEO SERP API, 18.11.2026 — one per `search_google_maps` call, $2/1k, no free tier)
   - `src/lib/ai/track-usage.ts#AI_SKU_CONFIG` (via `trackAiUsage`, same RPC):
     - `ai_parse_query`, `ai_rank_results`, `ai_place_profile`, `ai_embedding` (placeholder), `ai_compare` (v1.19.0), `ai_chat` (v1.21.0), `ai_trip_plan` (v1.22.0, $12/1k), `ai_instagram_read` (v1.28.0, $1.5/1k — one per Gemini call reading an Instagram post, so a retried read counts twice (v1.28.2); also the unit of the `instagram` budget, 300/month)
   - The Instagram import writes its `hikerapi_request` and `text_search_enterprise` rows in a `finally`, so a failed import's calls are still counted; since v1.28.2 the same `finally` writes one `ai_instagram_read` per Gemini call, retries and failed reads included.

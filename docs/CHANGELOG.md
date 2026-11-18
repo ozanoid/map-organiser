@@ -6,6 +6,31 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 18.11.2026 — v1.35.0 — Phase 1 approved: schema SQL written, Google Maps search tool
+
+- Ozan approved the Phase 1 design v2 ([[_plans/phase-1-planning]] v2.1.0,
+  now `stable`): one `plans` model, `visits`, free-text stops, cancel instead
+  of delete, place search through DataForSEO.
+- Schema SQL written, **not applied** (awaiting Ozan):
+  `supabase/migrations/` — `plans_tables` (plans / plan_days / plan_stops
+  with RLS and indexes, plus a copy of the 7 existing trips under the same
+  ids), `visits`, `list_place_notes`, `assistant_source`. Rollout changed
+  from rename-with-a-short-outage to expand → cutover → contract, with no
+  outage; the old trip tables are dropped last, after a separate approval.
+- New convention: schema SQL lives in the repo (`supabase/migrations/`,
+  README there); [[_agent/common-tasks]] updated.
+- New tool `search_google_maps` (7 tools now): Google Maps search through
+  DataForSEO's SERP API behind a `PlaceSearch` interface
+  (`src/lib/place-search/`). Verified live: the returned `cid` matches the
+  library's, chain branches come back separately, $0.002 per search, 2.6–12.4
+  s; `price_level` is empty in live results. New SKU
+  `dataforseo_maps_search`. `npm run check:assistant`: 32 checks pass.
+- Docs: [[04-integrations/claude-mcp]], [[04-integrations/dataforseo]],
+  [[02-backend/schema/api_usage]], [[00-overview/repo-structure]],
+  [[_plans/personal-assistant]].
+
+---
+
 ## 18.11.2026 — v1.34.0 — Phase 1 design v2: one plan model, visits, DataForSEO search
 
 - [[_plans/phase-1-planning]] rewritten (v2.0.0, draft, awaiting Ozan) after

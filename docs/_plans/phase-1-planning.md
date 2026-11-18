@@ -2,9 +2,9 @@
 title: "Faz 1 — Planlama ve ziyaretler: tasarım (öneri v2)"
 type: plan
 domain: trips
-version: 2.0.0
+version: 2.1.0
 last_updated: 18.11.2026
-status: draft
+status: stable
 related:
   - "[[personal-assistant]]"
   - "[[../01-domain/trips]]"
@@ -17,7 +17,7 @@ related:
 
 # Faz 1 — Planlama ve ziyaretler: tasarım (öneri v2)
 
-> **Ozan'ın onayını bekliyor (18.11.2026). Kod yok.** [[personal-assistant]] planının Faz 1'i.
+> **Tasarım onaylandı (Ozan, 18.11.2026); uygulama sürüyor** — bkz. [Uygulama durumu](#uygulama-durumu). [[personal-assistant]] planının Faz 1'i.
 >
 > v1 (17.11.2026) "planlar trip, tarihsiz hedefler liste, durağa durum alanı" öneriyordu. Ozan iki şey sordu: mevcut yapıyla kendimizi sınırlıyor muyuz, ve ad araması için Google Text Search şart mı. Bu sürüm modeli senaryolardan sıfırdan kurar, mevcut yapıyla farkını kanıtıyla gösterir ve geçiş yolunu verir.
 
@@ -188,7 +188,12 @@ Kurallar:
 
 **DataForSEO "Google Maps SERP"** (dokümanı ve fiyat sayfası, 18.11.2026): `POST /v3/serp/google/maps/live/advanced`; istek başına $0.002 (100 sonuca kadar); abonelik yok, ön ödemeli bakiyeden düşer. Her sonuçta ad, adres, `cid`, `place_id`, koordinat, puan ve yorum sayısı, kategori, telefon, web sitesi.
 
-- **Canlı doğrulanmadı:** yerel `.env.local`'de DataForSEO bilgisi yok (deneme 401 döndü); bilgiler yalnız Vercel'de. Gerçek yanıtın biçimi ve kalitesi uygulamanın ilk adımında doğrulanacak.
+- **Canlı doğrulandı (18.11.2026):**
+  - "DanDan Aldgate" → tek sonuç; `cid` veritabanındaki kayıtla aynı (9577570098796810468).
+  - "Dishoom" (Londra) → 11 şube, adres ve puanlarıyla ayrı ayrı.
+  - "ramen" (Shoreditch, dar alan) → 20 sonuç; ilk ikisi ramen, sonrası yakındaki başka restoranlar. Tür aramasında kategoriye bakmak gerekiyor.
+  - Ücret yanıtın kendi `cost` alanında: arama başına $0.002. Süre 2,6–12,4 sn.
+  - `price_level` canlı yanıtlarda boş geliyor; arama sonuçlarında fiyat seviyesi yok.
 
 **Öneri:** arama bir `PlaceSearch` arayüzünün arkasında durur; sağlayıcısı DataForSEO.
 - Zenginleştirme zaten DataForSEO'da; aramanın döndürdüğü `cid`, ekleme hattının kullandığı anahtarın aynısı.
@@ -221,7 +226,11 @@ Kurallar:
   - Plan tarihi değişince günler de kayar (bugün kaymıyor).
   - Oluşturma formu başlangıç + gün sayısı ister; tarih boş bırakılabilir.
   - Paylaşım linkleri aynı adresle çalışır.
-- **Yayın:** migration ve deploy birlikte yapılır; arada plan sayfaları 1–2 dakika hata verebilir (yalnız plan sayfaları). Geri dönüş: adlar geri alınır, türetilen sütunlar yeniden hesaplanır.
+- **Yayın — üç adım, kesintisiz** (18.11.2026'da değişti; önceki öneri tabloları yeniden adlandırmak ve 1–2 dakikalık kesintiyi kabul etmekti):
+  1. *Genişlet:* yeni tablolar eklenir ve mevcut trip satırları aynı id'lerle kopyalanır. Çalışan kod eski tablolarda devam eder; yeni kod gerçek veriyle test edilir.
+  2. *Geç:* yeni kod yayınlanır; arada eklenen trip varsa son kez kopyalanır, paylaşım linklerinin türü `plan` olur. Yeni kod geçiş boyunca `trip` türünü de kabul eder.
+  3. *Daralt:* doğrulamadan sonra eski üç tablo silinir — kalıcı silme, ayrıca onay alınır.
+  - Yeni tablolar temiz adlarla ve index'lerle doğar (eski tablolarda birincil anahtar dışında index yok). Geri dönüş: 2. adıma kadar yeni tabloları silmek yeter.
 - **Doğrulama:** `npm run check:assistant`'a plan ve ziyaret senaryoları; tarayıcıda plan sayfası (oluştur, kaydır, gün ekle-çıkar, durak taşı, AI plan, paylaşım); canlıda connector üzerinden P1–P12.
 
 ## Dilimler (sırayla)
@@ -252,13 +261,26 @@ Her dilim kendi başına tamamdır ve ayrı doğrulanır.
 - **Eski tablo adlarını view olarak bırakmak:** tek kullanıcı için atılacak karmaşıklık; yerine kısa bir yayın penceresi.
 - **Google Text Search (Pro kademesi):** ücretsiz kotası yeterli, ama ikinci sağlayıcı; DataForSEO canlı doğrulamada yetersiz çıkarsa yedek.
 
-## Açık kararlar
+## Kararlar (Ozan, 18.11.2026)
 
-1. **Model:** trip tabloları tek `plans` modeline dönüşsün (ad dahil), `visits` eklensin, listeler ayrı kalsın — öneri **evet**.
-2. **Kayıtlı mekanı olmayan durak** (buluşma noktası, yürüyüş) — öneri **evet**.
-3. **Claude plan silmez, iptal eder;** silme yalnız arayüzden — öneri **evet**.
-4. **Mekan arama DataForSEO'dan;** Google Text Search Faz 1'e girmez — öneri **evet**.
-5. **Yayın:** migration ve deploy birlikte; plan sayfalarında 1–2 dakika hata olabilir — onay.
-6. **DataForSEO'nun canlı doğrulaması:** `DATAFORSEO_LOGIN` ve `DATAFORSEO_PASSWORD` yerel `.env.local`'e Ozan tarafından eklenir, ya da doğrulama production'da yapılır.
+Altı karar da onaylandı:
 
-Migration SQL'i her dilimde uygulanmadan önce gösterilir.
+1. Trip tabloları tek `plans` modeline dönüşür (ad dahil), `visits` eklenir, listeler ayrı kalır.
+2. Kayıtlı mekanı olmayan duraklar olur.
+3. Claude plan silmez, iptal eder; silme yalnız arayüzden.
+4. Mekan arama DataForSEO'dan; Google Text Search Faz 1'e girmez.
+5. Yayın sırasında kısa bir kesinti kabul — ama artık gerekmiyor, bkz. [Yayın](#geçiş-ve-regresyon).
+6. DataForSEO bilgileri yerel `.env.local`'e eklendi (Ozan); canlı doğrulama yapıldı.
+
+Migration SQL'i uygulanmadan önce gösterilir.
+
+## Uygulama durumu
+
+| Dilim | Durum (18.11.2026) |
+|---|---|
+| Şema (dilim 1, 2, 4 ve 5'in tabloları) | SQL yazıldı: `supabase/migrations/20261118090000_plans_tables.sql`, `…090100_visits.sql`, `…090200_list_place_notes.sql`, `…090300_assistant_source.sql`. **Uygulanmadı — Ozan'ın onayını bekliyor.** Henüz çalıştırılmadı. |
+| 1 Plan modeli dönüşümü | Bekliyor (şema onayı) |
+| 2 Ziyaretler | Bekliyor |
+| 3 Plan tool'ları | Bekliyor |
+| 4 Listeler | Bekliyor |
+| 5 Arama ve ekleme | `search_google_maps` yazıldı ve canlı veriyle doğrulandı (dalda). `add_place` şema onayını bekliyor. |

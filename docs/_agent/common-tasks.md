@@ -2,8 +2,8 @@
 title: Common Tasks
 type: agent-note
 domain: agent
-version: 1.0.0
-last_updated: 12.05.2026
+version: 1.1.0
+last_updated: 18.11.2026
 status: stable
 related:
   - "[[conventions]]"
@@ -27,9 +27,9 @@ Checklists for frequent operations. Treat these as authoritative — if a checkl
 
 ## Add a new DB table
 
-> Schema is dashboard-managed. There's no local migrations folder.
+> Since 18.11.2026 the SQL of every schema change lives in `supabase/migrations/` (see its README). The 56 migrations before that exist only in the Supabase project.
 
-1. Create the table in the Supabase dashboard (or via Supabase MCP `apply_migration`).
+1. Write the migration as a file in `supabase/migrations/`, show it to Ozan, then apply it with Supabase MCP `apply_migration` under the same name. Prefer expand → cutover → contract when running code depends on the structure.
 2. Add RLS policies. Default-deny if in doubt. Authenticated-only for user-owned data.
 3. Create `docs/02-backend/schema/<table_name>.md` from the `table.md` template.
 4. Fill columns, indexes, RLS policies, foreign keys.

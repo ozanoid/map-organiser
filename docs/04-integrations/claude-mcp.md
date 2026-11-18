@@ -2,8 +2,8 @@
 title: "Claude connector (MCP server)"
 type: integration
 domain: integrations
-version: 1.1.0
-last_updated: 17.11.2026
+version: 1.2.0
+last_updated: 18.11.2026
 status: draft
 sources:
   - src/app/api/mcp/route.ts
@@ -19,6 +19,7 @@ sources:
   - src/lib/assistant/place-filters.ts
   - src/lib/assistant/tools/
   - src/lib/mapbox/geocode.ts
+  - src/lib/place-search/
   - src/lib/text/fold.ts
   - scripts/assistant-check/run.ts
 related:
@@ -63,6 +64,7 @@ Both new paths are skipped by the session middleware (matcher in `src/middleware
 | `rank_places` | read, AI call | Same filters, then the AI-search judge (Gemini, `rank-engine`) scores up to 30 profiles against an English `intent`. SKU `ai_rank_results`, budget `rank_backstop`; degrades to rating order with a notice. |
 | `get_places` | read | 1–5 places in full: profile (summary, pros, cons, top themes with a quote, `good_for` features), weekly hours, `at` → open?, closes at, busyness at that hour and the day's busiest hours, links (long Google links cut to their path), user status/rating/notes/tags/lists, the Instagram post in the notes, up to 3 "people also search" places not in the library — only listings with ≥ 4.0 and ≥ 20 reviews (a 1-review, 1★ listing showed up in the first live check). |
 | `read_reviews` | read | Stored Google reviews (~50 per place) filtered by words (`about`, any match, folded), min rating; sorted by relevance or date; ≤ 20 quotes cut to 450 chars around the hit. Without `about`, also the review themes. |
+| `search_google_maps` | read, paid | Google Maps search (DataForSEO SERP, live) around a point: by name or by kind. ≤ 20 results with address, category, Google rating and review count, distance, website, `maps_url`, `google_cid`, and `saved_place_id` when the place is already in the library (matched on cid / place id). No price level — the live response leaves it empty. 18.11.2026. |
 | `update_places` | write | 1–25 places: visit status (stamps `visited_at` / `booked_at` like `PATCH /api/places/[id]`), user rating 1–5 or null, a note appended as `[YYYY-MM-DD] …` (existing notes kept), tags to add (created if missing) or remove. Annotated destructive, so clients ask before running it. |
 
 Filters take **names**, not ids (`resolveNames`): exact folded match, then a unique partial match ("Rooftops" → "Rooftop"); otherwise a `ToolInputError` listing the closest names, which goes back to the model as an error result.
@@ -77,6 +79,7 @@ Filters take **names**, not ids (`resolveNames`): exact folded match, then a uni
 
 - claude.ai / Claude Code usage runs on the user's Claude plan; the tools spend nothing on the Claude API.
 - `rank_places`: one Gemini call per use (existing AI-search SKU and budget).
+- `search_google_maps`: one DataForSEO Maps search per call — $0.002 (`dataforseo_maps_search`), from the system DataForSEO balance; measured latency 2.6–12.4 s.
 - `near.area`: one Mapbox Geocoding request (`mapbox_geocoding`, 100k free per month, then $0.75 per 1,000).
 
 ## Limits and known issues
