@@ -6,10 +6,23 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 18.11.2026 — v1.38.1 — Visits on main
+
+- Phase 1, slice 2 merged to main with Ozan's approval (main had not moved
+  since the plans merge; the merged tree equals the branch tree). The
+  database side (one visit a day, `log_visit` / `delete_visit`,
+  `apply_plan_changes` v3) was already applied; production picks up the code
+  with this deploy. No data to move: there were no visits and every stop was
+  planned.
+- Docs: [[_plans/phase-1-planning]], [[_plans/personal-assistant]],
+  [[01-domain/visits]].
+
+---
+
 ## 18.11.2026 — v1.38.0 — Visits (Phase 1, slice 2)
 
-On the branch `feat/personal-assistant`; not on main yet. "I went" becomes a
-record: one saved place on one day, with that visit's rating and notes.
+Written on the branch `feat/personal-assistant`; on main since v1.38.1.
+"I went" becomes a record: one saved place on one day, with that visit's rating and notes.
 
 - **Database** (applied; bodies hash-match the files): `visits_one_per_day`
   (unique `(user_id, place_id, visited_on)` — Ozan approved), `visit_functions`

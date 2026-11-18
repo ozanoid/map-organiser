@@ -2,7 +2,7 @@
 title: Visit
 type: entity
 domain: visits
-version: 1.0.0
+version: 1.0.1
 last_updated: 18.11.2026
 status: stable
 sources:
@@ -27,7 +27,7 @@ related:
 
 # Visit
 
-What actually happened: **one saved place on one day**, with that visit's own rating and notes ("lamb was great, wine average"). Added in v1.38.0 (Phase 1, slice 2 of [[../_plans/phase-1-planning]]). Table: [[../02-backend/schema/visits]].
+What actually happened: **one saved place on one day**, with that visit's own rating and notes ("lamb was great, wine average"). Added in v1.38.0 (Phase 1, slice 2 of [[../_plans/phase-1-planning]]); on main since 18.11.2026. Table: [[../02-backend/schema/visits]].
 
 A **stop** in a [[plans|plan]] is an intention; a visit is the fact. A visit can fulfil a stop, or stand on its own (no plan, or a second visit to the same place).
 
