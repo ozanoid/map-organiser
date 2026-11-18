@@ -20,6 +20,11 @@ Claude can now read, save and change the user's plans through the connector.
   step (`created_via = assistant`). `update_plan` — `set` and ordered `ops`,
   all or nothing; no delete, Claude cancels. `log_visit` takes
   `plan_stop_id` to tick off a stop from `get_plans` whatever its day.
+  `delete_visit` (Ozan's decision, 18.11.2026) removes a visit the user says
+  didn't happen — only when they ask: the stop it ticked off is planned
+  again, the rating recomputed, the place stays visited. A visit has no
+  "cancelled" state, so removing a wrong one is a correction; plans are
+  still only cancelled.
 - **One schema:** the tools' inputs are `planCreateSchema` / `planSetSchema`
   / `planOpSchema` from `src/lib/plans/schema.ts` (now exported), whose
   `.describe()` texts the model reads; the API routes validate with the same
@@ -68,22 +73,23 @@ Claude can now read, save and change the user's plans through the connector.
   - *Retries:* an unexpected error in a write tool says the change may have
     been saved and to check first; the app origin is parsed once (http(s)
     only), so building a link can't fail after a write.
-  - *Honest descriptions:* a stop with a visit keeps its status (the visit is
-    removed in the app — Claude has no `delete_visit` tool, an open
-    decision); `title` changes only a text stop; costs default in dollars.
-- **Checks:** `npm run check:assistant -- plan-tools` — 48 checks on the
+  - *Honest descriptions:* a stop with a visit keeps its status until the
+    visit is deleted (the review noted Claude couldn't do that; Ozan then
+    approved `delete_visit`, above); `title` changes only a text stop; costs
+    default in dollars.
+- **Checks:** `npm run check:assistant -- plan-tools` — 51 checks on the
   live database (test account, everything removed afterwards): every tool's
   input converts to the JSON Schema clients see and refuses unknown keys;
   misnamed fields; the time-zone rule; create, list and filters (past and
   cancelled plans by name), detail with a route, a batch whose day number is
   read after a swap, the dollar default and none in pounds, the
   all-or-nothing refusal of "done" at a saved place, a stop with a visit
-  keeping its status, `log_visit` with `plan_stop_id`, cancel / restore /
-  unschedule. The 19 pure-helper checks (return path, OAuth redirect
+  keeping its status, `log_visit` with `plan_stop_id`, `delete_visit`
+  reopening that stop, cancel / restore / unschedule. The 19 pure-helper checks (return path, OAuth redirect
   allowlist) now run with every suite. The plan and visit suites pass again;
   `tsc`, `eslint`, `next build`. Signed-out redirects checked on the dev
   server.
-- **Measured:** the 12 tool definitions are about 32,000 characters;
+- **Measured:** the 13 tool definitions are about 33,000 characters;
   `update_plan` is 9,000 plus a 1,100-character description; 5,600 across
   all tools are zod's uuid and date patterns.
 - Docs: [[04-integrations/claude-mcp]], [[01-domain/plans]],

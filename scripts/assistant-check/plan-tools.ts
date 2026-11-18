@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- reads loosely typed tool output */
 /**
  * Plan tool checks: get_plans, create_plan, update_plan — and log_visit with
- * a plan stop — called the way the MCP server calls them, against the live
+ * a plan stop, delete_visit — called the way the MCP server calls them, against the live
  * database on the admin test account. Everything created here is deleted at
  * the end and the places used get their status, rating and visit date back.
  * One Mapbox Directions request (free allowance: 100,000 a month); no paid
@@ -251,7 +251,25 @@ export async function checkPlanTools(admin: SupabaseClient, expect: Expect, test
     const undoRefused = await failure("update_plan", { plan_id: plan.plan_id, ops: [{ op: "update_stop", stop_id: s1.stop_id, status: "planned" }] });
     expect("update: a stop with a visit keeps its status", /visit/.test(undoRefused ?? ""));
     expect("log_visit: needs a place, a stop or a visit", /place_id/.test((await failure("log_visit", { rating: 3 })) ?? ""));
-    await deleteVisit(ctx, logged.visit.visit_id);
+
+    // ── delete_visit: the mistake undone, the stop reopened ──────────
+    const removed = await tool("delete_visit", { visit_id: logged.visit.visit_id });
+    const reopened = (await tool("get_plans", { plan_id: plan.plan_id })).plan.days
+      .flatMap((d: any) => d.stops)
+      .find((s: any) => s.stop_id === s1.stop_id);
+    console.log(`   delete_visit → ${JSON.stringify(removed).slice(0, 300)}`);
+    expect(
+      "delete_visit: says what went, the stop is planned again",
+      removed.deleted?.visit_id === logged.visit.visit_id &&
+        removed.deleted?.place?.id === p1.id &&
+        removed.reopened_stop_id === s1.stop_id &&
+        reopened?.status === "planned" &&
+        !reopened?.visit
+    );
+    expect(
+      "delete_visit: a visit that is gone is a clear error",
+      /No visit with that id/.test((await failure("delete_visit", { visit_id: logged.visit.visit_id })) ?? "")
+    );
 
     // ── cancel, restore, unschedule, past ────────────────────────────
     await tool("update_plan", { plan_id: plan.plan_id, set: { status: "cancelled" } });

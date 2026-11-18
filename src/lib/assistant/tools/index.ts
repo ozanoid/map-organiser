@@ -1,4 +1,5 @@
 import { createPlanTool } from "@/lib/assistant/tools/create-plan";
+import { deleteVisitTool } from "@/lib/assistant/tools/delete-visit";
 import { getLibraryOverview } from "@/lib/assistant/tools/get-library-overview";
 import { getPlaces } from "@/lib/assistant/tools/get-places";
 import { getPlans } from "@/lib/assistant/tools/get-plans";
@@ -25,5 +26,6 @@ export const ASSISTANT_TOOLS: AssistantTool[] = [
   createPlanTool,
   updatePlanTool,
   logVisitTool,
+  deleteVisitTool,
   updatePlaces,
 ] as unknown as AssistantTool[];

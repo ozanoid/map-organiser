@@ -180,7 +180,7 @@ export const planOpSchema = z.discriminatedUnion("op", [
         .enum(STOP_STATUSES)
         .optional()
         .describe(
-          "skipped, or planned again. done only for a stop without a saved place: a saved place's stop is done when its visit is logged (log_visit), and a stop with a visit keeps its status — the visit is removed in the app"
+          "skipped, or planned again. done only for a stop without a saved place: a saved place's stop is done when its visit is logged (log_visit), and a stop with a visit keeps its status until the visit is deleted"
         ),
     })
     .describe("Change a stop; null clears a field. A time clears the part of the day and the other way round"),

@@ -104,7 +104,7 @@ The app asks for a route per day (`GET /api/plans/[id]/days/[dayId]/route?sig=�
 - `/lists?tab=plans` — the Plans tab: upcoming, no date yet, past, cancelled (`planPhase`). "New Plan": a name, a number of days, optionally a date, optionally the places of a list (they start on day 1).
 - `/plans/[id]` — the plan: timeline or map (`?view=map`), dates, budget, Auto Plan, AI Plan, the plan menu (share, dates, rename, cancel / restore, delete). `/trips/[id]` redirects here (plans kept the trips' ids).
 - `/shared/[slug]` — the public view of a shared plan ([[sharing]]).
-- **Claude** (connector, v1.39.0): `get_plans` lists and reads plans, `create_plan` saves one, `update_plan` changes one; a stop at a saved place is ticked off with `log_visit` (`plan_stop_id`). Claude cancels, never deletes, and gives the plan's link (`/plans/<id>` on the deployment it is connected to) — [[../04-integrations/claude-mcp]]. The Plans tab judges upcoming vs past by the viewer's date; `get_plans` by the date where the plan takes place (its last located stop's time zone).
+- **Claude** (connector, v1.39.0): `get_plans` lists and reads plans, `create_plan` saves one, `update_plan` changes one; a stop at a saved place is ticked off with `log_visit` (`plan_stop_id`) and reopened with `delete_visit`. Claude cancels, never deletes, and gives the plan's link (`/plans/<id>` on the deployment it is connected to) — [[../04-integrations/claude-mcp]]. The Plans tab judges upcoming vs past by the viewer's date; `get_plans` by the date where the plan takes place (its last located stop's time zone).
 
 ## Auto Plan and AI Plan
 

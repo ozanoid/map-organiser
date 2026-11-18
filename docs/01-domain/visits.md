@@ -13,6 +13,7 @@ sources:
   - src/lib/hooks/use-visits.ts
   - src/lib/assistant/tools/log-visit.ts
   - src/lib/assistant/tools/get-visits.ts
+  - src/lib/assistant/tools/delete-visit.ts
   - supabase/migrations/20261118025152_visit_functions.sql
 related:
   - "[[places]]"
@@ -61,7 +62,7 @@ Reads (`src/lib/visits/read.ts`): `listVisits` (by places, date range, minimum r
 
 - **Place page:** a line under the visit status ("2 visits · last on Sat 14 Nov" + **Log a visit**), and the **Visits** list above Notes — date, rating, notes, the plan; edit and delete. Marking a place "Visited" offers **Log the visit** in the toast. See [[../03-frontend/components/visits]].
 - **Plan page:** a stop's menu — **Mark as done…** (logs the visit), **Edit visit…**, **Mark as not done…** (deletes the visit), **Mark as skipped** / **Mark as planned**. A done stop shows its visit's rating.
-- **Claude:** `log_visit` (with `place_id`, or `plan_stop_id` for a stop from `get_plans` — v1.39.0), `get_visits`; `get_plans` shows each stop's visit; `get_places` shows the last three visits and upcoming plans; `get_library_overview` counts visits ([[../04-integrations/claude-mcp]]).
+- **Claude:** `log_visit` (with `place_id`, or `plan_stop_id` for a stop from `get_plans` — v1.39.0), `delete_visit` (only when the user asks — v1.39.0, Ozan's decision), `get_visits`; `get_plans` shows each stop's visit; `get_places` shows the last three visits and upcoming plans; `get_library_overview` counts visits ([[../04-integrations/claude-mcp]]).
 - **Not shown publicly:** shared places, lists and plans carry no visits.
 
 ## Not yet
