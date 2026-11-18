@@ -6,10 +6,31 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 18.11.2026 — v1.40.1 — Lists on main
+
+- Phase 1, slice 4 merged to main with Ozan's approval (merge `05cc911`;
+  main had not moved since the plan-tools merge, and the merged tree equals
+  the branch tree). The nested-controls fix (`PlaceCard` and two
+  link-wrapped buttons) went in with it, as Ozan asked. The slice's database
+  changes had been applied before the merge; main's older code ran on them
+  without trouble in the meantime.
+- Vercel built the branch's preview and then production successfully.
+  Checked in production: signed-out `/lists/<id>` goes to
+  `/login?next=…`; the public shared-list API returns each place's
+  `list_note` (new in this slice); a connector call with the real token
+  (`get_places`) runs the new code and returns the place's lists (none on
+  that account). `get_lists` and `save_list` weren't called through the
+  connector: this Claude Code session keeps the tool list it started with —
+  they appear in new claude.ai conversations.
+- Docs: [[_plans/phase-1-planning]], [[_plans/personal-assistant]],
+  [[04-integrations/claude-mcp]].
+
+---
+
 ## 18.11.2026 — v1.40.0 — Lists: one write path, notes, Claude (Phase 1, slice 4)
 
-Written on the branch `feat/personal-assistant`; not merged yet. Ozan's
-decisions are in [[_plans/phase-1-planning]] ("Dilim 4 kararları").
+Written on the branch `feat/personal-assistant`; on main since v1.40.1.
+Ozan's decisions are in [[_plans/phase-1-planning]] ("Dilim 4 kararları").
 
 - **Database** (applied with Ozan's approval; bodies hash-match the files):
   `list_items_order_and_access` — the order in every list made 0..n-1 (three

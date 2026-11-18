@@ -2,7 +2,7 @@
 title: "Claude connector (MCP server)"
 type: integration
 domain: integrations
-version: 1.5.0
+version: 1.5.1
 last_updated: 18.11.2026
 status: draft
 sources:
@@ -52,7 +52,7 @@ related:
 
 **Status (17.11.2026):** on main and connected. Ozan added the connector in claude.ai; Claude registered itself through dynamic client registration and Ozan approved on `/oauth/consent`. The connector's tools were then called through the real OAuth token from a Claude Code session on the same account: `get_library_overview` returned the owner's 291 places (so the owner gate and RLS work), plus `search_places` with `open_at`, `get_places` with `at`, `read_reviews` and `rank_places`. `update_places` has not been run through the connector yet.
 
-**Lists (v1.40.0, 18.11.2026 — branch, not merged):** `get_lists`, `save_list`, and `get_places` showing each list's note for the place; run against the live database by `npm run check:assistant -- lists`.
+**Lists (v1.40.0, on main since 18.11.2026):** `get_lists`, `save_list`, and `get_places` showing each list's note for the place; run against the live database by `npm run check:assistant -- lists`. After the deploy a connector call with the real token (`get_places`) ran the new code in production; `get_lists` and `save_list` appear in new claude.ai conversations — a Claude Code session keeps the tool list it started with.
 
 **Plans (v1.39.0, on main since 18.11.2026):** `get_plans`, `create_plan`, `update_plan`, `log_visit` with `plan_stop_id` and `delete_visit`, run against the live database by `npm run check:assistant -- plan-tools`. After the deploy a connector call with the real token (`get_library_overview`) confirmed the new tool context (`appUrl`) in production; the new tools themselves appear in new claude.ai conversations — a Claude Code session keeps the tool list it started with.
 
