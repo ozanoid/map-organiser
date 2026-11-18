@@ -6,9 +6,25 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 18.11.2026 — v1.39.1 — Plan tools on main
+
+- Phase 1, slice 3 merged to main with Ozan's approval (merge `4508f82`;
+  main had not moved since the visits merge, and the merged tree equals the
+  branch tree). Ozan also approved `delete_visit` before the merge, so it
+  went in with the slice. No database change.
+- Production deployment succeeded. Checked there: signed-out `/plans/<id>`
+  and `/map?add=…` go to `/login?next=…`, `/api/plans` gets no `next`; the
+  MCP endpoint's 401 challenge; a connector call with the real token
+  (`get_library_overview`) works with the new tool context. The new tools
+  weren't called from the Claude Code session (its tool list predates them).
+- Docs: [[_plans/phase-1-planning]], [[_plans/personal-assistant]],
+  [[04-integrations/claude-mcp]].
+
+---
+
 ## 18.11.2026 — v1.39.0 — Plan tools for Claude (Phase 1, slice 3)
 
-Written on the branch `feat/personal-assistant`; not merged yet.
+Written on the branch `feat/personal-assistant`; on main since v1.39.1.
 Claude can now read, save and change the user's plans through the connector.
 
 - **Tools** ([[04-integrations/claude-mcp]]): `get_plans` — a list (by

@@ -48,7 +48,7 @@ related:
 
 **Status (17.11.2026):** on main and connected. Ozan added the connector in claude.ai; Claude registered itself through dynamic client registration and Ozan approved on `/oauth/consent`. The connector's tools were then called through the real OAuth token from a Claude Code session on the same account: `get_library_overview` returned the owner's 291 places (so the owner gate and RLS work), plus `search_places` with `open_at`, `get_places` with `at`, `read_reviews` and `rank_places`. `update_places` has not been run through the connector yet.
 
-**Plans (v1.39.0, 18.11.2026 — branch, not merged):** `get_plans`, `create_plan`, `update_plan`, `log_visit` with `plan_stop_id` and `delete_visit`, run against the live database by `npm run check:assistant -- plan-tools`; not yet called through the connector (that needs the merge).
+**Plans (v1.39.0, on main since 18.11.2026):** `get_plans`, `create_plan`, `update_plan`, `log_visit` with `plan_stop_id` and `delete_visit`, run against the live database by `npm run check:assistant -- plan-tools`. After the deploy a connector call with the real token (`get_library_overview`) confirmed the new tool context (`appUrl`) in production; the new tools themselves appear in new claude.ai conversations — a Claude Code session keeps the tool list it started with.
 
 ## Shape
 
