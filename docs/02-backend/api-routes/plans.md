@@ -2,7 +2,7 @@
 title: Plans routes
 type: route-group
 domain: backend
-version: 1.1.0
+version: 1.1.1
 last_updated: 18.11.2026
 status: stable
 sources:
@@ -46,7 +46,7 @@ Creates the plan and `day_count` empty days in one transaction. With `list_id` t
 
 ## `PATCH /api/plans/[id]`
 
-The only way the UI changes a plan. The body is `planChangesSchema` (`src/lib/plans/schema.ts`):
+The only way the UI changes a plan. The body is `planChangesSchema` (`src/lib/plans/schema.ts`) — the same definition Claude's `update_plan` takes, so its `.describe()` texts are written for the model too:
 
 ```jsonc
 {

@@ -12,6 +12,7 @@ import { changePlan, createPlan, deletePlan, PlanInputError } from "@/lib/plans/
 import { listVisits } from "@/lib/visits/read";
 import { visitLogSchema } from "@/lib/visits/schema";
 import { deleteVisit, editVisit, logVisit, VisitInputError, VisitNotFoundError } from "@/lib/visits/write";
+import { CHECK_APP_URL } from "./context";
 
 type Expect = (label: string, ok: boolean) => void;
 
@@ -25,7 +26,7 @@ async function rejects(run: () => Promise<unknown>, kind: new (...args: never[])
 }
 
 export async function checkVisits(admin: SupabaseClient, expect: Expect, tester: string, owner: string) {
-  const ctx = { supabase: admin, userId: tester };
+  const ctx = { supabase: admin, userId: tester, appUrl: CHECK_APP_URL };
   const tool = async (name: string, input: unknown) => {
     const t = ASSISTANT_TOOLS.find((x) => x.name === name)!;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- loosely typed tool output

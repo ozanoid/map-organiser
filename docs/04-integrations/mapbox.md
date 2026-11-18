@@ -2,7 +2,7 @@
 title: Mapbox
 type: integration
 domain: integrations
-version: 1.4.0
+version: 1.5.0
 last_updated: 18.11.2026
 status: stable
 sources:
@@ -77,10 +77,13 @@ GET https://api.mapbox.com/directions/v5/mapbox/{profile}/{coords}
 - Returns: `{ distance_km, duration_min, geometry: LineString, legs[] }` — already converted to km (1 decimal) / whole minutes inside the wrapper. `dayRoute` (`src/lib/plans/read.ts`) calls it with the day's stops that have a located place and names each leg's two stops (`PlanRoute`).
 - Returns `null` on missing token, <2 coords, non-OK response, or fetch error. `dayRoute` turns a `null` for a day that should have a route into `RouteUnavailableError`: the day endpoint answers 502 (retried, not cached), the public share view shows the day without a route. Usage is recorded per route returned.
 
-Called through `dayRoute` from two places (both record usage in `after()`):
+Called through `dayRoute` from three places:
 
 - `GET /api/plans/[id]/days/[dayId]/route` — one day per request; `trackUsage(user.id, "mapbox_directions")`. The client caches the answer under the day's located stops, their order and the profile ([[../03-frontend/hooks/use-plans#Routes]]), so an edit that doesn't move a stop buys no route. (The trips page re-bought every day's route on each load and after most edits.)
 - `GET /api/shared/[slug]` for a shared plan — `withRoutes`, one request per day with ≥ 2 located stops on every view; the anonymous call is attributed to the link **owner** (`trackUsage(link.user_id, …)` — their share, their quota).
+- Claude's `get_plans` with `plan_id` and `with_routes` (v1.39.0) — one request per day with ≥ 2 located stops, only when Claude asks for routes; each recorded as `mapbox_directions` for the user before the tool answers.
+
+The two routes record usage in `after()`; the tool awaits `trackUsage` (it also runs outside a request, in the check script).
 
 ### Search Box API (server)
 

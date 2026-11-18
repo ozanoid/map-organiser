@@ -2,7 +2,7 @@
 title: Plan
 type: entity
 domain: plans
-version: 1.1.0
+version: 1.2.0
 last_updated: 18.11.2026
 status: stable
 sources:
@@ -20,6 +20,9 @@ sources:
   - src/lib/db/context.ts
   - src/lib/db/errors.ts
   - src/lib/hooks/use-plans.ts
+  - src/lib/assistant/tools/get-plans.ts
+  - src/lib/assistant/tools/create-plan.ts
+  - src/lib/assistant/tools/update-plan.ts
   - src/app/(app)/plans/[id]/page.tsx
   - src/app/(app)/lists/page.tsx
   - next.config.ts
@@ -79,16 +82,16 @@ Every change is one call into `src/lib/plans/write.ts`, which is one call to a P
 
 | Function | Calls | Used by |
 |---|---|---|
-| `createPlan(ctx, input, { createdVia })` | `create_plan` | `POST /api/plans`, shared-plan save |
-| `changePlan(ctx, planId, { set?, ops? })` | `apply_plan_changes` | `PATCH /api/plans/[id]`, auto-plan, AI Plan |
+| `createPlan(ctx, input, { createdVia })` | `create_plan` | `POST /api/plans`, shared-plan save, Claude's `create_plan` |
+| `changePlan(ctx, planId, { set?, ops? })` | `apply_plan_changes` | `PATCH /api/plans/[id]`, auto-plan, AI Plan, Claude's `update_plan` |
 | `deletePlan(ctx, planId)` | a delete | `DELETE /api/plans/[id]` |
 | `autoPlanStops(ctx, planId)` | `changePlan` with `move_stop` ops | `POST /api/plans/[id]/auto-plan` |
 
-`{ set, ops }` is defined once, in `src/lib/plans/schema.ts` (zod): `set` changes the plan's own fields (name, notes, party size, start date, status, colour); `ops` is a list of `add_day`, `remove_day`, `swap_days`, `set_day`, `add_stop`, `update_stop`, `move_stop`, `remove_stop`, `reorder_stops`, applied in order. `null` clears a field, a missing key leaves it alone. A batch applies completely or not at all. The assistant tools (Phase 1, slice 3) take the same shapes.
+`{ set, ops }` is defined once, in `src/lib/plans/schema.ts` (zod): `set` changes the plan's own fields (name, notes, party size, start date, status, colour); `ops` is a list of `add_day`, `remove_day`, `swap_days`, `set_day`, `add_stop`, `update_stop`, `move_stop`, `remove_stop`, `reorder_stops`, applied in order. `null` clears a field, a missing key leaves it alone. A batch applies completely or not at all. A day number in an op is read when that op runs, after the ops before it. Claude's `create_plan` and `update_plan` take the same shapes (without colour and source list); the schema's `.describe()` texts are what the model reads.
 
 `write.ts` adds what the database can't know: the default cost of a new stop, and which errors are the caller's (`PlanInputError` → 400, `PlanNotFoundError` → 404 — subclasses of the shared `InputError` / `NotFoundError` in `src/lib/db/errors.ts`, which the routes map through `errorResponse` in `src/lib/api/http.ts`). The context type is the shared `UserContext` (`src/lib/db/context.ts`).
 
-Reads are in `src/lib/plans/read.ts`: `listPlans`, `getPlan`, `plansUsingPlaces`, `dayRoute`, `withRoutes`. Every query is scoped by the caller's client (RLS) **and** an explicit `user_id` filter — the second is what protects the callers that use the service role (the share view, scripts).
+Reads are in `src/lib/plans/read.ts`: `listPlans`, `getPlan`, `planOutlines` (each plan's stops by name, for Claude's plan list), `plansUsingPlaces`, `dayRoute`, `withRoutes`. Every query is scoped by the caller's client (RLS) **and** an explicit `user_id` filter — the second is what protects the callers that use the service role (the share view, scripts).
 
 ## Routes on the map
 
@@ -101,6 +104,7 @@ The app asks for a route per day (`GET /api/plans/[id]/days/[dayId]/route?sig=�
 - `/lists?tab=plans` — the Plans tab: upcoming, no date yet, past, cancelled (`planPhase`). "New Plan": a name, a number of days, optionally a date, optionally the places of a list (they start on day 1).
 - `/plans/[id]` — the plan: timeline or map (`?view=map`), dates, budget, Auto Plan, AI Plan, the plan menu (share, dates, rename, cancel / restore, delete). `/trips/[id]` redirects here (plans kept the trips' ids).
 - `/shared/[slug]` — the public view of a shared plan ([[sharing]]).
+- **Claude** (connector, v1.39.0): `get_plans` lists and reads plans, `create_plan` saves one, `update_plan` changes one; a stop at a saved place is ticked off with `log_visit` (`plan_stop_id`). Claude cancels, never deletes, and gives the plan's link (`/plans/<id>` on the deployment it is connected to) — [[../04-integrations/claude-mcp]].
 
 ## Auto Plan and AI Plan
 
@@ -109,6 +113,4 @@ The app asks for a route per day (`GET /api/plans/[id]/days/[dayId]/route?sig=�
 
 ## Not yet
 
-- Plan tools for Claude (slice 3).
-- Renaming a free-text stop in place (remove and add again).
-- After signing in, a signed-out visitor to `/plans/[id]` lands on the map, not on the plan — the middleware keeps no return address for ordinary pages. To fix before Claude hands out plan links (slice 3).
+- Renaming a free-text stop in place in the app (remove and add again; Claude's `update_stop` can change a title).

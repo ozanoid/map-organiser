@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { safeNextPath } from "@/lib/auth/safe-next";
 
 export async function updateSession(request: NextRequest) {
   // Sign-ups are closed (the app has a single owner): old /signup links land
@@ -56,14 +57,21 @@ export async function updateSession(request: NextRequest) {
   if (!user && !isAuthRoute && !isPublicRoute) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
+    url.search = "";
+    // Come back to this page after signing in — a plan link from Claude, the
+    // iOS Shortcut's /map?add=… The login page and the auth callback follow
+    // a same-site `next` (safeNextPath). Not for API calls: a fetch has no
+    // page to come back to.
+    if (!request.nextUrl.pathname.startsWith("/api/")) {
+      url.searchParams.set("next", `${request.nextUrl.pathname}${request.nextUrl.search}`);
+    }
     return NextResponse.redirect(url);
   }
 
-  // Redirect authenticated users away from auth pages
+  // Signed in already: leave the login page for `next`, or the map.
   if (user && isAuthRoute) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/map";
-    return NextResponse.redirect(url);
+    const next = safeNextPath(request.nextUrl.searchParams.get("next"));
+    return NextResponse.redirect(new URL(next ?? "/map", request.url));
   }
 
   return supabaseResponse;

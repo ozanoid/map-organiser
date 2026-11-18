@@ -1,6 +1,7 @@
 import "server-only";
 import { OAuthError, OAuthErrorCode, type AuthInfo } from "@modelcontextprotocol/server";
 import { createClient } from "@supabase/supabase-js";
+import { getPublicOrigin } from "mcp-handler";
 import { supabaseAuthIssuer } from "@/lib/assistant/oauth";
 import { isAssistantOwner } from "@/lib/assistant/owner";
 
@@ -14,8 +15,12 @@ import { isAssistantOwner } from "@/lib/assistant/owner";
  * undefined → 401 with a challenge pointing at the resource metadata, so the
  * client starts (or restarts) the OAuth flow. A valid token for an account
  * that isn't an assistant owner → 403, which ends the flow instead.
+ *
+ * `extra.appUrl` is the origin the client reached this server at — the same
+ * one the OAuth metadata advertises — so links in tool results open the app
+ * the user is connected to (production, a preview, or localhost).
  */
-export async function verifyAssistantToken(_req: Request, bearer?: string): Promise<AuthInfo | undefined> {
+export async function verifyAssistantToken(req: Request, bearer?: string): Promise<AuthInfo | undefined> {
   if (!bearer) return undefined;
 
   const auth = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
@@ -38,6 +43,6 @@ export async function verifyAssistantToken(_req: Request, bearer?: string): Prom
     clientId: typeof claims.client_id === "string" ? claims.client_id : "supabase-session",
     scopes: typeof claims.scope === "string" ? claims.scope.split(" ").filter(Boolean) : [],
     expiresAt: typeof claims.exp === "number" ? claims.exp : undefined,
-    extra: { userId: claims.sub, email },
+    extra: { userId: claims.sub, email, appUrl: getPublicOrigin(req) },
   };
 }

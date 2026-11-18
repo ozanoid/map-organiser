@@ -6,6 +6,57 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 18.11.2026 — v1.39.0 — Plan tools for Claude (Phase 1, slice 3)
+
+Written on the branch `feat/personal-assistant`; not merged yet.
+Claude can now read, save and change the user's plans through the connector.
+
+- **Tools** ([[04-integrations/claude-mcp]]): `get_plans` — a list (by
+  default upcoming and not-yet-scheduled plans; `phase`, date range, name),
+  each with dates, the first stops by name, counts and the plan's link, or
+  one plan in full with day ids, dates, weekdays, stops, times, statuses and
+  visits; `with_routes` adds each day's travel time and legs (Mapbox
+  Directions, recorded as `mapbox_directions`). `create_plan` — a plan in one
+  step (`created_via = assistant`). `update_plan` — `set` and ordered `ops`,
+  all or nothing; no delete, Claude cancels. `log_visit` takes
+  `plan_stop_id` to tick off a stop from `get_plans` whatever its day.
+- **One schema:** the tools' inputs are `planCreateSchema` / `planSetSchema`
+  / `planOpSchema` from `src/lib/plans/schema.ts` (now exported), whose
+  `.describe()` texts the model reads; the API routes validate with the same
+  definitions.
+- **Links:** `AssistantContext` carries `appUrl`, set by the MCP server from
+  the address Claude reached it at (`getPublicOrigin`); plan results link
+  `<appUrl>/plans/<id>`. After a write the tools read the plan back; if that
+  read fails the result still says "saved", so a retry doesn't save twice.
+- **Server instructions:** lay a new plan out and save it once the user
+  agrees; do what the user asked with `update_plan`, ask before changes
+  Claude suggests itself; give the link after saving; cancel, never delete.
+- **Return path after sign-in** ([[03-frontend/middleware]]): a signed-out
+  request for a page now goes to `/login?next=<path and query>` and sign-in
+  returns there — a plan link, `/map?add=…`; before, every sign-in landed on
+  `/map`. A signed-in visit to `/login?next=…` goes straight on. API paths
+  get no `next`. Only same-site paths are followed (`safeNextPath`).
+- **Read helper:** `planOutlines` (`src/lib/plans/read.ts`) — each plan's
+  stops by name, for the plan list. `clip` moved into the assistant library.
+- **Checks:** `npm run check:assistant -- plan-tools` — 31 checks on the
+  live database (test account, everything removed afterwards): every tool's
+  input converts to the JSON Schema clients see; create, list and filters,
+  detail with a route, a batch whose day number is read after a swap, the
+  all-or-nothing refusal of "done" at a saved place, `log_visit` with
+  `plan_stop_id`, cancel / restore / unschedule. The plan and visit suites
+  pass again. Signed-out redirects checked on the dev server.
+- **Measured:** the 12 tool definitions are about 31,000 characters;
+  `update_plan` is 8,400 of them, 2,700 of which are zod's uuid patterns.
+- Docs: [[04-integrations/claude-mcp]], [[01-domain/plans]],
+  [[01-domain/visits]], [[05-flows/visit-flow]], [[05-flows/auth-flow]],
+  [[05-flows/claude-connector-flow]], [[02-backend/auth]],
+  [[02-backend/supabase-clients]], [[02-backend/api-routes/plans]],
+  [[03-frontend/middleware]], [[03-frontend/routing]],
+  [[04-integrations/mapbox]], [[_agent/common-tasks]],
+  [[_plans/phase-1-planning]], [[_plans/personal-assistant]].
+
+---
+
 ## 18.11.2026 — v1.38.1 — Visits on main
 
 - Phase 1, slice 2 merged to main with Ozan's approval (main had not moved

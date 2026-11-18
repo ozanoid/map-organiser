@@ -2,7 +2,7 @@
 title: Common Tasks
 type: agent-note
 domain: agent
-version: 1.3.0
+version: 1.4.0
 last_updated: 18.11.2026
 status: stable
 related:
@@ -43,9 +43,9 @@ Checklists for frequent operations. Treat these as authoritative — if a checkl
 Plans and visits each have one write path; keep it one.
 
 1. Every change to `plans` / `plan_days` / `plan_stops` goes through `createPlan` / `changePlan` in `src/lib/plans/write.ts`, which call the Postgres functions `create_plan` / `apply_plan_changes`. Don't write to those tables from a route or a component.
-2. A new kind of edit is a new **op**: add it to the SQL function (a migration file, shown to Ozan before applying — see "Add a new DB table"), to `planOpSchema` in `src/lib/plans/schema.ts`, and to the op tables in [[../02-backend/schema/plans]] and [[../02-backend/api-routes/plans]].
+2. A new kind of edit is a new **op**: add it to the SQL function (a migration file, shown to Ozan before applying — see "Add a new DB table"), to `planOpSchema` in `src/lib/plans/schema.ts` with a `.describe()` — Claude's `update_plan` takes the same schema, so the description is what the model reads — and to the op tables in [[../02-backend/schema/plans]] and [[../02-backend/api-routes/plans]].
 3. The UI sends ops through `usePlanEditor().apply` ([[../03-frontend/hooks/use-plans]]); it never patches the cached plan by hand — the PATCH response replaces it.
-4. Add a check to `scripts/assistant-check/plans.ts` and run `npm run check:assistant -- plans`.
+4. Add a check to `scripts/assistant-check/plans.ts` and run `npm run check:assistant -- plans`; for what Claude sees (tool output, schema conversion, links), `scripts/assistant-check/plan-tools.ts` and `-- plan-tools`.
 5. Visits the same way: `logVisit` / `editVisit` / `deleteVisit` in `src/lib/visits/write.ts` → `log_visit` / `delete_visit`. Rules that touch both (a stop is done when a visit fulfils it) live in the SQL functions, never in a route or a component. Checks: `scripts/assistant-check/visits.ts`, `npm run check:assistant -- visits`.
 6. Routes over these modules use `requestContext` / `errorResponse` from `src/lib/api/http.ts`; module errors subclass `InputError` / `NotFoundError` (`src/lib/db/errors.ts`).
 

@@ -230,6 +230,59 @@ export async function getPlan(ctx: PlanContext, planId: string): Promise<Plan | 
   return shapePlan(row, row.days ?? []);
 }
 
+/** A stop as a list of plans names it. */
+export interface StopOutline {
+  day_number: number;
+  /** The place's name, or the free-text stop's title. */
+  name: string;
+  start_time: string | null;
+  day_part: DayPart | null;
+  status: StopStatus;
+}
+
+/** The stops of these plans in day and visiting order, names only — for a
+ *  list of plans that says what is in each (the assistant's get_plans). */
+export async function planOutlines(ctx: PlanContext, planIds: string[]): Promise<Map<string, StopOutline[]>> {
+  const out = new Map<string, StopOutline[]>();
+  if (planIds.length === 0) return out;
+  const { data, error } = await ctx.supabase
+    .from("plan_days")
+    .select("plan_id,day_number,plans!inner(user_id),stops:plan_stops(sort_order,title,start_time,day_part,status,place:places(name))")
+    .in("plan_id", planIds)
+    .eq("plans.user_id", ctx.userId);
+  if (error) throw new Error(error.message);
+
+  type Row = {
+    plan_id: string;
+    day_number: number;
+    stops:
+      | {
+          sort_order: number;
+          title: string | null;
+          start_time: string | null;
+          day_part: DayPart | null;
+          status: StopStatus;
+          place: { name: string } | null;
+        }[]
+      | null;
+  };
+  const days = [...((data ?? []) as unknown as Row[])].sort((a, b) => a.day_number - b.day_number);
+  for (const day of days) {
+    const stops = out.get(day.plan_id) ?? [];
+    for (const s of [...(day.stops ?? [])].sort((a, b) => a.sort_order - b.sort_order)) {
+      stops.push({
+        day_number: day.day_number,
+        name: s.place?.name ?? s.title ?? "Stop",
+        start_time: s.start_time ? s.start_time.slice(0, 5) : null,
+        day_part: s.day_part,
+        status: s.status,
+      });
+    }
+    out.set(day.plan_id, stops);
+  }
+  return out;
+}
+
 /** Names of the plans a set of places appears in — for the "this place is
  *  in a plan" warning before a delete. */
 export async function plansUsingPlaces(

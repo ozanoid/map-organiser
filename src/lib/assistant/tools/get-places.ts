@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
   ToolInputError,
   busyness,
+  clip,
   closedState,
   openAt,
   priceLevel,
@@ -66,9 +67,6 @@ interface DetailRow {
   g_description: string | null;
   g_similar: Array<{ cid?: string; title?: string; rating?: number; votes_count?: number }> | null;
 }
-
-const clip = (s: string | null | undefined, n: number) =>
-  s ? (s.length > n ? `${s.slice(0, n - 1)}…` : s) : undefined;
 
 /** Long Google links (reserve, maps) carry kilobytes of tracking query;
  *  the path alone still opens the same page. */

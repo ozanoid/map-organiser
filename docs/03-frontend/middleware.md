@@ -2,8 +2,8 @@
 title: Middleware
 type: overview
 domain: frontend
-version: 1.3.0
-last_updated: 17.11.2026
+version: 1.4.0
+last_updated: 18.11.2026
 status: stable
 sources:
   - src/middleware.ts
@@ -55,8 +55,8 @@ Two pieces:
 4. Write refreshed cookies onto the response.
 5. Decide:
    - Public path → continue.
-   - Auth path (`/login`) with a logged-in user → redirect to `/map`.
-   - Any other path without a user → redirect to `/login`.
+   - Auth path (`/login`) with a logged-in user → redirect to its `next` when that is a same-site path (`safeNextPath`), otherwise `/map`.
+   - Any other path without a user → redirect to `/login?next=<path and query>`, so sign-in comes back to the page that was asked for — a plan link Claude gave, the iOS Shortcut's `/map?add=…` (v1.39.0; before, every sign-in landed on `/map`). API paths get no `next`: a fetch has no page to return to. The login page and `/auth/callback` follow `next` only through `safeNextPath`.
 6. Return the response.
 
 ## Public paths
@@ -114,7 +114,7 @@ If a new path needs to be public:
 
 ### Adding a new auth-gated route
 
-Default behavior — no changes needed. The middleware redirects unauthenticated users to `/login` for any path not in the public list and not an auth route.
+Default behavior — no changes needed. The middleware redirects unauthenticated users to `/login?next=…` for any path not in the public list and not an auth route, and sign-in returns them to it.
 
 ## Next.js 16 note
 

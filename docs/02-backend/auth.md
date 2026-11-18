@@ -2,8 +2,8 @@
 title: Auth
 type: overview
 domain: auth
-version: 1.2.0
-last_updated: 17.11.2026
+version: 1.3.0
+last_updated: 18.11.2026
 status: stable
 sources:
   - src/middleware.ts
@@ -95,7 +95,7 @@ Since 17.11.2026 the app has a single owner (see [[../_plans/personal-assistant]
 
 ## Return path after sign-in (`next`)
 
-Since 17.11.2026 a page can send a signed-out visitor to `/login?next=<path>` and get them back after sign-in — the OAuth consent page does. `next` is followed only through `safeNextPath` (`src/lib/auth/safe-next.ts`): one leading slash, no backslash or control characters, same origin after URL parsing.
+Since 17.11.2026 a page can send a signed-out visitor to `/login?next=<path>` and get them back after sign-in — the OAuth consent page does. Since v1.39.0 (18.11.2026) the middleware does the same for every protected page: a signed-out request for `/plans/<id>` goes to `/login?next=%2Fplans%2F<id>` (the path with its query), and a signed-in visit to `/login?next=…` goes straight there. `next` is followed only through `safeNextPath` (`src/lib/auth/safe-next.ts`): one leading slash, no backslash or control characters, same origin after URL parsing.
 
 - Email/password: the login page pushes `next` (or `/map`).
 - Google: the login page stores `next` in the short-lived `auth_next` cookie (10 min, SameSite=Lax) so the registered `/auth/callback` redirect URL stays unchanged; the callback reads `?next=` or the cookie, validates it, redirects and clears the cookie.
@@ -143,11 +143,12 @@ const isPublicRoute =
   pathname.startsWith("/api/cron/");      // cron authenticates itself
 
 if (!user && !isAuthRoute && !isPublicRoute) {
-  return NextResponse.redirect(/login);
+  // pages: /login?next=<path + query>; API paths: /login without next
+  return NextResponse.redirect(/login?next=…);
 }
 
 if (user && isAuthRoute) {
-  return NextResponse.redirect(/map);
+  return NextResponse.redirect(safeNextPath(next) ?? /map);
 }
 ```
 
@@ -157,7 +158,7 @@ if (user && isAuthRoute) {
 |---|---|
 | `/` | Landing page (currently redirects). |
 | `/auth/callback/*` | OAuth handshake — must run before session exists. |
-| `/login` | Inverse — authenticated users get redirected AWAY from it to `/map`. |
+| `/login` | Inverse — authenticated users get redirected AWAY from it, to its same-site `next` or `/map`. |
 | `/signup` | Closed (17.11.2026) — always redirects to `/login`. |
 | `/shared/*` | Slug-based public share view. See [[../01-domain/sharing]]. |
 | `/api/shared/*` | The matching API endpoints for the share view. |

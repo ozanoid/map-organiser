@@ -2,7 +2,7 @@
 title: Visit Flow
 type: flow
 domain: visits
-version: 1.0.0
+version: 1.1.0
 last_updated: 18.11.2026
 status: stable
 sources:
@@ -44,7 +44,7 @@ A free-text stop ("Meet at the Old Street exit") is ticked off with `PATCH /api/
 
 ## 3. From Claude
 
-"Went to Dishoom last night, 4 stars, the black daal was great" → `log_visit { place_id, visited_on, rating, notes }` (`created_via = assistant`). With no date, today at the place. Correcting: `log_visit { visit_id, … }`. Reading back: `get_visits`, and `get_places` shows the last visits.
+"Went to Dishoom last night, 4 stars, the black daal was great" → `log_visit { place_id, visited_on, rating, notes }` (`created_via = assistant`). With no date, today at the place. A visit that fulfils a stop Claude saw in `get_plans` → `log_visit { plan_stop_id, … }` (v1.39.0): the same as the stop menu's **Mark as done…** — that stop is ticked off whatever its day, and its day is the default date (today if the day is still ahead). Correcting: `log_visit { visit_id, … }`. Reading back: `get_visits`, `get_plans` (each stop shows its visit), and `get_places` shows the last visits.
 
 ## Failure modes
 
