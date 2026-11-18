@@ -2,7 +2,7 @@
 title: plans, plan_days, plan_stops
 type: table
 domain: backend
-version: 1.2.0
+version: 1.2.1
 last_updated: 18.11.2026
 status: draft
 sources:
@@ -25,7 +25,7 @@ related:
 
 The single planning model: an evening outing and a multi-day trip are both a **plan** with 1..N **days** of ordered **stops**. Created on 18.11.2026 (`plans_tables`) as the *expand* step that replaces [[trips]] / [[trip_days]] / [[trip_day_places]].
 
-**State (18.11.2026):** the app runs on these tables since v1.37.0 — every read and write goes through `src/lib/plans/` ([[../../01-domain/plans]]). The trip tables still exist, unused, until they are dropped (separate approval). On the branch `feat/personal-assistant`; production moves over with the merge — see [[../../_plans/phase-1-planning#Geçiş ve regresyon]].
+**State (18.11.2026):** the app runs on these tables since v1.37.0 — every read and write goes through `src/lib/plans/` ([[../../01-domain/plans]]). The trip tables still exist, unused, until they are dropped (separate approval). On main since 18.11.2026 — see [[../../_plans/phase-1-planning#Geçiş ve regresyon]] for the cutover steps.
 
 ## The one rule about dates
 

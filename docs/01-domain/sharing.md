@@ -2,7 +2,7 @@
 title: Shared Link
 type: entity
 domain: sharing
-version: 1.3.0
+version: 1.3.1
 last_updated: 18.11.2026
 status: stable
 sources:
@@ -130,6 +130,9 @@ By resource type (assembled in `GET /api/shared/[slug]`):
 - each day: `{ id, day_number, date, routing_profile, route, stops }`; `route` is `{ distance_km, duration_min, geometry, legs }` (Mapbox Directions per day, attributed to the link's owner)
 - each stop: `{ id, title, start_time, day_part, place }`; `place` is `{ id, name, address, city, country, rating, location, category {name, color}, google_data {url} }` or `null` for a stop without a place
 - **Not sent:** cost estimates, currency, party size, plan / day / stop notes, stop status, the place's visit status and the rest of its Google data
+- **Sent on purpose:** the owner's own star rating of a place (`place.rating`), shown next to the place — as on a shared list. Ozan decided to keep it (18.11.2026).
+
+This page is a read-only itinerary that a signed-in viewer can copy. It is **not** the invitation page: inviting people to a plan (who is invited, their answers, a cancellation notice) is Phase 3 of [[../_plans/personal-assistant]] and gets its own page and data.
 
 **Place (v1.20.0):**
 - `type: "place"`

@@ -6,6 +6,21 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 18.11.2026 — v1.37.2 — Plans on main
+
+- Phase 1, slice 1 merged to main with Ozan's approval (main had not moved;
+  the merged tree equals the branch tree). Production now runs on the plan
+  tables. Right after the deploy: the trips ↔ plans comparison is run once
+  more and the two share links stored as `trip` are renamed to `plan`. The
+  trip tables stay, unused, until dropping them is approved separately.
+- Decided (Ozan): the public share view keeps showing the owner's own star
+  rating of a place. Recorded in [[01-domain/sharing]], which now also says
+  that the share page is not the Phase 3 invitation page.
+- Docs: [[_plans/phase-1-planning]], [[_plans/personal-assistant]],
+  [[02-backend/schema/plans]], [[01-domain/sharing]].
+
+---
+
 ## 18.11.2026 — v1.37.1 — Plans UI checked in a browser
 
 - Full pass of the plan UI in Chrome, signed in as the test account, against
@@ -25,9 +40,9 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ## 18.11.2026 — v1.37.0 — Plans replace trips in the code (Phase 1, slice 1)
 
-On the branch `feat/personal-assistant`; not on main yet. The database already
-had the plan tables and functions (v1.36.0, v1.36.1); this is the code moving
-onto them.
+Written on the branch `feat/personal-assistant`; on main since v1.37.2. The
+database already had the plan tables and functions (v1.36.0, v1.36.1); this is
+the code moving onto them.
 
 - **Database: `apply_plan_changes` revised** (migration
   `plan_changes_by_day_id`, file
@@ -85,9 +100,9 @@ onto them.
   (7 / 7 plans, 127 / 127 stops).
   The signed-in UI and a real AI Plan generation were checked afterwards —
   see v1.37.1.
-- **Open decision:** the public payload of a shared plan (like a shared list
-  before it) carries the owner's own star rating of each place, and the page
-  shows it. Kept as it was; whether a share should show it is Ozan's call.
+- The public payload of a shared plan (like a shared list before it) carries
+  the owner's own star rating of each place, and the page shows it. Kept as
+  it was; Ozan confirmed it stays (v1.37.2).
 - **Docs — new:** [[01-domain/plans]], [[02-backend/api-routes/plans]],
   [[03-frontend/hooks/use-plans]], [[03-frontend/components/plans]],
   [[05-flows/plan-flow]], [[05-flows/ai-plan-flow]].
