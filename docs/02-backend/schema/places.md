@@ -2,8 +2,8 @@
 title: places
 type: table
 domain: backend
-version: 1.4.1
-last_updated: 16.10.2026
+version: 1.4.2
+last_updated: 18.11.2026
 status: stable
 sources:
   - Supabase project hukppmaevcapvbrvxtph (live)
@@ -48,7 +48,7 @@ The core entity — user-saved locations. 458 rows in the current snapshot. Geog
 | `rating` | smallint | yes | — | User's 1–5 rating. Check `rating >= 1 AND rating <= 5`. |
 | `notes` | text | yes | — | Free-form. |
 | `google_data` | jsonb | yes | `'{}'::jsonb` | Provider data (see [[../../01-domain/places#google_data-shape]]). |
-| `source` | text | yes | `'manual'::text` | CHECK enum (live): `manual` / `import` / `link` / `mapbox_search` / `similar` / `shared` / `instagram`. Added 13.05.2026 (`add_source_check_with_mapbox_search`); widened 15.07.2026 (`widen_places_source_check_add_similar` v1.18.0, `widen_places_source_check_add_shared` v1.20.0). The code also writes **`instagram`** (v1.28.0 — places the Instagram import creates; `Place.source` in `src/lib/types/index.ts`, `ImportDefaults.source` in the drain) — allowed by the live constraint since 16.10.2026 ([[#instagram-migration]]). |
+| `source` | text | yes | `'manual'::text` | CHECK enum (live): `manual` / `import` / `link` / `mapbox_search` / `similar` / `shared` / `instagram`. Added 13.05.2026 (`add_source_check_with_mapbox_search`); widened 15.07.2026 (`widen_places_source_check_add_similar` v1.18.0, `widen_places_source_check_add_shared` v1.20.0). The code also writes **`instagram`** (v1.28.0 — places the Instagram import creates; `Place.source` in `src/lib/types/index.ts`, `ImportDefaults.source` in the drain) — allowed by the live constraint since 16.10.2026 ([[#instagram-migration]]). **`assistant`** was added on 18.11.2026 (`assistant_source`) for places an assistant tool adds; no code writes it yet. |
 | `visit_status` | text | yes | — | Check enum: `want_to_go` / `booked` / `visited` / `favorite`. |
 | `visited_at` | timestamptz | yes | — | Set when status flips to `visited` (app-side). |
 | `booked_at` | timestamptz | yes | — | Set when status flips to `booked` (app-side). |

@@ -2,8 +2,8 @@
 title: RLS Policies
 type: overview
 domain: backend
-version: 1.4.0
-last_updated: 05.08.2026
+version: 1.5.0
+last_updated: 18.11.2026
 status: stable
 sources:
   - pg_policies (via Supabase MCP)
@@ -43,6 +43,10 @@ Truth source: `pg_policies`, fetched via Supabase MCP `execute_sql`. See per-tab
 | `trip_day_places` | Users can manage own trip day places | public | ALL | `trip_day_id IN (SELECT td.id FROM trip_days td JOIN trips t ON t.id = td.trip_id WHERE t.user_id = auth.uid())` |
 | `trip_days` | Users can manage own trip days | public | ALL | `trip_id IN (SELECT id FROM trips WHERE user_id = auth.uid())` |
 | `trips` | Users can manage own trips | public | ALL | `auth.uid() = user_id` |
+| `plans` | Users manage own plans | authenticated | ALL | `auth.uid() = user_id`; WITH CHECK also: `list_id` NULL or an own list |
+| `plan_days` | Users manage own plan days | authenticated | ALL | `plan_id IN (SELECT id FROM plans WHERE user_id = auth.uid())` |
+| `plan_stops` | Users manage own plan stops | authenticated | ALL | day's plan is the user's; WITH CHECK also: `place_id` NULL or an **own place** |
+| `visits` | Users manage own visits | authenticated | ALL | `auth.uid() = user_id`; WITH CHECK also: own place, and `plan_stop_id` NULL or a stop of an own plan |
 | `vocabulary_aliases` | Aliases are readable by all authenticated | authenticated | SELECT | `true` — global read, no write policy ([[schema/vocabulary]]) |
 | `vocabulary_candidates` | Users manage own vocabulary candidates | authenticated | ALL | `auth.uid() = user_id` |
 | `vocabulary_concepts` | Vocabulary is readable by all authenticated | authenticated | SELECT | `true` — global read, no write policy ([[schema/vocabulary]]) |
@@ -101,7 +105,11 @@ place_photos ─ via place_id → places.user_id
 list_places ─ via list_id   → lists.user_id
 trip_days   ─ via trip_id   → trips.user_id
 trip_day_places ─ via trip_day_id → trip_days.trip_id → trips.user_id  (two-level walk)
+plan_days   ─ via plan_id   → plans.user_id                              (18.11.2026)
+plan_stops  ─ via day_id    → plan_days.plan_id → plans.user_id          (two-level walk)
 ```
+
+**Ownership of referenced rows (18.11.2026).** The plan and visit policies also check, in WITH CHECK, that the rows they point at belong to the user (`plan_stops.place_id`, `visits.place_id`, `visits.plan_stop_id`, `plans.list_id`). A foreign key alone accepts any existing id; the public share view reads with the service role, so a foreign place attached to a stop would be exposed. See [[schema/plans]] and [[schema/visits]].
 
 The two-level walk on `trip_day_places` is the most expensive — measurable in EXPLAIN if trips grow large. Worth keeping an index on `trip_days.trip_id` (already in place by FK) and `trips.user_id` (in place via `trips_pkey` + sequential scan; consider a dedicated `idx_trips_user` if performance degrades).
 

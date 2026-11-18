@@ -2,8 +2,8 @@
 title: Schema
 type: overview
 domain: backend
-version: 1.2.1
-last_updated: 16.10.2026
+version: 1.3.0
+last_updated: 18.11.2026
 status: stable
 sources:
   - Supabase project hukppmaevcapvbrvxtph (via MCP)
@@ -31,7 +31,11 @@ All user-facing tables in the `public` schema of the Supabase project `hukppmaev
 | `list_places` | [[list_places]] | 95 | Junction: lists ↔ places with `sort_order` |
 | `place_photos` | [[place_photos]] | 0 | Place photo metadata (storage refs) |
 | `api_usage` | [[api_usage]] | 25 | Per-SKU API call counters |
-| `trips` | [[trips]] | 5 | Multi-day trip plans |
+| `plans` | [[plans]] | 7 | The planning model (18.11.2026): an outing or a trip; not used by code yet |
+| `plan_days` | [[plans]] | 40 | Days of a plan; dates derive from `plans.start_date` |
+| `plan_stops` | [[plans]] | 127 | Ordered stops of a day: a place or a free-text stop |
+| `visits` | [[visits]] | 0 | Dated visits to a place (18.11.2026); not used by code yet |
+| `trips` | [[trips]] | 5 | Multi-day trip plans — being replaced by `plans` |
 | `trip_days` | [[trip_days]] | 33 | Days within a trip |
 | `trip_day_places` | [[trip_day_places]] | 102 | Places within a trip day, ordered |
 | `shared_links` | [[shared_links]] | 3 | Public slug links to lists/trips/places |
@@ -116,7 +120,9 @@ The schema has been built up through 28 migrations on Supabase. Use Supabase MCP
 | 27 | 20260415202047 | create_shared_links_table |
 | 28 | 20260415230552 | add_cascade_delete_trip_day_places_place_id |
 
-Adding a new migration: use Supabase MCP `apply_migration` (preferred) or the dashboard SQL editor. Then update this list and the affected per-table doc.
+**Since 18.11.2026** the SQL of each migration is kept in `supabase/migrations/` (file name = the version Supabase recorded + the name). The list above stops at #28; the live project has 60 — use `list_migrations`. Migrations of 18.11.2026: `20261118005355_plans_tables`, `20261118005402_visits`, `20261118005404_list_place_notes`, `20261118005405_assistant_source`.
+
+Adding a new migration: write the file, show it to Ozan, apply it with Supabase MCP `apply_migration`, then update the affected per-table doc.
 
 ## How this doc relates to per-table docs
 

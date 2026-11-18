@@ -6,6 +6,29 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 18.11.2026 — v1.36.0 — Phase 1 schema applied: plans, visits
+
+- Applied to the live database (Ozan approved the SQL): `plans_tables`
+  (`plans` / `plan_days` / `plan_stops` + RLS + indexes + a copy of the 7
+  trips under the same ids; `shared_links.resource_type` accepts `plan`),
+  `visits`, `list_place_notes` (`list_places.note`), `assistant_source`
+  (`places.source` and `import_jobs.kind` accept `assistant`). The files in
+  `supabase/migrations/` now carry the versions Supabase recorded.
+- Verified: 7 / 40 / 127 rows copied, every derived day date and end date
+  equals the stored one, cost totals equal; policies exercised as a signed-in
+  user in a rolled-back transaction (foreign-place stop and visit blocked,
+  other accounts and anon see nothing); the security advisor reports nothing
+  for the new tables.
+- No application code uses the new tables yet; the trip tables keep serving
+  the app until the cutover.
+- Docs: new [[02-backend/schema/plans]], [[02-backend/schema/visits]];
+  updated [[02-backend/schema/_README]], [[02-backend/rls-policies]],
+  [[02-backend/schema/list_places]], [[02-backend/schema/places]],
+  [[02-backend/schema/import-jobs]], [[02-backend/schema/shared_links]];
+  "being replaced" notes on the trip docs; [[_plans/phase-1-planning]] v2.2.0.
+
+---
+
 ## 18.11.2026 — v1.35.1 — Root CLAUDE.md: how to design changes
 
 - `CLAUDE.md` gained a "How to design changes" section at Ozan's request:

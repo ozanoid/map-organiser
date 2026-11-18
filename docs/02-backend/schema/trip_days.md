@@ -2,8 +2,8 @@
 title: trip_days
 type: table
 domain: backend
-version: 1.1.0
-last_updated: 16.07.2026
+version: 1.1.1
+last_updated: 18.11.2026
 status: stable
 sources:
   - Supabase project hukppmaevcapvbrvxtph (live)
@@ -15,6 +15,8 @@ related:
 ---
 
 # `trip_days`
+
+> **Being replaced (18.11.2026).** The plan model — [[plans]] — now exists next to this table and holds a copy of its rows. The app still reads and writes here until the cutover; after it this table is dropped. See [[../../_plans/phase-1-planning]].
 
 > **v1.22.0 (NF-07/AI-09):** new `routing_profile` column (migration `add_trip_days_routing_profile`) — the per-day Mapbox Directions mode, switchable from the day header in the trip UI. `notes` gained its first real writer: the AI trip planner persists each day's theme + rationale there (`POST /api/ai/trip-plan`), and it's now editable via the new `PATCH /api/trips/[id]/days/[dayId]`.
 
