@@ -1,3 +1,4 @@
+import { addPlacesTool } from "@/lib/assistant/tools/add-places";
 import { createPlanTool } from "@/lib/assistant/tools/create-plan";
 import { deleteVisitTool } from "@/lib/assistant/tools/delete-visit";
 import { getLibraryOverview } from "@/lib/assistant/tools/get-library-overview";
@@ -26,6 +27,7 @@ export const ASSISTANT_TOOLS: AssistantTool[] = [
   getPlans,
   getLists,
   searchGoogleMaps,
+  addPlacesTool,
   createPlanTool,
   updatePlanTool,
   saveListTool,

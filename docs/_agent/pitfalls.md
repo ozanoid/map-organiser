@@ -2,7 +2,7 @@
 title: Pitfalls
 type: agent-note
 domain: agent
-version: 1.3.0
+version: 1.4.1
 last_updated: 18.11.2026
 status: stable
 related:
@@ -34,6 +34,11 @@ Things that will look right based on training data but will break in this codeba
 - **Three clients, three contexts.** See [[conventions#supabase-clients]]. Using the wrong one silently breaks auth — there's no error, just an unauthenticated user.
 - **Cookies are written by middleware.** If you change auth flow, ensure `src/middleware.ts` still runs and still calls `updateSession`.
 - **A redirect from the middleware must carry the session cookies.** `getUser()` may have just refreshed the session onto `supabaseResponse`; a bare `NextResponse.redirect` drops those cookies and leaves the browser with a spent refresh token. Use `redirectKeepingSession` in `src/lib/supabase/middleware.ts` (v1.39.0).
+- **A cookie client outside a cookie request reads nothing — silently.** The MCP endpoint authenticates with a bearer token and the cron drain with a secret; there `createClient()` from `@/lib/supabase/server` is anonymous. `getUserApiKeys(userId)` then found no profile and fell back to the server's Google key (until v1.41.0), and `trackUsage(userId, sku)` only worked because `increment_api_usage` is executable by anon. Pass the caller's client: `getUserApiKeys(userId, ctx.supabase)`, `trackUsage(userId, sku, client)`.
+- **`update … where id in (select … order by … limit …) returning *` does not return rows in the subquery's order.** `claim_import_items` selects by stage priority but hands rows back in update order; the drain sorts them again (v1.41.0 — before, a new place's import waited 87 s behind reviews from the same claim).
+- **A queue job born `running` before its items exist can be closed under them.** The drain's `finalizeJobs` marks every running job without active items `done`, and the claim only takes items of running jobs. Create the job `preparing` (or Instagram's `reading`), write the items, then set `running` (v1.41.0: Takeout and assistant jobs).
+- **`on delete set null` hides what was deleted.** `import_job_items.place_id` becomes null when its place is deleted, so "items whose place is gone" can't be found by joining — the item just looks like it never had one (an October Instagram job's five "Already exists" rows, 18.11.2026). Judge such history by what exists now.
+- **One place per Google place is a database rule** (`places_user_google_place_id_key`, v1.41.0). A new place writer checks first and treats 23505 (`isUniqueViolation` in `src/lib/db/errors.ts`) as "already saved", like `importPlace`, `POST /api/places` and the shared-save route.
 - **Migrations are SQL files in `supabase/migrations/`** (since 18.11.2026; the 56 before that exist only in the Supabase project), applied through Supabase MCP under the same name — see [[common-tasks]]. There's no Prisma: don't `prisma migrate dev`.
 
 ## Tailwind v4

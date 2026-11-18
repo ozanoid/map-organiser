@@ -21,22 +21,33 @@ export interface ParsedUrl {
   resolvedUrl?: string;
 }
 
+export interface ParseMapsUrlOptions {
+  /** Bounds following a short link. */
+  signal?: AbortSignal;
+  /** Throw when a short link can't be followed, instead of reading the short
+   *  link itself (which names no place). The assistant's add sets it, so a
+   *  network blip isn't reported as "this link names no place". */
+  strict?: boolean;
+}
+
 /**
  * Resolve short links and full Google Maps URLs by following redirects.
  * This gets us the final URL with coordinates.
  */
-async function resolveUrl(url: string): Promise<string> {
+async function resolveUrl(url: string, opts: ParseMapsUrlOptions = {}): Promise<string> {
   try {
     const response = await fetch(url, {
       method: "HEAD",
       redirect: "follow",
+      signal: opts.signal,
     });
     return response.url;
   } catch {
     try {
-      const response = await fetch(url, { redirect: "follow" });
+      const response = await fetch(url, { redirect: "follow", signal: opts.signal });
       return response.url;
-    } catch {
+    } catch (e) {
+      if (opts.strict) throw e;
       return url;
     }
   }
@@ -167,7 +178,7 @@ function extractSearchQuery(url: string): string | null {
 /**
  * Main parser: takes any Google Maps URL and extracts structured data.
  */
-export async function parseMapsUrl(rawUrl: string): Promise<ParsedUrl> {
+export async function parseMapsUrl(rawUrl: string, opts: ParseMapsUrlOptions = {}): Promise<ParsedUrl> {
   const original = rawUrl.trim();
   let url = original;
 
@@ -177,7 +188,7 @@ export async function parseMapsUrl(rawUrl: string): Promise<ParsedUrl> {
     url.includes("maps.app.goo.gl/") ||
     url.includes("maps.google.com/goo.gl");
   if (isShort) {
-    url = await resolveUrl(url);
+    url = await resolveUrl(url, opts);
   }
   const resolvedUrl = url !== original ? url : undefined;
 

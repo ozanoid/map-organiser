@@ -2,7 +2,7 @@
 title: Place
 type: entity
 domain: places
-version: 1.8.0
+version: 1.9.0
 last_updated: 18.11.2026
 status: stable
 sources:
@@ -51,7 +51,9 @@ related:
 
 # Place
 
-> **v1.28.0:** new place `source: "instagram"` — places the Instagram import creates (tagged `instagram`, `want_to_go`, the post URL as the note). The DB constraint allows it since 16.10.2026 — see [[../02-backend/schema/places#instagram-migration]].
+> **v1.41.0:** new place `source: "assistant"` — places Claude saves with `add_places` (by Google id or Maps link; `want_to_go` unless Claude passes another status). One place per Google place per user is now a database rule (`places_user_google_place_id_key`). See [[../04-integrations/claude-mcp#adding-places]].
+
+> **v1.28.0:** new place `source: "instagram" — places the Instagram import creates (tagged `instagram`, `want_to_go`, the post URL as the note). The DB constraint allows it since 16.10.2026 — see [[../02-backend/schema/places#instagram-migration]].
 
 > **v1.18.0:** `google_data` gains `work_timetable` + `tz` (open-now raw material); `PlaceFilters` gains `open_now` (dynamic, request-time evaluation — unknown places excluded); new place `source: "similar"` for NF-05 adds.
 
@@ -69,7 +71,7 @@ Source of truth: `public.places` table + `Place` interface in `src/lib/types/ind
 |---|---|---|---|
 | `id` | uuid | yes | Server-generated. |
 | `user_id` | uuid | yes | FK → `auth.users.id`. RLS-scoped. |
-| `google_place_id` | text | no | Stable Google Places identifier; nullable when source is manual or DataForSEO without Google ID. |
+| `google_place_id` | text | no | Stable Google Places identifier; nullable when source is manual or DataForSEO without Google ID. Unique per user when set (v1.41.0). |
 | `name` | text | yes | Display name. |
 | `address` | text | no | Free-form formatted address. |
 | `country` | text | no | Drives country filter pills. |
@@ -80,7 +82,7 @@ Source of truth: `public.places` table + `Place` interface in `src/lib/types/ind
 | `rating` | smallint | no | User's own 1–5 rating. Check constraint `rating >= 1 AND rating <= 5`. |
 | `notes` | text | no | Free-form. |
 | `google_data` | jsonb | no | Rich data from Google Places or DataForSEO (see [[#google_data shape]] below). |
-| `source` | text | no | `manual` / `import` / `link` / `mapbox_search` / `similar` (v1.18.0, NF-05) / `shared` (v1.20.0, NF-18 — copies saved from a share link) / `instagram` (v1.28.0 — the Instagram import). Default `manual`. DB CHECK constraint `places_source_check` enforces the set (`instagram` since 16.10.2026). |
+| `source` | text | no | `manual` / `import` / `link` / `mapbox_search` / `similar` (v1.18.0, NF-05) / `shared` (v1.20.0, NF-18 — copies saved from a share link) / `instagram` (v1.28.0 — the Instagram import) / `assistant` (v1.41.0 — Claude's `add_places`). Default `manual`. DB CHECK constraint `places_source_check` enforces the set (`instagram` since 16.10.2026, `assistant` since 18.11.2026). |
 | `visit_status` | text | no | One of `want_to_go` / `booked` / `visited` / `favorite`. Check constraint enforces. |
 | `visited_at` | timestamptz | no | Set when status transitions to `visited`. |
 | `booked_at` | timestamptz | no | Set when status transitions to `booked`. |
@@ -238,4 +240,4 @@ All `/api/places/*` routes live in `src/app/api/places/`. See [[../02-backend/ap
 ## Open questions
 
 - **Photo migration completeness.** `place_photos` has 0 rows but `places.google_data.photo_storage_url` is the canonical photo path. Worth checking whether `place_photos` is dormant or still wired to a flow.
-- **`source` enum.** Text with default `'manual'`; values: `manual`, `import`, `link`, `mapbox_search`, `similar`, `shared`, and `instagram` in the code since v1.28.0. Enforced by the `places_source_check` DB constraint (widened 15.07.2026 twice via MCP migrations: `similar` for NF-05, `shared` for NF-18 — the latter also unblocked the April-era share-save copiers that had never been able to insert). The `instagram` widening was applied 16.10.2026 — [[../02-backend/schema/places#instagram-migration]].
+- **`source` enum.** Text with default `'manual'`; values: `manual`, `import`, `link`, `mapbox_search`, `similar`, `shared`, `instagram` in the code since v1.28.0, and `assistant` since v1.41.0. Enforced by the `places_source_check` DB constraint (widened 15.07.2026 twice via MCP migrations: `similar` for NF-05, `shared` for NF-18 — the latter also unblocked the April-era share-save copiers that had never been able to insert). The `instagram` widening was applied 16.10.2026 — [[../02-backend/schema/places#instagram-migration]].

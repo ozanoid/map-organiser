@@ -97,6 +97,8 @@ export async function runInstagramImportJob(args: {
   tagIds: string[];
   googleApiKey: string;
   origin: string;
+  /** Kept on every meta this run writes (see InstagramJobMeta.via). */
+  via?: InstagramJobMeta["via"];
 }): Promise<void> {
   const { admin, jobId, userId, postUrl, shortcode, tagIds } = args;
 
@@ -104,7 +106,7 @@ export async function runInstagramImportJob(args: {
     await admin
       .from("import_jobs")
       .update({
-        meta,
+        meta: args.via ? { ...meta, via: args.via } : meta,
         total,
         status: running ? "running" : "done",
         finished_at: running ? null : new Date().toISOString(),

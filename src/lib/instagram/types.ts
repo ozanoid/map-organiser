@@ -28,6 +28,8 @@ export interface InstagramJobMeta {
   shortcode: string;
   post?: InstagramPostSummary;
   error?: InstagramJobError;
+  /** Who started it when it wasn't the app: Claude's add_places tool. */
+  via?: "assistant";
 }
 
 /** A Google place the user can pick for a venue the import skipped. */

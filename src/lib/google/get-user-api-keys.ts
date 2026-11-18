@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 
 const ALGORITHM = "aes-256-gcm";
@@ -45,8 +46,13 @@ export interface UserApiKeys {
   googlePlacesEnabled: boolean;
 }
 
-export async function getUserApiKeys(userId: string): Promise<UserApiKeys> {
-  const supabase = await createClient();
+/**
+ * `client` is the caller's own client when there is no cookie session — the
+ * MCP endpoint authenticates with a bearer token. Without it the cookie
+ * client reads no profile and the code below would hand out the server's key.
+ */
+export async function getUserApiKeys(userId: string, client?: SupabaseClient): Promise<UserApiKeys> {
+  const supabase = client ?? (await createClient());
 
   const { data: profile } = await supabase
     .from("profiles")

@@ -2,7 +2,7 @@
 title: Places routes
 type: route-group
 domain: backend
-version: 2.4.0
+version: 2.4.2
 last_updated: 18.11.2026
 status: stable
 sources:
@@ -104,7 +104,7 @@ All require auth except `drain-imports`, which is bearer-authed with `CRON_SECRE
 - **Body:** `{ name (required), lat (required), lng (required), address?, country?, city?, category_id?, rating?, notes?, google_place_id?, google_data?, source?, tag_ids?[], list_ids?[], visit_status?, photoRef? }`.
 - **DB:** `places` SELECT (dup check) + INSERT, `place_tags` INSERT. `list_ids` go through the list module (`addPlaceToLists` → `save_list`, at the end of each list; v1.40.0) — a list that is gone is skipped and logged, the place is saved either way.
 - **External:** `downloadAndStorePhotoFromUrl` (DataForSEO photo path) if `photoRef` is passed.
-- **Response:** Created place with `location` parsed. `200`, `409` on duplicate `google_place_id`.
+- **Response:** Created place with `location` parsed. `200`, `409` on duplicate `google_place_id` — also when a concurrent add wins the insert (`places_user_google_place_id_key`, v1.41.0; before, the race could leave two rows).
 - **Side effects:**
   - Auto-categorizes from Google `types` if no `category_id`.
   - Sets `visited_at` / `booked_at` from `visit_status`.
@@ -174,7 +174,7 @@ All require auth except `drain-imports`, which is bearer-authed with `CRON_SECRE
 
 - **Source:** `src/app/api/places/import-jobs/route.ts`
 - **Body:** multipart `file` + `options` (JSON: `visit_status`, `list_ids`, `tag_ids`).
-- **DB:** `import_jobs` INSERT (user client); `import_job_items` INSERT in chunks of 500 (**service client** — the table has no INSERT policy, see [[../schema/import-jobs]]).
+- **DB:** `import_jobs` INSERT (user client) as `preparing`; `import_job_items` INSERT in chunks of 500 (**service client** — the table has no INSERT policy, see [[../schema/import-jobs]]); then the job turns `running` — also after a failed chunk, so the rows that landed are drained (v1.41.0: a job born running could be closed by the drain before its items landed).
 - **Response:** `{ jobId, total }`. `400` on parse error, `500` on insert failure.
 - **Notes:** No enrichment and no API spend in the request. Fires a non-awaited kick at `/api/cron/drain-imports` (`kickDrain`, `src/lib/import/kick-drain.ts` — shared with the Instagram import since v1.28.0) so work starts before the next cron minute. Does not set `kind`; the column default makes the job `takeout`.
 

@@ -63,6 +63,16 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 const ACTIVE_STAGES = ["import", "photo", "reviews", "profile"] as const;
 
+/** `places.source` for a place a job of this kind creates. An assistant job
+ *  normally arrives with its places made (the add_places tool creates them
+ *  and queues only the enrichment), but one that queues a place still marks
+ *  it as the assistant's. */
+const SOURCE_BY_KIND: Record<string, "import" | "instagram" | "assistant"> = {
+  takeout: "import",
+  instagram: "instagram",
+  assistant: "assistant",
+};
+
 interface JobItem {
   id: string;
   job_id: string;
@@ -113,7 +123,12 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: claimErr.message }, { status: 500 });
   }
 
-  const items = (claimed ?? []) as JobItem[];
+  // The claim picks items by stage priority, but RETURNING hands them back in
+  // whatever order the update ran — measured 18.11.2026: a new place's import
+  // waited 87 s behind reviews claimed in the same run. Work them in the
+  // claim's order: places on the map first, enrichment after.
+  const stageRank = (stage: string) => (ACTIVE_STAGES as readonly string[]).indexOf(stage);
+  const items = ((claimed ?? []) as JobItem[]).sort((a, b) => stageRank(a.stage) - stageRank(b.stage));
   if (items.length === 0) {
     await finalizeJobs(admin);
     return NextResponse.json({ ok: true, claimed: 0, message: "nothing queued" });
@@ -211,7 +226,7 @@ export async function GET(request: NextRequest) {
               visitStatus: defaults.visit_status,
               listIds: defaults.list_ids,
               tagIds: defaults.tag_ids,
-              source: defaults.kind === "instagram" ? "instagram" : "import",
+              source: SOURCE_BY_KIND[defaults.kind] ?? "import",
             },
             await categoriesFor(item.user_id)
           );

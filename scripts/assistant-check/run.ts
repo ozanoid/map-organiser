@@ -10,6 +10,7 @@
  *   npm run check:assistant -- visits       only the visit checks (no paid calls)
  *   npm run check:assistant -- plan-tools   only the plan tool checks (no paid calls)
  *   npm run check:assistant -- lists        only the list checks (no paid calls)
+ *   npm run check:assistant -- add-places   only the add_places checks (paid, ≈ $0.03)
  *
  * Uses the service-role key: RLS is bypassed, so this relies on every tool
  * query also filtering by user_id (which they do).
@@ -19,6 +20,7 @@ import { isAllowedOAuthRedirect } from "@/lib/assistant/oauth";
 import { ASSISTANT_TOOLS } from "@/lib/assistant/tools";
 import { safeNextPath } from "@/lib/auth/safe-next";
 import { CHECK_APP_URL } from "./context";
+import { checkAddPlaces } from "./add-places";
 import { checkLists } from "./lists";
 import { checkPlanTools } from "./plan-tools";
 import { checkPlans } from "./plans";
@@ -105,7 +107,13 @@ async function main() {
   const owner = await userIdOf(OWNER);
   const tester = await userIdOf(TESTER);
 
-  const only = { plans: checkPlans, visits: checkVisits, "plan-tools": checkPlanTools, lists: checkLists }[process.argv[2] ?? ""];
+  const only = {
+    plans: checkPlans,
+    visits: checkVisits,
+    "plan-tools": checkPlanTools,
+    lists: checkLists,
+    "add-places": checkAddPlaces,
+  }[process.argv[2] ?? ""];
   if (only) {
     await only(admin, expect, tester, owner);
     checkPureHelpers();
@@ -247,6 +255,7 @@ async function main() {
   await checkVisits(admin, expect, tester, owner);
   await checkPlanTools(admin, expect, tester, owner);
   await checkLists(admin, expect, tester, owner);
+  await checkAddPlaces(admin, expect, tester);
 
   checkPureHelpers();
 
