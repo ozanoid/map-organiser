@@ -18,7 +18,7 @@ import { useDeletePlan } from "@/lib/hooks/use-plans";
 import { useCreateSharedLink } from "@/lib/hooks/use-shared-links";
 import { formatDayDate, planEndDate } from "@/lib/plans/dates";
 import type { Plan } from "@/lib/types";
-import { ICON_BUTTON, usePlanEditor } from "./use-plan-editor";
+import { ICON_BUTTON, UNDO_TOAST_MS, usePlanEditor } from "./use-plan-editor";
 
 export const PLANS_HOME = "/lists?tab=plans";
 
@@ -55,7 +55,10 @@ export function PlanMenu({ plan, onEditDates }: { plan: Plan; onEditDates: () =>
       {
         onDone: () =>
           status === "cancelled"
-            ? toast("Plan cancelled", { action: { label: "Undo", onClick: () => setStatus("planned") } })
+            ? toast("Plan cancelled", {
+                action: { label: "Undo", onClick: () => setStatus("planned") },
+                duration: UNDO_TOAST_MS,
+              })
             : toast.success("Plan restored"),
       }
     );

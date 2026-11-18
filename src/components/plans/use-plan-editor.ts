@@ -28,6 +28,10 @@ export function usePlanEditor(planId: string) {
   return { apply, isPending };
 }
 
+/** How long a toast that offers "Undo" stays: the default 4 s is gone
+ *  before the hand gets there. */
+export const UNDO_TOAST_MS = 8000;
+
 /**
  * Icon-only button: 36 px visible, 44 px hit area (the `after` layer), so it
  * can sit in a dense row and still be tapped reliably.

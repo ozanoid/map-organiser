@@ -2,7 +2,7 @@
 title: Plans components
 type: component
 domain: frontend
-version: 1.0.0
+version: 1.1.0
 last_updated: 18.11.2026
 status: stable
 sources:
@@ -47,7 +47,7 @@ Everything under `src/components/plans/` plus the plan page. All client componen
 ## Behaviour worth knowing
 
 - **Reorder** shows the new order at once. The dragged order belongs to the stops array it was made from; when the server's answer replaces that array the override no longer applies — no effect clears it. While the save is on its way the legs are hidden (they belong to the old order).
-- **Remove a stop** happens at once, with **Undo** in the toast: it adds a stop with the same content at the same position (place or text, time, note, cost — an emptied cost stays empty — and currency). It is a new row, so a stop's outcome (done / skipped, the visit linked to it) can't be put back; Undo is offered for planned stops only. The Undo goes through the day's editor, not the removed row's, so a failure is reported. No confirmation dialog.
+- **Remove a stop** happens at once, with **Undo** in the toast: it adds a stop with the same content at the same position (place or text, time, note, cost — an emptied cost stays empty — and currency). It is a new row, so a stop's outcome (done / skipped, the visit linked to it) can't be put back; Undo is offered for planned stops only. The Undo goes through the day's editor, not the removed row's, so a failure is reported. The toast stays 8 s (`UNDO_TOAST_MS`) — the default 4 s was gone before a hand could reach it. No confirmation dialog.
 - **Cancel a plan** is also undoable from the toast. **Delete** asks first — it can't be undone.
 - **Time** (`StopTime`): a popover with an exact time or one of four parts of the day, and "Clear time". Setting one clears the other (the server's rule).
 - **Cost** (`CostBadge`): tap, type, Enter or leave the field. Empty clears; a comma decimal is accepted.
@@ -55,6 +55,21 @@ Everything under `src/components/plans/` plus the plan page. All client componen
 - **AI Plan** can't be dismissed while it is generating, and other edits wait behind it (same write queue) — its result rewrites the days.
 - **Add day** stops at 60 days (the database's limit too).
 - **Stops that happened:** `done` shows a check, `skipped` a struck-through name and a chip. They can't be set from this page yet (Phase 1, slice 2).
+
+## Checked in the browser
+
+18.11.2026, Chrome, signed in as the test account, against the live database (temporary plans, deleted afterwards; the existing plans were only read — trips ↔ plans still identical row by row):
+
+- Plans tab: groups (Upcoming / Past), "New Plan" empty and from a list (6 places → day 1, cost defaults), lands on the new plan.
+- Plan page: existing plans render with dates, routes, legs, AI notes; an empty plan shows its days and "Add stop".
+- Add a saved place, add a free-text stop; exact time and part of the day; cost (comma decimal); drag to reorder; move to another day; remove + Undo.
+- Add a day, move a day, remove an empty day (refused entry disabled for a day with stops); route mode (walking → driving changed the route); dates (set → day dates and range); party size; rename; cancel → read-only banner → restore; delete with confirmation → back at the list, the plan's URL then says it doesn't exist.
+- Auto Plan; AI Plan (one real generation — [[../../05-flows/ai-plan-flow#Verified]]).
+- Map view with day routes and the day filter; `?view=map` survives a reload; `/trips/<id>` opens the plan.
+- Share link of an already shared plan (the existing link came back, no new row); "Save to my plans" from the public page (a copy with the times, without notes).
+- Network: 23 edits, each one `PATCH` answering 200 in 240–555 ms; a route request only after an edit that changed a day's located stops or its profile. No console error, no server error.
+
+Not checked: a real 375 px phone width (the desktop window stops at 500 px — the layout holds there and nothing overflows), keyboard-only reordering, the AI Plan pool option.
 
 ## Map
 

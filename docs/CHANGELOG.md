@@ -6,6 +6,23 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 18.11.2026 — v1.37.1 — Plans UI checked in a browser
+
+- Full pass of the plan UI in Chrome, signed in as the test account, against
+  the live database: the Plans tab, creating a plan (empty and from a list),
+  every edit on the plan page, Auto Plan, one real AI Plan generation, the
+  map view, the share link, saving a shared plan, deleting. 23 edits, each
+  one `PATCH`; no console or server error. The temporary plans were deleted;
+  the existing plans were only read (trips ↔ plans still identical).
+  Coverage and what was left out: [[03-frontend/components/plans#Checked in the browser]].
+- One fix from the pass: a toast that offers Undo (remove a stop, cancel a
+  plan) now stays 8 s instead of the default 4 s (`UNDO_TOAST_MS`).
+- Docs: [[03-frontend/components/plans]], [[05-flows/ai-plan-flow]]
+  ("Verified" replaces "Not verified yet"), [[_plans/phase-1-planning]],
+  [[_plans/personal-assistant]].
+
+---
+
 ## 18.11.2026 — v1.37.0 — Plans replace trips in the code (Phase 1, slice 1)
 
 On the branch `feat/personal-assistant`; not on main yet. The database already
@@ -66,8 +83,8 @@ onto them.
   foreign place id in a list refusing the whole plan — are fixed in this
   version). trips ↔ plans compared row by row on 18.11.2026: no difference
   (7 / 7 plans, 127 / 127 stops).
-  **Not checked:** the signed-in UI in a browser, and a real AI Plan
-  generation through the new route.
+  The signed-in UI and a real AI Plan generation were checked afterwards —
+  see v1.37.1.
 - **Open decision:** the public payload of a shared plan (like a shared list
   before it) carries the owner's own star rating of each place, and the page
   shows it. Kept as it was; whether a share should show it is Ozan's call.

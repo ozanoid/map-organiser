@@ -20,7 +20,7 @@ import { dayColor } from "@/lib/plans/day-colors";
 import { DAY_PARTS } from "@/lib/plans/schema";
 import { cn } from "@/lib/utils";
 import type { DayPart, PlanDay, PlanStop } from "@/lib/types";
-import { ICON_BUTTON, usePlanEditor } from "./use-plan-editor";
+import { ICON_BUTTON, UNDO_TOAST_MS, usePlanEditor } from "./use-plan-editor";
 
 const DAY_PART_LABELS: Record<DayPart, string> = {
   morning: "Morning",
@@ -94,7 +94,7 @@ export function StopRow({
         : undefined;
     apply(
       { ops: [{ op: "remove_stop", stop_id: stop.id }] },
-      { onDone: () => toast(`Removed ${label}`, { action: undo }) }
+      { onDone: () => toast(`Removed ${label}`, undo ? { action: undo, duration: UNDO_TOAST_MS } : undefined) }
     );
   }
 

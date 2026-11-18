@@ -2,7 +2,7 @@
 title: AI Plan Flow
 type: flow
 domain: ai
-version: 1.0.0
+version: 1.0.1
 last_updated: 18.11.2026
 status: stable
 sources:
@@ -80,6 +80,6 @@ Empirical, from the 16.07.2026 matrix on a failing real input (kept as they were
 
 Input ≈ 15–20k tokens at 40 candidates → about $0.012 a plan (SKU `ai_trip_plan`, 12.0 per 1,000). Cap: `AI_MONTHLY_TRIP_PLAN_CAP = 50` a month (a code constant).
 
-## Not verified yet
+## Verified
 
-The move onto plans was type-checked and the batch logic reviewed, but **no generation has been run through the new route** (it needs a signed-in session and spends a unit). First run: check the toast counts against the plan, and that a stop with an exact time kept it.
+18.11.2026, in a browser on the test account, one real generation through the new route on a two-day plan (two places, one free-text stop): 3.6 s; both days got a theme and a narrative that used the weekdays of the plan's dates; the stop with an exact time (21:00) kept it while the other got its part of the day; the cost survived; the free-text stop stayed in its day, after the planned stop; the dialog could not be dismissed while generating. Not exercised: the want-to-go pool option.
