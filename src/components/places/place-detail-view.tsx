@@ -27,7 +27,8 @@ import { SimilarPlaces } from "@/components/places/similar-places";
 import { DeleteVisitDialog } from "@/components/visits/delete-visit-dialog";
 import { PlaceVisitList, PlaceVisitSummary } from "@/components/visits/place-visits";
 import { VisitDialog, type VisitDialogTarget } from "@/components/visits/visit-dialog";
-import { useLists } from "@/lib/hooks/use-lists";
+import { useLists, useTogglePlaceOnList } from "@/lib/hooks/use-lists";
+import { UNDO_TOAST_MS } from "@/components/plans/use-plan-editor";
 import { useVisits } from "@/lib/hooks/use-visits";
 import { todayIso } from "@/lib/plans/dates";
 import { useCreateSharedLink } from "@/lib/hooks/use-shared-links";
@@ -97,6 +98,7 @@ export function PlaceDetailView({
   // NF-03 (v1.18.0): active "People mention" topic → filters ReviewsSection.
   const [topicFilter, setTopicFilter] = useState<string | null>(null);
   const { data: allLists = [] } = useLists();
+  const togglePlaceOnList = useTogglePlaceOnList();
   const createSharedLink = useCreateSharedLink();
   const { data: visits = [], isLoading: visitsLoading } = useVisits(placeId);
   const [visitDialog, setVisitDialog] = useState<VisitDialogTarget | null>(null);
@@ -219,6 +221,8 @@ export function PlaceDetailView({
     const res = await fetch(`/api/places/${placeId}`, { method: "DELETE" });
     if (res.ok) {
       queryClient.invalidateQueries({ queryKey: ["places"] });
+      // The place leaves every list it was on.
+      queryClient.invalidateQueries({ queryKey: ["lists"] });
       queryClient.invalidateQueries({ queryKey: ["plans"] });
       queryClient.invalidateQueries({ queryKey: ["plan"] });
       queryClient.invalidateQueries({ queryKey: ["visits"] });
@@ -336,31 +340,34 @@ export function PlaceDetailView({
     }
   }
 
-  async function handleToggleList(listId: string) {
+  // Only the list that is ticked or unticked changes: on the place's other
+  // lists it keeps its position and its note. Taking it off a list can be
+  // undone — back in its place, with its note.
+  function handleToggleList(listId: string) {
     if (!place) return;
-    const currentListIds = (place.lists || []).map((l) => l.id);
-    const isInList = currentListIds.includes(listId);
-    const newListIds = isInList
-      ? currentListIds.filter((id) => id !== listId)
-      : [...currentListIds, listId];
-
-    try {
-      const res = await fetch(`/api/places/${placeId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ list_ids: newListIds }),
-      });
-      if (res.ok) {
-        queryClient.invalidateQueries({ queryKey: ["places"] });
-        queryClient.invalidateQueries({ queryKey: ["lists"] });
-        fetchPlace();
-        toast.success(isInList ? "Removed from list" : "Added to list");
-      } else {
-        toast.error("Failed to update lists");
+    const membership = (place.lists || []).find((l) => l.id === listId);
+    const on = !membership;
+    togglePlaceOnList.mutate(
+      { listId, placeId, on },
+      {
+        onSuccess: () => {
+          fetchPlace();
+          if (on) return toast.success("Added to list");
+          toast(`Removed from ${membership.name}`, {
+            action: {
+              label: "Undo",
+              onClick: () =>
+                togglePlaceOnList.mutate(
+                  { listId, placeId, on: true, note: membership.note, position: membership.sort_order },
+                  { onSuccess: () => fetchPlace(), onError: (e) => toast.error(e.message) }
+                ),
+            },
+            duration: UNDO_TOAST_MS,
+          });
+        },
+        onError: (e) => toast.error(e.message),
       }
-    } catch {
-      toast.error("Failed to update lists");
-    }
+    );
   }
 
   async function handleTagsChange(tagIds: string[]) {
@@ -775,21 +782,34 @@ export function PlaceDetailView({
           </Popover>
         </div>
         {place.lists && place.lists.length > 0 ? (
-          <div className="flex flex-wrap gap-1.5">
-            {place.lists.map((list) => (
-              <Badge
-                key={list.id}
-                variant="secondary"
-                className="gap-1"
-                style={{
-                  backgroundColor: list.color + "20",
-                  color: list.color,
-                  borderColor: list.color + "40",
-                }}
-              >
-                {list.name}
-              </Badge>
-            ))}
+          <div className="space-y-1.5">
+            <div className="flex flex-wrap gap-1.5">
+              {place.lists.map((list) => (
+                <Badge
+                  key={list.id}
+                  variant="secondary"
+                  className="gap-1"
+                  style={{
+                    backgroundColor: list.color + "20",
+                    color: list.color,
+                    borderColor: list.color + "40",
+                  }}
+                >
+                  {list.name}
+                </Badge>
+              ))}
+            </div>
+            {/* The place's note on each list ("what to order") — edited on the list. */}
+            {place.lists
+              .filter((list) => list.note)
+              .map((list) => (
+                <p key={list.id} className="whitespace-pre-line text-xs italic text-emerald-700 dark:text-emerald-400">
+                  <span className="font-medium not-italic" style={{ color: list.color }}>
+                    {list.name}:
+                  </span>{" "}
+                  {list.note}
+                </p>
+              ))}
           </div>
         ) : (
           <p className="text-xs text-muted-foreground">Not in any lists.</p>

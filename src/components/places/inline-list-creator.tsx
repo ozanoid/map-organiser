@@ -21,11 +21,12 @@ export function InlineListCreator({ onCreated }: InlineListCreatorProps) {
     e.preventDefault();
     if (!name.trim()) return;
 
+    const listName = name.trim();
     createList.mutate(
-      { name: name.trim() },
+      { name: listName },
       {
         onSuccess: (list) => {
-          toast.success(`List "${list.name}" created`);
+          toast.success(`List "${listName}" created`);
           onCreated?.(list.id);
           setName("");
           setOpen(false);

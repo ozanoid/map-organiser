@@ -2,8 +2,8 @@
 title: Components
 type: overview
 domain: frontend
-version: 1.3.1
-last_updated: 16.10.2026
+version: 1.4.0
+last_updated: 18.11.2026
 status: stable
 sources:
   - src/components/
@@ -23,6 +23,7 @@ Feature components organized by area. shadcn primitives live separately in `src/
 | `assistant/` | AI chat assistant panel + header launcher (v1.21.0, S3 AI-02) | [[assistant]] |
 | `filters/` | All filter UI (category w/ sub-cat cascade, country/city, list, tag, visit-status, search, panel + sheet) | [[filters]] |
 | `layout/` | App chrome (header, sidebar, mobile nav, offline banner) | [[layout]] |
+| `lists/` | The list page's menu, note dialog and editor hook (v1.40.0) | [[lists]] |
 | `map/` | Mapbox view + the page-level map container | [[map]] |
 | `places/` | Place cards, dialogs (incl. lite-profile AI Suggestions panel and the Instagram import panel — v1.28.0), bulk actions, inline creators, visit-status toggle, AI Summary card + detail-page widgets (rating distribution, popular times, status badges, action links, amenities, topics, reviews — v1.17.0) | [[places]] |
 | `search/` | AI natural-language search input (Phase 6) | [[search]] |

@@ -13,6 +13,7 @@ import { defineTool } from "@/lib/assistant/tools/types";
 import type { UserContext } from "@/lib/db/context";
 import type { Timetable } from "@/lib/places/open-now";
 import { dayDate, todayAt } from "@/lib/plans/dates";
+import { listsOfPlaces } from "@/lib/lists/read";
 import { listVisits } from "@/lib/visits/read";
 
 const DETAIL_SELECT = [
@@ -134,7 +135,7 @@ export const getPlaces = defineTool({
   name: "get_places",
   title: "Get place details",
   description:
-    "Full details for 1–5 of the user's saved places by id: the review-derived profile (summary, pros, cons, themes with quotes, what it's good for), weekly opening hours, price, links (Google Maps, website, booking), phone, the user's own status, rating and notes, their last visits (date, rating, what they had), upcoming plans that include the place, tags, lists, the Instagram post it came from, and similar places the user has not saved. Pass `at` (local time at the place) to learn whether it is open then and how busy it usually is. Use it to compare places too.",
+    "Full details for 1–5 of the user's saved places by id: the review-derived profile (summary, pros, cons, themes with quotes, what it's good for), weekly opening hours, price, links (Google Maps, website, booking), phone, the user's own status, rating and notes, their last visits (date, rating, what they had), upcoming plans that include the place, tags, the lists it is on with the user's note there, the Instagram post it came from, and similar places the user has not saved. Pass `at` (local time at the place) to learn whether it is open then and how busy it usually is. Use it to compare places too.",
   inputSchema: z.object({
     place_ids: z.array(placeId).min(1).max(5),
     at: localDateTime
@@ -153,9 +154,9 @@ export const getPlaces = defineTool({
     const rows = (data ?? []) as unknown as DetailRow[];
     if (rows.length === 0) throw new ToolInputError("None of those ids is a saved place. Use ids from search_places.");
 
-    const [{ data: tagRows }, { data: listRows }, visits, upcoming] = await Promise.all([
+    const [{ data: tagRows }, listsOf, visits, upcoming] = await Promise.all([
       ctx.supabase.from("place_tags").select("place_id, tags(name)").in("place_id", ids),
-      ctx.supabase.from("list_places").select("place_id, lists(name)").in("place_id", ids),
+      listsOfPlaces(ctx, ids),
       listVisits(ctx, { placeIds: ids, limit: 200 }),
       upcomingPlansOf(ctx, ids, new Map(rows.map((r) => [r.id, r.g_tz]))),
     ]);
@@ -164,10 +165,6 @@ export const getPlaces = defineTool({
     const tagsOf = new Map<string, string[]>();
     for (const r of (tagRows ?? []) as unknown as Array<{ place_id: string; tags: { name: string } | null }>) {
       if (r.tags?.name) tagsOf.set(r.place_id, [...(tagsOf.get(r.place_id) ?? []), r.tags.name]);
-    }
-    const listsOf = new Map<string, string[]>();
-    for (const r of (listRows ?? []) as unknown as Array<{ place_id: string; lists: { name: string } | null }>) {
-      if (r.lists?.name) listsOf.set(r.place_id, [...(listsOf.get(r.place_id) ?? []), r.lists.name]);
     }
 
     // Which "people also search" places are already in the library.
@@ -239,7 +236,11 @@ export const getPlaces = defineTool({
           source: r.source ?? undefined,
           instagram_post: instagram,
           tags: tagsOf.get(r.id) ?? [],
-          lists: listsOf.get(r.id) ?? [],
+          lists: (listsOf.get(r.id) ?? []).map((l) => ({
+            list_id: l.id,
+            name: l.name,
+            note: l.note ?? undefined,
+          })),
         },
         hours: r.g_hours?.weekday_text ?? undefined,
         at: at

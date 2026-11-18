@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { errorResponse } from "@/lib/api/http";
+import { listsOfPlaces } from "@/lib/lists/read";
+import { setPlaceLists } from "@/lib/lists/write";
 import { plansUsingPlaces } from "@/lib/plans/read";
 
 // GET /api/places/[id]
@@ -34,11 +37,8 @@ export async function GET(
     .select("tag_id, tags(*)")
     .eq("place_id", id);
 
-  // Get lists
-  const { data: placeLists } = await supabase
-    .from("list_places")
-    .select("list_id, lists(*)")
-    .eq("place_id", id);
+  // The lists it is on, each with the place's note there.
+  const lists = (await listsOfPlaces({ supabase, userId: user.id }, [id])).get(id) ?? [];
 
   // Get photos
   const { data: photos } = await supabase
@@ -54,7 +54,7 @@ export async function GET(
     ...place,
     location: parseLocation(place.location),
     tags: placeTags?.map((pt) => pt.tags) || [],
-    lists: placeLists?.map((pl) => pl.lists) || [],
+    lists,
     plans,
     photos: photos || [],
   });
@@ -141,16 +141,14 @@ export async function PATCH(
     }
   }
 
-  // Sync lists if provided
+  // Lists, if given, are the place's lists from now on. Only the lists that
+  // change are written (src/lib/lists): on the others the place keeps its
+  // position and its note.
   if (list_ids !== undefined) {
-    await supabase.from("list_places").delete().eq("place_id", id);
-    if (list_ids.length > 0) {
-      await supabase.from("list_places").insert(
-        list_ids.map((listId: string) => ({
-          list_id: listId,
-          place_id: id,
-        }))
-      );
+    try {
+      await setPlaceLists({ supabase, userId: user.id }, id, list_ids);
+    } catch (e) {
+      return errorResponse(e, "places.lists");
     }
   }
 

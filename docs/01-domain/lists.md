@@ -2,144 +2,97 @@
 title: List
 type: entity
 domain: lists
-version: 1.1.0
+version: 2.0.0
 last_updated: 18.11.2026
 status: stable
 sources:
   - src/lib/types/index.ts
+  - src/lib/lists/schema.ts
+  - src/lib/lists/read.ts
+  - src/lib/lists/write.ts
   - src/lib/hooks/use-lists.ts
-  - src/app/api/lists/[id]/reorder/route.ts
+  - src/app/api/lists/route.ts
+  - src/app/api/lists/[id]/route.ts
   - src/app/(app)/lists/page.tsx
   - src/app/(app)/lists/[id]/page.tsx
+  - src/components/lists/
+  - src/lib/assistant/tools/get-lists.ts
+  - src/lib/assistant/tools/save-list.ts
+  - supabase/migrations/20261118044125_list_items_order_and_access.sql
+  - supabase/migrations/20261118044126_lists_created_via.sql
+  - supabase/migrations/20261118044153_list_functions.sql
 related:
   - "[[places]]"
   - "[[plans]]"
   - "[[sharing]]"
   - "[[../02-backend/schema/lists]]"
   - "[[../02-backend/schema/list_places]]"
+  - "[[../02-backend/api-routes/lists]]"
+  - "[[../04-integrations/claude-mcp]]"
 ---
 
 # List
 
-A named, ordered grouping of Places. The simplest organizational unit besides a Category — a "Tokyo Coffee Tour", a "Wishlist", a "Visited in 2025". Lists are M:N with Places via the `list_places` junction, which carries the ordering.
+A named, ordered collection of saved places with no date — a "Tokyo coffee tour", a wishlist, or a shortlist Claude builds: "solo dinners to try in November". Each place on a list can carry a **note for that list** — why it is there, what to order. A list can also seed a [[plans|Plan]] (its places become the stops of day 1).
 
-A List can also seed a [[plans|Plan]] (its places become the stops of day 1).
+*List ≠ plan:* a list has no time and no outcome; a plan is tied to dates, people and what happened ([[../_plans/phase-1-planning]]).
 
 ## Shape
 
 ### `lists`
 
-| Field | Type | Required | Notes |
-|---|---|---|---|
-| `id` | uuid | yes | — |
-| `user_id` | uuid | yes | FK → `auth.users.id`. RLS-scoped. |
-| `name` | text | yes | — |
-| `description` | text | no | Free-form. |
-| `color` | text | no | Hex like `'#059669'`. Default emerald. Used for list pills and map markers when a single list is filtered. |
-| `created_at` | timestamptz | yes | `default now()`. |
-| `updated_at` | timestamptz | yes | `default now()`. |
+| Field | Type | Notes |
+|---|---|---|
+| `id` | uuid | — |
+| `user_id` | uuid | FK → `auth.users`, RLS-scoped. |
+| `name` | text | 1–120 characters (checked by `save_list`). |
+| `description` | text \| null | What the list is for; ≤ 2,000. |
+| `color` | text | Hex, default `#059669`. Presentational only. |
+| `created_via` | `app` \| `assistant` | Who made it (v1.40.0). Existing lists are `app`. |
+| `created_at`, `updated_at` | timestamptz | `save_list` touches `updated_at` on every save. |
 
-### `list_places` (junction)
+### `list_places`
 
-| Field | Type | Required | Notes |
-|---|---|---|---|
-| `list_id` | uuid | yes | FK → `lists.id`. |
-| `place_id` | uuid | yes | FK → `places.id`. |
-| `sort_order` | int | no | Within-list order. Default 0. |
-| `added_at` | timestamptz | no | `default now()`. |
+| Field | Type | Notes |
+|---|---|---|
+| `list_id`, `place_id` | uuid | Primary key `(list_id, place_id)`: a place is on a list at most once. |
+| `sort_order` | int, not null | The order: **0..n-1, dense** (v1.40.0). |
+| `note` | text \| null | The place's note on this list; ≤ 2,000. |
+| `added_at` | timestamptz | — |
 
-**Primary key:** `(list_id, place_id)` composite. A place can be in many lists; a list-place pair is unique.
+Types: `PlaceList` (a list, with `place_count` in lists), `ListDetail` (a list with its `items`), `ListItem` (place id, position, note, added; optionally a light `place`), `PlaceListMembership` (a list as a place sees it: the list, the note, the position) — `src/lib/types/index.ts`.
 
-### Joined type (`PlaceList` interface)
+## Rules
 
-`PlaceList` in `src/lib/types/index.ts` adds:
+- **One write path.** Every change to `lists` / `list_places` is one call to the Postgres function `save_list` through `src/lib/lists/write.ts` — the list pages, the place page, new places, bulk actions, imports, saving a shared list, the in-app assistant and Claude. One call is one transaction: a batch lands completely or not at all. (Before v1.40.0 eight code paths wrote the tables directly, including the browser.)
+- **Order is dense.** Adding inserts at a position (default: the end) and shifts the rest; removing closes the gap; a move shifts what is between. Rows left with ties or gaps by older writes are put in shape before a save's changes run. (Until v1.40.0 every add wrote 0 — three lists had all of their 12–47 places at 0 and the order shown was undefined; the migration numbered them by old order, then by when they were added.)
+- **Only the user's own places.** `save_list` checks every place, and the RLS policy's `WITH CHECK` requires the place to be the user's too (v1.40.0; before, a client could put another user's place id on its own list).
+- **Adding a place that is already on the list** keeps its position; a note given replaces its note. Removing a place that isn't on it is reported, not an error. A reorder must name every place once.
+- **The place page touches one list at a time.** Ticking or unticking a list changes that list only; on the place's other lists it keeps its position and its note. (The old route deleted all of a place's list rows and inserted them again, which put it first on every list.) Taking a place off a list can be undone — back in its place, with its note.
+- **Notes are per list.** The same place can say "order the lamb" on one list and "for a rainy day" on another; the place's own note (on the place page) is separate.
+- **Deleting a list** removes it and its notes for good; its places stay saved, a plan seeded from it keeps going (`plans.list_id` → null). Only from the app — Claude doesn't delete lists.
+- **Limits:** 1,000 places a list, 1,000 changes a call, 2,000 characters a note or description.
 
-- `place_count?: number` — count of joined `list_places` rows. Set by the list hook for badge rendering.
+## Where it shows
 
-## Invariants
-
-- **Uniqueness.** A place can be in a given list at most once (enforced by PK).
-- **Sort order is dense and 0-based** (set by the reorder endpoint). New places are appended at `MAX(sort_order) + 1` when added one at a time.
-- **Reordering is bulk-replace.** `PATCH /api/lists/[id]/reorder` accepts a full ordered array of place IDs and rewrites every `sort_order` in one transaction.
-- **Filter behavior.** `GET /api/places?list_id=...` returns places joined with the list, ordered by `list_places.sort_order` ascending.
-- **Color is presentational only.** Doesn't drive any logic — just shown in the UI.
-
-## Lifecycle
-
-```
-   ┌─────────────────────────────────────────────────┐
-   │  CREATE list                                     │
-   │  • via /lists page or inline-list-creator        │
-   │  • PATCH lists name/description/color afterwards │
-   └────────────────┬────────────────────────────────┘
-                    │
-                    ▼
-   ┌─────────────────────────────────────────────────┐
-   │  ADD places                                      │
-   │  • Single: inline-list-creator from place card   │
-   │  • Bulk: BulkActionBar "Add to list"             │
-   │  • Each insert: INSERT list_places with          │
-   │    sort_order = MAX(sort_order) + 1              │
-   └────────────────┬────────────────────────────────┘
-                    │
-                    ▼
-   ┌─────────────────────────────────────────────────┐
-   │  REORDER                                         │
-   │  • List detail page drag-and-drop (@dnd-kit)     │
-   │  • Optimistic update via useReorderListPlaces    │
-   │  • PATCH /api/lists/[id]/reorder { place_ids[] } │
-   │  • Server rewrites every list_places.sort_order  │
-   └────────────────┬────────────────────────────────┘
-                    │
-                    ▼ optional
-   ┌─────────────────────────────────────────────────┐
-   │  SHARE                                           │
-   │  • POST /api/shared { resource_type: "list" }    │
-   │  • Returns slug; /shared/<slug> renders publicly │
-   └────────────────┬────────────────────────────────┘
-                    │
-                    ▼ optional
-   ┌─────────────────────────────────────────────────┐
-   │  SEED A PLAN                                     │
-   │  • POST /api/plans with list_id                  │
-   │  • The plan gets its days; the list's places     │
-   │    become the stops of day 1; Auto Plan spreads  │
-   │    them over the days                            │
-   └─────────────────────────────────────────────────┘
-```
+- `/lists` — the Lists tab: every list with its place count; "New List".
+- `/lists/[id]` — the list: places in order (drag to reorder), each with its note; a place's menu edits the note or takes it off the list (Undo, 8 s); the list menu copies a share link, renames, edits the description, deletes (confirmation dialog). List or map view, kept in the URL (`?view=map`).
+- `/places/[id]` — the Lists section: the place's lists as badges, ticked in a picker, and each list's note under them.
+- `/shared/[slug]` — a shared list shows each place's list note (Ozan's decision, 18.11.2026); saving it copies the list, its order and the notes ([[sharing]]).
+- **Claude** (v1.40.0): `get_lists` reads lists (one in full with its places and notes), `save_list` creates or changes one, `get_places` shows a place's lists with its note there — [[../04-integrations/claude-mcp]].
 
 ## Relationships
 
 | Entity | Cardinality | Mechanism |
 |---|---|---|
-| [[users-and-profiles\|User]] | N:1 | `lists.user_id` FK |
-| [[places\|Place]] | M:N | `list_places` junction with `sort_order` |
-| [[plans\|Plan]] | 1:N (optional) | `plans.list_id` FK (ON DELETE SET NULL) |
-| [[sharing\|Shared Link]] | 0..N | `shared_links.resource_type = 'list'`, `resource_id = lists.id` |
+| [[users-and-profiles\|User]] | N:1 | `lists.user_id` |
+| [[places\|Place]] | M:N | `list_places` with `sort_order` and `note`; a deleted place leaves its lists (cascade) |
+| [[plans\|Plan]] | 1:N optional | `plans.list_id` (ON DELETE SET NULL) |
+| [[sharing\|Shared link]] | 0..N | `shared_links.resource_type = 'list'` |
 
-When a list is deleted:
+## Code
 
-- `list_places` rows cascade away.
-- Any `plans.list_id` pointing at it is set to NULL (the plan continues to exist, just without the back-link).
-
-## API surface
-
-| Method | Path | Purpose |
-|---|---|---|
-| `PATCH` | `/api/lists/[id]/reorder` | Replace `sort_order` for every list-place pair. |
-
-Note: standard CRUD for lists themselves (create/update/delete) is done via direct Supabase calls from the frontend (no dedicated API route observed). This is consistent with the RLS-as-API pattern — `useLists` and friends hit Supabase JS client directly. The reorder endpoint exists because it needs a transaction.
-
-## Frontend code surface
-
-- **Hooks:** `src/lib/hooks/use-lists.ts` — `useLists()`, `useList(id)`, mutations for create/update/delete/reorder. Query keys `["lists"]` and `["list", id]`.
-- **Pages:**
-  - `src/app/(app)/lists/page.tsx` — Lists + Plans tabbed view; the open tab is in the URL (`?tab=plans`).
-  - `src/app/(app)/lists/[id]/page.tsx` — list detail with drag-and-drop place reorder.
-- **Inline creator:** `src/components/places/inline-list-creator.tsx` — used inside place cards and dialogs.
-- **Filter:** `src/components/filters/list-filter.tsx` — single-select list pill in the filter UI.
-
-## Open questions
-
-- **Bulk reorder transactionality.** The reorder endpoint rewrites every row — confirm it runs in a single transaction so partial failures don't leave the list in a half-reordered state.
-- **List capacity.** No documented limit. With 95 `list_places` rows across 6 lists currently, performance is fine, but a very large list could be worth paginating in the detail view.
+- **Module** `src/lib/lists/`: `schema.ts` (`listChangesSchema`, `listOpSchema`, `listSetSchema`, `listCreateSchema` — strict zod, shared with Claude's tools), `read.ts` (`listLists`, `getList`, `listsOfPlaces`), `write.ts` (`createList`, `changeList`, `deleteList`, `addPlacesToList`, `addPlaceToLists`, `setPlaceLists`; `ListInputError` → 400, `ListNotFoundError` → 404).
+- **Routes** [[../02-backend/api-routes/lists]]: `GET`/`POST /api/lists`, `GET`/`PATCH`/`DELETE /api/lists/[id]`.
+- **Hooks** [[../03-frontend/hooks/use-lists]]: `useLists`, `useList`, `useCreateList`, `useDeleteList`, `useChangeList`, `useTogglePlaceOnList`.
+- **Components** `src/components/lists/`: `ListMenu`, `ListNoteDialog`, `useListEditor`; `src/components/places/inline-list-creator.tsx`.

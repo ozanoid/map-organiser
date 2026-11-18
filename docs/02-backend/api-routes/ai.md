@@ -2,7 +2,7 @@
 title: AI routes
 type: route-group
 domain: backend
-version: 1.9.1
+version: 1.9.2
 last_updated: 18.11.2026
 status: stable
 sources:
@@ -221,7 +221,7 @@ S3 AI-02 v1 (v1.21.0). The assistant agent loop — the group's only STREAMING r
 - **Agent loop:** `streamText` + `stopWhen: stepCountIs(6)` + 8 tools from `src/lib/ai/chat-tools.ts`, all executing under the request's cookie client (RLS = ownership boundary):
   - read-only: `search_places` (shared `queryPlaces()` engine — same JS post-filters as GET /api/places), `get_place_details`, `compare_places` (data-only; the CHAT model verbalises — no nested ai_compare LLM call/unit), `get_stats` (shared `computeUserStats()`).
   - `rank_places` (v1.23.0) — LLM-as-judge over ALL hard-filter matches via `rank-engine.ts`; agent-invoked only for soft criteria; degraded rating-order `notice` fallback; tracks `ai_rank_results` per ATTEMPT behind `rank_backstop`
-  - mutating, `needsApproval: true` (v6 built-in approval flow — loop pauses, UI confirm card, `addToolApprovalResponse` resubmits): `add_to_list`, `create_list`, `set_visit_status`.
+  - mutating, `needsApproval: true` (v6 built-in approval flow — loop pauses, UI confirm card, `addToolApprovalResponse` resubmits): `add_to_list`, `create_list`, `set_visit_status`. The two list tools write through the list module (`addPlacesToList`, `createList` with `created_via = assistant` — one `save_list` transaction each; v1.40.0); ids that aren't the user's places are counted as `unknown_ids`, not sent.
   - Tool outputs are compact projections (id/name/city/rating/tldr…), never full google_data rows.
 - **Budget unit = one user TURN**, charged in `onFinish` only when the last inbound message is a `user` message — an approval-continuation POST (assistant message last) does not burn a second unit. `stopWhen` is the in-turn runaway guard.
 - **Response:** `result.toUIMessageStreamResponse()` — UIMessage stream consumed by `useChat`.

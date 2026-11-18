@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { parsePostgisPoint } from "@/lib/geo";
+import { getList } from "@/lib/lists/read";
+import type { ListOp } from "@/lib/lists/schema";
+import { createList, ListInputError } from "@/lib/lists/write";
 import { getPlan } from "@/lib/plans/read";
 import type { StopInput } from "@/lib/plans/schema";
 import { createPlan, PlanInputError } from "@/lib/plans/write";
@@ -54,10 +57,12 @@ export async function POST(
 // (widened in the same release — the check had never included it and
 // the copy path was latently broken since April).
 async function savePlace(supabase: any, admin: any, link: any, userId: string) {
+  // Scoped to the link's owner: a link row can name any id (v1.40.0).
   const { data: op } = await admin
     .from("places")
     .select("*")
     .eq("id", link.resource_id)
+    .eq("user_id", link.user_id)
     .single();
 
   if (!op) {
@@ -108,119 +113,59 @@ async function savePlace(supabase: any, admin: any, link: any, userId: string) {
   return NextResponse.json({ type: "place", id: newPlace.id });
 }
 
-async function saveList(supabase: any, admin: any, link: any, userId: string) {
-  // Fetch original list (service client — owner-scoped RLS blocks the
-  // visitor's session; this cross-user read had 404'd since April)
-  const { data: originalList } = await admin
-    .from("lists")
-    .select("*")
-    .eq("id", link.resource_id)
-    .single();
-
-  if (!originalList) {
+/**
+ * Copies a shared list into the visitor's account: its places first (an
+ * existing place with the same Google id is reused; a copy carries the
+ * owner's note on the place, which the public view shows), then the list
+ * with its places in order and their list notes, in one transaction
+ * (save_list). A place that could not be copied is left out — never linked
+ * to the owner's row.
+ */
+async function saveList(
+  supabase: SupabaseClient,
+  admin: SupabaseClient,
+  link: { user_id: string; resource_id: string },
+  userId: string
+) {
+  // The service client reads the owner's list; scoped by their id.
+  const original = await getList({ supabase: admin, userId: link.user_id }, link.resource_id);
+  if (!original) {
     return NextResponse.json({ error: "List not found" }, { status: 404 });
   }
 
-  // Create new list for this user
-  const { data: newList, error: listError } = await supabase
-    .from("lists")
-    .insert({
-      user_id: userId,
-      name: originalList.name,
-      description: originalList.description,
-      color: originalList.color,
-    })
-    .select()
-    .single();
-
-  if (listError) return NextResponse.json({ error: listError.message }, { status: 500 });
-
-  // Fetch original places (service client — cross-user rows)
-  const { data: listPlaces } = await admin
-    .from("list_places")
-    .select("place_id, sort_order")
-    .eq("list_id", link.resource_id)
-    .order("sort_order", { ascending: true });
-
-  if (listPlaces && listPlaces.length > 0) {
-    const placeIds = listPlaces.map((lp: any) => lp.place_id);
-    const { data: originalPlaces } = await admin
+  const copies = new Map<string, string>();
+  const placeIds = original.items.map((item) => item.place_id);
+  if (placeIds.length > 0) {
+    const { data: originals } = await admin
       .from("places")
       .select("*")
+      .eq("user_id", link.user_id)
       .in("id", placeIds);
-
-    if (originalPlaces) {
-      // Copy each place (skip if user already has it by google_place_id)
-      for (const op of originalPlaces) {
-        let targetPlaceId = op.id;
-
-        // Check if user already has this place
-        if (op.google_place_id) {
-          const { data: existing } = await supabase
-            .from("places")
-            .select("id")
-            .eq("user_id", userId)
-            .eq("google_place_id", op.google_place_id)
-            .maybeSingle();
-
-          if (existing) {
-            targetPlaceId = existing.id;
-          } else {
-            // Create copy
-            const loc = parsePostgisPoint(op.location);
-            const { data: newPlace } = await supabase
-              .from("places")
-              .insert({
-                user_id: userId,
-                name: op.name,
-                address: op.address,
-                country: op.country,
-                city: op.city,
-                location: `POINT(${loc.lng} ${loc.lat})`,
-                notes: op.notes,
-                google_place_id: op.google_place_id,
-                google_data: op.google_data,
-                source: "shared",
-              })
-              .select("id")
-              .single();
-
-            if (newPlace) targetPlaceId = newPlace.id;
-          }
-        } else {
-          // No google_place_id — always copy
-          const loc = parsePostgisPoint(op.location);
-          const { data: newPlace } = await supabase
-            .from("places")
-            .insert({
-              user_id: userId,
-              name: op.name,
-              address: op.address,
-              country: op.country,
-              city: op.city,
-              location: `POINT(${loc.lng} ${loc.lat})`,
-              notes: op.notes,
-              google_data: op.google_data,
-              source: "shared",
-            })
-            .select("id")
-            .single();
-
-          if (newPlace) targetPlaceId = newPlace.id;
-        }
-
-        // Add to new list
-        const sortOrder = listPlaces.find((lp: any) => lp.place_id === op.id)?.sort_order ?? 0;
-        await supabase.from("list_places").insert({
-          list_id: newList.id,
-          place_id: targetPlaceId,
-          sort_order: sortOrder,
-        });
-      }
+    for (const op of (originals ?? []) as SharedPlaceRow[]) {
+      const copyId = await copyPlaceFor(supabase, userId, op, { withNotes: true });
+      if (copyId) copies.set(op.id, copyId);
     }
   }
 
-  return NextResponse.json({ type: "list", id: newList.id });
+  try {
+    const result = await createList(
+      { supabase, userId },
+      {
+        name: original.name,
+        ...(original.description ? { description: original.description } : {}),
+        color: original.color,
+        ops: original.items.flatMap((item): ListOp[] => {
+          const copy = copies.get(item.place_id);
+          return copy ? [{ op: "add_place", place_id: copy, ...(item.note ? { note: item.note } : {}) }] : [];
+        }),
+      },
+      { createdVia: "app" }
+    );
+    return NextResponse.json({ type: "list", id: result.list_id });
+  } catch (e) {
+    const message = e instanceof ListInputError ? e.message : "Failed to save the list";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 }
 
 /**
@@ -299,17 +244,20 @@ interface SharedPlaceRow {
   country: string | null;
   city: string | null;
   location: unknown;
+  notes: string | null;
   google_place_id: string | null;
   google_data: unknown;
 }
 
 /** The visitor's own copy of a shared place: the one they already have with
- *  the same Google id, or a new row. Returns its id, or null if the copy
- *  failed. */
+ *  the same Google id, or a new row. `withNotes` carries the owner's note on
+ *  the place — shared lists show it, shared plans don't. Returns its id, or
+ *  null if the copy failed. */
 async function copyPlaceFor(
   supabase: SupabaseClient,
   userId: string,
-  op: SharedPlaceRow
+  op: SharedPlaceRow,
+  opts: { withNotes?: boolean } = {}
 ): Promise<string | null> {
   if (op.google_place_id) {
     const { data: existing } = await supabase
@@ -330,6 +278,7 @@ async function copyPlaceFor(
       country: op.country,
       city: op.city,
       location: `POINT(${loc.lng} ${loc.lat})`,
+      ...(opts.withNotes ? { notes: op.notes } : {}),
       google_place_id: op.google_place_id,
       google_data: op.google_data,
       source: "shared",

@@ -2,7 +2,7 @@
 title: Places routes
 type: route-group
 domain: backend
-version: 2.3.0
+version: 2.4.0
 last_updated: 18.11.2026
 status: stable
 sources:
@@ -102,7 +102,7 @@ All require auth except `drain-imports`, which is bearer-authed with `CRON_SECRE
 - **Source:** `src/app/api/places/route.ts`
 - **Auth:** required.
 - **Body:** `{ name (required), lat (required), lng (required), address?, country?, city?, category_id?, rating?, notes?, google_place_id?, google_data?, source?, tag_ids?[], list_ids?[], visit_status?, photoRef? }`.
-- **DB:** `places` SELECT (dup check) + INSERT, `place_tags` INSERT, `list_places` INSERT.
+- **DB:** `places` SELECT (dup check) + INSERT, `place_tags` INSERT. `list_ids` go through the list module (`addPlaceToLists` → `save_list`, at the end of each list; v1.40.0) — a list that is gone is skipped and logged, the place is saved either way.
 - **External:** `downloadAndStorePhotoFromUrl` (DataForSEO photo path) if `photoRef` is passed.
 - **Response:** Created place with `location` parsed. `200`, `409` on duplicate `google_place_id`.
 - **Side effects:**
@@ -123,7 +123,7 @@ All require auth except `drain-imports`, which is bearer-authed with `CRON_SECRE
 - **Source:** `src/app/api/places/[id]/route.ts`
 - **Auth:** required + ownership check.
 - **Body:** `{ name?, address?, category_id?, rating?, notes?, visit_status?, tag_ids?[], list_ids?[] }` — all optional.
-- **DB:** `places` UPDATE; `place_tags` DELETE+INSERT for sync; `list_places` DELETE+INSERT for sync.
+- **DB:** `places` UPDATE; `place_tags` DELETE+INSERT for sync. `list_ids` (the place's lists from now on) go through `setPlaceLists` (`src/lib/lists/write.ts`): only the lists that change are written, so on the others the place keeps its position and its note (v1.40.0 — the old DELETE+INSERT put it first on every list and would have wiped list notes). The place page itself now toggles one list through `PATCH /api/lists/[id]`.
 - **Side effects:**
   - `updated_at` bumped.
   - `visit_status` transitions: sets `visited_at` / `booked_at` if newly visited/booked; clears both if reset to `want_to_go`.
@@ -163,7 +163,7 @@ All require auth except `drain-imports`, which is bearer-authed with `CRON_SECRE
 - **Body:** `{ action, place_ids: string[], ... }`. Actions:
   - `update_category` — `{ category_id }`
   - `add_tags` — `{ tag_ids[] }` (UPSERT into `place_tags`)
-  - `add_to_list` — `{ list_id }` (UPSERT into `list_places`)
+  - `add_to_list` — `{ list_id }` → `addPlacesToList` (one `save_list` transaction; at the end of the list; places already on it keep their position). `affected` counts the places newly added (v1.40.0).
   - `update_status` — `{ visit_status }` (+ timestamp side effects)
   - `delete` — bulk DELETE
   - `check_delete` — read-only, returns `{ affected: 0, planNames: string[], placesInPlans: number, visits: number, placesWithVisits: number }` — what else goes if these places are deleted (plan stops and visits cascade)

@@ -24,7 +24,8 @@ export interface Place {
   category?: Category;
   subcategory?: Subcategory;
   tags?: Tag[];
-  lists?: PlaceList[];
+  /** The lists the place is on, each with this place's note there. */
+  lists?: PlaceListMembership[];
 }
 
 export interface Category {
@@ -78,9 +79,46 @@ export interface PlaceList {
   name: string;
   description: string | null;
   color: string;
+  created_via: "app" | "assistant";
   created_at: string;
   updated_at: string;
   place_count?: number;
+}
+
+/** A list as a place sees it: the list, the place's note on it and its
+ *  position there (so taking it off can be undone in place). */
+export interface PlaceListMembership extends PlaceList {
+  note: string | null;
+  sort_order: number;
+}
+
+/** A place on a list: its position, its note there, when it was added. */
+export interface ListItem {
+  place_id: string;
+  /** 0..n-1, dense (save_list keeps it so). */
+  sort_order: number;
+  note: string | null;
+  added_at: string | null;
+  /** Only when asked for (getList withPlaces): what a reader needs to name it. */
+  place?: ListItemPlace | null;
+}
+
+/** The part of a place a list carries for readers that don't load places
+ *  themselves (the assistant). A full row averages ~69 KB. */
+export interface ListItemPlace {
+  id: string;
+  name: string;
+  city: string | null;
+  country: string | null;
+  visit_status: VisitStatus | null;
+  rating: number | null;
+  category: { name: string; color: string; icon: string } | null;
+  google_data: { url: string | null; rating: number | null; user_ratings_total: number | null };
+}
+
+/** One list with its places in order. */
+export interface ListDetail extends PlaceList {
+  items: ListItem[];
 }
 
 export type RoutingProfile = "walking" | "driving" | "cycling";

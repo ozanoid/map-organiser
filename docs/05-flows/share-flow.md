@@ -2,7 +2,7 @@
 title: Share Flow
 type: flow
 domain: sharing
-version: 1.4.0
+version: 1.5.0
 last_updated: 18.11.2026
 status: stable
 sources:
@@ -60,7 +60,8 @@ Owner clicks "Share" on a list or place detail page, or "Copy share link" in a p
        │  • UPDATE view_count++ (fire-and-forget)
        │  • SELECT profiles to get ownerName
        │  • Branch by resource_type:
-       │      — list: SELECT lists, list_places, places + categories
+       │      — list: SELECT lists, list_places (with note), places +
+       │        categories — all scoped to the link's owner (v1.40.0)
        │      — plan (also links stored as "trip"): getPlan, scoped by the
        │              owner's id — plan, days, stops, light places in one query
        │              + withRoutes: Mapbox per day with ≥ 2 located stops, the
@@ -92,12 +93,15 @@ Owner clicks "Share" on a list or place detail page, or "Copy share link" in a p
        │    owner-scoped RLS had 404'd every cross-user save since April
        │  • All INSERTs: cookie client (RLS WITH CHECK enforces user_id)
        │  • Branch by type:
-       │      — list:
-       │          • INSERT new lists row owned by viewer (copy name, color, description)
-       │          • For each source place:
+       │      — list (v1.40.0):
+       │          • For each source place (copyPlaceFor):
        │              if viewer already has it (by google_place_id) → reuse
-       │              else → INSERT new places row owned by viewer (source: 'shared')
-       │          • INSERT list_places rows preserving sort_order
+       │              else → INSERT new places row owned by viewer
+       │                     (source: 'shared', with the owner's place note)
+       │          • createList → save_list: the list (name, colour,
+       │            description) with its places in order and their
+       │            list notes, one transaction; a place that couldn't
+       │            be copied is left out
        │      — plan:
        │          • copy each place for the viewer (same dedup as above)
        │          • createPlan → create_plan: the plan, its days and stops

@@ -2,7 +2,7 @@
 title: RLS Policies
 type: overview
 domain: backend
-version: 1.5.1
+version: 1.5.2
 last_updated: 18.11.2026
 status: stable
 sources:
@@ -28,7 +28,7 @@ Truth source: `pg_policies`, fetched via Supabase MCP `execute_sql`. See per-tab
 | `categories` | Users manage own categories | authenticated | ALL | `auth.uid() = user_id` |
 | `import_job_items` | `import_job_items_select` | authenticated | SELECT | `auth.uid() = user_id` — read-only by design ([[schema/import-jobs]]) |
 | `import_jobs` | `import_jobs_select` / `_insert` / `_update` | authenticated | SELECT, INSERT, UPDATE | `auth.uid() = user_id` |
-| `list_places` | Users manage own list_places | authenticated | ALL | `list_id IN (SELECT id FROM lists WHERE user_id = auth.uid())` |
+| `list_places` | Users manage own list_places | authenticated | ALL | USING `list_id IN (SELECT id FROM lists WHERE user_id = auth.uid())`; WITH CHECK also `place_id IN (SELECT id FROM places WHERE user_id = auth.uid())` (v1.40.0 — a list could hold another user's place id before) |
 | `lists` | Users manage own lists | authenticated | ALL | `auth.uid() = user_id` |
 | `place_photos` | Users manage own place_photos | authenticated | ALL | `place_id IN (SELECT id FROM places WHERE user_id = auth.uid())` |
 | `place_tags` | Users manage own place_tags | authenticated | ALL | `place_id IN (SELECT id FROM places WHERE user_id = auth.uid())` |

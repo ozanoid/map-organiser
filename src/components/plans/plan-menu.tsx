@@ -192,15 +192,18 @@ function DeleteDialog({
             size="sm"
             className="cursor-pointer"
             disabled={deletePlan.isPending}
-            onClick={() =>
-              deletePlan.mutate(plan.id, {
-                onSuccess: () => {
-                  toast.success("Plan deleted");
-                  router.replace(PLANS_HOME);
-                },
-                onError: (err) => toast.error(err.message),
-              })
-            }
+            // mutateAsync, not mutate's callbacks: the delete empties the
+            // cached plan, the page switches to "not found" and unmounts this
+            // dialog — callbacks passed to mutate() would never run.
+            onClick={async () => {
+              try {
+                await deletePlan.mutateAsync(plan.id);
+              } catch (err) {
+                return toast.error(err instanceof Error ? err.message : "Failed to delete the plan");
+              }
+              toast.success("Plan deleted");
+              router.replace(PLANS_HOME);
+            }}
           >
             {deletePlan.isPending && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
             Delete plan

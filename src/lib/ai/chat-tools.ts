@@ -9,6 +9,7 @@ import type { UserContext } from "@/lib/ai/context-builder";
 import { getAiClient } from "@/lib/ai/client";
 import { checkAiBudget, trackAiUsage } from "@/lib/ai/track-usage";
 import { log } from "@/lib/telemetry/logger";
+import { addPlacesToList, createList } from "@/lib/lists/write";
 import {
   capWithGuaranteedSeats,
   placeToRankCandidate,
@@ -420,36 +421,31 @@ export function buildChatTools(
     }),
     needsApproval: true,
     execute: async ({ list_id, place_ids }) => {
-      // RLS on list_places derives ownership from lists.user_id — a
-      // foreign/hallucinated list_id fails the insert, never leaks.
       const { data: list } = await supabase
         .from("lists")
         .select("id, name")
         .eq("id", list_id)
-        .single();
+        .eq("user_id", userId)
+        .maybeSingle();
       if (!list) return { error: "List not found" };
 
-      // list_places RLS checks only LIST ownership — a foreign place id
-      // would insert "successfully" yet never render (places reads are
-      // user-scoped). Pre-filter to the user's own places so counts are
-      // honest and no junk rows land.
+      // Unknown or hallucinated ids are counted, not sent: save_list refuses
+      // a call with a place that isn't the user's as a whole.
       const owned = await ownedPlaceIds(supabase, userId, place_ids);
-
-      const added: string[] = [];
-      const already: string[] = [];
-      for (const placeId of owned) {
-        const { error } = await supabase
-          .from("list_places")
-          .insert({ list_id, place_id: placeId });
-        if (!error) added.push(placeId);
-        else if (error.code === "23505") already.push(placeId);
+      if (owned.length === 0) {
+        return { list_name: list.name, added_count: 0, already_in_list: 0, unknown_ids: place_ids.length };
       }
-      return {
-        list_name: list.name,
-        added_count: added.length,
-        already_in_list: already.length,
-        unknown_ids: place_ids.length - owned.length,
-      };
+      try {
+        const result = await addPlacesToList({ supabase, userId }, list_id, owned);
+        return {
+          list_name: list.name,
+          added_count: result.added.length,
+          already_in_list: result.already.length,
+          unknown_ids: place_ids.length - owned.length,
+        };
+      } catch (e) {
+        return { error: e instanceof Error ? e.message : "Failed to add to the list" };
+      }
     },
   });
 
@@ -463,28 +459,23 @@ export function buildChatTools(
     }),
     needsApproval: true,
     execute: async ({ name, description, place_ids }) => {
-      const { data: newList, error } = await supabase
-        .from("lists")
-        .insert({
-          user_id: userId,
-          name,
-          description: description ?? null,
-        })
-        .select("id, name")
-        .single();
-      if (error || !newList)
-        return { error: error?.message ?? "Failed to create list" };
-
-      // Same ownership pre-filter as add_to_list.
+      // Same ownership pre-filter as add_to_list; the list and its places
+      // are one transaction (src/lib/lists).
       const owned = await ownedPlaceIds(supabase, userId, place_ids ?? []);
-      let addedCount = 0;
-      for (const placeId of owned) {
-        const { error: addErr } = await supabase
-          .from("list_places")
-          .insert({ list_id: newList.id, place_id: placeId });
-        if (!addErr) addedCount++;
+      try {
+        const result = await createList(
+          { supabase, userId },
+          {
+            name,
+            ...(description ? { description } : {}),
+            ops: owned.map((place_id) => ({ op: "add_place" as const, place_id })),
+          },
+          { createdVia: "assistant" }
+        );
+        return { list_id: result.list_id, list_name: name.trim(), added_count: result.added.length };
+      } catch (e) {
+        return { error: e instanceof Error ? e.message : "Failed to create list" };
       }
-      return { list_id: newList.id, list_name: newList.name, added_count: addedCount };
     },
   });
 

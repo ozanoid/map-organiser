@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { resolveCategoryId } from "@/lib/google/category-mapping";
+import { addPlaceToLists } from "@/lib/lists/write";
 import { queryPlaces } from "@/lib/places/query-places";
 import { log } from "@/lib/telemetry/logger";
 
@@ -214,14 +215,15 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Add to lists if provided
+  // Onto the chosen lists, at their end (src/lib/lists). The place is saved
+  // either way; a list that is gone meanwhile is skipped and logged.
   if (list_ids && list_ids.length > 0) {
-    await supabase.from("list_places").insert(
-      list_ids.map((listId: string) => ({
-        list_id: listId,
-        place_id: place.id,
-      }))
-    );
+    try {
+      const { missing } = await addPlaceToLists({ supabase, userId: user.id }, place.id, list_ids);
+      if (missing.length > 0) log.warn("places.create.lists_missing", { userId: user.id, missing });
+    } catch (e) {
+      log.warn("places.create.lists_failed", { userId: user.id, error: e instanceof Error ? e.message : String(e) });
+    }
   }
 
   return NextResponse.json({

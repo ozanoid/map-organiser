@@ -2,7 +2,7 @@
 title: Hooks
 type: overview
 domain: frontend
-version: 1.8.0
+version: 1.8.1
 last_updated: 18.11.2026
 status: stable
 sources:
@@ -26,7 +26,7 @@ Every custom hook lives in `src/lib/hooks/`. Convention: file `use-x.ts` exports
 | `useCreateCategory` / `useDeleteCategory` | mutation | invalidates `["categories"]`, `["places"]` | [[use-categories]] |
 | `useDebouncedCallback` | utility | — | [[use-debounce]] |
 | `useFilters` | local-state + URL sync | — | [[use-filters]] |
-| `useLists` + 6 mutations | react-query + mutations | `["lists"]`, `["place-lists", placeId]` | [[use-lists]] |
+| `useLists`, `useList` + 4 mutations | react-query + mutations (optimistic list changes) | `["lists"]`, `["lists", id]` | [[use-lists]] |
 | `useMapStyle` | localStorage + theme | — | [[use-map-style]] |
 | `usePlaces` + 4 mutations | react-query + mutations | `["places", filters]` | [[use-places]] |
 | `useSavedFilters` + 2 mutations | react-query + mutations | `["saved-filters"]` | [[use-saved-filters]] |

@@ -64,9 +64,9 @@ mobile).
        │      get_place_details  → place + tags + lists + profile
        │      compare_places     → data-only side-by-side (model verbalises)
        │      get_stats          → shared computeUserStats()
-       │      add_to_list        ┐
-       │      create_list        ├ needsApproval: true
-       │      set_visit_status   ┘
+       │      add_to_list        ┐ (lists through src/lib/lists →
+       │      create_list        ├  save_list, v1.40.0)
+       │      set_visit_status   ┘ needsApproval: true
        │  • outputs are COMPACT projections — full google_data never
        │    enters the loop (token cost)
        │

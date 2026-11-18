@@ -2,11 +2,12 @@
 title: useLists
 type: hook
 domain: frontend
-version: 1.0.0
-last_updated: 12.05.2026
+version: 2.0.0
+last_updated: 18.11.2026
 status: stable
 sources:
   - src/lib/hooks/use-lists.ts
+  - src/lib/lists/local.ts
 related:
   - "[[_README]]"
   - "[[../../01-domain/lists]]"
@@ -15,50 +16,31 @@ related:
 
 # `useLists` and family
 
-Seven exports — one query for the list of lists, plus mutations and a place-scoped sub-query.
-
-## Signatures
-
-```ts
-function useLists(): UseQueryResult<PlaceList[], Error>
-function useCreateList(): UseMutationResult<PlaceList, Error, { name: string; description?: string; color?: string }>
-function useDeleteList(): UseMutationResult<void, Error, string>
-function useAddToList(): UseMutationResult<void, Error, { listId: string; placeId: string }>
-function useRemoveFromList(): UseMutationResult<void, Error, { listId: string; placeId: string }>
-function useReorderListPlaces(): UseMutationResult<void, Error, { listId: string; placeIds: string[] }>
-function usePlaceLists(placeId: string | undefined): UseQueryResult<PlaceList[], Error>
-```
-
-## Behavior
-
-| Hook | Source | Invalidates |
-|---|---|---|
-| `useLists` | Supabase `select *, list_places(count)` ordered by `created_at desc`. `place_count` mapped from the count aggregate. | `["lists"]` |
-| `useCreateList` | Supabase insert. | `["lists"]` |
-| `useDeleteList` | Supabase delete by id. | `["lists"]` |
-| `useAddToList` | Supabase insert into `list_places`. | `["lists"]`, `["places"]` |
-| `useRemoveFromList` | Supabase delete from `list_places`. | `["lists"]`, `["places"]` |
-| `useReorderListPlaces` | `PATCH /api/lists/[id]/reorder` (because it's a bulk update). | `["places"]` |
-| `usePlaceLists(placeId)` | `GET /api/places/[id]` and extract `lists[]`. Enabled only when `placeId` is defined. | — (read-only) |
+Lists as server state, all through `/api/lists` (v1.40.0 — before, the hook wrote `lists` / `list_places` from the browser).
 
 ## Query keys
 
-- `["lists"]` — the user's lists.
-- `["place-lists", placeId]` — the lists a given place belongs to (read via `/api/places/[id]`).
+| Key | What |
+|---|---|
+| `["lists"]` | Every list with its place count (`useLists`). |
+| `["lists", id]` | One list: its items in order — place id, position, note (`useList`). |
+| `["places", { list_id }]` | The list's places themselves (`usePlaces`), for the cards and the map. |
 
-## Consumers
+One list sits under the overview's key, so invalidating `["lists"]` — what writes elsewhere do (a new place with lists, a bulk add, the in-app assistant, a deleted place) — also refreshes an open list page.
 
-- `src/app/(app)/lists/page.tsx` — `useLists`.
-- `src/app/(app)/lists/[id]/page.tsx` — `useLists`, `useAddToList`, `useRemoveFromList`, `useReorderListPlaces`, `usePlaceLists`.
-- `src/app/(app)/places/[id]/page.tsx` — `usePlaceLists`.
-- `src/app/(app)/import/page.tsx` — `useCreateList` (for the "add to new list" option during bulk import).
-- `src/components/filters/list-filter.tsx` — `useLists`.
-- `src/components/places/add-place-dialog.tsx` — `useLists`, `useAddToList`.
-- `src/components/places/bulk-action-bar.tsx` — `useAddToList`, `useRemoveFromList`.
-- `src/components/places/inline-list-creator.tsx` — `useCreateList`.
+## Exports
 
-## Edge cases
+```ts
+function useLists(): UseQueryResult<PlaceList[]>
+function useList(id: string | undefined): UseQueryResult<ListDetail | null>   // null: not the user's / deleted
+function useCreateList(): UseMutationResult<{ id: string }, Error, { name; description?; color? }>
+function useDeleteList(): UseMutationResult<void, Error, string>
+function useChangeList(listId: string): UseMutationResult<{ list: ListDetail | null }, Error, ListChanges>
+function useTogglePlaceOnList(): UseMutationResult<void, Error, { listId; placeId; on; note?; position? }>
+```
 
-- **`useReorderListPlaces` invalidates only `["places"]`** — not `["lists"]`. That's correct because list metadata didn't change, only the order of joined places. The places query (which orders by `list_places.sort_order` when filtered by list) needs to refetch.
-- **Optimistic updates** are not currently used. Drag-and-drop reorder in the list detail page uses local state for the visual feedback, then fires the mutation; React Query refetches and the list re-renders.
-- **`usePlaceLists` is a thin projection.** It hits `/api/places/[id]` (full place detail) just to read the `lists[]` array. Worth a dedicated lightweight endpoint if this becomes hot.
+- **`useChangeList`** — `PATCH /api/lists/[id]` with `{ set, ops }`. The change shows at once: before the request goes out the cached list takes it (`applyListChanges`, `src/lib/lists/local.ts` — order, notes, removals, name and description, by `save_list`'s rules; a place that is added appears with the answer). Writes to one list share a key and a scope and run one after another; the server's answer replaces the cached list only for the last write still queued — an earlier answer would undo, on screen, the writes behind it. After an error, or a committed write whose list couldn't be read back, the list is read again. The places are read again only when a write adds or removes places.
+- **`useTogglePlaceOnList`** — the place page's list picker: one list, one `add_place` / `remove_place`; `note` and `position` put a place back as it was (Undo). Toggles queue in one scope.
+- **`useDeleteList`** — sets `["lists", id]` to `null` so a page or a Back to the URL shows "not found", not the deleted list from the cache. The dialog that deletes navigates with `mutateAsync`: the delete unmounts it, and `mutate()`'s per-call callbacks don't run after that ([[../../_agent/pitfalls]]).
+
+Components: `useListEditor` (`src/components/lists/use-list-editor.ts`) wraps `useChangeList` with the toast for a refused change, like `usePlanEditor` for plans.

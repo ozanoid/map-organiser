@@ -6,6 +6,90 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 18.11.2026 — v1.40.0 — Lists: one write path, notes, Claude (Phase 1, slice 4)
+
+Written on the branch `feat/personal-assistant`; not merged yet. Ozan's
+decisions are in [[_plans/phase-1-planning]] ("Dilim 4 kararları").
+
+- **Database** (applied with Ozan's approval; bodies hash-match the files):
+  `list_items_order_and_access` — the order in every list made 0..n-1 (three
+  lists had all of their 12–47 places at 0) and `sort_order` not null; the
+  `list_places` policy's WITH CHECK also requires the place to be the user's
+  (a client could put another user's place on its list); index on
+  `list_places(place_id)`. `lists_created_via`. `list_functions` —
+  `save_list`, one transaction for creating or changing a list: `set` and
+  ops `add_place` / `remove_place` / `set_note` / `move_place` / `reorder`,
+  dense order, ownership checked. `list_note_rules` (after the review): a
+  blank or null note on `add_place` keeps the note there; trimming covers
+  tabs and line breaks. Dry-run in rolled-back transactions first (12 and 5
+  scenarios as the signed-in test user).
+- **One write path:** `src/lib/lists/` (schema, read, write) and
+  `/api/lists`, `/api/lists/[id]`. Eight code paths that wrote the tables
+  directly — the browser hook, the place page, new places, bulk add, imports,
+  saving a shared list, the in-app assistant, the reorder route (removed) —
+  now go through it. The place page used to delete all of a place's list rows
+  and insert them again to change one list (it put the place first on every
+  list, and would have wiped notes); it now touches only the list that
+  changes.
+- **UI:** the list page shows each place's note, a place menu (edit note,
+  remove with Undo — back with its note and position) and a list menu (share,
+  rename, description, delete in a dialog instead of `confirm()`); list / map
+  view in the URL. Its order comes from the list itself and a change shows at
+  once (`applyListChanges`; only the last queued write's answer replaces the
+  cache), so drags can't land on a stale position. The place page shows each
+  list's note and undoes unticking a list. A shared list shows its notes and
+  saving it copies them.
+- **Claude:** `get_lists` (every list, or one in full with places, notes and
+  statuses) and `save_list` (create or change; no delete); `get_places` lists
+  a place's lists with its note there. 15 tools, about 38,700 characters of
+  definitions.
+- **Older bugs found on the way and fixed:**
+  - Saving a shared list put the owner's place id on the visitor's list when
+    a copy failed; now that place is left out.
+  - The public read of a shared place or list, and saving a shared place,
+    didn't check the link's owner — a signed-in user could write a link row
+    with someone else's id and read the resource (with its notes). Scoped to
+    `link.user_id`; plans were already scoped.
+  - Deleting a plan or a list never redirected: the delete unmounted the
+    dialog before `mutate()`'s callbacks ran. Both use `mutateAsync` now.
+  - The list page looped ("Maximum update depth exceeded") while its places
+    loaded — a fresh `[]` default in an effect's dependencies.
+- **Reviews:** two rounds by an independent agent — six findings (drag
+  position against a lagging places query, `add_place` with a null note
+  wiping a note, cache keys that left an open list stale, the share read
+  above, a contradictory loading state, untrimmed notes) and, in the second
+  round, the unscoped shared-place save and a late error refetch; all fixed.
+- **Checks:** `npm run check:assistant -- lists` — 28 checks on the live
+  database, test account: schemas, the tools, a call with several ops, the
+  all-or-nothing refusal, note rules, the optimistic change matching the
+  server's, `get_places` with notes, the place page's one-list writes, bulk
+  add, delete, and the account's own lists compared item by item before and
+  after. Plan, visit and plan-tool suites pass; `tsc`, `eslint`, `next
+  build`. Chrome tour on the test account: create, add from place pages,
+  notes, remove + Undo, two quick drags settling on the server's order,
+  description, map view in the URL, the shared page with notes, saving a
+  shared list, delete with redirect.
+- **A slip, disclosed:** the first version of the list checks set "all lists
+  of a place" on a place that was on the test account's "london trip", which
+  took it off that list. It was put back (at the end — its old position
+  wasn't recorded); the checks now use places on no list and verify the
+  account's lists are untouched.
+- **Not changed (older):** `PlaceCard` nests the Maps link inside the card's
+  link — a console error on the list and places pages.
+- Docs: [[01-domain/lists]], [[01-domain/sharing]],
+  [[02-backend/schema/lists]], [[02-backend/schema/list_places]],
+  [[02-backend/api-routes/lists]], [[02-backend/api-routes/places]],
+  [[02-backend/api-routes/shared]], [[02-backend/api-routes/ai]],
+  [[02-backend/rls-policies]], [[03-frontend/hooks/use-lists]],
+  [[03-frontend/hooks/_README]], [[03-frontend/components/lists]],
+  [[03-frontend/components/places]], [[03-frontend/components/_README]],
+  [[04-integrations/claude-mcp]], [[05-flows/share-flow]],
+  [[05-flows/ai-chat-flow]], [[05-flows/place-import-flow]],
+  [[_agent/pitfalls]], [[_agent/common-tasks]],
+  [[_plans/phase-1-planning]], [[_plans/personal-assistant]].
+
+---
+
 ## 18.11.2026 — v1.39.1 — Plan tools on main
 
 - Phase 1, slice 3 merged to main with Ozan's approval (merge `4508f82`;

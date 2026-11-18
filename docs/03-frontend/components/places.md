@@ -2,7 +2,7 @@
 title: Places components
 type: component
 domain: frontend
-version: 1.9.0
+version: 1.10.0
 last_updated: 18.11.2026
 status: stable
 sources:
@@ -80,6 +80,12 @@ Twenty files under `src/components/places/`. All `"use client"`. The Place-relat
   visit** in the toast. A visit write returns the place's new status and
   rating, which replace the view's copy. The delete confirm counts the
   visits. Components: [[visits]].
+- **Lists (v1.40.0):** the place's lists as badges and, under them, its note
+  on each list ("list name: note"). The picker ticks or unticks one list at a
+  time (`useTogglePlaceOnList` → that list's `PATCH`) — on the place's other
+  lists it keeps its position and note (the old `list_ids` PATCH rewrote all
+  of them). Unticking offers **Undo**, which puts it back with its note and
+  position. A delete refreshes `["lists"]` too. See [[lists]].
 - **Used by:** the `/places/[id]` route (thin wrapper: `onBack=router.back`,
   `onDeleted=router.push("/places")`) and `PlaceDetailSheet`.
 
