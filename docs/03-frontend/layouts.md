@@ -2,8 +2,8 @@
 title: Layouts
 type: overview
 domain: frontend
-version: 1.0.1
-last_updated: 17.11.2026
+version: 1.0.2
+last_updated: 18.11.2026
 status: stable
 sources:
   - src/app/layout.tsx
@@ -28,7 +28,7 @@ The layout hierarchy. App Router lets each segment own a layout that wraps its c
 ```
 src/app/layout.tsx                ← Root: html/body, fonts, Providers
 ├── src/app/(app)/layout.tsx       ← Authenticated shell (sidebar + header)
-│   └── (every /map, /places, /lists, /trips, /stats, /import, /settings)
+│   └── (every /map, /places, /lists, /plans, /stats, /import, /settings)
 ├── src/app/(auth)/layout.tsx      ← Centered minimal layout for /login
 ├── src/app/shared/layout.tsx      ← Standalone public layout for /shared/<slug>
 └── (no group)

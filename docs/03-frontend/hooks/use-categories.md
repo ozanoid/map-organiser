@@ -2,8 +2,8 @@
 title: useCategories
 type: hook
 domain: frontend
-version: 1.0.0
-last_updated: 12.05.2026
+version: 1.0.1
+last_updated: 18.11.2026
 status: stable
 sources:
   - src/lib/hooks/use-categories.ts
@@ -45,7 +45,7 @@ function useDeleteCategory(): UseMutationResult<void, Error, string>
 - `src/components/places/inline-category-creator.tsx`
 - `src/app/(app)/settings/page.tsx`
 - `src/app/(app)/lists/[id]/page.tsx`
-- `src/app/(app)/trips/[id]/page.tsx`
+- `src/app/(app)/plans/[id]/page.tsx`
 
 ## Edge cases
 

@@ -2,8 +2,8 @@
 title: TanStack React Query
 type: integration
 domain: integrations
-version: 1.0.0
-last_updated: 12.05.2026
+version: 1.0.1
+last_updated: 18.11.2026
 status: stable
 sources:
   - src/lib/providers.tsx
@@ -58,8 +58,8 @@ No other hook overrides defaults.
 
 ## Patterns the codebase enforces
 
-1. **One hook per entity.** `usePlaces`, `useTrips`, etc. — each owns its query keys.
-2. **Stable namespaced query keys.** `["places", filters]`, `["trip", id]`, `["place-tags", placeId]`. See [[../03-frontend/state-management#query-key-conventions]].
+1. **One hook per entity.** `usePlaces`, `usePlans`, etc. — each owns its query keys.
+2. **Stable namespaced query keys.** `["places", filters]`, `["plan", id]`, `["place-tags", placeId]`. See [[../03-frontend/state-management#query-key-conventions]].
 3. **Mutations live with their query.** `useCreatePlace` is exported from `use-places.ts`, not a separate file.
 4. **Invalidation, not manual cache writes.** With one exception ([[../03-frontend/hooks/use-shared-links|`useSharedLink`]] mutations use `setQueryData` for optimistic-ish updates), mutations call `queryClient.invalidateQueries({...})` and let React Query refetch.
 5. **No `<Hydrate>` for SSR.** App Router pages either render Server Components (no React Query needed) or fetch client-side on mount.

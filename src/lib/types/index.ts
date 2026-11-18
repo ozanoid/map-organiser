@@ -17,7 +17,7 @@ export interface Place {
   visited_at: string | null;
   booked_at: string | null;
   google_data: GooglePlaceData;
-  source: "manual" | "import" | "link" | "mapbox_search" | "similar" | "shared" | "instagram";
+  source: "manual" | "import" | "link" | "mapbox_search" | "similar" | "shared" | "instagram" | "assistant";
   created_at: string;
   updated_at: string;
   // Joined
@@ -85,58 +85,112 @@ export interface PlaceList {
 
 export type RoutingProfile = "walking" | "driving" | "cycling";
 
-export interface Trip {
+export type PlanStatus = "planned" | "cancelled";
+export type StopStatus = "planned" | "done" | "skipped";
+export type DayPart = "morning" | "afternoon" | "evening" | "night";
+
+/**
+ * A plan: an evening out or a multi-day trip — 1..N days of ordered stops.
+ * Dates live in one place, `start_date`; `end_date` and each day's `date`
+ * are derived by the server (null while the plan is not scheduled).
+ */
+export interface Plan {
   id: string;
   user_id: string;
   list_id: string | null;
   name: string;
-  start_date: string;
-  end_date: string;
+  start_date: string | null;
+  /** Derived: start_date + days - 1. */
+  end_date: string | null;
+  status: PlanStatus;
   color: string;
   notes: string | null;
-  /** v1.22.0 (NF-08): budget totals multiply by this. CHECK 1-50. */
+  /** Budget totals multiply by this. CHECK 1-50. */
   party_size: number;
+  created_via: "app" | "assistant";
   created_at: string;
   updated_at: string;
   // Joined
-  days?: TripDay[];
+  days?: PlanDay[];
   day_count?: number;
-  place_count?: number;
+  stop_count?: number;
 }
 
-export interface TripDay {
+export interface PlanDay {
   id: string;
-  trip_id: string;
+  plan_id: string;
   day_number: number;
-  date: string;
+  /** Derived: plan.start_date + (day_number - 1). */
+  date: string | null;
   notes: string | null;
-  /** v1.22.0 (NF-07): Mapbox Directions profile for this day's route. */
+  /** Mapbox Directions profile for this day's route. */
   routing_profile: RoutingProfile;
   created_at: string;
   // Joined
-  places?: TripDayPlace[];
-  route?: {
+  stops?: PlanStop[];
+  /** Only on the public shared view; the app loads routes per day
+   *  (usePlanRoutes) so an edit that doesn't move a stop buys no route. */
+  route?: PlanRoute | null;
+}
+
+/** A day's route through its stops that have a place, in order. */
+export interface PlanRoute {
+  distance_km: number;
+  duration_min: number;
+  geometry: { type: "LineString"; coordinates: [number, number][] };
+  /** One leg per consecutive pair of stops with a place. */
+  legs: Array<{
+    from_stop_id: string;
+    to_stop_id: string;
     distance_km: number;
     duration_min: number;
-    geometry: { type: "LineString"; coordinates: [number, number][] };
-    legs?: Array<{ distance_km: number; duration_min: number }>;
+  }>;
+}
+
+/**
+ * The part of a place a plan carries. A full `places` row averages ~69 KB
+ * (stored reviews, profile), so plans read only what the plan page and the
+ * map marker show.
+ */
+export interface PlanPlace {
+  id: string;
+  name: string;
+  address: string | null;
+  city: string | null;
+  country: string | null;
+  /** null when the place has no coordinates. */
+  location: { lat: number; lng: number } | null;
+  rating: number | null;
+  visit_status: VisitStatus | null;
+  google_place_id: string | null;
+  category: { name: string; color: string; icon: string } | null;
+  google_data: {
+    url: string | null;
+    rating: number | null;
+    user_ratings_total: number | null;
+    price_level: number | null;
   };
 }
 
-export interface TripDayPlace {
+export interface PlanStop {
   id: string;
-  trip_day_id: string;
-  place_id: string;
+  day_id: string;
   sort_order: number;
-  time_slot: string | null;
+  /** A saved place, or null for a free-text stop (then `title` is set). */
+  place_id: string | null;
+  title: string | null;
+  /** "HH:MM", local time at the place; or a part of the day — never both. */
+  start_time: string | null;
+  day_part: DayPart | null;
   notes: string | null;
-  /** v1.22.0 (NF-08): per-person estimate; defaulted from
-   *  google_data.price_level tier when present, inline-editable. */
+  /** Per-person estimate; defaulted from the place's price level. */
   cost_estimate: number | null;
   currency: string | null;
+  status: StopStatus;
+  status_at: string | null;
   created_at: string;
   // Joined
-  place?: Place;
+  place?: PlanPlace | null;
 }
 
 export interface PlacePhoto {

@@ -186,18 +186,18 @@ export function PlaceDetailView({
   ]);
 
   async function handleDelete() {
-    const tripNames = ((place as any)?.trips || []).map((t: any) => t.name);
+    const planNames = ((place as { plans?: { name: string }[] } | undefined)?.plans ?? []).map((p) => p.name);
     let msg = "Are you sure you want to delete this place?";
-    if (tripNames.length > 0) {
-      msg += `\n\nThis place is part of ${tripNames.length} trip${tripNames.length > 1 ? "s" : ""}: ${tripNames.join(", ")}. It will be removed from those trips too.`;
+    if (planNames.length > 0) {
+      msg += `\n\nThis place is part of ${planNames.length} plan${planNames.length > 1 ? "s" : ""}: ${planNames.join(", ")}. It will be removed from those plans too.`;
     }
     if (!confirm(msg)) return;
 
     const res = await fetch(`/api/places/${placeId}`, { method: "DELETE" });
     if (res.ok) {
       queryClient.invalidateQueries({ queryKey: ["places"] });
-      queryClient.invalidateQueries({ queryKey: ["trips"] });
-      queryClient.invalidateQueries({ queryKey: ["trip"] });
+      queryClient.invalidateQueries({ queryKey: ["plans"] });
+      queryClient.invalidateQueries({ queryKey: ["plan"] });
       toast.success("Place deleted");
       onDeleted();
     } else {
@@ -221,7 +221,7 @@ export function PlaceDetailView({
     }
   }
 
-  // NF-18 (v1.20.0): public single-place share — mirrors the trip page's
+  // NF-18 (v1.20.0): public single-place share — mirrors the plan page's
   // handleShare (create/reuse link → clipboard + toast).
   function handleShare() {
     createSharedLink.mutate(

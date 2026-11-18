@@ -5,7 +5,8 @@
  * the owner's library; the write check and the paid calls (geocoding, AI
  * ranking) use the admin test account and undo the write afterwards.
  *
- *   npm run check:assistant
+ *   npm run check:assistant            everything
+ *   npm run check:assistant -- plans   only the plan checks (no paid calls)
  *
  * Uses the service-role key: RLS is bypassed, so this relies on every tool
  * query also filtering by user_id (which they do).
@@ -14,6 +15,7 @@ import { createClient } from "@supabase/supabase-js";
 import { isAllowedOAuthRedirect } from "@/lib/assistant/oauth";
 import { ASSISTANT_TOOLS } from "@/lib/assistant/tools";
 import { safeNextPath } from "@/lib/auth/safe-next";
+import { checkPlans } from "./plans";
 
 const OWNER = "ozan@maporganiser.com";
 const TESTER = "admin@maporganiser.com";
@@ -61,6 +63,12 @@ function expect(label: string, ok: boolean) {
 async function main() {
   const owner = await userIdOf(OWNER);
   const tester = await userIdOf(TESTER);
+
+  if (process.argv[2] === "plans") {
+    await checkPlans(admin, expect, tester, owner);
+    console.log(`\n${failures === 0 ? "ALL CHECKS PASSED" : `${failures} CHECK(S) FAILED`}`);
+    process.exit(failures === 0 ? 0 : 1);
+  }
 
   // ── Owner library, read-only ──────────────────────────────────────
   const overview = await call("overview", owner, "get_library_overview", {}, 700);
@@ -190,6 +198,9 @@ async function main() {
     );
     void written;
   }
+
+  // ── Plans (src/lib/plans) ─────────────────────────────────────────
+  await checkPlans(admin, expect, tester, owner);
 
   // ── Pure helpers ──────────────────────────────────────────────────
   for (const [raw, want] of [

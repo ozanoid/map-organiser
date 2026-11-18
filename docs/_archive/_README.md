@@ -2,8 +2,8 @@
 title: Archive
 type: meta
 domain: meta
-version: 1.1.0
-last_updated: 17.11.2026
+version: 1.2.0
+last_updated: 18.11.2026
 status: stable
 ---
 
@@ -31,6 +31,13 @@ The original `docs/*_v1.md` and `*_v2.md` files were moved here on **12.05.2026*
 | `test-plan_v1.md` | Test strategy (v1) |
 | `test-plan_v2.md` | Test strategy (v2, 2026-04-16) |
 | `dataforseo-vs-google-places-analysis.md` | API provider comparison |
+| `01-domain/trips.md` | The Trip entity (trips / trip_days / trip_day_places). Superseded on 18.11.2026 by `01-domain/plans`. |
+| `02-backend/api-routes/trips.md` | The seven `/api/trips/**` route files. Superseded on 18.11.2026 by `02-backend/api-routes/plans`. |
+| `03-frontend/hooks/use-trips.md` | `useTrips` and its 11 mutations. Superseded on 18.11.2026 by `03-frontend/hooks/use-plans`. |
+| `05-flows/trip-planning-flow.md` | Create a trip → auto-plan → day edits. Superseded on 18.11.2026 by `05-flows/plan-flow`. |
+| `05-flows/ai-trip-plan-flow.md` | The AI trip planner on the trips tables. Superseded on 18.11.2026 by `05-flows/ai-plan-flow`. |
+
+The five trip docs keep their folder under `_archive/` because two of them share a filename (`trips.md`).
 
 ## Redistribution checklist
 

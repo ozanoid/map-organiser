@@ -2,8 +2,8 @@
 title: Supabase Clients
 type: overview
 domain: backend
-version: 1.1.3
-last_updated: 17.11.2026
+version: 1.1.4
+last_updated: 18.11.2026
 status: stable
 sources:
   - src/lib/supabase/client.ts
@@ -80,7 +80,7 @@ const supabase = createServiceClient(); // bypasses RLS — use with care
 
 | File | Why the service role |
 |---|---|
-| `src/app/api/shared/[slug]/route.ts` | Public read of a shared list/trip/place — the viewer is anonymous, so the user-scoped client can't read the underlying rows; the route assembles a whitelisted public payload. |
+| `src/app/api/shared/[slug]/route.ts` | Public read of a shared list/plan/place — the viewer is anonymous, so the user-scoped client can't read the underlying rows; the route assembles a whitelisted public payload. |
 | `src/app/api/shared/[slug]/save/route.ts` | Reads the shared **originals** only (they belong to another user); every insert stays on the viewer's cookie client. |
 | `src/app/api/cron/refresh-places/route.ts` | Daily sweep across users — no cookie. |
 | `src/app/api/cron/drain-imports/route.ts` | Drains the import queue across users — no cookie (v1.26.0). |

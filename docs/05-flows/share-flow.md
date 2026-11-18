@@ -2,8 +2,8 @@
 title: Share Flow
 type: flow
 domain: sharing
-version: 1.3.0
-last_updated: 16.07.2026
+version: 1.4.0
+last_updated: 18.11.2026
 status: stable
 sources:
   - src/app/api/shared/route.ts
@@ -21,11 +21,11 @@ related:
 
 > **v1.20.0 (NF-18):** tek mekan paylaşımı eklendi — detay sayfası başlığında Share2 butonu → link → `/shared/[slug]` `SharedPlaceView` (public payload WHITELIST: foto, kategori, rating, adres, saatler, harita pini, not — owner alanları ve review/AI profili sızmaz). "Save to my places" → tek mekan kopyası. İki düzeltme: save route orijinal içeriği artık service client'la okuyor (owner-scoped RLS her cross-user save'i Nisan'dan beri 404'lüyordu) ve deaktive edilmiş kaynağı yeniden paylaşmak mevcut linki reaktive ediyor.
 
-End-to-end public sharing of a list, trip, or single place — from creating the slug to a logged-in viewer saving the content into their own account.
+End-to-end public sharing of a list, plan, or single place — from creating the slug to a logged-in viewer saving the content into their own account.
 
 ## Trigger
 
-Owner clicks "Share" on a list, trip, or place detail page.
+Owner clicks "Share" on a list or place detail page, or "Copy share link" in a plan's menu.
 
 ## Steps
 
@@ -34,7 +34,7 @@ Owner clicks "Share" on a list, trip, or place detail page.
        │
        ▼
 2. useCreateSharedLink → POST /api/shared { resource_type, resource_id }
-       │  • Verifies user owns lists.id, trips.id, or places.id
+       │  • Verifies user owns lists.id, plans.id, or places.id
        │  • Returns existing link if (user_id, resource_type, resource_id)
        │    already shared — idempotent; if that link was deactivated,
        │    flips is_active back to true (v1.20.0) so the URL works
@@ -61,12 +61,13 @@ Owner clicks "Share" on a list, trip, or place detail page.
        │  • SELECT profiles to get ownerName
        │  • Branch by resource_type:
        │      — list: SELECT lists, list_places, places + categories
-       │      — trip: SELECT trip, trip_days, trip_day_places, places + categories
-       │              + Mapbox getRoute per multi-stop day, using each day's
-       │                routing_profile (v1.22.0) — tracked as mapbox_directions
+       │      — plan (also links stored as "trip"): getPlan, scoped by the
+       │              owner's id — plan, days, stops, light places in one query
+       │              + withRoutes: Mapbox per day with ≥ 2 located stops, the
+       │                day's routing_profile — tracked as mapbox_directions
        │                attributed to the link OWNER (their share, their quota)
-       │              payload strips cost_estimate/currency (per row) and
-       │                party_size (trip) — owner-private budget data (v1.22.0)
+       │              payload is a WHITELIST (handlePlanShare): no costs,
+       │                currency, party size, notes, stop status, visit status
        │      — place (v1.20.0): SELECT single place + categories(name, color)
        │              payload is a WHITELIST of rendered fields only
        │              (no user_id / rating / visit_status / dates / source;
@@ -76,7 +77,8 @@ Owner clicks "Share" on a list, trip, or place detail page.
        ▼
 6. Public page renders:
        │  • List: place cards + map view
-       │  • Trip: day timeline + day-colored polylines on map
+       │  • Plan: dates (when set), day timeline with times and free-text
+       │    stops, day-colored polylines on map
        │  • Place: SharedPlaceView — photo, category chip, rating, address,
        │    notes, map pin, opening hours, website/maps links
        │
@@ -96,18 +98,18 @@ Owner clicks "Share" on a list, trip, or place detail page.
        │              if viewer already has it (by google_place_id) → reuse
        │              else → INSERT new places row owned by viewer (source: 'shared')
        │          • INSERT list_places rows preserving sort_order
-       │      — trip:
-       │          • INSERT new trips row owned by viewer
-       │          • INSERT trip_days rows (date offset preserved)
-       │          • INSERT trip_day_places rows referencing viewer's place IDs
-       │          • INSERT new places as needed (same dedup as above)
+       │      — plan:
+       │          • copy each place for the viewer (same dedup as above)
+       │          • createPlan → create_plan: the plan, its days and stops
+       │            in ONE transaction (name, start date, order, times,
+       │            free-text stops; not costs, notes or party size)
        │      — place (v1.20.0):
        │          • Single-place copy — same dedupe by google_place_id;
        │            omits rating/visit_status/category; source: 'shared'
        │  • Returns { type, id: newResourceId }
        │
-       ▼  Invalidates ["lists"], ["trips"], ["places"]
-9. Toast: "Saved!" — viewer navigates to their new list/trip/place.
+       ▼  Invalidates ["lists"], ["plans"], ["places"]
+9. Toast: "Saved!" — viewer navigates to their new list/plan/place.
 ```
 
 ## Inputs / outputs
@@ -116,7 +118,7 @@ Owner clicks "Share" on a list, trip, or place detail page.
 |---|---|---|
 | 2 | resource_type + resource_id | shared_links row (new or existing) |
 | 5 | slug | assembled public payload + view_count++ |
-| 8 | slug (viewer authenticated) | new list/trip + (maybe) new places for the viewer |
+| 8 | slug (viewer authenticated) | new list/plan + (maybe) new places for the viewer |
 
 ## Owner controls
 
@@ -135,7 +137,7 @@ Same payload either way (step 5). The **Save** action requires auth — anonymou
 
 - **Owner not authorized to share (step 2):** the API verifies `lists.user_id = auth.uid()`. Returns 404 if not owned (not 403 — don't leak existence).
 - **Slug doesn't exist or disabled (step 5):** 404.
-- **Underlying list/trip deleted (step 5):** the join returns null; the route returns 400/404. The share link survives in `shared_links` (orphaned).
+- **Underlying list/plan deleted (step 5):** the join returns null; the route returns 400/404. The share link survives in `shared_links` (orphaned).
 - **Save while offline (step 8):** fails outright. UI shows a toast.
 - **Race on view_count (step 5):** lost increments. Acceptable.
 
@@ -148,7 +150,7 @@ Same payload either way (step 5). The **Save** action requires auth — anonymou
 
 ## Related code
 
-- `src/components/places/place-card.tsx` (and similar trip card) — share button entry points.
+- `src/components/places/place-card.tsx` — share button entry point; for plans: `src/components/plans/plan-menu.tsx`.
 - `src/app/(app)/places/[id]/page.tsx` — place detail Share2 button (v1.20.0).
 - `src/lib/hooks/use-shared-links.ts` — hooks.
 - `src/app/api/shared/route.ts` — create/patch.
@@ -160,5 +162,5 @@ Same payload either way (step 5). The **Save** action requires auth — anonymou
 
 ## Open questions
 
-- **Orphan share links.** If a list/trip is deleted, the share row sticks around and returns 4xx. Trigger to cascade-delete (or auto-disable) would be cleaner. See [[../02-backend/schema/shared_links#open-questions]].
+- **Orphan share links.** If a list/plan is deleted, the share row sticks around and returns 4xx. Trigger to cascade-delete (or auto-disable) would be cleaner. See [[../02-backend/schema/shared_links#open-questions]].
 - **Save dedup.** Places without `google_place_id` (manual entries) always get copied. A secondary fingerprint (name + nearest-100m coords) would reduce duplicates.

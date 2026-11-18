@@ -57,11 +57,13 @@ export const AI_SKU_CONFIG = {
     costPer1k: 15.0,
     freeMonthly: 0,
   },
-  // v1.22.0 (S4 AI-09): one unit = one trip-plan generation. Input is a
-  // compact projection of up to ~40 candidates (~350 tok each) + trip
-  // frame ≈ 15-20k tokens ≈ $0.012/plan.
+  // v1.22.0 (S4 AI-09): one unit = one AI Plan generation on the plan page.
+  // The key says "trip" because plans were called trips; it stays so the
+  // usage history is one series. Input is a compact projection of up to
+  // ~40 candidates (~350 tok each) + the plan frame ≈ 15-20k tokens ≈
+  // $0.012/plan.
   ai_trip_plan: {
-    name: "AI Trip Plan",
+    name: "AI Plan",
     costPer1k: 12.0,
     freeMonthly: 0,
   },
@@ -129,7 +131,7 @@ export const AI_MONTHLY_COMPARE_CAP = 200;
  *  The stopWhen step ceiling in the chat route bounds per-turn fan-out. */
 export const AI_MONTHLY_CHAT_CAP = 200;
 /** v1.22.0 (S4 AI-09) — one unit per plan generation; deliberate-click
- *  only from the trip page's AI Plan dialog. */
+ *  only from the plan page's AI Plan dialog. */
 export const AI_MONTHLY_TRIP_PLAN_CAP = 50;
 /** One unit per Instagram post import (one Gemini read; it also bounds the
  *  HikerAPI and Google calls the import makes). */

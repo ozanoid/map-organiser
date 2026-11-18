@@ -2,7 +2,7 @@
 title: Schema
 type: overview
 domain: backend
-version: 1.3.0
+version: 1.3.2
 last_updated: 18.11.2026
 status: stable
 sources:
@@ -31,14 +31,14 @@ All user-facing tables in the `public` schema of the Supabase project `hukppmaev
 | `list_places` | [[list_places]] | 95 | Junction: lists ↔ places with `sort_order` |
 | `place_photos` | [[place_photos]] | 0 | Place photo metadata (storage refs) |
 | `api_usage` | [[api_usage]] | 25 | Per-SKU API call counters |
-| `plans` | [[plans]] | 7 | The planning model (18.11.2026): an outing or a trip; not used by code yet |
+| `plans` | [[plans]] | 7 | The planning model (18.11.2026): an outing or a trip. The app's plan code runs on it since v1.37.0 |
 | `plan_days` | [[plans]] | 40 | Days of a plan; dates derive from `plans.start_date` |
 | `plan_stops` | [[plans]] | 127 | Ordered stops of a day: a place or a free-text stop |
 | `visits` | [[visits]] | 0 | Dated visits to a place (18.11.2026); not used by code yet |
-| `trips` | [[trips]] | 5 | Multi-day trip plans — being replaced by `plans` |
-| `trip_days` | [[trip_days]] | 33 | Days within a trip |
-| `trip_day_places` | [[trip_day_places]] | 102 | Places within a trip day, ordered |
-| `shared_links` | [[shared_links]] | 3 | Public slug links to lists/trips/places |
+| `trips` | [[trips]] | 7 | Replaced by `plans`; no code uses it since v1.37.0 — kept until the drop is approved |
+| `trip_days` | [[trip_days]] | 40 | As above (replaced by `plan_days`) |
+| `trip_day_places` | [[trip_day_places]] | 127 | As above (replaced by `plan_stops`) |
+| `shared_links` | [[shared_links]] | 3 | Public slug links to lists/plans/places |
 | `saved_filters` | [[saved_filters]] | 0 | Saved filter presets / quick chips (v1.20.0) |
 | `ai_suggestions_queue` | [[ai_suggestions_queue]] | 0 | Moderation queue for AI-proposed sub-categories & category changes |
 | `vocabulary_concepts` | [[vocabulary]] | 257 | The global controlled vocabulary — one dictionary for every account |
@@ -69,6 +69,7 @@ All user-facing tables in the `public` schema of the Supabase project `hukppmaev
 | `create_default_categories()` | trigger function | On `public.profiles` INSERT, seeds the 12 default categories. SECURITY DEFINER. |
 | `increment_api_usage(p_user_id, p_sku, p_cost)` | RPC | Atomic UPSERT into `api_usage` for cost tracking. SECURITY DEFINER. |
 | `claim_import_items(p_limit)` | RPC | Claims the next slice of the import queue with `FOR UPDATE SKIP LOCKED`. Service-role only — `EXECUTE` revoked from `public`/`anon`/`authenticated`. See [[import-jobs]]. |
+| `create_plan(p_user_id, p_plan)` · `apply_plan_changes(p_user_id, p_plan_id, p_changes)` | RPC | The atomic write path for plans (18.11.2026): create a plan with its days and stops; apply a batch of edits in one transaction. SECURITY INVOKER; `authenticated` + `service_role` only. Helpers: `plan_insert_stop`, `plan_assert_caller`. See [[plans#Functions — the write path]]. |
 
 Triggers:
 
@@ -120,7 +121,7 @@ The schema has been built up through 28 migrations on Supabase. Use Supabase MCP
 | 27 | 20260415202047 | create_shared_links_table |
 | 28 | 20260415230552 | add_cascade_delete_trip_day_places_place_id |
 
-**Since 18.11.2026** the SQL of each migration is kept in `supabase/migrations/` (file name = the version Supabase recorded + the name). The list above stops at #28; the live project has 60 — use `list_migrations`. Migrations of 18.11.2026: `20261118005355_plans_tables`, `20261118005402_visits`, `20261118005404_list_place_notes`, `20261118005405_assistant_source`.
+**Since 18.11.2026** the SQL of each migration is kept in `supabase/migrations/` (file name = the version Supabase recorded + the name). The list above stops at #28; the live project has 62 — use `list_migrations`. Migrations of 18.11.2026: `20261118005355_plans_tables`, `20261118005402_visits`, `20261118005404_list_place_notes`, `20261118005405_assistant_source`, `20261118010309_plan_functions`.
 
 Adding a new migration: write the file, show it to Ozan, apply it with Supabase MCP `apply_migration`, then update the affected per-table doc.
 

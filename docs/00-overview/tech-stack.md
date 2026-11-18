@@ -2,8 +2,8 @@
 title: Tech Stack
 type: overview
 domain: overview
-version: 1.6.0
-last_updated: 16.10.2026
+version: 1.6.1
+last_updated: 18.11.2026
 status: stable
 sources:
   - package.json
@@ -89,7 +89,7 @@ See [[../05-flows/observability-flow]] for the full architecture.
 
 | Lib | Version | Role | Notes |
 |---|---|---|---|
-| `mapbox-gl` | `^3.25.0` | Map rendering | Plus Directions API for trip route lines. Token in `NEXT_PUBLIC_MAPBOX_TOKEN`. |
+| `mapbox-gl` | `^3.25.0` | Map rendering | Plus Directions API for plan route lines. Token in `NEXT_PUBLIC_MAPBOX_TOKEN`. |
 | `@types/mapbox-gl` | `^3.5.0` | Types | — |
 | `@types/geojson` | `^7946.0.16` | GeoJSON types | Declared explicitly (v1.15.0): the mapbox bump dropped it as a transitive dep, breaking the `GeoJSON` namespace in `map-view.tsx`. |
 | `s2-geometry` | `^1.2.10` | S2 cell decoding | Used **only** in `src/lib/google/parse-maps-url.ts` to decode the FTid in Google Maps URLs. See [[../01-domain/geo-and-s2]]. |
@@ -100,7 +100,7 @@ See [[../05-flows/observability-flow]] for the full architecture.
 | Lib | Version | Role |
 |---|---|---|
 | `@dnd-kit/core` | `^6.3.1` | Core primitives |
-| `@dnd-kit/sortable` | `^10.0.0` | Sortable lists (list reorder, trip day reorder) |
+| `@dnd-kit/sortable` | `^10.0.0` | Sortable lists (list reorder, plan stop reorder) |
 | `@dnd-kit/utilities` | `^3.2.2` | Helpers |
 
 ## Charts & dates

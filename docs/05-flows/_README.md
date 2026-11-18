@@ -2,8 +2,8 @@
 title: Flows
 type: overview
 domain: overview
-version: 1.7.0
-last_updated: 17.11.2026
+version: 1.8.0
+last_updated: 18.11.2026
 status: stable
 related:
   - "[[auth-flow]]"
@@ -16,7 +16,8 @@ related:
   - "[[full-profile-flow]]"
   - "[[ai-enrichment-flow]]"
   - "[[ai-search-flow]]"
-  - "[[trip-planning-flow]]"
+  - "[[plan-flow]]"
+  - "[[ai-plan-flow]]"
   - "[[share-flow]]"
   - "[[share-target-flow]]"
   - "[[offline-flow]]"
@@ -41,8 +42,9 @@ End-to-end user / data flows that span multiple subsystems. Each doc traces the 
 | [[full-profile-flow]] | Background Gemini full place_profile generation (Phase 4 + 5.5) | `step=reviews` chain → `step=profile` → Gemini Flash → 4-band auto-apply + moderation queue |
 | [[ai-enrichment-flow]] | A place is saved (any entry point) | The `enrich` cascade `info → reviews → profile`, per-entry-point coverage, completeness ladder, cost cap — overview |
 | [[ai-search-flow]] | User submits a NL query in the AI search input (Phase 6) | `/api/ai/parse-query` → `/api/places` (hard + soft features) → optional `/api/ai/rank-results` |
-| [[trip-planning-flow]] | User creates a trip from a list | `/api/trips` → optional `/api/trips/[id]/auto-plan` → day-place mutations |
-| [[share-flow]] | User clicks "Share" on a list or trip | `/api/shared` (POST) → public `/shared/<slug>` → optional save |
+| [[plan-flow]] | User creates a plan (empty or from a list) and edits it | `POST /api/plans` → `PATCH /api/plans/[id] { set, ops }` → optional `/api/plans/[id]/auto-plan` → per-day route |
+| [[ai-plan-flow]] | User clicks "AI Plan" on a plan | `POST /api/ai/day-plan` → one atomic batch of plan changes |
+| [[share-flow]] | User clicks "Share" on a list, plan or place | `/api/shared` (POST) → public `/shared/<slug>` → optional save |
 | [[share-target-flow]] | User shares a URL into the PWA from mobile share sheet | `/api/share-target` → `/map?add=…` → manual-place-create-flow (an Instagram link arriving as `/map?add=` → instagram-import-flow) |
 | [[offline-flow]] | Network drops while the user is in the app | SW, offline banner, `/offline` fallback |
 

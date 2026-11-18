@@ -2,8 +2,8 @@
 title: List
 type: entity
 domain: lists
-version: 1.0.0
-last_updated: 12.05.2026
+version: 1.1.0
+last_updated: 18.11.2026
 status: stable
 sources:
   - src/lib/types/index.ts
@@ -13,7 +13,7 @@ sources:
   - src/app/(app)/lists/[id]/page.tsx
 related:
   - "[[places]]"
-  - "[[trips]]"
+  - "[[plans]]"
   - "[[sharing]]"
   - "[[../02-backend/schema/lists]]"
   - "[[../02-backend/schema/list_places]]"
@@ -23,7 +23,7 @@ related:
 
 A named, ordered grouping of Places. The simplest organizational unit besides a Category — a "Tokyo Coffee Tour", a "Wishlist", a "Visited in 2025". Lists are M:N with Places via the `list_places` junction, which carries the ordering.
 
-A List can also seed a Trip (the trip copies the list's places into its days).
+A List can also seed a [[plans|Plan]] (its places become the stops of day 1).
 
 ## Shape
 
@@ -100,11 +100,11 @@ A List can also seed a Trip (the trip copies the list's places into its days).
                     │
                     ▼ optional
    ┌─────────────────────────────────────────────────┐
-   │  SEED A TRIP                                     │
-   │  • POST /api/trips with list_id                  │
-   │  • Trip materializes a day per date, then either │
-   │    copies all list places to day 1 or runs       │
-   │    auto-plan to spread them across days          │
+   │  SEED A PLAN                                     │
+   │  • POST /api/plans with list_id                  │
+   │  • The plan gets its days; the list's places     │
+   │    become the stops of day 1; Auto Plan spreads  │
+   │    them over the days                            │
    └─────────────────────────────────────────────────┘
 ```
 
@@ -114,13 +114,13 @@ A List can also seed a Trip (the trip copies the list's places into its days).
 |---|---|---|
 | [[users-and-profiles\|User]] | N:1 | `lists.user_id` FK |
 | [[places\|Place]] | M:N | `list_places` junction with `sort_order` |
-| [[trips\|Trip]] | 1:N (optional) | `trips.list_id` FK |
+| [[plans\|Plan]] | 1:N (optional) | `plans.list_id` FK (ON DELETE SET NULL) |
 | [[sharing\|Shared Link]] | 0..N | `shared_links.resource_type = 'list'`, `resource_id = lists.id` |
 
 When a list is deleted:
 
 - `list_places` rows cascade away.
-- Any `trips.list_id` pointing at it becomes orphaned (FK is nullable; the trip continues to exist, just without a back-link).
+- Any `plans.list_id` pointing at it is set to NULL (the plan continues to exist, just without the back-link).
 
 ## API surface
 
@@ -134,7 +134,7 @@ Note: standard CRUD for lists themselves (create/update/delete) is done via dire
 
 - **Hooks:** `src/lib/hooks/use-lists.ts` — `useLists()`, `useList(id)`, mutations for create/update/delete/reorder. Query keys `["lists"]` and `["list", id]`.
 - **Pages:**
-  - `src/app/(app)/lists/page.tsx` — Lists + Trips tabbed view.
+  - `src/app/(app)/lists/page.tsx` — Lists + Plans tabbed view; the open tab is in the URL (`?tab=plans`).
   - `src/app/(app)/lists/[id]/page.tsx` — list detail with drag-and-drop place reorder.
 - **Inline creator:** `src/components/places/inline-list-creator.tsx` — used inside place cards and dialogs.
 - **Filter:** `src/components/filters/list-filter.tsx` — single-select list pill in the filter UI.

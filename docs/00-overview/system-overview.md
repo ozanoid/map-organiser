@@ -2,7 +2,7 @@
 title: System Overview
 type: overview
 domain: overview
-version: 1.3.1
+version: 1.4.0
 last_updated: 18.11.2026
 status: stable
 sources:
@@ -19,7 +19,7 @@ related:
   - "[[repo-structure]]"
   - "[[glossary]]"
   - "[[../01-domain/places]]"
-  - "[[../01-domain/trips]]"
+  - "[[../01-domain/plans]]"
   - "[[../01-domain/sharing]]"
   - "[[../02-backend/auth]]"
 ---
@@ -28,9 +28,9 @@ related:
 
 ## What it is
 
-**Map Organiser** is a single-user PWA for organizing places saved from Google Maps, planning multi-day trips, and publishing read-only public shares of either. It's currently web-only (Vercel-deployed), with iOS and AI categorization on the roadmap.
+**Map Organiser** is a single-user PWA for organizing places saved from Google Maps, planning outings and trips, and publishing read-only public shares of either. It's currently web-only (Vercel-deployed), with iOS and AI categorization on the roadmap.
 
-The model in one sentence: **users collect Places, group them into Lists, lay them across days as Trips, and optionally share Lists or Trips via slug URLs.** Places carry rich metadata (Google + DataForSEO enrichment) and live on a PostGIS map.
+The model in one sentence: **users collect Places, group them into Lists, lay them across days as Plans, and optionally share Lists or Plans via slug URLs.** Places carry rich metadata (Google + DataForSEO enrichment) and live on a PostGIS map.
 
 ## Audience and use cases
 
@@ -44,8 +44,8 @@ Typical session:
 2. Share an Instagram post (iOS Shortcut → `/map?add=`) → every venue it features that can be pinned on evidence is added automatically, tagged `instagram` (v1.28.0).
 3. Bulk-import a Google Takeout file → server-side queue: insert, photo, reviews, AI profile.
 4. Tag and categorize, set visit status, drop into lists.
-5. Build a trip from a list → auto-plan distributes places across days, draws Mapbox routes.
-6. Share a list or trip → copy slug URL.
+5. Build a plan (an evening out or a multi-day trip), empty or from a list → auto-plan distributes places across days, draws Mapbox routes.
+6. Share a list or plan → copy slug URL.
 
 ## High-level architecture
 
@@ -82,7 +82,7 @@ Typical session:
 |---|---|---|
 | Auth | `src/middleware.ts`, `src/lib/supabase/middleware.ts`, `src/app/auth/callback/` | Cookie-SSR via `@supabase/ssr`. Google OAuth. |
 | Places | `src/app/api/places/*`, `src/app/(app)/places/`, `src/components/places/` | The core entity. See [[../01-domain/places]]. |
-| Trips | `src/app/api/trips/*`, `src/app/(app)/trips/[id]/`, `src/lib/trip/` | Multi-day plans with auto-plan + Mapbox routes. See [[../01-domain/trips]]. |
+| Plans | `src/app/api/plans/*`, `src/app/(app)/plans/[id]/`, `src/lib/plans/`, `src/components/plans/` | Plans of 1..N days with ordered stops, auto-plan + Mapbox routes; every write is one Postgres function call. See [[../01-domain/plans]]. |
 | Lists | `src/app/api/lists/*`, `src/app/(app)/lists/` | Ordered place groupings. See [[../01-domain/lists]]. |
 | Sharing | `src/app/api/shared/*`, `src/app/shared/[slug]/` | Public read links via service-role bypass. See [[../01-domain/sharing]]. |
 | Filters & search | `src/components/filters/`, `src/lib/hooks/use-filters.ts` | Country/city, category, tag, list, rating, visit status, sort. |
@@ -99,7 +99,7 @@ Typical session:
 
 ## Cross-cutting
 
-- **Server state** lives in TanStack Query (`useQueryClient` configured in `src/lib/providers.tsx`, `staleTime: 60s`, `refetchOnWindowFocus: false`). All entity hooks (`usePlaces`, `useTrips`, `useLists`, …) wrap React Query.
+- **Server state** lives in TanStack Query (`useQueryClient` configured in `src/lib/providers.tsx`, `staleTime: 60s`, `refetchOnWindowFocus: false`). All entity hooks (`usePlaces`, `usePlans`, `useLists`, …) wrap React Query.
 - **Client state** that spans pages lives in Zustand (currently only `src/lib/stores/import-store.ts`).
 - **Row-Level Security** is the security spine: every user-owned table has `auth.uid() = user_id` policies. The only public read is on `shared_links` (active links only). The service-role client bypasses RLS and is used only where no session can do the job — public share reads, the cron routes, the import-queue writes and the Instagram import's background job ([[../02-backend/supabase-clients]]).
 - **PostGIS geography** stores place coordinates; `src/lib/geo.ts` parses EWKB/WKT/GeoJSON into `{lat, lng}` once for every API route. See [[../01-domain/geo-and-s2]].

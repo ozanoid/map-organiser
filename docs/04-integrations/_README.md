@@ -2,8 +2,8 @@
 title: Integrations
 type: overview
 domain: integrations
-version: 1.4.0
-last_updated: 17.11.2026
+version: 1.4.1
+last_updated: 18.11.2026
 status: stable
 related:
   - "[[supabase]]"
@@ -28,7 +28,7 @@ Third-party services and runtime libraries that materially shape how this app wo
 | Service | What we use it for | Doc |
 |---|---|---|
 | **Supabase** | Postgres + Auth + Storage (+ Vault, MCP, migrations) | [[supabase]] |
-| **Mapbox** | Map rendering (GL JS) + Directions API for trip routes | [[mapbox]] |
+| **Mapbox** | Map rendering (GL JS) + Directions API for plan routes | [[mapbox]] |
 | **Google Places API** | Authoritative place data when the user provides a key | [[google-places]] |
 | **DataForSEO Business Data** | Default enrichment provider (no per-user key) | [[dataforseo]] |
 | **Google Gemini** (Generative Language API) | AI feature provider — `gemini-3-flash-preview`. Phase 4 full place_profile, Phase 6 NL search (both shipped); since v1.28.0 also the one read per Instagram post | [[gemini]] |

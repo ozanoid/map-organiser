@@ -2,18 +2,18 @@
 title: Geo & S2
 type: entity
 domain: geo
-version: 1.1.1
-last_updated: 16.10.2026
+version: 1.1.2
+last_updated: 18.11.2026
 status: stable
 sources:
   - src/lib/geo.ts
   - src/lib/google/parse-maps-url.ts
-  - src/lib/trip/directions.ts
+  - src/lib/plans/directions.ts
   - src/components/map/map-view.tsx
   - src/components/map/map-content.tsx
 related:
   - "[[places]]"
-  - "[[trips]]"
+  - "[[plans]]"
   - "[[../02-backend/schema/places]]"
   - "[[../04-integrations/mapbox]]"
 ---
@@ -35,7 +35,7 @@ PostGIS is installed in the `public` schema (advisor flags this as a warn but do
 - **`places.location`** — column type `geography(Point, 4326)`. Stores the coordinates of every place. WGS84 spheroid.
 - **`idx_places_location`** — GIST index on `places.location`. Enables fast `ST_DWithin` and friends.
 
-No other table currently uses PostGIS types. (Trip routes are computed on read from Mapbox and not persisted as geometry.)
+No other table currently uses PostGIS types. (Plan routes are computed on read from Mapbox and not persisted as geometry.)
 
 ### Why `geography` (not `geometry`)
 
@@ -97,7 +97,7 @@ import { parsePostgisPoint } from "@/lib/geo";
 
 The repo doesn't currently issue `ST_DWithin` or similar from the frontend. Distance comes up in two places, both client-side after data is loaded:
 
-- **Auto-plan** (`src/lib/trip/auto-plan.ts`) — haversine on `{lat, lng}` for the nearest-neighbor heuristic and for k-means cluster assignment. (v1.19.0: `haversineDistance` itself moved to `src/lib/geo.ts` — shared with the compare view's distance column; auto-plan imports it.)
+- **Auto-plan** (`src/lib/plans/auto-plan.ts`) — haversine on `{lat, lng}` for the nearest-neighbor heuristic and for k-means cluster assignment. (v1.19.0: `haversineDistance` itself moved to `src/lib/geo.ts` — shared with the compare view's distance column; auto-plan imports it.)
 - **Mapbox Directions** — Mapbox returns segment distance and duration in the response; the app surfaces those without recomputing.
 
 If a future feature needs "places within N km", that would be the first DB-side spatial query. `idx_places_location` is already in place to support it.

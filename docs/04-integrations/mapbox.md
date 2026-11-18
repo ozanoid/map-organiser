@@ -2,12 +2,15 @@
 title: Mapbox
 type: integration
 domain: integrations
-version: 1.3.0
-last_updated: 17.11.2026
+version: 1.4.0
+last_updated: 18.11.2026
 status: stable
 sources:
   - src/components/map/map-view.tsx
-  - src/lib/trip/directions.ts
+  - src/lib/plans/directions.ts
+  - src/lib/plans/read.ts
+  - src/lib/plans/route-signature.ts
+  - src/app/api/plans/[id]/days/[dayId]/route/route.ts
   - src/lib/map/category-icons.ts
   - src/lib/mapbox/search-box.ts
   - src/lib/mapbox/geocode.ts
@@ -17,12 +20,12 @@ sources:
 related:
   - "[[../03-frontend/components/map]]"
   - "[[../03-frontend/hooks/use-map-style]]"
-  - "[[../01-domain/trips]]"
+  - "[[../01-domain/plans]]"
 ---
 
 # Mapbox
 
-Three products used: **Mapbox GL JS** for the map view, **Mapbox Directions API** for trip route lines, **Mapbox Search Box API** for in-app place search.
+Three products used: **Mapbox GL JS** for the map view, **Mapbox Directions API** for plan route lines, **Mapbox Search Box API** for in-app place search.
 
 ## Account & access
 
@@ -55,7 +58,7 @@ Per-user override: `profiles.mapbox_token_enc` (encrypted column). If a user set
 - Initializes a map with one of six styles (resolved by [[../03-frontend/hooks/use-map-style]]).
 - GeoJSON source for places.
 - Cluster + circle/symbol layers for markers.
-- Optional line layer for trip routes (day-colored polylines).
+- Optional line layer for plan routes (day-colored polylines).
 - Popups on marker click.
 - Viewport-change callback for the "visible places" badge.
 
@@ -63,21 +66,21 @@ Custom marker icons are rendered to canvas in `src/lib/map/category-icons.ts` an
 
 ### Directions API (server)
 
-`src/lib/trip/directions.ts` exports `getRoute(coords, profile, token?)` — a thin wrapper around:
+`src/lib/plans/directions.ts` exports `getRoute(coords, profile, token?)` — a thin wrapper around:
 
 ```
 GET https://api.mapbox.com/directions/v5/mapbox/{profile}/{coords}
 ```
 
-- **Profile (NF-07, v1.22.0):** `RoutingProfile = "walking" | "driving" | "cycling"` — comes from `trip_days.routing_profile` (DB default `'walking'`; the union and the DB CHECK must stay in sync). The trip UI cycles it per day via `PATCH /api/trips/[id]/days/[dayId]`; the signature default is `"walking"`.
+- **Profile:** `RoutingProfile = "walking" | "driving" | "cycling"` — comes from `plan_days.routing_profile` (DB default `'walking'`; the union and the DB CHECK must stay in sync). The plan page cycles it per day (`set_day` op); the signature default is `"walking"`.
 - Max 25 waypoints (coords sliced).
-- Returns: `{ distance_km, duration_min, geometry: LineString, legs[] }` — already converted to km (1 decimal) / whole minutes inside the wrapper; assigned to `TripDay.route`.
-- Fail-soft: returns `null` on missing token, <2 coords, non-OK response, or fetch error.
+- Returns: `{ distance_km, duration_min, geometry: LineString, legs[] }` — already converted to km (1 decimal) / whole minutes inside the wrapper. `dayRoute` (`src/lib/plans/read.ts`) calls it with the day's stops that have a located place and names each leg's two stops (`PlanRoute`).
+- Returns `null` on missing token, <2 coords, non-OK response, or fetch error. `dayRoute` turns a `null` for a day that should have a route into `RouteUnavailableError`: the day endpoint answers 502 (retried, not cached), the public share view shows the day without a route. Usage is recorded per route returned.
 
-Called from (both pass `day.routing_profile ?? "walking"` and track usage):
+Called through `dayRoute` from two places (both record usage in `after()`):
 
-- `GET /api/trips/[id]` — once per trip day with ≥ 2 places; `trackUsage(user.id, "mapbox_directions")`.
-- `GET /api/shared/[slug]` when `resource_type = 'trip'` — same, but the anonymous call is attributed to the link **owner** (`trackUsage(link.user_id, …)` — their share, their quota).
+- `GET /api/plans/[id]/days/[dayId]/route` — one day per request; `trackUsage(user.id, "mapbox_directions")`. The client caches the answer under the day's located stops, their order and the profile ([[../03-frontend/hooks/use-plans#Routes]]), so an edit that doesn't move a stop buys no route. (The trips page re-bought every day's route on each load and after most edits.)
+- `GET /api/shared/[slug]` for a shared plan — `withRoutes`, one request per day with ≥ 2 located stops on every view; the anonymous call is attributed to the link **owner** (`trackUsage(link.user_id, …)` — their share, their quota).
 
 ### Search Box API (server)
 
@@ -114,7 +117,7 @@ Mapbox public-key free tier:
 
 - **Token revoked / wrong:** map fails to load; check console.
 - **CORS / origin not allowed:** map fails; add domain in Mapbox dashboard.
-- **Directions API 429:** rate-limited (very unlikely at our volume). The API route returns the route as `null` so the trip detail still renders (just without a route line).
+- **Directions API 429:** rate-limited (very unlikely at our volume). The API route returns the route as `null` so the plan still renders (just without a route line).
 - **Directions API 422:** invalid coordinates (e.g. one of them is `(0, 0)` — see [[../01-domain/geo-and-s2#open-questions]]).
 
 ## Dark-mode considerations
@@ -149,4 +152,4 @@ If we swap Mapbox:
 - **Google Maps JS** would be a heavier port — different API shape, different licensing model.
 - **Directions** has fewer good alternatives (OpenRouteService, GraphHopper). Each requires its own auth and response shape.
 
-Trip-route caching would soften the impact — see [[../02-backend/api-routes/trips#open-questions]].
+Route caching: the app caches per day in the client since v1.37.0; the public share view still computes on every view (no server-side cache).

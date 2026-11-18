@@ -2,8 +2,8 @@
 title: Routing
 type: overview
 domain: frontend
-version: 1.5.0
-last_updated: 17.11.2026
+version: 1.6.0
+last_updated: 18.11.2026
 status: stable
 sources:
   - src/app/
@@ -30,17 +30,17 @@ Every route in the app — pages, API handlers, and special routes — in one pl
 | `/` | `src/app/page.tsx` | root | Public | Landing/redirect page. |
 | `/map` | `src/app/(app)/map/page.tsx` | `(app)/layout.tsx` | Required | Default post-login destination. Mapbox GL view. |
 | `/places` | `src/app/(app)/places/page.tsx` | `(app)/layout.tsx` | Required | Filter/search/sort the user's places. |
-| `/places/[id]` | `src/app/(app)/places/[id]/page.tsx` | `(app)/layout.tsx` | Required | Place detail with tags, lists, photos, trip refs. |
+| `/places/[id]` | `src/app/(app)/places/[id]/page.tsx` | `(app)/layout.tsx` | Required | Place detail with tags, lists, photos, plan refs. |
 | `/places/compare` | `src/app/(app)/places/compare/page.tsx` | `(app)/layout.tsx` | Required | S2 F-04 (v1.19.0): side-by-side 2-4 place comparison (`?ids=a,b,c`) + deliberate-click AI analysis. |
-| `/lists` | `src/app/(app)/lists/page.tsx` | `(app)/layout.tsx` | Required | Lists + Trips tabbed view. |
+| `/lists` | `src/app/(app)/lists/page.tsx` | `(app)/layout.tsx` | Required | Lists + Plans tabbed view; `?tab=plans` opens the Plans tab. |
 | `/lists/[id]` | `src/app/(app)/lists/[id]/page.tsx` | `(app)/layout.tsx` | Required | List detail with drag-and-drop reorder. |
-| `/trips/[id]` | `src/app/(app)/trips/[id]/page.tsx` | `(app)/layout.tsx` | Required | Trip timeline + map view. |
+| `/plans/[id]` | `src/app/(app)/plans/[id]/page.tsx` | `(app)/layout.tsx` | Required | Plan timeline + map (`?view=map`). `/trips/[id]` redirects here (308, `next.config.ts`). |
 | `/stats` | `src/app/(app)/stats/page.tsx` | `(app)/layout.tsx` | Required | Recharts dashboard. |
 | `/import` | `src/app/(app)/import/page.tsx` | `(app)/layout.tsx` | Required | Batch import with Zustand progress. |
 | `/settings` | `src/app/(app)/settings/page.tsx` | `(app)/layout.tsx` | Required | Categories / Tags / API / Theme tabs. |
 | `/login` | `src/app/(auth)/login/page.tsx` | `(auth)/layout.tsx` | **Public** (redirect if signed in) | Google OAuth + email/password. |
 | `/signup` | — (page removed 17.11.2026) | — | Redirect | Sign-ups are closed; the middleware sends it to `/login`. |
-| `/shared/[slug]` | `src/app/shared/[slug]/page.tsx` | `shared/layout.tsx` | **Public** | Public read view of a list, trip, or single place (v1.20.0). |
+| `/shared/[slug]` | `src/app/shared/[slug]/page.tsx` | `shared/layout.tsx` | **Public** | Public read view of a list, plan, or single place. |
 | `/oauth/consent` | `src/app/(auth)/oauth/consent/page.tsx` | `(auth)/layout.tsx` | **Public** — the page itself sends signed-out visitors to `/login?next=…` | OAuth consent for the Claude connector (17.11.2026). See [[../05-flows/claude-connector-flow]]. |
 | `/offline` | `src/app/offline/page.tsx` | root | Public — skips the middleware | PWA offline fallback; the service worker precaches it. |
 
@@ -60,7 +60,7 @@ All under `/api/*`. Full detail in [[../02-backend/api-routes/_README]].
 | Prefix | Group | Doc |
 |---|---|---|
 | `/api/places/*` | Places (11 endpoints) | [[../02-backend/api-routes/places]] |
-| `/api/trips/*` | Trips (8 endpoints) | [[../02-backend/api-routes/trips]] |
+| `/api/plans/*` | Plans (7 endpoints in 4 files) | [[../02-backend/api-routes/plans]] |
 | `/api/lists/[id]/reorder` | Lists (1 endpoint) | [[../02-backend/api-routes/lists]] |
 | `/api/shared/*` | Shared (4 endpoints incl. public GET) | [[../02-backend/api-routes/shared]] |
 | `/api/stats` | Stats | [[../02-backend/api-routes/stats]] |
@@ -109,9 +109,9 @@ See [[../02-backend/auth#middleware-gate]] for the implementation.
 
 | Pattern | Used in | Param type (Next.js 16) |
 |---|---|---|
-| `[id]` | `/places/[id]`, `/lists/[id]`, `/trips/[id]`, `/api/places/[id]`, `/api/trips/[id]`, `/api/lists/[id]/reorder`, `/api/places/[id]/...`, `/api/trips/[id]/...`, `/api/instagram/import/[id]`, `/api/instagram/import/[id]/pick` | `Promise<{ id: string }>` |
+| `[id]` | `/places/[id]`, `/lists/[id]`, `/plans/[id]`, `/api/places/[id]`, `/api/plans/[id]`, `/api/lists/[id]/reorder`, `/api/places/[id]/...`, `/api/plans/[id]/...`, `/api/instagram/import/[id]`, `/api/instagram/import/[id]/pick` | `Promise<{ id: string }>` |
 | `[slug]` | `/shared/[slug]`, `/api/shared/[slug]`, `/api/shared/[slug]/save` | `Promise<{ slug: string }>` |
-| `[dayId]` | `/api/trips/[id]/days/[dayId]/...` | combined: `Promise<{ id: string, dayId: string }>` |
+| `[dayId]` | `/api/plans/[id]/days/[dayId]/route` | combined: `Promise<{ id: string, dayId: string }>` |
 
 **Next.js 16 quirk:** params are Promises — `await params` before using.
 

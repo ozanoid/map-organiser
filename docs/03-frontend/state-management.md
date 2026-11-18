@@ -2,8 +2,8 @@
 title: State Management
 type: overview
 domain: frontend
-version: 1.2.0
-last_updated: 18.05.2026
+version: 1.3.0
+last_updated: 18.11.2026
 status: stable
 sources:
   - src/lib/providers.tsx
@@ -60,8 +60,9 @@ const [queryClient] = useState(
 | Tags for a place | `["place-tags", placeId]` | `usePlaceTags(placeId)` |
 | Lists | `["lists"]` | `useLists()` |
 | Lists for a place | `["place-lists", placeId]` | `usePlaceLists(placeId)` |
-| Trips (list) | `["trips"]` | `useTrips()` |
-| Trip (detail) | `["trip", tripId]` | `useTrip(id)` |
+| Plans (list) | `["plans"]` | `usePlans()` |
+| Plan (detail) | `["plan", planId]` | `usePlan(id)` |
+| Plan day route | `["plan-route", dayId, signature]` | `usePlanRoutes(plan)` |
 | Stats | `["stats"]` | `useStats()` (staleTime override 5 min) |
 | Shared link | `["shared-link", resourceType, resourceId]` | `useSharedLink(...)` (disabled by default) |
 | AI suggestions | `["ai-suggestions"]` | `useAiSuggestions()` (Phase 5; pre-aggregated server-side; staleTime 30 s) |
@@ -71,11 +72,11 @@ const [queryClient] = useState(
 
 **Invalidation conventions** (per [[hooks/_README]]):
 
-- Place delete → `["places"]` + `["lists"]` + `["trips"]` (lists/trips counts change).
+- Place delete → `["places"]` + `["lists"]` + `["plans"]` + `["plan"]` (lists/plans lose the place).
 - Place mutation → `["places"]`.
 - Category/tag/list mutation → its own key + `["places"]` (places carry joined data).
 - Subcategory mutation → `["subcategories"]` + `["places"]` (places carry joined sub-cat data).
-- Trip mutation → `["trips"]` (list refreshes counts) and/or `["trip", tripId]` (detail).
+- Plan change → the PATCH response replaces `["plan", planId]` (no refetch); `["plans"]` is invalidated so the list's counts and dates refresh. Routes refetch only when their key changes — see [[hooks/use-plans]].
 - AI suggestion accept → `["ai-suggestions"]` + `["tags"]` + `["subcategories"]` + `["places"]` (entity is created and joined onto places). Reject → only `["ai-suggestions"]`.
 
 `PlaceFilters` carries `subcategory_ids?: string[]` alongside `category_ids` since Phase 2; URL-state mirror is `?subcategory=<id,id>` and the cascade filter UI (CategoryFilter) drives it.
@@ -163,7 +164,7 @@ Default for everything else. `useState`, `useReducer`, `useRef`. If a piece of s
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │ Server-backed                                                  │
-│ • Places, trips, lists, categories, tags                       │
+│ • Places, plans, lists, categories, tags                       │
 │ • Shared links, stats, profiles                                │
 │ → TanStack React Query (src/lib/hooks/)                        │
 └──────────────────────────────────────────────────────────────┘

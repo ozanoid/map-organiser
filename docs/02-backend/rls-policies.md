@@ -2,7 +2,7 @@
 title: RLS Policies
 type: overview
 domain: backend
-version: 1.5.0
+version: 1.5.1
 last_updated: 18.11.2026
 status: stable
 sources:
@@ -120,7 +120,7 @@ Several policies have `roles = {public}` instead of `{authenticated}`. In Supaba
 The functional difference is small but real: a `{public}` policy is the broader of the two role markers; security depends entirely on the predicate. Tables with `{public}` policies:
 
 - `shared_links` (intentional — public read needed)
-- `trips`, `trip_days`, `trip_day_places` (likely from older migrations; predicate still gates correctly)
+- `trips`, `trip_days`, `trip_day_places` (likely from older migrations; predicate still gates correctly). No application code uses these tables since v1.37.0; their policies go with them when they are dropped. The plan tables' policies are `TO authenticated`.
 - `storage.objects` UPDATE (same)
 
 This is a minor cleanup opportunity, not a vulnerability.
@@ -136,7 +136,7 @@ CREATE POLICY "Anyone can read active shared links"
   USING (is_active = true);
 ```
 
-This grants anonymous SELECT on `shared_links` rows whose `is_active = true`. **Crucially, it does NOT grant access to the underlying lists/trips/places.** Those still require either `auth.uid() = user_id` or service-role bypass.
+This grants anonymous SELECT on `shared_links` rows whose `is_active = true`. **Crucially, it does NOT grant access to the underlying lists/plans/places.** Those still require either `auth.uid() = user_id` or service-role bypass.
 
 That's why `GET /api/shared/[slug]` uses `createServiceClient()` — to read the joined data, the request must bypass RLS. See [[../01-domain/sharing]].
 

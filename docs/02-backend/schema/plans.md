@@ -2,18 +2,22 @@
 title: plans, plan_days, plan_stops
 type: table
 domain: backend
-version: 1.0.0
+version: 1.2.1
 last_updated: 18.11.2026
 status: draft
 sources:
   - Supabase project hukppmaevcapvbrvxtph (live)
   - supabase/migrations/20261118005355_plans_tables.sql
+  - supabase/migrations/20261118010309_plan_functions.sql
+  - supabase/migrations/20261118020401_plan_changes_by_day_id.sql
 related:
   - "[[_README]]"
   - "[[visits]]"
   - "[[trips]]"
   - "[[lists]]"
   - "[[../rls-policies]]"
+  - "[[../../01-domain/plans]]"
+  - "[[../api-routes/plans]]"
   - "[[../../_plans/phase-1-planning]]"
 ---
 
@@ -21,7 +25,7 @@ related:
 
 The single planning model: an evening outing and a multi-day trip are both a **plan** with 1..N **days** of ordered **stops**. Created on 18.11.2026 (`plans_tables`) as the *expand* step that replaces [[trips]] / [[trip_days]] / [[trip_day_places]].
 
-**State (18.11.2026):** the tables exist and hold a copy of the 7 trips (40 days, 127 stops, same ids). **No application code reads or writes them yet** — the app still runs on the trip tables until the cutover; see [[../../_plans/phase-1-planning#Geçiş ve regresyon]].
+**State (18.11.2026):** the app runs on these tables since v1.37.0 — every read and write goes through `src/lib/plans/` ([[../../01-domain/plans]]). The trip tables still exist, unused, until they are dropped (separate approval). On main since 18.11.2026 — see [[../../_plans/phase-1-planning#Geçiş ve regresyon]] for the cutover steps.
 
 ## The one rule about dates
 
@@ -31,7 +35,7 @@ Dates live in one place, `plans.start_date`:
 - the plan's end date = `start_date + (number of days - 1)`;
 - `start_date` NULL = the plan is not scheduled yet (it still has its day structure).
 
-Nothing else stores a date, so moving a plan is a one-row update and day dates cannot drift. (The trip tables stored `start_date`, `end_date` and a `date` per day; `PATCH /api/trips/[id]` updated only the first two.)
+Nothing else stores a date, so moving a plan is a one-row update and day dates cannot drift. (The trip tables stored `start_date`, `end_date` and a `date` per day; `PATCH /api/trips/[id]` updated only the first two.) In code the rule lives in `src/lib/plans/dates.ts`.
 
 ## `plans`
 
@@ -103,9 +107,46 @@ All three: one policy, `FOR ALL TO authenticated`.
 | `plan_days` | the plan is the user's | — |
 | `plan_stops` | the day's plan is the user's | `place_id` is NULL or one of the user's **own places** |
 
-The own-place rule exists because the public share view reads plans with the service role: a foreign place id attached to a stop would leak that place. The trips code guarded this in the route (`src/app/api/trips/route.ts`); here the database does.
+The own-place rule exists because the public share view reads plans with the service role: a foreign place id attached to a stop would leak that place. The trips code guarded this in the route; here the database does.
 
 Checked on 18.11.2026 as a signed-in user inside a rolled-back transaction: own plans visible only to their owner (admin 5, another account 0, anon 0); stop on a foreign place blocked; free-text stop accepted; a stop with neither place nor title, and a stop with both time and day part, rejected; undated plan accepted; a plan for another user blocked; two day numbers swapped in one statement.
+
+## Functions — the write path
+
+Applied 18.11.2026 (`plan_functions`; `apply_plan_changes` revised the same day by `plan_changes_by_day_id` — see below). Every change that touches more than one row goes through one of these, so it is one transaction: a plan is never half-created and a batch of edits applies completely or not at all. All are `SECURITY INVOKER` (RLS applies to a signed-in caller); `EXECUTE` is granted to `authenticated` and `service_role` only. Because the service role bypasses RLS, the functions also check ownership through `p_user_id`.
+
+| Function | What it does |
+|---|---|
+| `create_plan(p_user_id, p_plan jsonb) → uuid` | Inserts the plan, its days (numbered in array order) and their stops. A plan always gets at least one day. Refuses a list or a place that is not the user's. |
+| `apply_plan_changes(p_user_id, p_plan_id, p_changes jsonb) → jsonb` | `set` (name, notes, party_size, start_date, status, color — a present key is applied, `null` clears) and `ops`, applied in order. Returns `{ added_days, added_stops }`. |
+| `plan_insert_stop(p_user_id, p_day_id, p_sort, p_stop jsonb) → uuid` | Inserts one stop; needs a `place_id` (own place) or a `title`; an exact time wins over a day part. |
+| `plan_assert_caller(p_user_id)` | A signed-in caller may only act for themselves. |
+
+Ops of `apply_plan_changes`. Where an op names a day it takes `day` (the day's number, 1-based) **or** `day_id`:
+
+| Op | Fields | Rule |
+|---|---|---|
+| `add_day` | `position?` (1-based), `notes?`, `routing_profile?` | Default: after the last day; later days shift. At most 60 days. |
+| `remove_day` | `day` \| `day_id` | Only an empty day; a plan keeps at least one day. Later days shift down. |
+| `swap_days` | `a`, `b` — or `a_id`, `b_id` | Both must be days of the plan. |
+| `set_day` | `day` \| `day_id`, `notes?`, `routing_profile?` | — |
+| `add_stop` | `day` \| `day_id`, `position?` (0-based), stop fields | Default: end of the day. At most 200 stops a day. |
+| `update_stop` | `stop_id`, `title?`, `start_time?`, `day_part?`, `notes?`, `cost_estimate?`, `currency?`, `status?` | Setting a time clears the day part and the other way round; a status change stamps `status_at`. |
+| `move_stop` | `stop_id`, `day` \| `day_id`, `position?` | Within a day or across days; both days stay densely ordered. |
+| `remove_stop` | `stop_id` | — |
+| `reorder_stops` | `day` \| `day_id`, `stop_ids[]` | Must list every stop of the day. |
+
+**Number or id.** A screen that shows a plan sends ids: if the days were renumbered meanwhile (a queued "remove day 1", an edit in another tab) the change still lands on the day that was shown, and a day that is gone is refused ("that day is no longer part of this plan") instead of being written to another day. Numbers are for callers that think in dates — AI Plan ("day 2 is the Saturday"), the assistant.
+
+**Stop order.** `sort_order` is an ordering key; the positions the ops take are indexes. Nothing keeps the two equal by itself — deleting a place removes its stops through the foreign key and leaves a gap, and the rows copied from the trip tables came with gaps (2 of 40 days on 18.11.2026) — so `apply_plan_changes` first renumbers the plan's stops 0..n−1 per day, then runs the ops. A plan's order is therefore dense after its first change; reads only sort and don't care.
+
+**`plan_changes_by_day_id` (18.11.2026)** added the three things above — day ids, the renumbering, the two limits — after a review of the calling code found that "add at the end" landed in the middle of a day with a gap, and that a change addressed by day number could be queued behind a renumbering and hit another day.
+
+Tested on 18.11.2026 — first as a dry run in a rolled-back transaction, as a signed-in user: create with a place stop and a free-text stop; a foreign place and a blank name refused with nothing left behind; a batch of six edits; swapping days and inserting a day at the front; removing a non-empty day refused with the reason; reorder + remove; a batch with one bad op refused **entirely**; cancel and unschedule; acting for another user, another user editing the plan, and `anon` all refused. The function bodies in the database hash-match the repo files (after the revision: `apply_plan_changes` md5 `5d6f93ee…`, same in both).
+
+Marking a stop `done` does not yet create a visit; that arrives with `log_visit` (slice 2).
+
+Callers: `createPlan` / `changePlan` in `src/lib/plans/write.ts` — the only code that calls these functions. `npm run check:assistant -- plans` exercises them through that module against the live database (44 checks on 18.11.2026, including a change by day id, an unknown day id refused, a gap in the order healed, and the 61st day refused).
 
 ## Copy from the trip tables
 
@@ -113,4 +154,4 @@ Checked on 18.11.2026 as a signed-in user inside a rolled-back transaction: own 
 
 ## Open questions
 
-- Plans created through the old UI between this copy and the cutover have to be copied again at cutover (the copy is by id, so it can be repeated for missing rows).
+- Trips created through the old UI between this copy and the cutover have to be copied again at cutover (the copy is by id, so it can be repeated for missing rows). On 18.11.2026 none was missing (7 trips, 7 plans).

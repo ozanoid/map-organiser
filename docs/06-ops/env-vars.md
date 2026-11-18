@@ -2,8 +2,8 @@
 title: Env Vars
 type: overview
 domain: ops
-version: 1.7.0
-last_updated: 17.11.2026
+version: 1.7.1
+last_updated: 18.11.2026
 status: stable
 sources:
   - .env.local.example
@@ -111,7 +111,7 @@ Practical rules:
 | `NEXT_PUBLIC_SUPABASE_URL` | `process.env.NEXT_PUBLIC_SUPABASE_URL` in all three Supabase client files |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | same |
 | `SUPABASE_SERVICE_ROLE_KEY` | `process.env.SUPABASE_SERVICE_ROLE_KEY` in `src/lib/supabase/server.ts#createServiceClient` |
-| `NEXT_PUBLIC_MAPBOX_TOKEN` | `process.env.NEXT_PUBLIC_MAPBOX_TOKEN` in `MapView` and `src/lib/trip/directions.ts` |
+| `NEXT_PUBLIC_MAPBOX_TOKEN` | `process.env.NEXT_PUBLIC_MAPBOX_TOKEN` in `MapView` and `src/lib/plans/directions.ts` |
 | `GOOGLE_PLACES_API_KEY` | `process.env.GOOGLE_PLACES_API_KEY` in `getUserApiKeys` (admin fallback) |
 | `ENCRYPTION_SECRET` | `process.env.ENCRYPTION_SECRET` in the AES-256-GCM helpers |
 | `DATAFORSEO_LOGIN` / `DATAFORSEO_PASSWORD` | `process.env.DATAFORSEO_*` in `src/lib/dataforseo/client.ts` |

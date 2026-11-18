@@ -6,6 +6,155 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 18.11.2026 — v1.37.2 — Plans on main
+
+- Phase 1, slice 1 merged to main with Ozan's approval (main had not moved;
+  the merged tree equals the branch tree). Production now runs on the plan
+  tables. Right after the deploy: the trips ↔ plans comparison is run once
+  more and the two share links stored as `trip` are renamed to `plan`. The
+  trip tables stay, unused, until dropping them is approved separately.
+- Decided (Ozan): the public share view keeps showing the owner's own star
+  rating of a place. Recorded in [[01-domain/sharing]], which now also says
+  that the share page is not the Phase 3 invitation page.
+- Docs: [[_plans/phase-1-planning]], [[_plans/personal-assistant]],
+  [[02-backend/schema/plans]], [[01-domain/sharing]].
+
+---
+
+## 18.11.2026 — v1.37.1 — Plans UI checked in a browser
+
+- Full pass of the plan UI in Chrome, signed in as the test account, against
+  the live database: the Plans tab, creating a plan (empty and from a list),
+  every edit on the plan page, Auto Plan, one real AI Plan generation, the
+  map view, the share link, saving a shared plan, deleting. 23 edits, each
+  one `PATCH`; no console or server error. The temporary plans were deleted;
+  the existing plans were only read (trips ↔ plans still identical).
+  Coverage and what was left out: [[03-frontend/components/plans#Checked in the browser]].
+- One fix from the pass: a toast that offers Undo (remove a stop, cancel a
+  plan) now stays 8 s instead of the default 4 s (`UNDO_TOAST_MS`).
+- Docs: [[03-frontend/components/plans]], [[05-flows/ai-plan-flow]]
+  ("Verified" replaces "Not verified yet"), [[_plans/phase-1-planning]],
+  [[_plans/personal-assistant]].
+
+---
+
+## 18.11.2026 — v1.37.0 — Plans replace trips in the code (Phase 1, slice 1)
+
+Written on the branch `feat/personal-assistant`; on main since v1.37.2. The
+database already had the plan tables and functions (v1.36.0, v1.36.1); this is
+the code moving onto them.
+
+- **Database: `apply_plan_changes` revised** (migration
+  `plan_changes_by_day_id`, file
+  `supabase/migrations/20261118020401_plan_changes_by_day_id.sql`, applied
+  under the standing permission for the plan functions; the body in the
+  database hash-matches the file). A day can be named by id (`day_id`,
+  `a_id` / `b_id`) as well as by number; the plan's stop order is made dense
+  before the ops run; 60 days a plan, 200 stops a day. Both came out of an
+  independent review of the new code: with a gap in `sort_order` (a deleted
+  place leaves one; 2 of 40 copied days had one) "add at the end" landed in
+  the middle, and a change addressed by day number could wait behind a
+  renumbering and hit another day. No application code on main calls the
+  function, so nothing running changed.
+
+- **New shared module `src/lib/plans/`** — `schema.ts` (zod: create and
+  `{ set, ops }`), `read.ts` (`listPlans`, `getPlan` with a light place
+  projection, `plansUsingPlaces`, `dayRoute`, `withRoutes`), `write.ts`
+  (`createPlan`, `changePlan`, `deletePlan`, `autoPlanStops` — each write is
+  one call to `create_plan` / `apply_plan_changes`), `dates.ts` (a day's date
+  is derived from the plan's start), `day-colors.ts`, `http.ts`;
+  `auto-plan.ts`, `directions.ts`, `cost-defaults.ts` moved from `src/lib/trip/`.
+- **Routes:** `/api/plans` (GET, POST), `/api/plans/[id]` (GET, PATCH
+  `{ set, ops }`, DELETE), `/api/plans/[id]/auto-plan`,
+  `/api/plans/[id]/days/[dayId]/route`. The seven `/api/trips/**` files are
+  gone. `/api/ai/trip-plan` → `/api/ai/day-plan`, rewritten to apply its
+  result as one atomic batch (the SKU, budget kind and telemetry ids keep
+  their names).
+- **UI:** `/plans/[id]` (`/trips/[id]` redirects), the Plans tab of `/lists`
+  (`?tab=plans`), `src/components/plans/` (8 files), `use-plans.ts` (one
+  write queue per plan for changes, Auto Plan and AI Plan; routes cached per
+  day under a signature of what they depend on, which the server checks).
+  `use-trips.ts` and the trips page are gone.
+- **Behaviour that changed:** moving a plan's date moves its days; a plan
+  can have no date; a stop can be a line of text; a stop has an exact time or
+  a part of the day; a plan can be cancelled and restored; a day is removed
+  only when empty; the days are always shown (an empty trip hid "Add place");
+  stop actions no longer depend on hover; removing a stop and cancelling a
+  plan are undoable from the toast; the open tab and the map/timeline view
+  are in the URL; an edit that doesn't move a stop buys no Mapbox route; a
+  plan read is ~1 KB per stop instead of the full place row (47 stops: 43 KB).
+- **Sharing:** `resource_type: "plan"`; links stored as `trip` keep working.
+  The public plan payload is now a whitelist; saving a shared plan creates it
+  in one transaction.
+- **Place delete warnings** name plans (`plans` on `GET /api/places/[id]`,
+  `check_plans` on the bulk route).
+- **Checked:** `npm run check:assistant -- plans` — 44 checks against the live
+  database on the test account; `tsc`, `eslint`, `next build`; in the browser,
+  signed out: the redirect and the public share page with real data; an
+  independent review of the diff (no data-loss or access finding; its two
+  medium findings are the database revision above, the smaller ones — a
+  failed route remembered as "no route", AI Plan outside the write queue,
+  Undo after remove, a failed read-back reported as a failed change, a
+  foreign place id in a list refusing the whole plan — are fixed in this
+  version). trips ↔ plans compared row by row on 18.11.2026: no difference
+  (7 / 7 plans, 127 / 127 stops).
+  The signed-in UI and a real AI Plan generation were checked afterwards —
+  see v1.37.1.
+- The public payload of a shared plan (like a shared list before it) carries
+  the owner's own star rating of each place, and the page shows it. Kept as
+  it was; Ozan confirmed it stays (v1.37.2).
+- **Docs — new:** [[01-domain/plans]], [[02-backend/api-routes/plans]],
+  [[03-frontend/hooks/use-plans]], [[03-frontend/components/plans]],
+  [[05-flows/plan-flow]], [[05-flows/ai-plan-flow]].
+  **Archived** (superseded, under `_archive/` with their folders):
+  `01-domain/trips`, `02-backend/api-routes/trips`,
+  `03-frontend/hooks/use-trips`, `05-flows/trip-planning-flow`,
+  `05-flows/ai-trip-plan-flow`.
+  **Updated:** the three trip table docs (no longer used by the app),
+  [[02-backend/schema/plans]], [[02-backend/schema/_README]],
+  [[02-backend/schema/shared_links]], [[02-backend/schema/lists]],
+  [[02-backend/schema/places]], [[02-backend/rls-policies]],
+  [[02-backend/_README]] (rule 4: shared modules filter by user id),
+  [[02-backend/supabase-clients]], [[02-backend/api-routes/_README]],
+  [[02-backend/api-routes/ai]], [[02-backend/api-routes/places]],
+  [[02-backend/api-routes/shared]], [[01-domain/lists]], [[01-domain/places]],
+  [[01-domain/sharing]], [[01-domain/geo-and-s2]],
+  [[01-domain/users-and-profiles]], [[00-overview/glossary]],
+  [[00-overview/repo-structure]], [[00-overview/system-overview]],
+  [[00-overview/tech-stack]], [[03-frontend/routing]],
+  [[03-frontend/state-management]], [[03-frontend/layouts]],
+  [[03-frontend/hooks/_README]], [[03-frontend/hooks/use-shared-links]],
+  [[03-frontend/hooks/use-places]], [[03-frontend/hooks/use-categories]],
+  [[03-frontend/components/places]], [[04-integrations/mapbox]],
+  [[04-integrations/gemini]], [[04-integrations/react-query]],
+  [[04-integrations/claude-mcp]], [[04-integrations/_README]],
+  [[05-flows/_README]], [[05-flows/share-flow]],
+  [[05-flows/ai-enrichment-flow]], [[06-ops/deployment]], [[06-ops/env-vars]],
+  [[_agent/conventions]], [[_agent/common-tasks]] (new: "Change how plans are
+  written"), [[_plans/phase-1-planning]], [[_plans/personal-assistant]].
+  Reviewed, no change needed: docs that list `src/lib/types/index.ts` or
+  `src/lib/ai/track-usage.ts` only for parts this change didn't touch
+  ([[01-domain/categories-and-tags]], [[02-backend/schema/api_usage]],
+  [[05-flows/instagram-import-flow]], [[05-flows/ai-chat-flow]]).
+
+---
+
+## 18.11.2026 — v1.36.1 — Plan write path: `create_plan`, `apply_plan_changes`
+
+- Applied `plan_functions` (file `supabase/migrations/20261118010309_plan_functions.sql`):
+  `create_plan`, `apply_plan_changes` (nine ops, one transaction) and two
+  helpers. SECURITY INVOKER; `authenticated` and `service_role` only.
+- Tested first as a dry run in a rolled-back transaction, as a signed-in
+  user (13 scenarios, including a batch with one bad op being refused
+  entirely and other users / anon being refused); the bodies in the database
+  hash-match the repo file.
+- `search_google_maps` and the Phase 1 schema are on main (merge `b28d087`);
+  the production connector answers with the new build.
+- Docs: [[02-backend/schema/plans]] (functions section),
+  [[02-backend/schema/_README]], [[_plans/phase-1-planning]].
+
+---
+
 ## 18.11.2026 — v1.36.0 — Phase 1 schema applied: plans, visits
 
 - Applied to the live database (Ozan approved the SQL): `plans_tables`

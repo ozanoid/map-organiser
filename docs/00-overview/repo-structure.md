@@ -2,7 +2,7 @@
 title: Repo Structure
 type: overview
 domain: overview
-version: 1.10.0
+version: 1.11.0
 last_updated: 18.11.2026
 status: stable
 sources:
@@ -37,7 +37,7 @@ What every top-level directory contains, why it exists, and where to dig further
 ├── README.md                  Next.js boilerplate (vestigial — actual project README is docs/README.md)
 ├── components.json            shadcn config — style `base-nova`, alias map, icon lib
 ├── eslint.config.mjs          Extends eslint-config-next core-web-vitals + typescript
-├── next.config.ts             Empty (no overrides)
+├── next.config.ts             One redirect: /trips/:id → /plans/:id (permanent; plans kept the trips' ids)
 ├── package.json               Deps + scripts (dev/build/start/lint/eval:instagram)
 ├── package-lock.json          npm lockfile (committed)
 ├── postcss.config.mjs         Wires @tailwindcss/postcss
@@ -71,9 +71,9 @@ src/
 │   │   ├── places/page.tsx
 │   │   ├── places/[id]/page.tsx
 │   │   ├── places/compare/page.tsx  S2 F-04 yan-yana karşılaştırma (v1.19.0)
-│   │   ├── lists/page.tsx     Lists + Trips tabs
+│   │   ├── lists/page.tsx     Lists + Plans tabs (?tab=plans)
 │   │   ├── lists/[id]/page.tsx
-│   │   ├── trips/[id]/page.tsx Timeline + map
+│   │   ├── plans/[id]/page.tsx Timeline + map (/trips/[id] redirects here — next.config.ts)
 │   │   ├── stats/page.tsx     Recharts dashboard
 │   │   ├── import/page.tsx    Batch import + Zustand progress
 │   │   └── settings/page.tsx  Categories (with sub-cat manage) / Tags / API & Usage / AI / Theme tabs
@@ -86,11 +86,11 @@ src/
 │   ├── offline/page.tsx       PWA offline fallback
 │   └── api/                   Route handlers (see [[../02-backend/api-routes/_README]])
 │       ├── places/            CRUD + bulk + enrich (info/reviews/profile) + refresh-google-data (merge + profile chain) + import-jobs (durable import queue) + parse-link (returns lite_profile) + migrate-photos
-│       ├── ai/                parse-query + rank-results (Phase 6) + compare (v1.19.0) + chat (v1.21.0, streaming) + trip-plan (v1.22.0, writes trip tables)
+│       ├── ai/                parse-query + rank-results (Phase 6) + compare (v1.19.0) + chat (v1.21.0, streaming) + day-plan (AI Plan; v1.22.0 as trip-plan, on the plans model since v1.37.0)
 │       ├── cron/              refresh-places — daily periodic-refresh sweep (CRON_SECRET, service-role, opt-in per user);
 │       │                      drain-imports — every minute, the import queue (Takeout + Instagram jobs)
 │       ├── instagram/         import (POST — start from a post URL, work in after()) + import/[id] (GET — dialog progress) — v1.28.0; import/[id]/pick (POST — add the place picked for a skipped venue) — v1.28.1
-│       ├── trips/             CRUD + auto-plan + day PATCH (routing_profile/notes, v1.22.0) + day reorder + day places (move/update shapes) + swap-days
+│       ├── plans/             list + create; [id] GET / PATCH { set, ops } / DELETE; auto-plan; days/[dayId]/route (v1.37.0, replaced trips/)
 │       ├── lists/[id]/reorder
 │       ├── subcategories/     CRUD (per-user; default seed via signup trigger)
 │       ├── shared/            Create + public-read + save-to-account
@@ -105,6 +105,7 @@ src/
 │   ├── map/                   MapView, MapContent, SearchBox, SearchResultPanel
 │   ├── places/                PlaceCard, AddPlaceDialog (with AI Suggestions panel + sub-cat strip), InstagramImportPanel (v1.28.0), BulkActionBar, inline creators, VisitStatusToggle, AiSummaryCard,
 │   │                          + detail-page widgets (v1.17.0): RatingDistributionBar, PopularTimesWidget, PlaceStatusBadges, PlaceActionLinks, AmenitiesGrid, PlaceTopics, ReviewsSection
+│   ├── plans/                 PlansTab, CreatePlanDialog, PlanDayTimeline, StopRow, AddStopDialog, PlanMenu + PlanDatesDialog, AiPlanButton, usePlanEditor (v1.37.0)
 │   ├── settings/              ApiKeysManager, CostTracker, AiSettings (master toggle), AiSuggestionsQueue (moderation UI)
 │   ├── sw-register.tsx        Service worker registration (client component)
 │   └── ui/                    shadcn primitives (avatar, badge, button, card, command, dialog, dropdown-menu, input, input-group, popover, select, separator, sheet, skeleton, sonner, tabs, textarea)
@@ -116,17 +117,21 @@ src/
     ├── ai/                    AI SDK v6 wiring (Gemini 3 Flash). client.ts, context-builder.ts,
     │                          dedup.ts, normalize.ts, track-usage.ts (budgets), generate-profile.ts,
     │                          chat-tools.ts (assistant tool belt, v1.21.0; +rank_places v1.23.0); rank-engine.ts (server-side LLM-as-judge twin, v1.23.0);
-    │                          schemas/ (Zod — +compare.ts v1.19.0, +trip-plan.ts v1.22.0); prompts/ (place-profile-full.ts, compare.ts, chat.ts,
-    │                          trip-plan.ts v1.22.0); extract/ (lite-profile.ts,
+    │                          schemas/ (Zod — +compare.ts v1.19.0, +day-plan.ts v1.22.0); prompts/ (place-profile-full.ts, compare.ts, chat.ts,
+    │                          day-plan.ts v1.22.0); extract/ (lite-profile.ts,
     │                          category-resolver.ts, features-extractor.ts,
     │                          suggestions-from-profile.ts); apply-suggestions.ts.
     ├── text/                  fold.ts — Turkish-aware text folding for matching (17.11.2026; moved from instagram/normalize.ts)
     ├── places/                refresh-google-data.ts — service-client-safe full re-lookup + review merge (shared by refresh route + cron);
-    │                          open-now.ts (tz-aware render-time isOpenNow, v1.18.0; +day-granular isOpenOnDate for the AI trip planner, v1.22.0);
+    │                          open-now.ts (tz-aware render-time isOpenNow, v1.18.0; +day-granular isOpenOnDate for AI Plan, v1.22.0);
     │                          attribute-icons.ts (NF-04 group/icon map);
     │                          query-places.ts + user-stats.ts (v1.21.0 — extracted route engines shared with chat tools)
     ├── place-search/          PlaceSearch interface + the DataForSEO Google Maps provider (18.11.2026) — used by the
     │                          assistant's search_google_maps tool
+    ├── plans/                 The plan model's shared module (v1.37.0, replaced trip/): schema.ts (zod: create + { set, ops }),
+    │                          read.ts (listPlans, getPlan, plansUsingPlaces, dayRoute), write.ts (createPlan, changePlan →
+    │                          create_plan / apply_plan_changes; autoPlanStops), dates.ts (derived day dates, planPhase),
+    │                          auto-plan.ts (k-means), directions.ts (Mapbox wrapper), cost-defaults.ts, day-colors.ts, http.ts
     ├── dataforseo/            DataForSEO client + types + adapters + transform (mergeReviews) + reviews + photo
     ├── google/                Google Places + URL parser + category mapping + Takeout parser + usage tracker + key access;
     │                          place-candidates.ts (multi-candidate Text Search for the Instagram import, v1.28.0)
@@ -135,15 +140,13 @@ src/
     │                          resolve.ts (deterministic pinning rules), normalize.ts, maps-link.ts, import-job.ts, provenance.ts
     ├── import/                process-place.ts (resolveIdentity / findExisting / importPlace / ensurePlacePhoto),
     │                          kick-drain.ts (nudge the drain; shared by both imports, v1.28.0)
-    ├── hooks/                 React Query hooks (19 files): useAiSearch, useAiSuggestions, useBackfillProfiles, useCategories, useDebounce, useFilters, useImportJob, useInstagramImport, useIsDesktop, useLists, useMapStyle, usePlaceSearch, usePlaces, useSavedFilters, useSharedLinks, useStats, useSubcategories, useTags, useTrips
+    ├── hooks/                 React Query hooks (19 files): useAiSearch, useAiSuggestions, useBackfillProfiles, useCategories, useDebounce, useFilters, useImportJob, useInstagramImport, useIsDesktop, useLists, useMapStyle, usePlaceSearch, usePlaces, useSavedFilters, useSharedLinks, useStats, useSubcategories, useTags, usePlans
     ├── stores/                Zustand stores (currently just import-store.ts)
     ├── map/                   category-icons.ts (canvas marker rendering)
-    ├── trip/                  auto-plan.ts (k-means clustering), directions.ts (Mapbox wrapper, RoutingProfile param v1.22.0),
-    │                          cost-defaults.ts (price_level → per-person USD defaults, v1.22.0)
     ├── supabase/              client.ts (browser), server.ts (+ createServiceClient), middleware.ts (updateSession)
     ├── telemetry/             logger.ts (dual-write log.*), trace-context.ts (W3C traceparent mint),
     │                          langfuse.ts (LangfuseSpanProcessor singleton + flushLangfuse) — see [[../05-flows/observability-flow]]
-    ├── types/                 index.ts — domain types (Place, Trip, Category, Subcategory, Tag, …)
+    ├── types/                 index.ts — domain types (Place, Plan, Category, Subcategory, Tag, …)
     ├── geo.ts                 Shared PostGIS point parser (EWKB hex / WKT / GeoJSON / plain object)
     ├── providers.tsx          ThemeProvider + QueryClientProvider
     └── utils.ts               cn() Tailwind class merger
@@ -201,8 +204,8 @@ Counts (approximate, as of `last_updated`):
 | Area | Files |
 |---|---|
 | App routes (`src/app/**/page.tsx`) | 12 page files |
-| API route handlers (`src/app/api/**/route.ts`) | 43 routes (v1.22.0 added `/api/ai/trip-plan` + `/api/trips/[id]/days/[dayId]`; v1.28.0 added `/api/instagram/import` + `/api/instagram/import/[id]`; v1.28.1 added `/api/instagram/import/[id]/pick`) |
-| Feature components (`src/components/{assistant,filters,layout,map,places,settings}`) | ~27 |
+| API route handlers (`src/app/api/**/route.ts`) | 41 routes (v1.37.0 replaced the 7 `/api/trips/**` files with 4 under `/api/plans/**` and renamed `/api/ai/trip-plan` to `/api/ai/day-plan`; v1.22.0 added `/api/ai/trip-plan` + `/api/trips/[id]/days/[dayId]`; v1.28.0 added `/api/instagram/import` + `/api/instagram/import/[id]`; v1.28.1 added `/api/instagram/import/[id]/pick`) |
+| Feature components (`src/components/{assistant,filters,layout,map,places,plans,settings}`) | ~35 |
 | shadcn UI (`src/components/ui/`) | 19 primitives |
 | Custom hooks (`src/lib/hooks/`) | 19 files (v1.20.0 added useSavedFilters; later useImportJob, useIsDesktop; v1.28.0 useInstagramImport) |
 | Supabase clients (`src/lib/supabase/`) | 3 (browser, server, middleware) |
