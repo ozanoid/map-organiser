@@ -14,7 +14,10 @@ import { z } from "zod";
  * database applies a batch of changes in one transaction, so a batch either
  * lands completely or not at all.
  *
- * `null` clears a field, a missing key leaves it alone.
+ * `null` clears a field, a missing key leaves it alone. Every object is
+ * strict: a key it doesn't know is an error, not silently dropped — a model
+ * that writes `time` for `start_time` hears about it instead of saving a
+ * stop without its time.
  *
  * A day is named by its number (`day`, 1-based) or by its id (`day_id`). A
  * screen that shows a plan sends ids: if the days were renumbered meanwhile
@@ -51,21 +54,23 @@ const stopShape = {
   place_id: z.uuid().optional().describe("A saved place"),
   title: stopTitle
     .optional()
-    .describe("For a stop that isn't a saved place: what it is, e.g. 'Meet at the Old Street exit'"),
+    .describe("Only for a stop that isn't a saved place: what it is, e.g. 'Meet at the Old Street exit'"),
   start_time: clock.optional().describe("Exact local time at the place, 24-hour 'HH:MM'"),
   day_part: z.enum(DAY_PARTS).optional().describe("Part of the day, when there is no exact time"),
   notes: stopNotes.optional().describe("What to order, a booking reference, a link"),
-  /** Per person. Left out, it is filled from the place's price level; null
-   *  means "no estimate" and stays empty. */
+  /** Per person. Left out, a stop at a saved place in US dollars gets the
+   *  dollar default for the place's price level; null means "no estimate"
+   *  and stays empty. */
   cost_estimate: cost
     .nullable()
     .optional()
-    .describe("Cost per person; left out, estimated from the place's price level"),
-  currency: currency.optional().describe("3-letter code, e.g. GBP"),
+    .describe("Cost per person. Left out, a saved place's stop gets an estimate in US dollars from its price level"),
+  currency: currency.optional().describe("3-letter code; default USD"),
 };
 
-const hasPlaceOrTitle = (s: { place_id?: string; title?: string }) => !!s.place_id || !!s.title;
-const PLACE_OR_TITLE = { message: "A stop needs a place_id or a title" };
+/** One of the two: a saved place shows the place's own name. */
+const hasPlaceOrTitle = (s: { place_id?: string; title?: string }) => !!s.place_id !== !!s.title;
+const PLACE_OR_TITLE = { message: "A stop is a saved place (place_id) or a line of text (title) — one of the two" };
 
 /** The day an op is about: its number or its id, one of the two. */
 const dayRef = {
@@ -75,9 +80,9 @@ const dayRef = {
 const hasOneDay = (o: { day?: number; day_id?: string }) => (o.day != null) !== (o.day_id != null);
 const ONE_DAY = { message: "Name the day by `day` (its number) or by `day_id` — one of the two" };
 
-export const stopInputSchema = z.object(stopShape).refine(hasPlaceOrTitle, PLACE_OR_TITLE);
+export const stopInputSchema = z.strictObject(stopShape).refine(hasPlaceOrTitle, PLACE_OR_TITLE);
 
-export const planCreateSchema = z.object({
+export const planCreateSchema = z.strictObject({
   name: planName.describe("e.g. 'Saturday in Shoreditch', 'Barcelona'"),
   /** Left out or null: the plan is not scheduled yet. */
   start_date: isoDate
@@ -92,7 +97,7 @@ export const planCreateSchema = z.object({
   /** In order: the first entry is day 1. Left out: one empty day. */
   days: z
     .array(
-      z.object({
+      z.strictObject({
         notes: dayNotes.optional(),
         routing_profile: z
           .enum(ROUTING_PROFILES)
@@ -112,7 +117,7 @@ export const planCreateSchema = z.object({
 export const planOpSchema = z.discriminatedUnion("op", [
   /** position is 1-based; left out, the day goes after the last one. */
   z
-    .object({
+    .strictObject({
       op: z.literal("add_day"),
       position: dayNumber.optional().describe("1-based; left out, after the last day"),
       notes: dayNotes.optional(),
@@ -121,12 +126,12 @@ export const planOpSchema = z.discriminatedUnion("op", [
     .describe("Add a day; the days after it move one later"),
   /** Only an empty day can be removed; a plan keeps at least one day. */
   z
-    .object({ op: z.literal("remove_day"), ...dayRef })
+    .strictObject({ op: z.literal("remove_day"), ...dayRef })
     .refine(hasOneDay, ONE_DAY)
     .describe("Remove an empty day (move or remove its stops first); a plan keeps at least one day"),
   /** Two days by number (`a`, `b`) or by id (`a_id`, `b_id`). */
   z
-    .object({
+    .strictObject({
       op: z.literal("swap_days"),
       a: dayNumber.optional(),
       b: dayNumber.optional(),
@@ -141,7 +146,7 @@ export const planOpSchema = z.discriminatedUnion("op", [
     )
     .describe("Swap two days with their stops: `a` and `b` (day numbers) or `a_id` and `b_id`"),
   z
-    .object({
+    .strictObject({
       op: z.literal("set_day"),
       ...dayRef,
       notes: dayNotes.nullable().optional(),
@@ -151,7 +156,7 @@ export const planOpSchema = z.discriminatedUnion("op", [
     .describe("Change a day's notes or how its route is drawn"),
   /** position is 0-based; left out, the stop goes to the end of the day. */
   z
-    .object({
+    .strictObject({
       op: z.literal("add_stop"),
       ...dayRef,
       position: z.number().int().min(0).optional().describe("0-based; left out, at the end of the day"),
@@ -162,10 +167,10 @@ export const planOpSchema = z.discriminatedUnion("op", [
     .describe("Add a stop: a saved place (place_id) or a line of text (title)"),
   /** Setting a time clears the day part and the other way round. */
   z
-    .object({
+    .strictObject({
       op: z.literal("update_stop"),
       stop_id: z.uuid(),
-      title: stopTitle.optional(),
+      title: stopTitle.optional().describe("New text of a stop without a saved place (ignored for a saved place)"),
       start_time: clock.nullable().optional(),
       day_part: z.enum(DAY_PARTS).nullable().optional(),
       notes: stopNotes.nullable().optional(),
@@ -175,12 +180,12 @@ export const planOpSchema = z.discriminatedUnion("op", [
         .enum(STOP_STATUSES)
         .optional()
         .describe(
-          "skipped, or back to planned. done only for a stop without a saved place — a saved place's stop is done when its visit is logged"
+          "skipped, or planned again. done only for a stop without a saved place: a saved place's stop is done when its visit is logged (log_visit), and a stop with a visit keeps its status — the visit is removed in the app"
         ),
     })
     .describe("Change a stop; null clears a field. A time clears the part of the day and the other way round"),
   z
-    .object({
+    .strictObject({
       op: z.literal("move_stop"),
       stop_id: z.uuid(),
       ...dayRef,
@@ -188,10 +193,10 @@ export const planOpSchema = z.discriminatedUnion("op", [
     })
     .refine(hasOneDay, ONE_DAY)
     .describe("Move a stop to a day — the same or another — and a position"),
-  z.object({ op: z.literal("remove_stop"), stop_id: z.uuid() }).describe("Remove a stop"),
+  z.strictObject({ op: z.literal("remove_stop"), stop_id: z.uuid() }).describe("Remove a stop"),
   /** stop_ids lists every stop of the day, in the new order. */
   z
-    .object({
+    .strictObject({
       op: z.literal("reorder_stops"),
       ...dayRef,
       stop_ids: z.array(z.uuid()).min(1).max(MAX_STOPS_PER_DAY),
@@ -200,7 +205,7 @@ export const planOpSchema = z.discriminatedUnion("op", [
     .describe("Put a day's stops in this order; stop_ids lists every stop of the day"),
 ]);
 
-export const planSetSchema = z.object({
+export const planSetSchema = z.strictObject({
   name: planName.optional(),
   notes: z.string().max(5000).nullable().optional(),
   party_size: z.number().int().min(1).max(50).optional(),
@@ -218,7 +223,7 @@ export const planSetSchema = z.object({
 });
 
 export const planChangesSchema = z
-  .object({
+  .strictObject({
     set: planSetSchema.optional().describe("Changes to the plan itself"),
     /** Applied in order, after `set`. */
     ops: z.array(planOpSchema).max(MAX_OPS).optional().describe("Changes to days and stops, applied in order after set"),

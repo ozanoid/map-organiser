@@ -130,7 +130,7 @@ See [[auth]] for the full flow.
 
 ## Why middleware matters
 
-The browser and server clients on their own can read auth state from cookies, but **only the middleware writes refreshed cookies** back to the response. Without it, expired sessions never refresh — users get unauthenticated mid-session.
+The browser and server clients on their own can read auth state from cookies, but **only the middleware writes refreshed cookies** back to the response — its redirects too (`redirectKeepingSession` copies them, v1.39.0). Without it, expired sessions never refresh — users get unauthenticated mid-session.
 
 If you change the middleware matcher or shortcut it for a path, **make sure the path doesn't need an authenticated Supabase context** — or it'll start failing silently after the token expires.
 

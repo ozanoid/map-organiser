@@ -240,45 +240,65 @@ export interface StopOutline {
   status: StopStatus;
 }
 
-/** The stops of these plans in day and visiting order, names only — for a
- *  list of plans that says what is in each (the assistant's get_plans). */
-export async function planOutlines(ctx: PlanContext, planIds: string[]): Promise<Map<string, StopOutline[]>> {
-  const out = new Map<string, StopOutline[]>();
-  if (planIds.length === 0) return out;
-  const { data, error } = await ctx.supabase
-    .from("plan_days")
-    .select("plan_id,day_number,plans!inner(user_id),stops:plan_stops(sort_order,title,start_time,day_part,status,place:places(name))")
-    .in("plan_id", planIds)
-    .eq("plans.user_id", ctx.userId);
+/** A plan's stops by name, and the time zone its days are lived in. */
+export interface PlanOutline {
+  stops: StopOutline[];
+  /** IANA zone of the plan's last stop at a located place ("Europe/London"),
+   *  or null when no stop has one — the plan's last day ends there. */
+  timeZone: string | null;
+}
+
+/** Each plan's stops in day and visiting order, names only, and its time
+ *  zone — for a list of plans that says what is in each and whether it is
+ *  over (the assistant's get_plans). Without `planIds`, every plan of the
+ *  user. */
+export async function planOutlines(ctx: PlanContext, planIds?: string[]): Promise<Map<string, PlanOutline>> {
+  const out = new Map<string, PlanOutline>();
+  if (planIds && planIds.length === 0) return out;
+  let query = ctx.supabase
+    .from("plans")
+    .select(
+      "id,days:plan_days(day_number,stops:plan_stops(sort_order,title,start_time,day_part,status,place:places(name,tz:google_data->>tz)))"
+    )
+    .eq("user_id", ctx.userId);
+  if (planIds) query = query.in("id", planIds);
+  const { data, error } = await query;
   if (error) throw new Error(error.message);
 
   type Row = {
-    plan_id: string;
-    day_number: number;
-    stops:
+    id: string;
+    days:
       | {
-          sort_order: number;
-          title: string | null;
-          start_time: string | null;
-          day_part: DayPart | null;
-          status: StopStatus;
-          place: { name: string } | null;
+          day_number: number;
+          stops:
+            | {
+                sort_order: number;
+                title: string | null;
+                start_time: string | null;
+                day_part: DayPart | null;
+                status: StopStatus;
+                place: { name: string; tz: string | null } | null;
+              }[]
+            | null;
         }[]
       | null;
   };
-  const days = [...((data ?? []) as unknown as Row[])].sort((a, b) => a.day_number - b.day_number);
-  for (const day of days) {
-    const stops = out.get(day.plan_id) ?? [];
-    for (const s of [...(day.stops ?? [])].sort((a, b) => a.sort_order - b.sort_order)) {
-      stops.push({
-        day_number: day.day_number,
-        name: s.place?.name ?? s.title ?? "Stop",
-        start_time: s.start_time ? s.start_time.slice(0, 5) : null,
-        day_part: s.day_part,
-        status: s.status,
-      });
+  for (const plan of (data ?? []) as unknown as Row[]) {
+    const stops: StopOutline[] = [];
+    let timeZone: string | null = null;
+    for (const day of [...(plan.days ?? [])].sort((a, b) => a.day_number - b.day_number)) {
+      for (const s of [...(day.stops ?? [])].sort((a, b) => a.sort_order - b.sort_order)) {
+        stops.push({
+          day_number: day.day_number,
+          name: s.place?.name ?? s.title ?? "Stop",
+          start_time: s.start_time ? s.start_time.slice(0, 5) : null,
+          day_part: s.day_part,
+          status: s.status,
+        });
+        if (s.place?.tz) timeZone = s.place.tz;
+      }
     }
-    out.set(day.plan_id, stops);
+    out.set(plan.id, { stops, timeZone });
   }
   return out;
 }

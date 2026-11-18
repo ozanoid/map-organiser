@@ -95,7 +95,7 @@ Since 17.11.2026 the app has a single owner (see [[../_plans/personal-assistant]
 
 ## Return path after sign-in (`next`)
 
-Since 17.11.2026 a page can send a signed-out visitor to `/login?next=<path>` and get them back after sign-in — the OAuth consent page does. Since v1.39.0 (18.11.2026) the middleware does the same for every protected page: a signed-out request for `/plans/<id>` goes to `/login?next=%2Fplans%2F<id>` (the path with its query), and a signed-in visit to `/login?next=…` goes straight there. `next` is followed only through `safeNextPath` (`src/lib/auth/safe-next.ts`): one leading slash, no backslash or control characters, same origin after URL parsing.
+Since 17.11.2026 a page can send a signed-out visitor to `/login?next=<path>` and get them back after sign-in — the OAuth consent page does. Since v1.39.0 (18.11.2026) the middleware does the same for every protected page: a signed-out request for `/plans/<id>` goes to `/login?next=%2Fplans%2F<id>` (the path with its query), and a signed-in visit to `/login?next=…` goes straight there. `next` is followed only through `safeNextPath` (`src/lib/auth/safe-next.ts`): one leading slash, no backslash or control characters, same origin after URL parsing, and the parsed path must not start with `//` either. That last check came with v1.39.0: parsing collapses dot segments, so `/.//evil.com` (or `/%2e//evil.com`, `/a/..//evil.com`) came out as `//evil.com` — a protocol-relative link to another host. Since 17.11.2026 the login page could be sent there after an email sign-in; the middleware's signed-in redirect would have made it one click. Found by the slice-3 review, closed before merge; unit checks cover the three forms.
 
 - Email/password: the login page pushes `next` (or `/map`).
 - Google: the login page stores `next` in the short-lived `auth_next` cookie (10 min, SameSite=Lax) so the registered `/auth/callback` redirect URL stays unchanged; the callback reads `?next=` or the cookie, validates it, redirects and clears the cookie.
@@ -119,7 +119,7 @@ export const config = {
 };
 ```
 
-It delegates to `updateSession()` in `src/lib/supabase/middleware.ts`, which:
+It delegates to `updateSession()` in `src/lib/supabase/middleware.ts`, which (every redirect after step 4 goes through `redirectKeepingSession`, so the cookies `getUser()` refreshed or cleared reach the browser):
 
 1. `/signup` → redirect to `/login` and stop (sign-ups closed, 17.11.2026).
 2. Reads cookies from `request.cookies`.

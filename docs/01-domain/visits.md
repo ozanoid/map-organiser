@@ -51,7 +51,7 @@ Like plans: every write is one call into `src/lib/visits/write.ts`, which is one
 | `editVisit(ctx, id, changes)` | `log_visit` with `visit_id` | `PATCH /api/visits/[id]`, tool `log_visit` with `visit_id` |
 | `deleteVisit(ctx, id)` | `delete_visit` | `DELETE /api/visits/[id]` |
 
-`write.ts` adds the **default date**: the planned stop's day when it has come, otherwise **today at the place** (its Google time zone), so "I went last night" from London at 1 am lands on the right day. Errors: `VisitInputError` (400 / correctable by the model), `VisitNotFoundError` (404).
+`write.ts` adds the **default date**: the planned stop's day when it has come, otherwise **today at the place** (its Google time zone, UTC when it has none — the shared `todayAt` in `src/lib/plans/dates.ts`), so "I went last night" from London at 1 am lands on the right day. Errors: `VisitInputError` (400 / correctable by the model), `VisitNotFoundError` (404).
 
 Reads (`src/lib/visits/read.ts`): `listVisits` (by places, date range, minimum rating; newest first; each with a light place and the plan it fulfilled), `getVisit`, `visitCounts` (for the delete warnings).
 

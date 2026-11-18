@@ -65,6 +65,40 @@ function expect(label: string, ok: boolean) {
   console.log(`   ${ok ? "PASS" : "FAIL"} ${label}`);
 }
 
+/** No database, no network: the return-path guard and the OAuth redirect
+ *  allowlist. Runs with every suite. */
+function checkPureHelpers() {
+  console.log("\n## pure helpers");
+  for (const [raw, want] of [
+    ["/oauth/consent?authorization_id=abc", "/oauth/consent?authorization_id=abc"],
+    ["/map", "/map"],
+    ["/map?add=https%3A%2F%2Fwww.instagram.com%2Fp%2Fabc%2F", "/map?add=https%3A%2F%2Fwww.instagram.com%2Fp%2Fabc%2F"],
+    ["/plans/7f1c2e8a-0000-4000-8000-000000000000", "/plans/7f1c2e8a-0000-4000-8000-000000000000"],
+    ["//evil.com", null],
+    ["@evil.com", null],
+    ["https://evil.com", null],
+    ["/\\evil.com", null],
+    ["/%2F%2Fevil.com", "/%2F%2Fevil.com"],
+    // Dot segments collapse while parsing; the result must not be "//evil.com".
+    ["/.//evil.com", null],
+    ["/%2e//evil.com", null],
+    ["/a/..//evil.com", null],
+    ["/./plans", "/plans"],
+  ] as const) {
+    expect(`safeNextPath(${raw}) = ${want}`, safeNextPath(raw) === want);
+  }
+  for (const [uri, want] of [
+    ["https://claude.ai/api/mcp/auth_callback", true],
+    ["https://claude.com/api/mcp/auth_callback?code=x&state=y", true],
+    ["http://localhost:54123/callback", true],
+    ["https://claude.ai.evil.com/api/mcp/auth_callback", false],
+    ["https://evil.com/api/mcp/auth_callback", false],
+    ["http://claude.ai/api/mcp/auth_callback", false],
+  ] as const) {
+    expect(`redirect ${uri} → ${want}`, isAllowedOAuthRedirect(uri) === want);
+  }
+}
+
 async function main() {
   const owner = await userIdOf(OWNER);
   const tester = await userIdOf(TESTER);
@@ -72,6 +106,7 @@ async function main() {
   const only = { plans: checkPlans, visits: checkVisits, "plan-tools": checkPlanTools }[process.argv[2] ?? ""];
   if (only) {
     await only(admin, expect, tester, owner);
+    checkPureHelpers();
     console.log(`\n${failures === 0 ? "ALL CHECKS PASSED" : `${failures} CHECK(S) FAILED`}`);
     process.exit(failures === 0 ? 0 : 1);
   }
@@ -210,30 +245,7 @@ async function main() {
   await checkVisits(admin, expect, tester, owner);
   await checkPlanTools(admin, expect, tester, owner);
 
-  // ── Pure helpers ──────────────────────────────────────────────────
-  for (const [raw, want] of [
-    ["/oauth/consent?authorization_id=abc", "/oauth/consent?authorization_id=abc"],
-    ["/map", "/map"],
-    ["/map?add=https%3A%2F%2Fwww.instagram.com%2Fp%2Fabc%2F", "/map?add=https%3A%2F%2Fwww.instagram.com%2Fp%2Fabc%2F"],
-    ["/plans/7f1c2e8a-0000-4000-8000-000000000000", "/plans/7f1c2e8a-0000-4000-8000-000000000000"],
-    ["//evil.com", null],
-    ["@evil.com", null],
-    ["https://evil.com", null],
-    ["/\\evil.com", null],
-    ["/%2F%2Fevil.com", "/%2F%2Fevil.com"],
-  ] as const) {
-    expect(`safeNextPath(${raw}) = ${want}`, safeNextPath(raw) === want);
-  }
-  for (const [uri, want] of [
-    ["https://claude.ai/api/mcp/auth_callback", true],
-    ["https://claude.com/api/mcp/auth_callback?code=x&state=y", true],
-    ["http://localhost:54123/callback", true],
-    ["https://claude.ai.evil.com/api/mcp/auth_callback", false],
-    ["https://evil.com/api/mcp/auth_callback", false],
-    ["http://claude.ai/api/mcp/auth_callback", false],
-  ] as const) {
-    expect(`redirect ${uri} → ${want}`, isAllowedOAuthRedirect(uri) === want);
-  }
+  checkPureHelpers();
 
   console.log(`\n${failures === 0 ? "ALL CHECKS PASSED" : `${failures} CHECK(S) FAILED`}`);
   process.exit(failures === 0 ? 0 : 1);

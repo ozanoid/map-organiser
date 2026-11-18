@@ -57,7 +57,7 @@ Two pieces:
    - Public path → continue.
    - Auth path (`/login`) with a logged-in user → redirect to its `next` when that is a same-site path (`safeNextPath`), otherwise `/map`.
    - Any other path without a user → redirect to `/login?next=<path and query>`, so sign-in comes back to the page that was asked for — a plan link Claude gave, the iOS Shortcut's `/map?add=…` (v1.39.0; before, every sign-in landed on `/map`). API paths get no `next`: a fetch has no page to return to. The login page and `/auth/callback` follow `next` only through `safeNextPath`.
-6. Return the response.
+6. Return the response. Redirects copy the cookies from step 4 (`redirectKeepingSession`, v1.39.0) — a bare redirect would drop a refreshed session and leave the browser with a spent refresh token.
 
 ## Public paths
 

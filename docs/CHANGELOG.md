@@ -37,22 +37,55 @@ Claude can now read, save and change the user's plans through the connector.
   `/map`. A signed-in visit to `/login?next=…` goes straight on. API paths
   get no `next`. Only same-site paths are followed (`safeNextPath`).
 - **Read helper:** `planOutlines` (`src/lib/plans/read.ts`) — each plan's
-  stops by name, for the plan list. `clip` moved into the assistant library.
-- **Checks:** `npm run check:assistant -- plan-tools` — 31 checks on the
+  stops by name and its time zone (the last located stop's), for one plan or
+  all. `clip` moved into the assistant library; `todayAt` (today in a zone,
+  UTC without one) is shared by plans and visits in `src/lib/plans/dates.ts`.
+- **Review fixes** (an independent review of the first commit, 18.11.2026):
+  - *Open redirect:* `safeNextPath` checked the raw `next` only; parsing
+    collapses dot segments, so `/.//evil.com` came out as `//evil.com` —
+    open on the login page since 17.11.2026, one click through the new
+    signed-in redirect. The parsed path is checked now; unit checks added.
+  - *Session cookies on redirects:* the middleware's redirects copy the
+    cookies `getUser()` wrote (`redirectKeepingSession`); before, a refresh
+    during a redirect was lost.
+  - *Strict inputs:* every tool refuses unknown keys (`defineTool`), the plan
+    schemas are `z.strictObject` throughout, and plan output uses the input's
+    names (`start_time`, `cost_estimate`, `place_id`) — a misnamed field was
+    silently dropped (`date` for `visited_on` logged the visit today). A stop
+    is a place or a text, not both.
+  - *Where "today" is:* a plan's phase in `get_plans` follows the time zone
+    of its last located stop, not the server's UTC date (a New York evening
+    is already tomorrow in UTC).
+  - *Name search* covers every phase, so a past or cancelled trip is found.
+  - *Currency:* the dollar cost default is no longer written onto a stop in
+    another currency.
+  - *Retries:* an unexpected error in a write tool says the change may have
+    been saved and to check first; the app origin is parsed once (http(s)
+    only), so building a link can't fail after a write.
+  - *Honest descriptions:* a stop with a visit keeps its status (the visit is
+    removed in the app — Claude has no `delete_visit` tool, an open
+    decision); `title` changes only a text stop; costs default in dollars.
+- **Checks:** `npm run check:assistant -- plan-tools` — 48 checks on the
   live database (test account, everything removed afterwards): every tool's
-  input converts to the JSON Schema clients see; create, list and filters,
-  detail with a route, a batch whose day number is read after a swap, the
-  all-or-nothing refusal of "done" at a saved place, `log_visit` with
-  `plan_stop_id`, cancel / restore / unschedule. The plan and visit suites
-  pass again. Signed-out redirects checked on the dev server.
-- **Measured:** the 12 tool definitions are about 31,000 characters;
-  `update_plan` is 8,400 of them, 2,700 of which are zod's uuid patterns.
+  input converts to the JSON Schema clients see and refuses unknown keys;
+  misnamed fields; the time-zone rule; create, list and filters (past and
+  cancelled plans by name), detail with a route, a batch whose day number is
+  read after a swap, the dollar default and none in pounds, the
+  all-or-nothing refusal of "done" at a saved place, a stop with a visit
+  keeping its status, `log_visit` with `plan_stop_id`, cancel / restore /
+  unschedule. The 19 pure-helper checks (return path, OAuth redirect
+  allowlist) now run with every suite. The plan and visit suites pass again;
+  `tsc`, `eslint`, `next build`. Signed-out redirects checked on the dev
+  server.
+- **Measured:** the 12 tool definitions are about 32,000 characters;
+  `update_plan` is 9,000 plus a 1,100-character description; 5,600 across
+  all tools are zod's uuid and date patterns.
 - Docs: [[04-integrations/claude-mcp]], [[01-domain/plans]],
   [[01-domain/visits]], [[05-flows/visit-flow]], [[05-flows/auth-flow]],
   [[05-flows/claude-connector-flow]], [[02-backend/auth]],
   [[02-backend/supabase-clients]], [[02-backend/api-routes/plans]],
   [[03-frontend/middleware]], [[03-frontend/routing]],
-  [[04-integrations/mapbox]], [[_agent/common-tasks]],
+  [[04-integrations/mapbox]], [[_agent/common-tasks]], [[_agent/pitfalls]],
   [[_plans/phase-1-planning]], [[_plans/personal-assistant]].
 
 ---

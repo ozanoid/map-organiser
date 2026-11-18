@@ -2,7 +2,7 @@
 title: Pitfalls
 type: agent-note
 domain: agent
-version: 1.1.0
+version: 1.2.0
 last_updated: 18.11.2026
 status: stable
 related:
@@ -33,7 +33,8 @@ Things that will look right based on training data but will break in this codeba
 
 - **Three clients, three contexts.** See [[conventions#supabase-clients]]. Using the wrong one silently breaks auth — there's no error, just an unauthenticated user.
 - **Cookies are written by middleware.** If you change auth flow, ensure `src/middleware.ts` still runs and still calls `updateSession`.
-- **No local migrations.** Schema changes happen in the dashboard or via Supabase MCP. Don't `prisma migrate dev` — there's no Prisma. Don't expect `supabase/migrations/` to exist.
+- **A redirect from the middleware must carry the session cookies.** `getUser()` may have just refreshed the session onto `supabaseResponse`; a bare `NextResponse.redirect` drops those cookies and leaves the browser with a spent refresh token. Use `redirectKeepingSession` in `src/lib/supabase/middleware.ts` (v1.39.0).
+- **Migrations are SQL files in `supabase/migrations/`** (since 18.11.2026; the 56 before that exist only in the Supabase project), applied through Supabase MCP under the same name — see [[common-tasks]]. There's no Prisma: don't `prisma migrate dev`.
 
 ## Tailwind v4
 
@@ -52,6 +53,15 @@ Things that will look right based on training data but will break in this codeba
 - `ENCRYPTION_SECRET` is server-only. Never log it, never expose to the client, never commit to git.
 - Encrypted columns (`google_api_key_enc`, `mapbox_token_enc`) — only decrypt server-side.
 - Never propose `console.log(process.env.ENCRYPTION_SECRET)` even in a debug context.
+
+## Assistant tools (MCP)
+
+- **zod objects drop unknown keys silently.** A model that writes `date` for `visited_on` or `time` for `start_time` would get a call that ignores the field (a visit logged today, a stop without its time). Tool inputs are strict at the top (`defineTool` in `src/lib/assistant/tools/types.ts`) and the plan schemas are `z.strictObject` all the way down; keep new schemas strict, and name output fields as the input names them, so what the model reads it can write back.
+- **A tool result is not the place to guess "today".** Plans and visits are judged by the date where they take place (`todayAt(place tz)` in `src/lib/plans/dates.ts`), not by the server's UTC date.
+
+## URLs and redirects
+
+- **Check a path after parsing, not only before.** `new URL()` collapses dot segments: `/.//evil.com`, `/%2e//evil.com` and `/a/..//evil.com` all become `//evil.com`, a protocol-relative URL to another host. `safeNextPath` (`src/lib/auth/safe-next.ts`) checks the parsed path too (v1.39.0; the raw-only check was an open redirect).
 
 ## Imports
 

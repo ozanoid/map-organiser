@@ -20,6 +20,19 @@ import { isAssistantOwner } from "@/lib/assistant/owner";
  * one the OAuth metadata advertises — so links in tool results open the app
  * the user is connected to (production, a preview, or localhost).
  */
+
+/** The public origin, parsed once: only http(s), else the request's own. A
+ *  link built on it can't throw later, after a tool has written. */
+function appOrigin(req: Request): string {
+  try {
+    const url = new URL(getPublicOrigin(req));
+    if (url.protocol === "https:" || url.protocol === "http:") return url.origin;
+  } catch {
+    // a forwarded host that doesn't parse
+  }
+  return new URL(req.url).origin;
+}
+
 export async function verifyAssistantToken(req: Request, bearer?: string): Promise<AuthInfo | undefined> {
   if (!bearer) return undefined;
 
@@ -43,6 +56,6 @@ export async function verifyAssistantToken(req: Request, bearer?: string): Promi
     clientId: typeof claims.client_id === "string" ? claims.client_id : "supabase-session",
     scopes: typeof claims.scope === "string" ? claims.scope.split(" ").filter(Boolean) : [],
     expiresAt: typeof claims.exp === "number" ? claims.exp : undefined,
-    extra: { userId: claims.sub, email, appUrl: getPublicOrigin(req) },
+    extra: { userId: claims.sub, email, appUrl: appOrigin(req) },
   };
 }

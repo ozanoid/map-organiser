@@ -35,15 +35,18 @@ function fail(error: PostgrestError): never {
 
 /**
  * Stops that name a place and say nothing about cost get the per-person
- * default for the place's price level (an explicit null stays empty). Places
- * that aren't the user's are left as they are — the database refuses them
- * with a message.
+ * default for the place's price level (an explicit null stays empty). The
+ * defaults are US dollars, so a stop in another currency gets none — "25"
+ * from the dollar table must not be saved as 25 GBP. Places that aren't the
+ * user's are left as they are — the database refuses them with a message.
  */
-async function withDefaultCosts<T extends Pick<StopInput, "place_id" | "cost_estimate">>(
+async function withDefaultCosts<T extends Pick<StopInput, "place_id" | "cost_estimate" | "currency">>(
   ctx: PlanContext,
   stops: T[]
 ): Promise<void> {
-  const ids = [...new Set(stops.filter((s) => s.place_id && s.cost_estimate === undefined).map((s) => s.place_id!))];
+  const wantsDefault = (s: T) =>
+    !!s.place_id && s.cost_estimate === undefined && (s.currency === undefined || s.currency === "USD");
+  const ids = [...new Set(stops.filter(wantsDefault).map((s) => s.place_id!))];
   if (ids.length === 0) return;
   const { data, error } = await ctx.supabase
     .from("places")
@@ -58,8 +61,8 @@ async function withDefaultCosts<T extends Pick<StopInput, "place_id" | "cost_est
     ])
   );
   for (const stop of stops) {
-    if (stop.place_id && stop.cost_estimate === undefined) {
-      const cost = costs.get(stop.place_id);
+    if (wantsDefault(stop)) {
+      const cost = costs.get(stop.place_id!);
       if (cost != null) stop.cost_estimate = cost;
     }
   }

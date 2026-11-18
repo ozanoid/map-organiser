@@ -76,7 +76,14 @@ export const assistantMcpHandler = createMcpHandler(
               userId: ctx.userId,
               error: e instanceof Error ? e.message : String(e),
             });
-            return textResult("Map Organiser hit an error running this tool. Try again, or narrow the request.", true);
+            // A write may have landed before the error (a lost response):
+            // retrying blindly could save it twice.
+            return textResult(
+              tool.annotations.readOnlyHint
+                ? "Map Organiser hit an error running this tool. Try again, or narrow the request."
+                : "Map Organiser hit an error running this tool; the change may or may not have been saved. Check the current state (get_plans, get_visits or get_places) before trying again.",
+              true
+            );
           }
         }
       );

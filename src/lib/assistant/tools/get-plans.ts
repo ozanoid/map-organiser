@@ -3,7 +3,7 @@ import { z } from "zod";
 import { clip, ToolInputError, type AssistantContext } from "@/lib/assistant/library";
 import { defineTool } from "@/lib/assistant/tools/types";
 import { trackUsage } from "@/lib/google/track-usage";
-import { planPhase, todayIso, weekdayName, type PlanPhase } from "@/lib/plans/dates";
+import { planPhase, todayAt, weekdayName, type PlanPhase } from "@/lib/plans/dates";
 import {
   dayRoute,
   getPlan,
@@ -11,6 +11,7 @@ import {
   planOutlines,
   routedStops,
   RouteUnavailableError,
+  type PlanOutline,
   type StopOutline,
 } from "@/lib/plans/read";
 import { log } from "@/lib/telemetry/logger";
@@ -21,9 +22,14 @@ import type { Plan, PlanDay, PlanRoute, PlanStop } from "@/lib/types";
  * Plans as the model sees them — get_plans here, and the plan that
  * create_plan and update_plan return after a write.
  *
- * "Today" is the server's date (UTC). It decides whether a plan is upcoming
- * or past and is returned with every answer, so the model reads dates
- * against the same day.
+ * Field names follow the write tools' input (start_time, day_part,
+ * cost_estimate, place_id, day, day_id), so what the model reads it can
+ * write back.
+ *
+ * A plan is upcoming until its last day is over where it takes place: "today"
+ * is the date in the time zone of the plan's last stop at a located place
+ * (UTC when it has none) — not the server's date, which is already tomorrow
+ * during a New York evening.
  */
 
 const PHASES = ["upcoming", "unscheduled", "past", "cancelled"] as const satisfies readonly PlanPhase[];
@@ -33,17 +39,20 @@ const PREVIEW_STOPS = 8;
 
 /** The plan's page in the app. */
 export function planUrl(ctx: AssistantContext, planId: string): string {
-  return new URL(`/plans/${planId}`, ctx.appUrl).toString();
+  return `${ctx.appUrl}/plans/${planId}`;
 }
+
+/** Where the plan sits in time, judged by today's date where it takes place. */
+const phaseOf = (plan: Plan, outline: PlanOutline | undefined) => planPhase(plan, todayAt(outline?.timeZone));
 
 const stopName = (s: Pick<PlanStop, "place" | "title">) => s.place?.name ?? s.title ?? "Stop";
 
 function stopForModel(s: PlanStop) {
   return {
     stop_id: s.id,
+    place_id: s.place_id ?? undefined,
     place: s.place
       ? {
-          place_id: s.place.id,
           name: s.place.name,
           category: s.place.category?.name,
           area: s.place.city ?? undefined,
@@ -51,10 +60,10 @@ function stopForModel(s: PlanStop) {
         }
       : undefined,
     title: s.title ?? undefined,
-    time: s.start_time ?? undefined,
+    start_time: s.start_time ?? undefined,
     day_part: s.day_part ?? undefined,
     notes: s.notes ?? undefined,
-    cost_per_person: s.cost_estimate ?? undefined,
+    cost_estimate: s.cost_estimate ?? undefined,
     currency: s.cost_estimate != null ? (s.currency ?? undefined) : undefined,
     status: s.status,
     visit: s.visit
@@ -124,13 +133,13 @@ async function routesOf(ctx: AssistantContext, plan: Plan): Promise<Map<string, 
 export function planForModel(
   ctx: AssistantContext,
   plan: Plan,
-  today: string,
+  phase: PlanPhase,
   routes?: Map<string, RouteForModel>
 ) {
   return {
     plan_id: plan.id,
     name: plan.name,
-    phase: planPhase(plan, today),
+    phase,
     start_date: plan.start_date ?? undefined,
     end_date: plan.end_date ?? undefined,
     party_size: plan.party_size,
@@ -148,8 +157,8 @@ export function planForModel(
   };
 }
 
-function preview(outline: StopOutline[], multiDay: boolean): string[] {
-  return outline.slice(0, PREVIEW_STOPS).map((s) => {
+function preview(stops: StopOutline[], multiDay: boolean): string[] {
+  return stops.slice(0, PREVIEW_STOPS).map((s) => {
     const when = s.start_time ?? (s.day_part ? `(${s.day_part})` : "");
     return [multiDay ? `Day ${s.day_number}:` : "", s.name, when, s.status === "planned" ? "" : `[${s.status}]`]
       .filter(Boolean)
@@ -158,13 +167,13 @@ function preview(outline: StopOutline[], multiDay: boolean): string[] {
 }
 
 /** A plan in a list: dates, counts, the first stops by name, the link. */
-function planSummary(ctx: AssistantContext, plan: Plan, today: string, outline: StopOutline[]) {
+function planSummary(ctx: AssistantContext, plan: Plan, phase: PlanPhase, stops: StopOutline[]) {
   const multiDay = (plan.day_count ?? 1) > 1;
-  const count = (status: StopOutline["status"]) => outline.filter((s) => s.status === status).length || undefined;
+  const count = (status: StopOutline["status"]) => stops.filter((s) => s.status === status).length || undefined;
   return {
     plan_id: plan.id,
     name: plan.name,
-    phase: planPhase(plan, today),
+    phase,
     start_date: plan.start_date ?? undefined,
     weekday: plan.start_date ? weekdayName(plan.start_date) : undefined,
     end_date: multiDay ? (plan.end_date ?? undefined) : undefined,
@@ -174,21 +183,29 @@ function planSummary(ctx: AssistantContext, plan: Plan, today: string, outline: 
     skipped: count("skipped"),
     party_size: plan.party_size > 1 ? plan.party_size : undefined,
     notes: clip(plan.notes, 200),
-    stops_preview: outline.length ? preview(outline, multiDay) : undefined,
+    stops_preview: stops.length ? preview(stops, multiDay) : undefined,
     url: planUrl(ctx, plan.id),
   };
 }
 
 /** Upcoming soonest first; then the plans without dates, newest first; then
  *  past and cancelled ones, most recent first. */
-function byPhaseThenDate(today: string) {
+function byPhaseThenDate(phases: Map<string, PlanPhase>) {
   return (a: Plan, b: Plan) => {
-    const pa = planPhase(a, today);
-    const pb = planPhase(b, today);
+    const pa = phases.get(a.id)!;
+    const pb = phases.get(b.id)!;
     if (pa !== pb) return PHASE_ORDER[pa] - PHASE_ORDER[pb];
     if (pa === "upcoming") return a.start_date!.localeCompare(b.start_date!);
     return (b.start_date ?? "").localeCompare(a.start_date ?? "") || b.created_at.localeCompare(a.created_at);
   };
+}
+
+/** One plan in full, with its phase where it takes place. */
+async function planInFull(ctx: AssistantContext, planId: string, withRoutes = false) {
+  const [plan, outlines] = await Promise.all([getPlan(ctx, planId), planOutlines(ctx, [planId])]);
+  if (!plan) return null;
+  const routes = withRoutes ? await routesOf(ctx, plan) : undefined;
+  return planForModel(ctx, plan, phaseOf(plan, outlines.get(planId)), routes);
 }
 
 /**
@@ -197,8 +214,8 @@ function byPhaseThenDate(today: string) {
  */
 export async function savedPlan(ctx: AssistantContext, planId: string) {
   try {
-    const plan = await getPlan(ctx, planId);
-    if (plan) return { plan: planForModel(ctx, plan, todayIso()) };
+    const plan = await planInFull(ctx, planId);
+    if (plan) return { plan };
   } catch (e) {
     log.warn("assistant.plan_read_back_failed", {
       planId,
@@ -217,13 +234,15 @@ export const getPlans = defineTool({
   name: "get_plans",
   title: "Plans",
   description:
-    "The user's plans: outings and trips saved in Map Organiser, each with days and stops. Without plan_id it lists plans with their dates, the first stops and a link — by default the ones still ahead and those without dates yet. With plan_id it returns one plan in full: every day with its date and weekday, and every stop in order with its saved place or text, time or part of the day, notes, cost per person, status (planned, done, skipped) and the visit logged for it. with_routes adds travel time and distance between each day's stops. Answers 'what are my plans', 'what's on Saturday', 'show me the Barcelona plan'.",
+    "The user's plans: outings and trips saved in Map Organiser, each with days and stops. Without plan_id it lists plans with their dates, the first stops and a link — by default the ones still ahead and those without dates yet; a plan is ahead until its last day is over where it takes place. With plan_id it returns one plan in full: every day with its date and weekday, and every stop in order with its saved place or text, start_time or day_part, notes, cost per person, status (planned, done, skipped) and the visit logged for it. with_routes adds travel time and distance between each day's stops. Answers 'what are my plans', 'what's on Saturday', 'show me the Barcelona plan'.",
   inputSchema: z.object({
     plan_id: z.uuid().optional().describe("One plan in full"),
     phase: z
       .enum(["upcoming", "unscheduled", "past", "cancelled", "all"])
       .optional()
-      .describe("Which plans to list. Default: upcoming and unscheduled; with from/to, every plan with a day in that range"),
+      .describe(
+        "Which plans to list. Default: upcoming and unscheduled; with name, every phase; with from/to, plans that aren't cancelled"
+      ),
     from: z.iso.date().optional().describe("Plans with a day on or after this date, YYYY-MM-DD"),
     to: z.iso.date().optional().describe("Plans with a day on or before this date, YYYY-MM-DD"),
     name: z.string().trim().min(1).max(80).optional().describe("Part of the plan's name"),
@@ -235,42 +254,41 @@ export const getPlans = defineTool({
   }),
   annotations: { readOnlyHint: true, openWorldHint: false },
   async run(ctx, { plan_id, phase, from, to, name, with_routes, limit }) {
-    const today = todayIso();
-
     if (plan_id) {
-      const plan = await getPlan(ctx, plan_id);
+      const plan = await planInFull(ctx, plan_id, with_routes);
       if (!plan) throw new ToolInputError("No plan with that id. Take plan_id from a get_plans list.");
-      const routes = with_routes ? await routesOf(ctx, plan) : undefined;
-      return { today, plan: planForModel(ctx, plan, today, routes) };
+      return { plan };
     }
 
-    const all = await listPlans(ctx);
+    const [all, outlines] = await Promise.all([listPlans(ctx), planOutlines(ctx)]);
+    const phases = new Map(all.map((p) => [p.id, phaseOf(p, outlines.get(p.id))]));
     const counts: Record<PlanPhase, number> = { upcoming: 0, unscheduled: 0, past: 0, cancelled: 0 };
-    for (const p of all) counts[planPhase(p, today)]++;
+    for (const p of all) counts[phases.get(p.id)!]++;
 
     const ranged = Boolean(from || to);
     const wanted = new Set<PlanPhase>(
-      phase === "all" ? PHASES : phase ? [phase] : ranged ? ["upcoming", "past"] : ["upcoming", "unscheduled"]
+      phase === "all" || (!phase && name)
+        ? PHASES
+        : phase
+          ? [phase]
+          : ranged
+            ? ["upcoming", "past"]
+            : ["upcoming", "unscheduled"]
     );
     const needle = name ? fold(name) : null;
     const matches = all
-      .filter((p) => wanted.has(planPhase(p, today)))
+      .filter((p) => wanted.has(phases.get(p.id)!))
       .filter(
         (p) =>
           !ranged ||
           (p.start_date !== null && (!to || p.start_date <= to) && (!from || (p.end_date ?? p.start_date) >= from))
       )
       .filter((p) => !needle || fold(p.name).includes(needle))
-      .sort(byPhaseThenDate(today));
+      .sort(byPhaseThenDate(phases));
     const shown = matches.slice(0, limit);
-    const outlines = await planOutlines(
-      ctx,
-      shown.map((p) => p.id)
-    );
 
     return {
-      today,
-      plans: shown.map((p) => planSummary(ctx, p, today, outlines.get(p.id) ?? [])),
+      plans: shown.map((p) => planSummary(ctx, p, phases.get(p.id)!, outlines.get(p.id)?.stops ?? [])),
       more: matches.length > shown.length ? matches.length - shown.length : undefined,
       all_plans: counts,
       note: shown.length === 0 ? "No plans match. all_plans counts every plan of the user by phase." : undefined,
