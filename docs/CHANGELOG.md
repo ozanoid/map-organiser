@@ -6,6 +6,22 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 18.11.2026 — v1.36.1 — Plan write path: `create_plan`, `apply_plan_changes`
+
+- Applied `plan_functions` (file `supabase/migrations/20261118010309_plan_functions.sql`):
+  `create_plan`, `apply_plan_changes` (nine ops, one transaction) and two
+  helpers. SECURITY INVOKER; `authenticated` and `service_role` only.
+- Tested first as a dry run in a rolled-back transaction, as a signed-in
+  user (13 scenarios, including a batch with one bad op being refused
+  entirely and other users / anon being refused); the bodies in the database
+  hash-match the repo file.
+- `search_google_maps` and the Phase 1 schema are on main (merge `b28d087`);
+  the production connector answers with the new build.
+- Docs: [[02-backend/schema/plans]] (functions section),
+  [[02-backend/schema/_README]], [[_plans/phase-1-planning]].
+
+---
+
 ## 18.11.2026 — v1.36.0 — Phase 1 schema applied: plans, visits
 
 - Applied to the live database (Ozan approved the SQL): `plans_tables`

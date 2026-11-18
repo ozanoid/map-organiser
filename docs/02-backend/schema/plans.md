@@ -2,12 +2,13 @@
 title: plans, plan_days, plan_stops
 type: table
 domain: backend
-version: 1.0.0
+version: 1.1.0
 last_updated: 18.11.2026
 status: draft
 sources:
   - Supabase project hukppmaevcapvbrvxtph (live)
   - supabase/migrations/20261118005355_plans_tables.sql
+  - supabase/migrations/20261118010309_plan_functions.sql
 related:
   - "[[_README]]"
   - "[[visits]]"
@@ -106,6 +107,35 @@ All three: one policy, `FOR ALL TO authenticated`.
 The own-place rule exists because the public share view reads plans with the service role: a foreign place id attached to a stop would leak that place. The trips code guarded this in the route (`src/app/api/trips/route.ts`); here the database does.
 
 Checked on 18.11.2026 as a signed-in user inside a rolled-back transaction: own plans visible only to their owner (admin 5, another account 0, anon 0); stop on a foreign place blocked; free-text stop accepted; a stop with neither place nor title, and a stop with both time and day part, rejected; undated plan accepted; a plan for another user blocked; two day numbers swapped in one statement.
+
+## Functions — the write path
+
+Applied 18.11.2026 (`plan_functions`). Every change that touches more than one row goes through one of these, so it is one transaction: a plan is never half-created and a batch of edits applies completely or not at all. All are `SECURITY INVOKER` (RLS applies to a signed-in caller); `EXECUTE` is granted to `authenticated` and `service_role` only. Because the service role bypasses RLS, the functions also check ownership through `p_user_id`.
+
+| Function | What it does |
+|---|---|
+| `create_plan(p_user_id, p_plan jsonb) → uuid` | Inserts the plan, its days (numbered in array order) and their stops. A plan always gets at least one day. Refuses a list or a place that is not the user's. |
+| `apply_plan_changes(p_user_id, p_plan_id, p_changes jsonb) → jsonb` | `set` (name, notes, party_size, start_date, status, color — a present key is applied, `null` clears) and `ops`, applied in order. Returns `{ added_days, added_stops }`. |
+| `plan_insert_stop(p_user_id, p_day_id, p_sort, p_stop jsonb) → uuid` | Inserts one stop; needs a `place_id` (own place) or a `title`; an exact time wins over a day part. |
+| `plan_assert_caller(p_user_id)` | A signed-in caller may only act for themselves. |
+
+Ops of `apply_plan_changes`:
+
+| Op | Fields | Rule |
+|---|---|---|
+| `add_day` | `position?` (1-based), `notes?`, `routing_profile?` | Default: after the last day; later days shift. |
+| `remove_day` | `day` | Only an empty day; a plan keeps at least one day. Later days shift down. |
+| `swap_days` | `a`, `b` | Both must exist. |
+| `set_day` | `day`, `notes?`, `routing_profile?` | — |
+| `add_stop` | `day`, `position?` (0-based), stop fields | Default: end of the day. |
+| `update_stop` | `stop_id`, `title?`, `start_time?`, `day_part?`, `notes?`, `cost_estimate?`, `currency?`, `status?` | Setting a time clears the day part and the other way round; a status change stamps `status_at`. |
+| `move_stop` | `stop_id`, `day`, `position?` | Within a day or across days; both days stay densely ordered. |
+| `remove_stop` | `stop_id` | — |
+| `reorder_stops` | `day`, `stop_ids[]` | Must list every stop of the day. |
+
+Tested on 18.11.2026 — first as a dry run in a rolled-back transaction, as a signed-in user: create with a place stop and a free-text stop; a foreign place and a blank name refused with nothing left behind; a batch of six edits; swapping days and inserting a day at the front; removing a non-empty day refused with the reason; reorder + remove; a batch with one bad op refused **entirely**; cancel and unschedule; acting for another user, another user editing the plan, and `anon` all refused. The function bodies in the database hash-match the repo file.
+
+Marking a stop `done` does not yet create a visit; that arrives with `log_visit` (slice 2).
 
 ## Copy from the trip tables
 

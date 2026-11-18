@@ -2,7 +2,7 @@
 title: "Faz 1 — Planlama ve ziyaretler: tasarım (öneri v2)"
 type: plan
 domain: trips
-version: 2.2.0
+version: 2.2.1
 last_updated: 18.11.2026
 status: stable
 related:
@@ -279,7 +279,7 @@ Migration SQL'i uygulanmadan önce gösterilir.
 | Dilim | Durum (18.11.2026) |
 |---|---|
 | Şema (dilim 1, 2, 4 ve 5'in tabloları) | **Uygulandı (18.11.2026, Ozan onayı):** `supabase/migrations/20261118005355_plans_tables.sql`, `…005402_visits.sql`, `…005404_list_place_notes.sql`, `…005405_assistant_source.sql`. Doğrulandı: 7 plan / 40 gün / 127 durak aynı id'lerle kopyalandı; türetilen tarihler eskileriyle birebir; erişim kuralları gerçek kullanıcı kimliğiyle sınandı (yabancı mekana durak ve ziyaret engelleniyor). Uygulama kodu yeni tabloları henüz kullanmıyor. Üç veritabanı fonksiyonu için de izin verildi. |
-| 1 Plan modeli dönüşümü | Sırada: fonksiyonlar, ortak modül, route / sayfa uyarlaması |
+| 1 Plan modeli dönüşümü | Veritabanı yazma yolu hazır: `create_plan` ve `apply_plan_changes` uygulandı (`…010309_plan_functions.sql`), 13 senaryoyla sınandı. Sırada: ortak modül (`src/lib/plans/`), route / sayfa / hook geçişi, yayın |
 | 2 Ziyaretler | Bekliyor |
 | 3 Plan tool'ları | Bekliyor |
 | 4 Listeler | Bekliyor |
