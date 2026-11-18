@@ -61,7 +61,8 @@ record: one saved place on one day, with that visit's rating and notes.
   [[04-integrations/claude-mcp]], [[00-overview/glossary]],
   [[00-overview/repo-structure]], [[00-overview/system-overview]],
   [[_agent/common-tasks]], [[_agent/conventions]], [[_plans/phase-1-planning]]
-  (slice 2 decisions and status), [[_plans/personal-assistant]].
+  (slice 2 decisions and status), [[_plans/personal-assistant]],
+  [[_agent/pitfalls]] (new: a dev-server CSS cache trap met while checking the UI).
 
 ---
 
