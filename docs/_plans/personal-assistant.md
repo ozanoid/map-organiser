@@ -2,8 +2,8 @@
 title: "Kişisel mekan ve gezme asistanı — yön planı"
 type: plan
 domain: overview
-version: 1.4.0
-last_updated: 17.11.2026
+version: 1.5.0
+last_updated: 18.11.2026
 status: stable
 related:
   - "[[../00-overview/system-overview]]"
@@ -33,7 +33,7 @@ related:
 |---|---|---|
 | — | Public sign-up'ı kapat | Tamam: kod `feat/personal-assistant` dalında; Supabase'de kayıt kapalı (`disable_signup: true`, doğrulandı 17.11.2026) |
 | 0 | Claude'a kapı: MCP server + OAuth | **Tamam (17.11.2026):** main'de, claude.ai'a bağlı. Okuma tool'ları connector üzerinden gerçek token'la doğrulandı; `update_places` henüz gerçek kullanımda denenmedi |
-| 1 | Planlama | Tasarım yazıldı, onay bekliyor (17.11.2026): [[phase-1-planning]] |
+| 1 | Planlama ve ziyaretler | Tasarım v2 yazıldı, onay bekliyor (18.11.2026): [[phase-1-planning]] |
 | 2 | Platform asistanı Claude'a | Sırada |
 | 3 | İletişim (e-posta, Telegram, WhatsApp linki, davet sayfası) | Sırada |
 | 4 | Geri bildirim döngüsü | Sırada |
@@ -175,7 +175,7 @@ Amaç: claude.ai'da (mobil dahil) ve Claude Code'da kayıtlı mekanlarla konuşa
 
 ### Faz 1 — Planlama
 
-> Tasarım önerisi (17.11.2026, onay bekliyor): [[phase-1-planning]] — planlar trip olarak, tarihsiz hedefler liste olarak; durak durumu; `get_plans`, `create_plan`, `update_plan`, `delete_plan`, `save_list`, `add_place`.
+> Tasarım önerisi v2 (18.11.2026, onay bekliyor): [[phase-1-planning]] — trip tabloları tek `plans` modeline dönüşür (tarih tek kaynakta, yapısal saat, iptal durumu), ziyaretler ayrı varlık olur (`visits`), tarihsiz hedefler liste kalır; mekan arama DataForSEO'dan. Aşağıdaki maddeler ilk taslaktır; geçerli olan o dokümandır.
 
 - **Plan veri modeli** faz başında yazılı netleşir ve onaylanır (açık soru 1). Mevcut `trips` / `trip_days` / `trip_day_places` yapısı aday.
 - **Tool'lar:** `update_places`, `add_place`, `save_plan` / `get_plans`, `manage_lists`, opsiyonel `route_between` ([[#Tool tasarımı (öneri)]]). Yazmalar da RLS altında ve geri alınabilir.

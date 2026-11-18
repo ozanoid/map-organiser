@@ -6,6 +6,30 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 18.11.2026 — v1.34.0 — Phase 1 design v2: one plan model, visits, DataForSEO search
+
+- [[_plans/phase-1-planning]] rewritten (v2.0.0, draft, awaiting Ozan) after
+  he asked whether v1 was shaped by what already exists. The model is now
+  derived from twelve scenarios first and then compared with the code:
+  ten evidence-backed gaps (visits flattened onto the place and logged as
+  dated note lines, free-text time, dates stored in two places — the cause of
+  the date-change bug —, mandatory dates, non-atomic writes, no stop outcome,
+  no cancel, place-only stops, the "trip" name, schema SQL missing from the
+  repo). Proposal: evolve the trip tables into one `plans` model (derived
+  day dates, nullable start, structured time, status), add `visits` as an
+  entity, keep lists for undated shortlists, atomic writes through Postgres
+  functions, eight tools, five ordered slices, migration and regression list.
+- Place search: measured Google Text Search usage (3 this month, 114 last
+  month — never past the free allowance) and verified prices from the
+  official pages; proposes DataForSEO's Google Maps search behind a
+  `PlaceSearch` interface. Not verified live: DataForSEO credentials are not
+  in the local env.
+- Noted: `text_search_pro` is priced $17/1k in the SKU registry, $32 on
+  Google's price list.
+- [[_plans/personal-assistant]] points at v2.
+
+---
+
 ## 17.11.2026 — v1.33.0 — Phase 1 (planning) design proposal
 
 - New [[_plans/phase-1-planning]] (draft, awaiting Ozan): eight planning
