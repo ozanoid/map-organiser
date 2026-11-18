@@ -6,6 +6,15 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 18.11.2026 — v1.35.1 — Root CLAUDE.md: how to design changes
+
+- `CLAUDE.md` gained a "How to design changes" section at Ozan's request:
+  model first and existing code second, structure decided up front, what a
+  proposal must carry, the schema-change routine, and how to state costs. It
+  also points at [[_plans/personal-assistant]] as the current direction.
+
+---
+
 ## 18.11.2026 — v1.35.0 — Phase 1 approved: schema SQL written, Google Maps search tool
 
 - Ozan approved the Phase 1 design v2 ([[_plans/phase-1-planning]] v2.1.0,
