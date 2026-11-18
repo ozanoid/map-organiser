@@ -109,7 +109,7 @@ src/
 │   ├── sw-register.tsx        Service worker registration (client component)
 │   └── ui/                    shadcn primitives (avatar, badge, button, card, command, dialog, dropdown-menu, input, input-group, popover, select, separator, sheet, skeleton, sonner, tabs, textarea)
 └── lib/
-    ├── assistant/             The Claude connector (17.11.2026): tools/ (six transport-free tool definitions), library.ts (light
+    ├── assistant/             The Claude connector (17.11.2026): tools/ (transport-free tool definitions), library.ts (light
     │                          place projection, name resolution, time + busyness helpers), place-filters.ts, mcp.ts (MCP server),
     │                          verify-token.ts, oauth.ts (resource paths, redirect allowlist), owner.ts — see [[../04-integrations/claude-mcp]]
     ├── auth/                  safe-next.ts — same-site `next` validation for login and the OAuth callback (17.11.2026)
