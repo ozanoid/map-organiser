@@ -10,30 +10,32 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useSaveSharedContent } from "@/lib/hooks/use-shared-links";
 import { useMapStyle } from "@/lib/hooks/use-map-style";
 import {
-  MapPin, Calendar, Star, Save, Loader2, ExternalLink,
+  MapPin, Calendar, Star, Save, Loader2, ExternalLink, StickyNote,
 } from "lucide-react";
 import { toast } from "sonner";
-import type { Place, TripDay } from "@/lib/types";
+import type { Place, PlanDay } from "@/lib/types";
 import { googleMapsPlaceUrl } from "@/lib/google/maps-url";
-
-const DAY_COLORS = ["#3B82F6", "#F97316", "#8B5CF6", "#22C55E", "#EC4899", "#06B6D4", "#F59E0B"];
+import { formatDateRange, formatDayDate } from "@/lib/plans/dates";
+import { dayColor } from "@/lib/plans/day-colors";
 
 interface SharedData {
-  type: "list" | "trip" | "place";
+  type: "list" | "plan" | "place";
   slug: string;
   ownerName: string;
   list?: { id: string; name: string; description: string | null; color: string };
   places?: Place[];
   /** NF-18 (v1.20.0): single-place share payload (reviews/profile stripped server-side). */
   place?: Place;
-  trip?: {
+  /** Whitelisted server-side (handlePlanShare): no costs, notes or outcomes. */
+  plan?: {
     id: string;
     name: string;
-    start_date: string;
-    end_date: string;
+    start_date: string | null;
+    end_date: string | null;
+    status: "planned" | "cancelled";
     day_count: number;
-    place_count: number;
-    days: TripDay[];
+    stop_count: number;
+    days: PlanDay[];
   };
 }
 
@@ -81,7 +83,7 @@ export default function SharedPage() {
             ? `/lists/${result.id}`
             : result.type === "place"
               ? `/places/${result.id}`
-              : `/trips/${result.id}`
+              : `/plans/${result.id}`
         );
       },
       onError: (err) => toast.error(err.message),
@@ -111,7 +113,7 @@ export default function SharedPage() {
   }
 
   if (data.type === "list") return <SharedListView data={data} isLoggedIn={isLoggedIn} onSave={handleSave} saving={saveContent.isPending} mapStyleUrl={mapStyleUrl} markerStyle={markerStyle} />;
-  if (data.type === "trip") return <SharedTripView data={data} isLoggedIn={isLoggedIn} onSave={handleSave} saving={saveContent.isPending} mapStyleUrl={mapStyleUrl} markerStyle={markerStyle} />;
+  if (data.type === "plan") return <SharedPlanView data={data} isLoggedIn={isLoggedIn} onSave={handleSave} saving={saveContent.isPending} mapStyleUrl={mapStyleUrl} markerStyle={markerStyle} />;
   if (data.type === "place") return <SharedPlaceView data={data} isLoggedIn={isLoggedIn} onSave={handleSave} saving={saveContent.isPending} mapStyleUrl={mapStyleUrl} markerStyle={markerStyle} />;
   return null;
 }
@@ -179,24 +181,26 @@ function SharedListView({
   );
 }
 
-function SharedTripView({
+function SharedPlanView({
   data, isLoggedIn, onSave, saving, mapStyleUrl, markerStyle,
 }: {
   data: SharedData; isLoggedIn: boolean; onSave: () => void; saving: boolean;
   mapStyleUrl: string; markerStyle: "icons" | "dots";
 }) {
-  const trip = data.trip;
-  if (!trip) return null;
-  const days = trip.days || [];
-  const allPlaces = days.flatMap((d) => (d.places || []).map((dp: any) => dp.place).filter(Boolean));
+  const plan = data.plan;
+  if (!plan) return null;
+  const days = plan.days || [];
+  // The public payload carries the part of a place this view shows; MapView
+  // and PlaceRow are typed for full rows.
+  const allPlaces = days.flatMap((d) =>
+    (d.stops || []).flatMap((s) => (s.place?.location ? [s.place] : []))
+  ) as unknown as Place[];
 
-  const routeLines = days
-    .filter((d) => d.route?.geometry?.coordinates)
-    .map((d) => ({
-      id: `route-${d.day_number}`,
-      color: DAY_COLORS[(d.day_number - 1) % DAY_COLORS.length],
-      coordinates: d.route!.geometry.coordinates,
-    }));
+  const routeLines = days.flatMap((d) =>
+    d.route?.geometry?.coordinates
+      ? [{ id: `route-${d.day_number}`, color: dayColor(d.day_number), coordinates: d.route.geometry.coordinates }]
+      : []
+  );
 
   return (
     <div className="flex flex-col min-h-dvh">
@@ -210,7 +214,7 @@ function SharedTripView({
           {isLoggedIn && (
             <Button size="sm" className="cursor-pointer" onClick={onSave} disabled={saving}>
               {saving ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Save className="h-4 w-4 mr-1" />}
-              Save to my trips
+              Save to my plans
             </Button>
           )}
         </div>
@@ -219,13 +223,24 @@ function SharedTripView({
       <div className="max-w-2xl mx-auto w-full p-4 space-y-4 flex-1">
         {/* Title */}
         <div>
-          <h1 className="text-xl font-semibold">{trip.name}</h1>
-          <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+          <h1 className="text-xl font-semibold flex items-center gap-2">
+            {plan.name}
+            {plan.status === "cancelled" && (
+              <Badge variant="secondary" className="text-[10px] font-normal">Cancelled</Badge>
+            )}
+          </h1>
+          <p className="text-xs text-muted-foreground mt-1 flex flex-wrap items-center gap-1">
             by {data.ownerName}
+            {plan.start_date && (
+              <>
+                <span className="mx-0.5">·</span>
+                {formatDateRange(plan.start_date, plan.end_date)}
+              </>
+            )}
             <span className="mx-0.5">·</span>
-            <Calendar className="h-3 w-3" /> {trip.day_count}
+            <Calendar className="h-3 w-3" /> {plan.day_count}
             <span className="mx-0.5">·</span>
-            <MapPin className="h-3 w-3" /> {trip.place_count}
+            <MapPin className="h-3 w-3" /> {plan.stop_count}
           </p>
         </div>
 
@@ -244,12 +259,9 @@ function SharedTripView({
 
         {/* Timeline */}
         <div className="space-y-4">
-          {days.map((day, i) => {
-            const color = DAY_COLORS[i % DAY_COLORS.length];
-            const dayPlaces = (day.places || []) as any[];
-            const dateStr = new Date(day.date).toLocaleDateString("en-GB", {
-              weekday: "short", day: "numeric", month: "short",
-            });
+          {days.map((day) => {
+            const color = dayColor(day.day_number);
+            const stops = day.stops || [];
 
             return (
               <div key={day.id}>
@@ -258,11 +270,13 @@ function SharedTripView({
                     className="h-6 w-6 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
                     style={{ backgroundColor: color }}
                   >
-                    {i + 1}
+                    {day.day_number}
                   </span>
                   <div className="flex-1">
-                    <p className="text-sm font-semibold">Day {i + 1}</p>
-                    <p className="text-[10px] text-muted-foreground">{dateStr}</p>
+                    <p className="text-sm font-semibold">Day {day.day_number}</p>
+                    {day.date && (
+                      <p className="text-[10px] text-muted-foreground">{formatDayDate(day.date)}</p>
+                    )}
                   </div>
                   {day.route && (
                     <span className="text-[10px] text-muted-foreground">
@@ -271,18 +285,29 @@ function SharedTripView({
                   )}
                 </div>
                 <div className="pl-3 border-l-2 ml-3 space-y-0" style={{ borderColor: color }}>
-                  {dayPlaces.map((dp: any, j: number) => (
-                    <div key={dp.id}>
-                      {dp.place && <PlaceRow place={dp.place} index={j} />}
-                      {j < dayPlaces.length - 1 && day.route?.legs?.[j] && (
-                        <div className="flex items-center gap-1.5 pl-6 py-0.5">
-                          <span className="text-[9px] text-muted-foreground">
-                            {day.route.legs[j].distance_km} km · {day.route.legs[j].duration_min} min
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  ))}
+                  {stops.length === 0 && (
+                    <p className="text-xs text-muted-foreground py-2 pl-2">Nothing planned for this day.</p>
+                  )}
+                  {stops.map((stop, j) => {
+                    const leg = day.route?.legs.find((l) => l.from_stop_id === stop.id);
+                    const when = stop.start_time ?? stop.day_part;
+                    return (
+                      <div key={stop.id}>
+                        {stop.place ? (
+                          <PlaceRow place={stop.place as unknown as Place} index={j} when={when} />
+                        ) : (
+                          <NoteRow title={stop.title ?? ""} index={j} when={when} />
+                        )}
+                        {leg && j < stops.length - 1 && (
+                          <div className="flex items-center gap-1.5 pl-6 py-0.5">
+                            <span className="text-[9px] text-muted-foreground">
+                              {leg.distance_km} km · {leg.duration_min} min
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             );
@@ -294,7 +319,21 @@ function SharedTripView({
   );
 }
 
-function PlaceRow({ place, index }: { place: Place; index: number }) {
+/** A stop without a saved place — a meeting point, a note. */
+function NoteRow({ title, index, when }: { title: string; index: number; when?: string | null }) {
+  return (
+    <div className="flex items-center gap-2.5 py-2">
+      <span className="text-xs font-medium text-muted-foreground w-5 text-center shrink-0">{index + 1}</span>
+      <span className="h-5 w-5 rounded-full shrink-0 bg-muted flex items-center justify-center">
+        <StickyNote className="h-3 w-3 text-muted-foreground" />
+      </span>
+      <p className="text-sm font-medium truncate min-w-0 flex-1">{title}</p>
+      {when && <span className="text-[10px] text-muted-foreground border rounded px-1 py-px shrink-0">{when}</span>}
+    </div>
+  );
+}
+
+function PlaceRow({ place, index, when }: { place: Place; index: number; when?: string | null }) {
   // Cross-platform Maps link (mobile app can't resolve the stored url).
   // Public payload strips google_place_id → name-search fallback.
   const googleUrl = googleMapsPlaceUrl(
@@ -319,6 +358,9 @@ function PlaceRow({ place, index }: { place: Place; index: number }) {
         )}
       </div>
       <div className="flex items-center gap-2 shrink-0">
+        {when && (
+          <span className="text-[10px] text-muted-foreground border rounded px-1 py-px">{when}</span>
+        )}
         {place.rating && (
           <span className="flex items-center gap-0.5 text-xs text-muted-foreground">
             <Star className="h-3 w-3 fill-orange-400 text-orange-400" />

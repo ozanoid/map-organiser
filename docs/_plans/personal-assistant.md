@@ -2,7 +2,7 @@
 title: "Kişisel mekan ve gezme asistanı — yön planı"
 type: plan
 domain: overview
-version: 1.6.1
+version: 1.6.2
 last_updated: 18.11.2026
 status: stable
 related:
@@ -33,7 +33,7 @@ related:
 |---|---|---|
 | — | Public sign-up'ı kapat | Tamam: kod `feat/personal-assistant` dalında; Supabase'de kayıt kapalı (`disable_signup: true`, doğrulandı 17.11.2026) |
 | 0 | Claude'a kapı: MCP server + OAuth | **Tamam (17.11.2026):** main'de, claude.ai'a bağlı. Okuma tool'ları connector üzerinden gerçek token'la doğrulandı; `update_places` henüz gerçek kullanımda denenmedi |
-| 1 | Planlama ve ziyaretler | Tasarım v2 onaylı: [[phase-1-planning]]. Şema uygulandı (18.11.2026); `search_google_maps` main'de; sırada plan modeli dönüşümü |
+| 1 | Planlama ve ziyaretler | Tasarım v2 onaylı: [[phase-1-planning]]. Şema uygulandı (18.11.2026); `search_google_maps` main'de. **Dilim 1 (plan modeli dönüşümü) kodu `feat/personal-assistant` dalında hazır (v1.37.0)** — main'e alınması ve oturumlu arayüzün tarayıcıda denenmesi bekliyor. Sırada dilim 2 (ziyaretler) |
 | 2 | Platform asistanı Claude'a | Sırada |
 | 3 | İletişim (e-posta, Telegram, WhatsApp linki, davet sayfası) | Sırada |
 | 4 | Geri bildirim döngüsü | Sırada |
@@ -235,7 +235,7 @@ v4'ün açık backlog'u çok kullanıcılı ürün içindi. Bu yönle:
   - Migration'lar dashboard'da yönetiliyor; şema snapshot'ı vault'ta güncel tutulmalı.
   - Model sürümü değişince profillerin yeniden üretimi; review'ların tek seferlik olması ([[backfill-grandfather-reenrich]]).
   - DataForSEO SKU'larında aylık tavan yok.
-  - Paylaşım linkini iptal etme arayüzü yok; public shared trip her görüntülemede Mapbox Directions çağırıyor (cache ve rate limit yok).
+  - Paylaşım linkini iptal etme arayüzü yok; public shared plan her görüntülemede Mapbox Directions çağırıyor (cache ve rate limit yok).
   - Lint borcu (`any`, React Compiler kuralları).
 
 ## Açık sorular

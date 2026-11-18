@@ -2,8 +2,8 @@
 title: User & Profile
 type: entity
 domain: users
-version: 1.4.0
-last_updated: 17.11.2026
+version: 1.4.1
+last_updated: 18.11.2026
 status: stable
 sources:
   - src/lib/supabase/client.ts
@@ -167,7 +167,7 @@ The `increment_api_usage(p_user_id, p_sku, p_cost)` SECURITY DEFINER function do
 | [[categories-and-tags\|Category]] | 1:N | `categories.user_id` (12 defaults seeded on signup) |
 | [[categories-and-tags\|Tag]] | 1:N | `tags.user_id` |
 | [[lists\|List]] | 1:N | `lists.user_id` |
-| [[trips\|Trip]] | 1:N | `trips.user_id` |
+| [[plans\|Plan]] | 1:N | `plans.user_id` |
 | [[sharing\|Shared Link]] | 1:N | `shared_links.user_id` |
 | Place Photo (via Place) | indirect | `place_photos.place_id` → `places.user_id` |
 | `api_usage` | 1:N | `api_usage.user_id` |
@@ -186,5 +186,5 @@ Profile rows are SELECT-only for their owner and the service role. There's no "l
 ## Open questions
 
 - **`is_admin` only switches key source.** Besides `getUserApiKeys`, only the Settings → API banner reads it; there are no admin-only routes.
-- **Account deletion.** No documented self-serve delete path. Cascading would require RLS-friendly cleanup of places/lists/trips. Worth a runbook.
+- **Account deletion.** No documented self-serve delete path. Cascading would require RLS-friendly cleanup of places/lists/plans. Worth a runbook.
 - **Multi-account scenarios.** The model is strictly per-user. Shared workspaces / teams would require schema changes.

@@ -2,8 +2,8 @@
 title: AI Enrichment Flow
 type: flow
 domain: places
-version: 1.8.1
-last_updated: 17.11.2026
+version: 1.8.2
+last_updated: 18.11.2026
 status: stable
 sources:
   - src/app/api/places/[id]/enrich/route.ts
@@ -125,12 +125,12 @@ buckets added as those features shipped):
   `onFinish` — an approval-continuation POST is free; `stopWhen:
   stepCountIs(6)` bounds in-turn LLM fan-out. See
   [[ai-chat-flow]].
-- **TRIP PLAN — `AI_MONTHLY_TRIP_PLAN_CAP = 50` generations** (v1.22.0,
-  S4 AI-09, SKU `ai_trip_plan`). One unit per `/api/ai/trip-plan`
-  generation; deliberate-click only from the trip page's AI Plan dialog.
-  A failed/unusable LLM output still burns the unit (compare precedent)
-  but the delete-after-validate write order leaves the trip untouched.
-  See [[ai-trip-plan-flow]].
+- **AI PLAN — `AI_MONTHLY_TRIP_PLAN_CAP = 50` generations** (v1.22.0,
+  S4 AI-09, SKU `ai_trip_plan` — the names keep "trip"). One unit per
+  `/api/ai/day-plan` generation; deliberate-click only from the plan
+  page's AI Plan dialog. A failed/unusable LLM output still burns the
+  unit (compare precedent) but the plan stays untouched: the result is
+  applied as one atomic batch. See [[ai-plan-flow]].
 - **PROFILE — `AI_MONTHLY_PROFILE_CAP = 1000` generations.** Covers the
   add-place chain, manual refresh chain, backfill, and the cron sweep
   together. Ceiling ≈ $9.5/month. A full ~470-place backfill fits within

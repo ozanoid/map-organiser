@@ -2,8 +2,8 @@
 title: Hooks
 type: overview
 domain: frontend
-version: 1.6.1
-last_updated: 16.10.2026
+version: 1.7.0
+last_updated: 18.11.2026
 status: stable
 sources:
   - src/lib/hooks/
@@ -35,16 +35,16 @@ Every custom hook lives in `src/lib/hooks/`. Convention: file `use-x.ts` exports
 | `useTags` + 4 mutations | react-query + mutations | `["tags"]`, `["place-tags", placeId]` | [[use-tags]] |
 | `useImportJob` + 2 mutations | react-query poll + mutations | `["import-job"]` | [[use-import-job]] |
 | `useInstagramImport` + `useStartInstagramImport` (v1.28.0) + `usePickInstagramPlace` (v1.28.1) | react-query poll (1.5 s while reading/adding, 3 s while a photo is pending) + two mutations | `["instagram-import", jobId]` | [[use-instagram-import]] |
-| `useTrips` + 9 mutations | react-query + mutations | `["trips"]`, `["trip", id]` | [[use-trips]] |
+| `usePlans` family (2 queries, 1 change mutation, per-day route queries) | react-query + mutations | `["plans"]`, `["plan", id]`, `["plan-route", dayId, signature]` | [[use-plans]] |
 | `useAiSuggestions` + 2 mutations | react-query + mutations | `["ai-suggestions"]` (staleTime 30 s) | [[use-ai-suggestions]] |
 | `useAiSearch` + `useAiRerankOrchestrator` (Phase 6) | mutation + side-effect | no query key — writes to `useAiSearchStore` (Zustand) | [[use-ai-search]] |
 
 ## Conventions
 
-- **Query keys:** stable arrays, namespaced by entity (`["places", filters]`, `["trip", id]`).
+- **Query keys:** stable arrays, namespaced by entity (`["places", filters]`, `["plan", id]`).
 - **`staleTime`:** default 60 s from the QueryClient. Override per-hook only with a reason.
 - **Mutations always invalidate at least their own key.** Cross-entity invalidation is documented per hook.
-- **Direct Supabase vs API route:** simple list/CRUD use Supabase JS (`useCategories`, `useTags`, `useLists`); compound operations route through `/api/*` (e.g. `usePlaces` because filtering is complex; `useTrips` because Mapbox enrichment happens server-side).
+- **Direct Supabase vs API route:** simple list/CRUD use Supabase JS (`useCategories`, `useTags`, `useLists`); compound operations route through `/api/*` (e.g. `usePlaces` because filtering is complex; `usePlans` because every plan write is one transactional call and routes need Mapbox enrichment happens server-side).
 - **Auth check inside hooks:** mutations that create rows call `supabase.auth.getUser()` first — RLS would block anonymous writes anyway, but the explicit check produces a nicer error.
 
 ## Patterns to follow

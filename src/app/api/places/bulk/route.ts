@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { plansUsingPlaces } from "@/lib/plans/read";
 
 type BulkAction =
   | "update_category"
@@ -7,7 +8,7 @@ type BulkAction =
   | "add_to_list"
   | "update_status"
   | "delete"
-  | "check_trips";
+  | "check_plans";
 
 interface BulkRequest {
   action: BulkAction;
@@ -172,28 +173,13 @@ export async function POST(request: NextRequest) {
       break;
     }
 
-    case "check_trips": {
-      const { data: tripRefs } = await supabase
-        .from("trip_day_places")
-        .select("place_id, trip_days!inner(trip_id, trips!inner(name))")
-        .in("place_id", validIds);
-
-      const tripNames = new Set<string>();
-      let placesInTrips = 0;
-      const seenPlaces = new Set<string>();
-      for (const ref of tripRefs || []) {
-        const name = (ref as any).trip_days?.trips?.name;
-        if (name) tripNames.add(name);
-        if (!seenPlaces.has(ref.place_id)) {
-          seenPlaces.add(ref.place_id);
-          placesInTrips++;
-        }
-      }
-
+    case "check_plans": {
+      // Which plans would lose stops if these places were deleted.
+      const used = await plansUsingPlaces({ supabase, userId: user.id }, validIds);
       return NextResponse.json({
         affected: 0,
-        tripNames: Array.from(tripNames),
-        placesInTrips,
+        planNames: used.plans.map((p) => p.name),
+        placesInPlans: used.placeIds.length,
       });
     }
 

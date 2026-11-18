@@ -22,11 +22,11 @@ This is the canonical documentation vault for **map-organiser**. It's an Obsidia
 - `_plans/` — plans; the current direction is [[_plans/personal-assistant]]
 - `_archive/` — superseded docs kept for historical reference
 - `00-overview/` — high-level system, tech stack, glossary
-- `01-domain/` — domain entities (places, trips, lists, sharing, …)
+- `01-domain/` — domain entities (places, plans, lists, sharing, …)
 - `02-backend/` — Supabase clients, schema, RLS, API routes
 - `03-frontend/` — Next.js routes, components, hooks, stores, design system
 - `04-integrations/` — third-party services (Mapbox, Google Places, DataForSEO, …)
-- `05-flows/` — user/data flows (auth, import, trip planning, …)
+- `05-flows/` — user/data flows (auth, import, plans, …)
 - `06-ops/` — deployment, env vars, runbooks
 
 ## Conventions in 30 seconds

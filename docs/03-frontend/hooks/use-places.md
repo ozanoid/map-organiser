@@ -2,8 +2,8 @@
 title: usePlaces
 type: hook
 domain: frontend
-version: 1.2.0
-last_updated: 15.07.2026
+version: 1.2.1
+last_updated: 18.11.2026
 status: stable
 sources:
   - src/lib/hooks/use-places.ts
@@ -77,7 +77,7 @@ type CreatePlaceInput = {
 
 - `src/app/(app)/places/page.tsx`
 - `src/app/(app)/lists/[id]/page.tsx` (filtering within a list)
-- `src/app/(app)/trips/[id]/page.tsx` (sourcing places for the "add to trip" picker)
+- `src/components/plans/add-stop-dialog.tsx` (sourcing places for the plan page's "Add stop" picker)
 - `src/components/map/map-content.tsx`
 - `src/components/places/add-place-dialog.tsx` (uses `useParseLink` + `useCreatePlace`)
 

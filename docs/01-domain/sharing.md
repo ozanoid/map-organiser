@@ -2,8 +2,8 @@
 title: Shared Link
 type: entity
 domain: sharing
-version: 1.2.0
-last_updated: 16.07.2026
+version: 1.3.0
+last_updated: 18.11.2026
 status: stable
 sources:
   - src/lib/hooks/use-shared-links.ts
@@ -16,7 +16,7 @@ sources:
 related:
   - "[[places]]"
   - "[[lists]]"
-  - "[[trips]]"
+  - "[[plans]]"
   - "[[users-and-profiles]]"
   - "[[../02-backend/schema/shared_links]]"
   - "[[../02-backend/auth]]"
@@ -26,9 +26,9 @@ related:
 
 > **v1.20.0 (NF-18):** `resource_type` widened to include `'place'` — single places are now shareable from the place detail header. The public place payload is a whitelist of rendered fields (no owner-personal data). Save-side fix: original content reads moved to the service client (owner-scoped RLS had blocked every cross-user save since April); re-sharing a deactivated resource reactivates the existing link.
 
-> **v1.22.0 (NF-07/NF-08):** the public trip payload now strips the owner's budget fields (`cost_estimate`/`currency` per stop, `party_size` on the trip), and per-day routes honour `trip_days.routing_profile`; the anonymous Directions call is tracked to the link owner's quota. See [[../02-backend/api-routes/shared]].
+> **v1.37.0:** trips became [[plans]]. A shared plan has `resource_type = 'plan'`; links created as `'trip'` keep working (plans kept the trips' ids) and are renamed at the cutover. The public plan payload is a whitelist — no budget (stop costs, currency, party size), no notes, no stop outcomes, no personal place fields. See [[../02-backend/api-routes/shared]].
 
-A public, read-only slug URL pointing at one of the user's Lists, Trips, or single Places. The mechanism for sharing curated content without exposing the user's account. When viewed by a logged-in user, the page offers a "Save to my account" CTA that copies the resource into the viewer's data — the viral loop.
+A public, read-only slug URL pointing at one of the user's Lists, Plans, or single Places. The mechanism for sharing curated content without exposing the user's account. When viewed by a logged-in user, the page offers a "Save to my account" CTA that copies the resource into the viewer's data — the viral loop.
 
 ## Shape
 
@@ -38,8 +38,8 @@ A public, read-only slug URL pointing at one of the user's Lists, Trips, or sing
 |---|---|---|---|
 | `id` | uuid | yes | — |
 | `user_id` | uuid | yes | FK → `auth.users.id`. The creator/owner. |
-| `resource_type` | text | yes | Check constraint: `'list'`, `'trip'`, or `'place'` (v1.20.0). |
-| `resource_id` | uuid | yes | Points at `lists.id`, `trips.id`, or `places.id` depending on `resource_type`. Not a FK (polymorphic by design). |
+| `resource_type` | text | yes | Check constraint: `'list'`, `'plan'`, `'place'` — and `'trip'` (the old name for plan) until the contract step. |
+| `resource_id` | uuid | yes | Points at `lists.id`, `plans.id`, or `places.id` depending on `resource_type`. Not a FK (polymorphic by design). |
 | `slug` | text | yes | **UNIQUE**. The path segment in `/shared/<slug>`. Generated via `nanoid(10)` server-side. |
 | `is_active` | boolean | no | Default `true`. Toggle to disable a link without deleting it. |
 | `view_count` | int | no | Default 0. Incremented on each public read. |
@@ -53,7 +53,7 @@ A public, read-only slug URL pointing at one of the user's Lists, Trips, or sing
 ## Invariants
 
 - **Slug is the public identity.** `id` never appears in URLs. Anyone with the slug can read (when `is_active = true`).
-- **`resource_id` is not FK-constrained.** Because `resource_type` swings between `lists`, `trips`, and `places`, no single FK applies. The API checks ownership on create (`auth.uid()` must own the referenced row) but the DB itself doesn't enforce existence.
+- **`resource_id` is not FK-constrained.** Because `resource_type` swings between `lists`, `plans`, and `places`, no single FK applies. The API checks ownership on create (`auth.uid()` must own the referenced row) but the DB itself doesn't enforce existence.
 - **`is_active = false` returns 404**, not 410. The viewer experience: link looks dead, not "disabled".
 - **`view_count` increment is best-effort.** Failures on the counter update don't block the read.
 - **No expiry.** Links live forever until manually disabled or deleted.
@@ -69,7 +69,7 @@ This is the only public-readable user-data table in the schema. Two policies on 
 
 (The "public" role on the second policy still requires `auth.uid()` to return a non-null UUID — anonymous users can't satisfy it. This is just how Supabase generates policies for "authenticated + anon" by default.)
 
-The public read of the shared-links **row** doesn't grant access to the referenced list/trip rows. To resolve those, the API uses the **service-role client** (`createServiceClient` in `src/lib/supabase/server.ts`) which bypasses RLS. The endpoint then carefully selects only what's safe to expose.
+The public read of the shared-links **row** doesn't grant access to the referenced list/plan rows. To resolve those, the API uses the **service-role client** (`createServiceClient` in `src/lib/supabase/server.ts`) which bypasses RLS. The endpoint then carefully selects only what's safe to expose.
 
 ## Lifecycle
 
@@ -89,9 +89,9 @@ The public read of the shared-links **row** doesn't grant access to the referenc
    │  • /shared/<slug> — middleware exempt                    │
    │  • GET /api/shared/<slug> uses service-role client       │
    │  • Increments view_count                                 │
-   │  • Returns list+places, trip+days+places, or a single    │
-   │    whitelisted place (v1.20.0)                           │
-   │  • Trip routes are computed via Mapbox per day           │
+   │  • Returns list+places, a whitelisted plan (days, stops) │
+   │    or a single whitelisted place                         │
+   │  • Plan routes are computed via Mapbox per day           │
    └────────────────────┬────────────────────────────────────┘
                         │
                         ▼ (logged-in viewer)
@@ -102,7 +102,8 @@ The public read of the shared-links **row** doesn't grant access to the referenc
    │    fix); INSERTs run as the viewer (RLS WITH CHECK)      │
    │  • Copies places into viewer's account (duplicate-safe   │
    │    by google_place_id), source: 'shared'                 │
-   │  • For trips, copies trip + days + day_places too;       │
+   │  • For plans, copies the places, then the plan with its  │
+   │    days and stops in one transaction (create_plan);      │
    │    for place shares, a single-place copy                 │
    └────────────────────┬────────────────────────────────────┘
                         │
@@ -123,10 +124,12 @@ By resource type (assembled in `GET /api/shared/[slug]`):
 - `list: { id, name, description, color, place_count }`
 - `places: Place[]` (ordered by `list_places.sort_order`)
 
-**Trip:**
-- `resource_type: "trip"`
-- `trip: { id, name, start_date, end_date, color, notes, day_count, place_count }`
-- `days: TripDay[]` — each with `places: TripDayPlace[]` and `route: { distance_km, duration_min, geometry, legs }` (Mapbox Directions per day)
+**Plan (v1.37.0):**
+- `type: "plan"`
+- `plan: { id, name, start_date, end_date, status, day_count, stop_count, days }` — dates are `null` for a plan that isn't scheduled
+- each day: `{ id, day_number, date, routing_profile, route, stops }`; `route` is `{ distance_km, duration_min, geometry, legs }` (Mapbox Directions per day, attributed to the link's owner)
+- each stop: `{ id, title, start_time, day_part, place }`; `place` is `{ id, name, address, city, country, rating, location, category {name, color}, google_data {url} }` or `null` for a stop without a place
+- **Not sent:** cost estimates, currency, party size, plan / day / stop notes, stop status, the place's visit status and the rest of its Google data
 
 **Place (v1.20.0):**
 - `type: "place"`
@@ -139,15 +142,15 @@ The owner's `user_id` is **not** included in the response.
 | Entity | Cardinality | Mechanism |
 |---|---|---|
 | [[users-and-profiles\|User]] | N:1 | `shared_links.user_id` FK |
-| [[lists\|List]] / [[trips\|Trip]] / [[places\|Place]] | N:1 (polymorphic) | `resource_id` + `resource_type` |
+| [[lists\|List]] / [[plans\|Plan]] / [[places\|Place]] | N:1 (polymorphic) | `resource_id` + `resource_type` |
 
 ## API surface
 
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
-| `POST` | `/api/shared` | Authenticated | Create a slug link for a list/trip/place the user owns (reactivates a deactivated existing link). |
+| `POST` | `/api/shared` | Authenticated | Create a slug link for a list/plan/place the user owns (reactivates a deactivated existing link). |
 | `PATCH` | `/api/shared` | Authenticated | Toggle `is_active` or other flags (no UI call sites yet — v4 debt). |
-| `GET` | `/api/shared/[slug]` | **Public** (uses service-role client) | Resolve slug → list/trip/place payload, increment view count. |
+| `GET` | `/api/shared/[slug]` | **Public** (uses service-role client) | Resolve slug → list/plan/place payload, increment view count. |
 | `POST` | `/api/shared/[slug]/save` | Authenticated viewer | Copy the shared content into the viewer's account. |
 
 The `/api/shared/*` paths are explicitly exempt in `src/lib/supabase/middleware.ts`:
@@ -163,8 +166,8 @@ const isPublicRoute =
 ## Frontend code surface
 
 - **Hook:** `src/lib/hooks/use-shared-links.ts` — `useSharedLink()`, `useCreateSharedLink()`, `useToggleSharedLink()`, `useSaveSharedContent()` (resource_type unions include `"place"` as of v1.20.0).
-- **Page:** `src/app/shared/[slug]/page.tsx` — standalone layout (no app sidebar/header) with Save CTA; renders `SharedListView` / trip view / `SharedPlaceView`. Layout file: `src/app/shared/layout.tsx`.
-- **Entry points:** list/trip detail pages + place detail header Share2 button (v1.20.0).
+- **Page:** `src/app/shared/[slug]/page.tsx` — standalone layout (no app sidebar/header) with Save CTA; renders `SharedListView` / `SharedPlanView` / `SharedPlaceView`. Layout file: `src/app/shared/layout.tsx`.
+- **Entry points:** list detail page, the plan menu ("Copy share link") and the place detail header Share2 button (v1.20.0).
 
 ## Security notes
 

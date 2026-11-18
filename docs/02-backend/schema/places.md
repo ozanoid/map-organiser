@@ -2,7 +2,7 @@
 title: places
 type: table
 domain: backend
-version: 1.4.2
+version: 1.4.3
 last_updated: 18.11.2026
 status: stable
 sources:
@@ -91,9 +91,11 @@ The core entity — user-saved locations. 458 rows in the current snapshot. Geog
 | `place_tags` | `place_id` | CASCADE |
 | `place_photos` | `place_id` | CASCADE |
 | `list_places` | `place_id` | CASCADE |
-| `trip_day_places` | `place_id` | **CASCADE** (migration `add_cascade_delete_trip_day_places_place_id`) |
+| `plan_stops` | `place_id` | **CASCADE** |
+| `visits` | `place_id` | **CASCADE** |
+| `trip_day_places` | `place_id` | **CASCADE** (migration `add_cascade_delete_trip_day_places_place_id`) — table no longer used by the app |
 
-When a place is deleted, all four junction/child rows go with it.
+When a place is deleted, all of these junction/child rows go with it.
 
 ## Triggers / functions
 
@@ -121,7 +123,7 @@ before the same migration added `import_jobs.kind`.
 - **`google_data` size discipline.** API routes strip `reviews`, `editorialSummary`, `editorial_summary`, and `photos` from the inbound payload before insert. Reviews come back later via the enrichment step. Photos are replaced by `photo_storage_url` after download. This keeps the row size sane.
 - **`google_data.place_profile` (Phase 4).** AI pivot data nested under `google_data`. Schema in `src/lib/ai/schemas/place-profile.ts`. Two completeness levels (`"lite"` / `"full"`). Written by `POST /api/places/[id]/enrich?step=profile`. Detail page renders via `AiSummaryCard`. See [[../../01-domain/places#google_dataplace_profile-shape-phase-4]] for the field-by-field shape.
 - **`location` is canonical.** Frontend `Place.location` of type `{ lat, lng }` is the post-parser shape; raw EWKB comes back from PostgREST and is parsed by `src/lib/geo.ts#parsePostgisPoint` on every read.
-- Consumed by: every `/api/places/*` route, `/api/trips/*` (via join), `/api/shared/[slug]` (via join), `/api/stats`, the import drain `/api/cron/drain-imports` (inserts), and the Instagram routes — `/api/instagram/import` and `/api/instagram/import/[id]/pick` (duplicate check, tag + note on already-saved places), `/api/instagram/import/[id]` (reads).
+- Consumed by: every `/api/places/*` route, `/api/plans/*` and `/api/ai/day-plan` (via `src/lib/plans/read.ts`, a light projection), `/api/shared/[slug]` (via join), `/api/stats`, the import drain `/api/cron/drain-imports` (inserts), and the Instagram routes — `/api/instagram/import` and `/api/instagram/import/[id]/pick` (duplicate check, tag + note on already-saved places), `/api/instagram/import/[id]` (reads).
 
 ## Open questions
 

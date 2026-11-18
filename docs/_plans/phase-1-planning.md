@@ -2,15 +2,15 @@
 title: "Faz 1 — Planlama ve ziyaretler: tasarım (öneri v2)"
 type: plan
 domain: trips
-version: 2.2.1
+version: 2.3.1
 last_updated: 18.11.2026
 status: stable
 related:
   - "[[personal-assistant]]"
-  - "[[../01-domain/trips]]"
+  - "[[../01-domain/plans]]"
   - "[[../01-domain/lists]]"
   - "[[../01-domain/places]]"
-  - "[[../05-flows/trip-planning-flow]]"
+  - "[[../05-flows/plan-flow]]"
   - "[[../04-integrations/claude-mcp]]"
   - "[[../04-integrations/dataforseo]]"
 ---
@@ -228,7 +228,7 @@ Kurallar:
   - Paylaşım linkleri aynı adresle çalışır.
 - **Yayın — üç adım, kesintisiz** (18.11.2026'da değişti; önceki öneri tabloları yeniden adlandırmak ve 1–2 dakikalık kesintiyi kabul etmekti):
   1. *Genişlet:* yeni tablolar eklenir ve mevcut trip satırları aynı id'lerle kopyalanır. Çalışan kod eski tablolarda devam eder; yeni kod gerçek veriyle test edilir.
-  2. *Geç:* yeni kod yayınlanır; arada eklenen trip varsa son kez kopyalanır, paylaşım linklerinin türü `plan` olur. Yeni kod geçiş boyunca `trip` türünü de kabul eder.
+  2. *Geç:* yeni kod yayınlanır; trip ve plan tabloları satır satır karşılaştırılır (eklenen trip ya da arada eski kodla yapılmış düzenleme varsa buradan görülür ve eşitlenir — 18.11.2026'da fark yok), paylaşım linklerinin türü `plan` olur. Yeni kod geçiş boyunca `trip` türünü de kabul eder.
   3. *Daralt:* doğrulamadan sonra eski üç tablo silinir — kalıcı silme, ayrıca onay alınır.
   - Yeni tablolar temiz adlarla ve index'lerle doğar (eski tablolarda birincil anahtar dışında index yok). Geri dönüş: 2. adıma kadar yeni tabloları silmek yeter.
 - **Doğrulama:** `npm run check:assistant`'a plan ve ziyaret senaryoları; tarayıcıda plan sayfası (oluştur, kaydır, gün ekle-çıkar, durak taşı, AI plan, paylaşım); canlıda connector üzerinden P1–P12.
@@ -279,7 +279,7 @@ Migration SQL'i uygulanmadan önce gösterilir.
 | Dilim | Durum (18.11.2026) |
 |---|---|
 | Şema (dilim 1, 2, 4 ve 5'in tabloları) | **Uygulandı (18.11.2026, Ozan onayı):** `supabase/migrations/20261118005355_plans_tables.sql`, `…005402_visits.sql`, `…005404_list_place_notes.sql`, `…005405_assistant_source.sql`. Doğrulandı: 7 plan / 40 gün / 127 durak aynı id'lerle kopyalandı; türetilen tarihler eskileriyle birebir; erişim kuralları gerçek kullanıcı kimliğiyle sınandı (yabancı mekana durak ve ziyaret engelleniyor). Uygulama kodu yeni tabloları henüz kullanmıyor. Üç veritabanı fonksiyonu için de izin verildi. |
-| 1 Plan modeli dönüşümü | Veritabanı yazma yolu hazır: `create_plan` ve `apply_plan_changes` uygulandı (`…010309_plan_functions.sql`), 13 senaryoyla sınandı. Sırada: ortak modül (`src/lib/plans/`), route / sayfa / hook geçişi, yayın |
+| 1 Plan modeli dönüşümü | **Kod hazır, `feat/personal-assistant` dalında (v1.37.0, 18.11.2026); main'e alınmadı.** Ortak modül `src/lib/plans/`, route'lar `/api/plans/**`, hook `use-plans.ts`, sayfa `/plans/[id]`, Lists'te "Plans" sekmesi, paylaşım (okuma / kaydetme / public sayfa), AI Plan (`/api/ai/day-plan`) ve mekan silme uyarıları yeni tablolarda; `/api/trips/**`, `/trips/[id]` ve `use-trips.ts` kaldırıldı, `/trips/:id` → `/plans/:id` yönleniyor. **Veritabanı:** `apply_plan_changes` aynı gün revize edildi (`…020401_plan_changes_by_day_id.sql`): gün numarayla olduğu gibi id ile de adreslenir, durak sırası her değişiklikten önce boşluksuz hale getirilir, plan başına 60 gün ve gün başına 200 durak sınırı. **Doğrulanan:** `npm run check:assistant -- plans` canlı veritabanında 44 kontrol (okuma boyutu, oluşturma, değişiklik paketi, ya hep ya hiç, gün id'siyle değişiklik, sıra boşluğunun kapanması, gün sınırı, yabancı mekan / plan reddi, auto-plan, bir rota ve imzası); bağımsız bir code review (veri kaybı ya da yetki bulgusu yok; bulguları bu sürümde kapatıldı); trips ↔ plans satır satır karşılaştırma: fark yok; `tsc`, `eslint`, `next build`; tarayıcıda oturumsuz kısım — `/trips/<id>` yönlenmesi ve gerçek veriyle public paylaşım sayfası (harita, rotalar, saat etiketleri; payload'da bütçe / not / kişisel alan yok). **Doğrulanmayan:** oturum gerektiren arayüz (plan sayfası, Plans sekmesi, oluşturma, sürükle-bırak, AI Plan) tarayıcıda denenmedi — Ozan'ın yerelde giriş yapması gerekiyor. **Yayın için kalan:** main'e merge (onay); merge anında trips ↔ plans karşılaştırması yeniden çalıştırılır (kopya tek seferlikti — main'deki eski kod arada trip tablolarına yazdıysa fark buradan görülür ve eşitlenir), ardından 2 paylaşım linkinin türü `plan` yapılır; eski üç tablonun silinmesi ayrı onayla. Ek: girişsiz açılan `/plans/<id>` girişten sonra plana dönmüyor (middleware dönüş adresi tutmuyor) — Claude plan linki vermeye başlamadan (dilim 3) düzeltilecek. |
 | 2 Ziyaretler | Bekliyor |
 | 3 Plan tool'ları | Bekliyor |
 | 4 Listeler | Bekliyor |

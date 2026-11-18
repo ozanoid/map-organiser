@@ -2,7 +2,7 @@
 title: Common Tasks
 type: agent-note
 domain: agent
-version: 1.1.0
+version: 1.2.0
 last_updated: 18.11.2026
 status: stable
 related:
@@ -37,6 +37,15 @@ Checklists for frequent operations. Treat these as authoritative — if a checkl
 6. If there's a related entity, link from `[[../01-domain/<entity>]]` → Code surface.
 7. If you need generated types, regenerate them per the runbook (TBD — see `[[../06-ops/runbooks/regenerate-db-types]]` once it exists).
 8. Log in [[../CHANGELOG]].
+
+## Change how plans are written
+
+Plans have one write path; keep it one.
+
+1. Every change to `plans` / `plan_days` / `plan_stops` goes through `createPlan` / `changePlan` in `src/lib/plans/write.ts`, which call the Postgres functions `create_plan` / `apply_plan_changes`. Don't write to those tables from a route or a component.
+2. A new kind of edit is a new **op**: add it to the SQL function (a migration file, shown to Ozan before applying — see "Add a new DB table"), to `planOpSchema` in `src/lib/plans/schema.ts`, and to the op tables in [[../02-backend/schema/plans]] and [[../02-backend/api-routes/plans]].
+3. The UI sends ops through `usePlanEditor().apply` ([[../03-frontend/hooks/use-plans]]); it never patches the cached plan by hand — the PATCH response replaces it.
+4. Add a check to `scripts/assistant-check/plans.ts` and run `npm run check:assistant -- plans`.
 
 ## Add a new domain entity
 

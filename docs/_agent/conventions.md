@@ -2,8 +2,8 @@
 title: Coding Conventions
 type: agent-note
 domain: agent
-version: 1.0.1
-last_updated: 17.11.2026
+version: 1.0.2
+last_updated: 18.11.2026
 status: stable
 related:
   - "[[common-tasks]]"
@@ -38,7 +38,7 @@ src/
   components/
     filters/, layout/, map/, places/, settings/, ui/
   lib/
-    dataforseo/, google/, hooks/, map/, stores/, supabase/, trip/, types/
+    dataforseo/, google/, hooks/, map/, plans/, stores/, supabase/, types/
     geo.ts, utils.ts, providers.tsx
   middleware.ts
 ```
@@ -48,7 +48,7 @@ Rules:
 - **Pages live in `app/`**, components in `components/`, primitives in `components/ui/`.
 - **Hooks** that wrap data fetching live in `src/lib/hooks/`. Component-local hooks stay co-located.
 - **API route handlers** in `src/app/api/.../route.ts`.
-- **Domain-namespaced helpers** in `src/lib/<domain>/` (e.g. `src/lib/trip/`, `src/lib/google/`).
+- **Domain-namespaced helpers** in `src/lib/<domain>/` (e.g. `src/lib/plans/`, `src/lib/google/`).
 - **Server-only modules** that must never be imported from client code: add `import 'server-only'` at the top.
 
 ## Naming
@@ -92,7 +92,7 @@ Never import the browser client from a Server Component. Never import the server
 
 ## State management
 
-- **Server state** (anything backed by Supabase or an API) → TanStack Query. Use the hooks in `src/lib/hooks/` (e.g. `usePlaces`, `useTrips`).
+- **Server state** (anything backed by Supabase or an API) → TanStack Query. Use the hooks in `src/lib/hooks/` (e.g. `usePlaces`, `usePlans`).
 - **Cross-component client state** → Zustand store in `src/lib/stores/`.
 - **Component-local state** → `useState` / `useReducer`. Don't promote local state to a store.
 - **Query keys**: stable arrays, namespaced by entity. Example: `["places", filters]`.
@@ -121,7 +121,7 @@ Specifically:
 
 ## Commit & PR
 
-- Commit messages: imperative, short ("Add reorder API for trip days"). Wrap at 72 chars.
+- Commit messages: imperative, short ("Add reorder API for plan days"). Wrap at 72 chars.
 - Don't `--amend` unless the user asks. Create a new commit.
 - Never `--no-verify`. Fix the hook failure.
 - Pre-commit hooks (if any) must pass.

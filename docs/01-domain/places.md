@@ -2,8 +2,8 @@
 title: Place
 type: entity
 domain: places
-version: 1.6.1
-last_updated: 16.10.2026
+version: 1.7.0
+last_updated: 18.11.2026
 status: stable
 sources:
   - src/lib/types/index.ts
@@ -34,7 +34,7 @@ sources:
 related:
   - "[[categories-and-tags]]"
   - "[[lists]]"
-  - "[[trips]]"
+  - "[[plans]]"
   - "[[sharing]]"
   - "[[geo-and-s2]]"
   - "[[users-and-profiles]]"
@@ -58,7 +58,7 @@ related:
 
 > **Telemetry (v1.16.0):** the enrich profile step now exports LLM spans to Langfuse (trace `place-profile`). Domain semantics unchanged. See [[../05-flows/observability-flow]].
 
-A single user-saved location. The atomic unit of the app — every other entity (List, Trip, Tag, Share) ultimately points at one or more Places.
+A single user-saved location. The atomic unit of the app — every other entity (List, Plan, Tag, Share) ultimately points at one or more Places.
 
 ## Shape
 
@@ -172,8 +172,8 @@ Schema definition: `src/lib/ai/schemas/place-profile.ts` (Zod). See [[../05-flow
                         ▼
    ┌──────────────────────────────────────────────────────────────┐
    │  Use                                                          │
-   │  • appears in /map, /places, list detail, trip days, stats    │
-   │  • participates in shared/<slug> if its list/trip is shared   │
+   │  • appears in /map, /places, list detail, plan days, stats    │
+   │  • participates in shared/<slug> if its list/plan is shared   │
    └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -188,14 +188,14 @@ See [[../05-flows/place-import-flow]] for the import path, [[../05-flows/instagr
 | [[categories-and-tags\|Tag]] | M:N | `place_tags` junction |
 | [[lists\|List]] | M:N | `list_places` junction with `sort_order` |
 | Place Photo | 1:N | `place_photos.place_id` (CASCADE) |
-| [[trips\|Trip Day Place]] | 1:N | `trip_day_places.place_id` (CASCADE — see migration `add_cascade_delete_trip_day_places_place_id`) |
+| [[plans\|Plan Stop]] | 1:N | `plan_stops.place_id` (CASCADE) |
 
 When a Place is deleted:
 
 - `place_tags` rows are removed (cascade).
 - `list_places` rows are removed (cascade).
 - `place_photos` rows are removed (cascade).
-- `trip_day_places` rows are removed (cascade) — meaning trip days can lose places silently. The bulk-delete API runs `check_trips` first to warn the user.
+- `plan_stops` rows are removed (cascade) — a plan loses that stop. Both delete paths warn first, naming the plans: the place detail reads `plans` from `GET /api/places/[id]`, the bulk bar runs `check_plans` (both use `plansUsingPlaces`).
 
 ## API surface
 
@@ -207,13 +207,13 @@ All `/api/places/*` routes live in `src/app/api/places/`. See [[../02-backend/ap
 | `POST` | `/api/places` | Create a single place (used by manual UI and parse-link flow). |
 | `GET` | `/api/places/[id]` | Detail. |
 | `PATCH` | `/api/places/[id]` | Update. |
-| `DELETE` | `/api/places/[id]` | Delete (with cascade across junctions and trip_day_places). |
+| `DELETE` | `/api/places/[id]` | Delete (with cascade across junctions and plan stops). |
 | `POST` | `/api/places/[id]/enrich` | Re-run enrichment (`step=info` or `step=reviews`). |
 | `POST` | `/api/places/[id]/refresh-google-data` | Force re-fetch from Google. |
 | `POST` | `/api/places/parse-link` | Parse a Google Maps URL → `ParsedPlaceData`. |
 | `POST` | `/api/places/import-jobs` | Queue a Takeout file as a durable import job. |
 | `GET` | `/api/places/import-jobs` | Progress of the newest Takeout job. |
-| `POST` | `/api/places/bulk` | Bulk operations (delete, list assignment, tag assignment, category, visit status; `check_trips` pre-check). |
+| `POST` | `/api/places/bulk` | Bulk operations (delete, list assignment, tag assignment, category, visit status; `check_plans` pre-check). |
 | `GET` | `/api/cron/drain-imports` | Drains the import queue (Takeout and Instagram jobs): insert → photo → reviews → profile. |
 | `POST` | `/api/instagram/import` | Start an Instagram import for a post URL — see [[../02-backend/api-routes/instagram]]. |
 | `GET` | `/api/instagram/import/[id]` | Progress and result of one Instagram import. |

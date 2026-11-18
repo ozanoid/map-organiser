@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse, after } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { parsePostgisPoint } from "@/lib/geo";
-import { getRoute } from "@/lib/trip/directions";
+import { getPlan, withRoutes } from "@/lib/plans/read";
 import { trackUsage } from "@/lib/google/track-usage";
 
 /**
@@ -9,10 +9,9 @@ import { trackUsage } from "@/lib/google/track-usage";
  * whitelist — not just the single-place share. The service client
  * bypasses RLS, and a full `places(*)` passthrough leaks owner-personal
  * fields (user_id, visit_status, timestamps, source) plus the sensitive
- * google_data bulk (reviews, place_profile, work_timetable). Worse, a
- * foreign place attached to a trip (place-ownership gaps) would leak the
- * VICTIM's row. Keep in sync with what SharedListView/SharedTripView/
- * SharedPlaceView actually render.
+ * google_data bulk (reviews, place_profile, work_timetable). Keep in sync
+ * with what SharedListView / SharedPlaceView actually render. (Plans have
+ * their own whitelist in handlePlanShare.)
  */
 function publicPlaceProjection(p: any) {
   if (!p) return null;
@@ -78,8 +77,9 @@ export async function GET(
 
   if (link.resource_type === "list") {
     return await handleListShare(supabase, link, ownerName);
-  } else if (link.resource_type === "trip") {
-    return await handleTripShare(supabase, link, ownerName);
+  } else if (link.resource_type === "plan" || link.resource_type === "trip") {
+    // "trip": a link created before trips became plans (same ids).
+    return await handlePlanShare(supabase, link, ownerName);
   } else if (link.resource_type === "place") {
     return await handlePlaceShare(supabase, link, ownerName);
   }
@@ -88,7 +88,7 @@ export async function GET(
 }
 
 // NF-18 (v1.20.0): single-place public payload. Deliberate deviation
-// from the list/trip full-row passthrough: the payload is a WHITELIST of
+// from the list full-row passthrough: the payload is a WHITELIST of
 // exactly what SharedPlaceView renders. Owner-personal fields
 // (user_id, rating, visit_status, booked_at/visited_at, source,
 // timestamps) and heavy/private google_data (reviews, place_profile,
@@ -182,79 +182,71 @@ async function handleListShare(supabase: any, link: any, ownerName: string) {
   });
 }
 
-async function handleTripShare(supabase: any, link: any, ownerName: string) {
-  // Fetch trip
-  const { data: trip } = await supabase
-    .from("trips")
-    .select("*")
-    .eq("id", link.resource_id)
-    .single();
-
-  if (!trip) {
-    return NextResponse.json({ error: "Trip not found" }, { status: 404 });
+/**
+ * A plan's public payload: a WHITELIST of what SharedPlanView renders.
+ * Left on the server: the owner's budget (cost estimates, currency, party
+ * size), notes on the plan, its days and its stops, the stops' outcome
+ * (done / skipped) and everything personal on a place (visit status, the
+ * Google data bulk). The route of each day is included; that Directions
+ * call is attributed to the link's owner (their share, their quota).
+ */
+async function handlePlanShare(
+  supabase: ReturnType<typeof createServiceClient>,
+  link: { slug: string; user_id: string; resource_id: string },
+  ownerName: string
+) {
+  // The service client bypasses RLS; getPlan scopes by the owner's id.
+  const found = await getPlan({ supabase, userId: link.user_id }, link.resource_id);
+  if (!found) {
+    return NextResponse.json({ error: "Plan not found" }, { status: 404 });
   }
 
-  // Fetch days
-  const { data: days } = await supabase
-    .from("trip_days")
-    .select("*")
-    .eq("trip_id", trip.id)
-    .order("day_number", { ascending: true });
-
-  // Fetch places for each day with routes
-  const enrichedDays = await Promise.all(
-    (days || []).map(async (day: any) => {
-      const { data: dayPlaces } = await supabase
-        .from("trip_day_places")
-        .select("*, place:places(*, category:categories(*))")
-        .eq("trip_day_id", day.id)
-        .order("sort_order", { ascending: true });
-
-      // NF-08 (v1.22.0): cost_estimate/currency are the owner's private
-      // budget planning — never in the public payload; and the embedded
-      // place row goes through the same whitelist as every public place.
-      const places = (dayPlaces || []).map((dp: any) => {
-        const { cost_estimate: _c, currency: _cur, ...rest } = dp;
-        return {
-          ...rest,
-          place: publicPlaceProjection(dp.place),
-        };
-      });
-
-      // Get route
-      const coords = places
-        .filter((dp: any) => dp.place?.location)
-        .map((dp: any) => [dp.place.location.lng, dp.place.location.lat] as [number, number]);
-
-      let route = null;
-      if (coords.length >= 2) {
-        // NF-07 (v1.22.0): honour the day's routing_profile on the public
-        // view too; the anonymous Directions call is attributed to the
-        // link OWNER (their share, their quota).
-        route = await getRoute(coords, day.routing_profile ?? "walking");
-        // after(): a loose fire-and-forget can be frozen with the
-        // serverless instance before the RPC settles.
-        after(() =>
-          trackUsage(link.user_id, "mapbox_directions", supabase).catch(() => {})
-        );
-      }
-
-      return { ...day, places, route };
-    })
+  const plan = await withRoutes(found, () =>
+    // after(): a loose fire-and-forget can be frozen with the serverless
+    // instance before the RPC settles.
+    after(() => trackUsage(link.user_id, "mapbox_directions", supabase).catch(() => {}))
   );
 
-  // party_size is owner-private budget context — strip from public view.
-  const { party_size: _ps, ...publicTrip } = trip;
-
   return NextResponse.json({
-    type: "trip",
+    type: "plan",
     slug: link.slug,
     ownerName,
-    trip: {
-      ...publicTrip,
-      days: enrichedDays,
-      day_count: enrichedDays.length,
-      place_count: enrichedDays.reduce((s: number, d: any) => s + (d.places?.length || 0), 0),
+    plan: {
+      id: plan.id,
+      name: plan.name,
+      start_date: plan.start_date,
+      end_date: plan.end_date,
+      status: plan.status,
+      day_count: plan.day_count,
+      stop_count: plan.stop_count,
+      days: (plan.days ?? []).map((day) => ({
+        id: day.id,
+        day_number: day.day_number,
+        date: day.date,
+        routing_profile: day.routing_profile,
+        route: day.route ?? null,
+        stops: (day.stops ?? []).map((stop) => ({
+          id: stop.id,
+          title: stop.title,
+          start_time: stop.start_time,
+          day_part: stop.day_part,
+          place: stop.place
+            ? {
+                id: stop.place.id,
+                name: stop.place.name,
+                address: stop.place.address,
+                city: stop.place.city,
+                country: stop.place.country,
+                rating: stop.place.rating,
+                location: stop.place.location,
+                category: stop.place.category
+                  ? { name: stop.place.category.name, color: stop.place.category.color }
+                  : null,
+                google_data: { url: stop.place.google_data.url },
+              }
+            : null,
+        })),
+      })),
     },
   });
 }

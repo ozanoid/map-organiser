@@ -2,13 +2,13 @@
 title: Glossary
 type: overview
 domain: overview
-version: 1.3.0
-last_updated: 16.10.2026
+version: 1.4.0
+last_updated: 18.11.2026
 status: stable
 related:
   - "[[system-overview]]"
   - "[[../01-domain/places]]"
-  - "[[../01-domain/trips]]"
+  - "[[../01-domain/plans]]"
   - "[[../01-domain/lists]]"
   - "[[../01-domain/sharing]]"
   - "[[../01-domain/users-and-profiles]]"
@@ -30,10 +30,10 @@ Single source of truth for every domain term, abbreviation, and acronym used in 
 | **Sub-category** | An optional granular classification under a parent Category (e.g. *Cocktail Bar* under *Bar & Nightlife*). Per-user, ~62 defaults seeded on signup, AI can propose new ones via moderation queue. See [[../02-backend/schema/subcategories]]. |
 | **Tag** | A free-form label attached to a Place (M:N). User-created. See [[../01-domain/categories-and-tags]]. |
 | **List** | A named, ordered grouping of Places. Many-to-many with Places via `list_places`. See [[../01-domain/lists]]. |
-| **Trip** | A date-ranged plan made up of Trip Days, each holding ordered Places. Often linked to a source List. See [[../01-domain/trips]]. |
-| **Trip Day** | One date within a Trip; carries a `day_number` and ordered `trip_day_places`. |
-| **Trip Day Place** | A Place placement within a Trip Day, with `sort_order` and optional `time_slot`. |
-| **Shared Link** | A public-readable slug URL pointing to a List or Trip. See [[../01-domain/sharing]]. |
+| **Plan** | An intention for one or more days: 1..N Days, each holding ordered Stops. An evening out and a multi-day trip are both plans; a plan may have no date yet. Called *Trip* until v1.37.0. See [[../01-domain/plans]]. |
+| **Plan Day** | One day of a Plan, addressed by `day_number`; its date is derived from the plan's start date. |
+| **Stop** | One entry of a Plan Day: a saved Place or a line of text, with an order, an optional time (exact or a part of the day), a per-person cost and a status. |
+| **Shared Link** | A public-readable slug URL pointing to a List, a Plan or a single Place. See [[../01-domain/sharing]]. |
 | **Profile** | The per-user row in `public.profiles` (1:1 with `auth.users`). Holds display name, encrypted API keys, feature flags. See [[../01-domain/users-and-profiles]]. |
 | **Visit Status** | One of `want_to_go` / `booked` / `visited` / `favorite`. Drives filtering and marker style. |
 
@@ -41,7 +41,7 @@ Single source of truth for every domain term, abbreviation, and acronym used in 
 
 | Term | Meaning |
 |---|---|
-| **Auto-plan** | The trip-day distribution algorithm: K-means++ clustering by lat/lng → category ordering → nearest-neighbor routing. Lives in `src/lib/trip/auto-plan.ts`. |
+| **Auto-plan** | Distributes a plan's stops over its days: K-means++ clustering by lat/lng → category ordering → nearest-neighbor routing. Lives in `src/lib/plans/auto-plan.ts`. |
 | **Enrichment** | Fetching rich data (rating, photos, opening hours, reviews) for a Place from Google Places API or DataForSEO. Stored in `places.google_data` (jsonb). |
 | **Batch import** | The server-driven flow that parses a Google Takeout file into `import_job_items`, then advances each row through insert → reviews → profile in `/api/cron/drain-imports`. Survives a closed tab. See [[../05-flows/place-import-flow]]. |
 | **Instagram import** | v1.28.0. Shares of an Instagram post or reel (iOS Shortcut → `/map?add=`, or a pasted link) become an `import_jobs` row of `kind = 'instagram'`. The server reads the post through HikerAPI, classifies its accounts with one Gemini call, and pins each featured venue to a Google place only on evidence (same phone or website, its own Maps link, a matching address, close to its own coordinates or the location tag, or the only same-name place in an area the post itself names); the places then go through the same queue as a batch import, tagged `instagram`, `want_to_go`, the post URL as the note. See [[../05-flows/instagram-import-flow]]. |

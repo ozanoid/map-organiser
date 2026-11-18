@@ -2,8 +2,8 @@
 title: Places components
 type: component
 domain: frontend
-version: 1.8.0
-last_updated: 16.10.2026
+version: 1.8.1
+last_updated: 18.11.2026
 status: stable
 sources:
   - src/components/places/add-place-dialog.tsx
@@ -271,8 +271,8 @@ Twenty files under `src/components/places/`. All `"use client"`. The Place-relat
 - **API call:** `POST /api/places/bulk` with action and payload.
 - **State:** `loading` (mutation in-flight).
 - **Renders:** fixed bottom bar — selection count + clear, **Compare (v1.19.0 — enabled only for 2-4 selections → `/places/compare?ids=…`)**, four action dropdowns (Category, Tag, List, Status), and a delete button.
-- **Pre-delete:** runs `check_trips` action first; if there are trip references, surfaces a confirm with the affected trip names.
-- **Cache invalidation on success:** `["places"]`, `["lists"]`, `["trips"]`.
+- **Pre-delete:** runs the `check_plans` action first; if the places are stops of any plan, the confirm names those plans.
+- **Cache invalidation on success:** `["places"]`, `["lists"]`, `["plans"]`, `["plan"]`.
 - **Used by:** `/places` page when one or more places are selected.
 
 ## `InlineCategoryCreator`
@@ -320,7 +320,7 @@ Twenty files under `src/components/places/`. All `"use client"`. The Place-relat
   - `VisitStatusBadge` — display-only. Props: `{ status }`.
 - **No hooks.** Stateless.
 - **UI:** 4 buttons (Bookmark/CalendarCheck/CheckCircle2/Heart) with status-specific colors (amber/blue/emerald/red). Toggle: clicking the active one deselects.
-- **Used by:** `AddPlaceDialog`, `MapContent` (detail panel), `PlaceCard` (badge), trip/place detail pages.
+- **Used by:** `AddPlaceDialog`, `MapContent` (detail panel), `PlaceCard` (badge), place detail pages.
 
 ## Detail-page widgets (extracted v1.17.0)
 

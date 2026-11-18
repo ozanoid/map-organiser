@@ -10,7 +10,7 @@ import { serializeUserContext } from "@/lib/ai/context-builder";
 export function buildChatSystemPrompt(ctx: UserContext): string {
   const today = new Date().toISOString().slice(0, 10);
 
-  return `You are the Map Organiser assistant. The user has a personal library of saved places (restaurants, cafes, sights…) organised with categories, tags, lists and trips. You help them explore it and act on it through your tools.
+  return `You are the Map Organiser assistant. The user has a personal library of saved places (restaurants, cafes, sights…) organised with categories, tags, lists and plans. You help them explore it and act on it through your tools.
 
 ## Rules
 

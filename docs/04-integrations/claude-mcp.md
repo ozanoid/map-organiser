@@ -2,7 +2,7 @@
 title: "Claude connector (MCP server)"
 type: integration
 domain: integrations
-version: 1.2.0
+version: 1.2.1
 last_updated: 18.11.2026
 status: draft
 sources:
@@ -22,6 +22,7 @@ sources:
   - src/lib/place-search/
   - src/lib/text/fold.ts
   - scripts/assistant-check/run.ts
+  - scripts/assistant-check/plans.ts
 related:
   - "[[../_plans/personal-assistant]]"
   - "[[../05-flows/claude-connector-flow]]"
@@ -96,7 +97,7 @@ Filters take **names**, not ids (`resolveNames`): exact folded match, then a uni
 
 ## Testing
 
-`npm run check:assistant` (`scripts/assistant-check/run.ts`) runs every tool against the live database with the service-role key — read checks on the owner's library; the paid calls (geocoding, AI ranking) and one write on the admin test account, the write undone afterwards — plus unit checks for `safeNextPath` and the redirect allowlist. The OAuth round trip and real-token RLS were covered by the production end-to-end check of 17.11.2026 (read tools only).
+`npm run check:assistant` (`scripts/assistant-check/run.ts`) runs every tool against the live database with the service-role key — read checks on the owner's library; the paid calls (geocoding, AI ranking) and one write on the admin test account, the write undone afterwards — plus the plan module's checks (`scripts/assistant-check/plans.ts`; `npm run check:assistant -- plans` runs only those, with no paid call) and unit checks for `safeNextPath` and the redirect allowlist. The OAuth round trip and real-token RLS were covered by the production end-to-end check of 17.11.2026 (read tools only).
 
 ## Failure modes
 

@@ -2,8 +2,8 @@
 title: lists
 type: table
 domain: backend
-version: 1.0.0
-last_updated: 12.05.2026
+version: 1.0.1
+last_updated: 18.11.2026
 status: stable
 sources:
   - Supabase project hukppmaevcapvbrvxtph (live)
@@ -11,7 +11,7 @@ related:
   - "[[_README]]"
   - "[[list_places]]"
   - "[[../../01-domain/lists]]"
-  - "[[trips]]"
+  - "[[plans]]"
 ---
 
 # `lists`
@@ -56,14 +56,15 @@ Named, ordered groupings of places. 6 rows in snapshot.
 | Source | Column | On delete |
 |---|---|---|
 | `list_places` | `list_id` | CASCADE |
-| `trips` | `list_id` | (NO ACTION — trip becomes orphaned but survives) |
+| `plans` | `list_id` | SET NULL — the plan survives without the back-link |
+| `trips` | `list_id` | (NO ACTION) — the table is no longer used by the app, see [[trips]] |
 
 ## Notes
 
 - **Migration.** `create_lists` (2026-04-09). `add_sort_order_to_list_places` (2026-04-15) added the ordering column on the junction.
-- **List vs Trip.** A list is an ordered bag of places; a trip lays a list (or arbitrary place set) across multi-day calendars. A list can seed a trip (`trips.list_id`), but trips don't reflect back into the list once created.
+- **List vs Plan.** A list is an ordered bag of places with no time; a plan lays places across one or more days. A list can seed a plan (`plans.list_id`; its places become the stops of day 1), but the plan doesn't reflect back into the list.
 - **Color is presentational.** Used in filter pills and as marker color when a single-list filter is active.
-- Consumed by: list CRUD (via Supabase JS, no dedicated `/api/lists` route except reorder), `list_places`, `trips.list_id`, the import flow's "add to lists" option, the bulk-actions "add to list" operation, public sharing (`shared_links.resource_type = 'list'`).
+- Consumed by: list CRUD (via Supabase JS, no dedicated `/api/lists` route except reorder), `list_places`, `plans.list_id`, the import flow's "add to lists" option, the bulk-actions "add to list" operation, public sharing (`shared_links.resource_type = 'list'`).
 
 ## Open questions
 

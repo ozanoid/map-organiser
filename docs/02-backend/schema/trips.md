@@ -2,7 +2,7 @@
 title: trips
 type: table
 domain: backend
-version: 1.1.1
+version: 1.1.2
 last_updated: 18.11.2026
 status: stable
 sources:
@@ -12,12 +12,12 @@ related:
   - "[[trip_days]]"
   - "[[trip_day_places]]"
   - "[[lists]]"
-  - "[[../../01-domain/trips]]"
+  - "[[../../01-domain/plans]]"
 ---
 
 # `trips`
 
-> **Being replaced (18.11.2026).** The plan model — [[plans]] — now exists next to this table and holds a copy of its rows. The app still reads and writes here until the cutover; after it this table is dropped. See [[../../_plans/phase-1-planning]].
+> **No longer used by the app (v1.37.0, 18.11.2026).** The plan model — [[plans]] — replaced this table; no application code reads or writes it. The rows stay (the plan tables hold a copy under the same ids) until the *contract* step drops the table, which needs Ozan's separate approval. The rest of this page describes the table as it was used. See [[../../_plans/phase-1-planning]].
 
 > **v1.22.0 (NF-08):** new `party_size` column (migration `add_trips_party_size`) — the trip header's budget total is `Σ per-person cost_estimate × party_size`, adjustable via a stepper in the UI. Stripped from the public share payload (owner-private). Alongside it, `PATCH /api/trips/[id]` switched from a raw-body spread (every column client-writable, `user_id` included) to a Zod whitelist.
 

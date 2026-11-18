@@ -2,7 +2,7 @@
 title: trip_days
 type: table
 domain: backend
-version: 1.1.1
+version: 1.1.2
 last_updated: 18.11.2026
 status: stable
 sources:
@@ -11,12 +11,12 @@ related:
   - "[[_README]]"
   - "[[trips]]"
   - "[[trip_day_places]]"
-  - "[[../../01-domain/trips]]"
+  - "[[../../01-domain/plans]]"
 ---
 
 # `trip_days`
 
-> **Being replaced (18.11.2026).** The plan model — [[plans]] — now exists next to this table and holds a copy of its rows. The app still reads and writes here until the cutover; after it this table is dropped. See [[../../_plans/phase-1-planning]].
+> **No longer used by the app (v1.37.0, 18.11.2026).** The plan model — [[plans]] — replaced this table; no application code reads or writes it. The rows stay (the plan tables hold a copy under the same ids) until the *contract* step drops the table, which needs Ozan's separate approval. The rest of this page describes the table as it was used. See [[../../_plans/phase-1-planning]].
 
 > **v1.22.0 (NF-07/AI-09):** new `routing_profile` column (migration `add_trip_days_routing_profile`) — the per-day Mapbox Directions mode, switchable from the day header in the trip UI. `notes` gained its first real writer: the AI trip planner persists each day's theme + rationale there (`POST /api/ai/trip-plan`), and it's now editable via the new `PATCH /api/trips/[id]/days/[dayId]`.
 

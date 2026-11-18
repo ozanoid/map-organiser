@@ -2,8 +2,8 @@
 title: Deployment
 type: overview
 domain: ops
-version: 1.1.0
-last_updated: 16.10.2026
+version: 1.1.1
+last_updated: 18.11.2026
 status: stable
 sources:
   - next.config.ts
@@ -111,7 +111,7 @@ Before promoting to production:
 - [ ] Visit `/` — landing loads.
 - [ ] Sign in (OAuth and email/password if used).
 - [ ] Open `/map` — Mapbox renders, places appear.
-- [ ] Open a `/shared/<slug>` link — public payload renders (this exercises the service-role client and Mapbox Directions for trips).
+- [ ] Open a `/shared/<slug>` link — public payload renders (this exercises the service-role client and Mapbox Directions for plans).
 - [ ] `/settings` → API tab loads (`api_keys` fetch works).
 
 ## Function timeouts
@@ -119,7 +119,7 @@ Before promoting to production:
 Vercel Function default timeout is **60 seconds** (verify current plan default). Routes that can run close to this limit:
 
 - `POST /api/places/[id]/enrich?step=reviews` — DataForSEO reviews can take ~30 s.
-- `GET /api/trips/[id]` — Mapbox Directions per day; long trips with many days can stack.
+- `GET /api/shared/[slug]` for a plan — Mapbox Directions per day in one request; a plan with many days can stack. (The app itself asks one day per request: `GET /api/plans/[id]/days/[dayId]/route`.)
 
 Routes that export `maxDuration` (checked 16.10.2026):
 
@@ -128,7 +128,7 @@ Routes that export `maxDuration` (checked 16.10.2026):
 | `/api/cron/refresh-places` | 300 | daily sweep; 240 s soft deadline |
 | `/api/cron/drain-imports` | 300 | import queue; 240 s soft deadline |
 | `/api/ai/chat` | 120 | multi-step agent turns (+ the Langfuse flush) |
-| `/api/ai/trip-plan` | 120 | bounded LLM call + one retry on degeneration |
+| `/api/ai/day-plan` | 120 | bounded LLM call + one retry on degeneration |
 | `/api/instagram/import` | 120 | the post read runs in `after()` and counts against the same invocation (v1.28.0) |
 
 Everything else runs on the platform default. Vercel caps `maxDuration` at 300 s.

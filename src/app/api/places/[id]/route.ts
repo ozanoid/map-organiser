@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { plansUsingPlaces } from "@/lib/plans/read";
 
 // GET /api/places/[id]
 export async function GET(
@@ -46,22 +47,15 @@ export async function GET(
     .eq("place_id", id)
     .order("created_at", { ascending: false });
 
-  // Get trip references
-  const { data: tripRefs } = await supabase
-    .from("trip_day_places")
-    .select("trip_day_id, trip_days!inner(trip_id, trips!inner(name))")
-    .eq("place_id", id);
-
-  const trips = (tripRefs || []).map((ref: any) => ({
-    name: ref.trip_days?.trips?.name || "Unknown trip",
-  }));
+  // The plans this place is a stop of — the delete warning names them.
+  const { plans } = await plansUsingPlaces({ supabase, userId: user.id }, [id]);
 
   return NextResponse.json({
     ...place,
     location: parseLocation(place.location),
     tags: placeTags?.map((pt) => pt.tags) || [],
     lists: placeLists?.map((pl) => pl.lists) || [],
-    trips,
+    plans,
     photos: photos || [],
   });
 }
