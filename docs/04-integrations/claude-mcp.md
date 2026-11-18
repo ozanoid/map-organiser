@@ -2,7 +2,7 @@
 title: "Claude connector (MCP server)"
 type: integration
 domain: integrations
-version: 1.6.0
+version: 1.6.1
 last_updated: 18.11.2026
 status: draft
 sources:
@@ -58,7 +58,7 @@ related:
 
 **Status (17.11.2026):** on main and connected. Ozan added the connector in claude.ai; Claude registered itself through dynamic client registration and Ozan approved on `/oauth/consent`. The connector's tools were then called through the real OAuth token from a Claude Code session on the same account: `get_library_overview` returned the owner's 291 places (so the owner gate and RLS work), plus `search_places` with `open_at`, `get_places` with `at`, `read_reviews` and `rank_places`. `update_places` has not been run through the connector yet.
 
-**Adding places (v1.41.0, 18.11.2026 — branch, not merged):** `add_places`, run against the live database by `npm run check:assistant -- add-places` (paid, test account); not yet called through the connector.
+**Adding places (v1.41.0, on main since 18.11.2026):** `add_places`, run against the live database by `npm run check:assistant -- add-places` (paid, test account). Production serves it; not yet called through the connector — it appears in new claude.ai conversations.
 
 **Lists (v1.40.0, on main since 18.11.2026):** `get_lists`, `save_list`, and `get_places` showing each list's note for the place; run against the live database by `npm run check:assistant -- lists`. After the deploy a connector call with the real token (`get_places`) ran the new code in production; `get_lists` and `save_list` appear in new claude.ai conversations — a Claude Code session keeps the tool list it started with.
 

@@ -6,9 +6,27 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 18.11.2026 — v1.41.1 — add_places on main
+
+- Phase 1, slice 5 merged to main with Ozan's approval (merge `9245eee`;
+  main had not moved since the lists merge, and the merged tree equals the
+  branch tree). Its database change was applied before the merge.
+- Production deployment succeeded. `add_places` isn't in this Claude Code
+  session's tool list (it keeps the list it started with); it appears in new
+  claude.ai conversations.
+- **The Takeout check the slice left open, done** (Ozan asked me to run it):
+  the app's `/import` page on the test account, a one-row CSV of a place the
+  account already has → the job went `preparing` → `running` → `done` in
+  1.4 s, the place skipped as "Already exists", no lookup paid; the job was
+  deleted afterwards.
+- Docs: [[_plans/phase-1-planning]], [[_plans/personal-assistant]],
+  [[04-integrations/claude-mcp]].
+
+---
+
 ## 18.11.2026 — v1.41.0 — Claude saves places: add_places (Phase 1, slice 5)
 
-Written on the branch `feat/personal-assistant`; not merged yet. Ozan's
+Written on the branch `feat/personal-assistant`; on main since v1.41.1. Ozan's
 decisions are in [[_plans/phase-1-planning]] ("Dilim 5 kararları") — he
 approved every proposal.
 
