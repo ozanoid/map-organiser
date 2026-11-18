@@ -11,8 +11,10 @@ import {
   extractExtendedData,
   mergeReviews,
   countNewReviews,
+  ratingsTotal,
 } from "@/lib/dataforseo/transform";
-import { trackUsage } from "@/lib/google/track-usage";
+import { nextAttempt, type WaveAttempt } from "@/lib/places/freshness";
+import { trackUsage, type SkuType } from "@/lib/google/track-usage";
 import type { GoogleReview } from "@/lib/types";
 
 export interface RefreshOutcome {
@@ -28,20 +30,35 @@ export interface RefreshOutcome {
   newReviews: number;
   /** Whether a place_profile existed before this refresh. */
   hadProfile: boolean;
-  /** False when the DataForSEO biz-info lookup returned nothing — the row
-   *  is still updated (reviews may have merged via the stored cid) and
-   *  `refresh_attempted_at` is stamped, but extended data didn't refresh. */
+  /** False when a business-info lookup ran and returned nothing — the row
+   *  is still updated (reviews may have merged via the stored cid) and the
+   *  attempt is stamped, but the business info didn't refresh. True when
+   *  the lookup succeeded or wasn't requested. */
   bizInfoOk: boolean;
+  /** Whether a reviews fetch ran and returned reviews. */
+  reviewsFetched: boolean;
 }
 
+/** Which usage SKUs the calls are billed under. Background waves have their
+ *  own SKUs so the wave budget counts only its own spend. */
+const USAGE_SKUS: Record<"interactive" | "refresh", { biz: SkuType; reviews: SkuType }> = {
+  interactive: { biz: "dataforseo_business_info_live", reviews: "dataforseo_reviews" },
+  refresh: { biz: "refresh_business_info", reviews: "refresh_reviews" },
+};
+
 /**
- * Full DataForSEO re-lookup for one place: business info + extended data
- * (incl. `enriched_at` stamp) + reviews (merged into the stored corpus —
- * see mergeReviews) + photo (unless skipped).
+ * DataForSEO re-lookup for one place: business info + extended data
+ * (incl. `enriched_at` stamp) and/or reviews (merged into the stored corpus
+ * — see mergeReviews, stamps `reviews_refreshed_at`) + photo (unless
+ * skipped).
  *
- * Extracted from the refresh-google-data route (15.07.2026) so the same
- * logic runs under BOTH the cookie-scoped user client (route) and the
- * service-role client (the refresh cron). Every query filters by userId
+ * `parts` picks what to fetch: the manual refresh takes both, the refresh
+ * waves take what the current wave still owes (see lib/places/freshness).
+ * Each requested part's wave attempt is stamped BEFORE any paid call, so a
+ * run that dies mid-place cannot make the same place look untried forever.
+ *
+ * Shared by the cookie-scoped user client (manual refresh route) and the
+ * service-role client (refresh cron). Every query filters by userId
  * explicitly — nothing in this path relies on RLS.
  */
 export async function refreshPlaceGoogleData(
@@ -54,14 +71,21 @@ export async function refreshPlaceGoogleData(
     reviewSort?: "newest" | "relevant";
     /** Skip photo download (cron — avoids storage writes it doesn't need). */
     skipPhoto?: boolean;
+    /** What to fetch. Default: both (the manual refresh). */
+    parts?: { biz: boolean; reviews: boolean };
+    /** Usage SKUs to bill under. Default "interactive". */
+    usage?: "interactive" | "refresh";
   }
 ): Promise<RefreshOutcome> {
   const { placeId, userId } = opts;
+  const parts = opts.parts ?? { biz: true, reviews: true };
+  const skus = USAGE_SKUS[opts.usage ?? "interactive"];
   const none = {
     totalReviews: 0,
     newReviews: 0,
     hadProfile: false,
     bizInfoOk: false,
+    reviewsFetched: false,
   };
 
   const login = process.env.DATAFORSEO_LOGIN;
@@ -97,27 +121,58 @@ export async function refreshPlaceGoogleData(
 
   const existingData = (place.google_data as Record<string, unknown>) || {};
   const hadProfile = Boolean(existingData.place_profile);
+  const now = new Date();
 
-  // 1. Fetch fresh business info via DataForSEO Live
-  const keyword = place.google_place_id.startsWith("ChIJ")
-    ? `place_id:${place.google_place_id}`
-    : `cid:${place.google_place_id}`;
+  // Reviews need the CID; a place without one gets a business-info lookup
+  // too, whatever was asked, because that is where the CID comes from.
+  const wantBiz = parts.biz || (parts.reviews && !existingData.cid);
 
-  const raw = await fetchBusinessInfoLive(client, { keyword });
-  trackUsage(userId, "dataforseo_business_info_live", supabase).catch(
-    () => {}
-  );
+  // 0. Stamp the attempts before any paid call.
+  const attempts: Record<string, WaveAttempt> = {};
+  if (wantBiz) {
+    attempts.biz_attempt = nextAttempt(
+      existingData.biz_attempt as WaveAttempt | undefined,
+      "biz",
+      now
+    );
+  }
+  if (parts.reviews) {
+    attempts.reviews_attempt = nextAttempt(
+      existingData.reviews_attempt as WaveAttempt | undefined,
+      "reviews",
+      now
+    );
+  }
+  const baseData: Record<string, unknown> = { ...existingData, ...attempts };
+  if (Object.keys(attempts).length > 0) {
+    await supabase
+      .from("places")
+      .update({ google_data: baseData })
+      .eq("id", placeId)
+      .eq("user_id", userId);
+  }
+
+  // 1. Business info via DataForSEO Live.
+  let raw: Awaited<ReturnType<typeof fetchBusinessInfoLive>> = null;
+  if (wantBiz) {
+    const keyword = place.google_place_id.startsWith("ChIJ")
+      ? `place_id:${place.google_place_id}`
+      : `cid:${place.google_place_id}`;
+    raw = await fetchBusinessInfoLive(client, { keyword });
+    trackUsage(userId, skus.biz, supabase).catch(() => {});
+  }
 
   const details = raw ? transformBusinessInfoToPlaceData(raw) : null;
   const extended = raw ? extractExtendedData(raw) : {};
 
-  // 2. Fetch reviews — need CID + location for the reviews endpoint.
+  // 2. Reviews — need CID + location for the reviews endpoint.
   const cid = raw?.cid || (existingData.cid as string) || null;
   const existingReviews =
     (existingData.reviews as GoogleReview[] | undefined) ?? [];
   let mergedReviews = existingReviews;
   let newReviews = 0;
-  if (cid) {
+  let reviewsFetched = false;
+  if (parts.reviews && cid) {
     const rawReviews = await fetchReviews(client, {
       cid,
       depth: 50,
@@ -128,9 +183,10 @@ export async function refreshPlaceGoogleData(
       location_name: (place.country as string) || "United States",
     });
     // The task is billed whether or not reviews come back — track always.
-    trackUsage(userId, "dataforseo_reviews", supabase).catch(() => {});
+    trackUsage(userId, skus.reviews, supabase).catch(() => {});
     const fetched = transformReviews(rawReviews);
     if (fetched.length > 0) {
+      reviewsFetched = true;
       // Key-diff BEFORE merging — a length delta reads 0 at the cap.
       newReviews = countNewReviews(existingReviews, fetched);
       // Merge, don't replace — mode mirrors the fetch sort ("newest"
@@ -153,68 +209,52 @@ export async function refreshPlaceGoogleData(
     if (newUrl) photoStorageUrl = newUrl;
   }
 
-  // Calculate total ratings from distribution.
-  const dist = (extended as { rating_distribution?: Record<string, number> })
-    .rating_distribution;
-  const userRatingsTotal = dist
-    ? Object.values(dist).reduce((a: number, b: number) => a + b, 0)
-    : existingData.user_ratings_total;
-
   const updatedGoogleData: Record<string, unknown> = {
-    ...existingData,
-    types: details?.types || existingData.types,
-    rating: details?.rating ?? existingData.rating,
-    user_ratings_total: userRatingsTotal,
-    opening_hours: details?.openingHours || existingData.opening_hours,
-    website: details?.website || existingData.website,
-    phone: details?.phone || existingData.phone,
-    price_level: details?.priceLevel ?? existingData.price_level,
-    url: details?.googleMapsUrl || existingData.url,
+    ...baseData,
+    types: details?.types || baseData.types,
+    rating: details?.rating ?? baseData.rating,
+    user_ratings_total: (raw && ratingsTotal(raw)) ?? baseData.user_ratings_total,
+    opening_hours: details?.openingHours || baseData.opening_hours,
+    website: details?.website || baseData.website,
+    phone: details?.phone || baseData.phone,
+    price_level: details?.priceLevel ?? baseData.price_level,
+    url: details?.googleMapsUrl || baseData.url,
     photo_storage_url: photoStorageUrl,
     reviews: mergedReviews,
-    // DataForSEO extended fields (includes enriched_at when biz-info
-    // succeeded).
+    // DataForSEO extended fields — includes enriched_at, the business-info
+    // freshness stamp, when the lookup succeeded.
     ...extended,
-    // ALWAYS stamped, success or not — this is the cron's staleness
-    // marker. Without it, a place whose biz-info lookup permanently fails
-    // would sort to the head of every daily batch forever (starvation).
-    refresh_attempted_at: new Date().toISOString(),
+    ...(reviewsFetched ? { reviews_refreshed_at: now.toISOString() } : {}),
   };
 
-  // Clean legacy fields
+  // Clean legacy fields. refresh_attempted_at was the old per-place 30-day
+  // clock; the waves read the markers above instead.
   delete updatedGoogleData.photos;
   delete updatedGoogleData.editorial_summary;
   delete updatedGoogleData.editorialSummary;
+  delete updatedGoogleData.refresh_attempted_at;
 
   const { data: updated, error: updateError } = await supabase
     .from("places")
     .update({
       google_data: updatedGoogleData,
-      updated_at: new Date().toISOString(),
+      updated_at: now.toISOString(),
     })
     .eq("id", placeId)
     .eq("user_id", userId)
     .select("*, category:categories(*)")
     .single();
 
-  if (updateError) {
-    return {
-      ok: false,
-      status: 500,
-      error: updateError.message,
-      totalReviews: mergedReviews.length,
-      newReviews,
-      hadProfile,
-      bizInfoOk: Boolean(raw),
-    };
-  }
-
-  return {
-    ok: true,
-    updated,
+  const outcome = {
     totalReviews: mergedReviews.length,
     newReviews,
     hadProfile,
-    bizInfoOk: Boolean(raw),
+    bizInfoOk: !wantBiz || Boolean(raw),
+    reviewsFetched,
   };
+
+  if (updateError) {
+    return { ok: false, status: 500, error: updateError.message, ...outcome };
+  }
+  return { ok: true, updated, ...outcome };
 }

@@ -2,8 +2,8 @@
 title: Supabase Clients
 type: overview
 domain: backend
-version: 1.1.3
-last_updated: 17.11.2026
+version: 1.1.4
+last_updated: 18.11.2026
 status: stable
 sources:
   - src/lib/supabase/client.ts
@@ -82,7 +82,7 @@ const supabase = createServiceClient(); // bypasses RLS — use with care
 |---|---|
 | `src/app/api/shared/[slug]/route.ts` | Public read of a shared list/trip/place — the viewer is anonymous, so the user-scoped client can't read the underlying rows; the route assembles a whitelisted public payload. |
 | `src/app/api/shared/[slug]/save/route.ts` | Reads the shared **originals** only (they belong to another user); every insert stays on the viewer's cookie client. |
-| `src/app/api/cron/refresh-places/route.ts` | Daily sweep across users — no cookie. |
+| `src/app/api/cron/refresh-places/route.ts` | Refresh waves across opted-in users, every 2 h — no cookie. |
 | `src/app/api/cron/drain-imports/route.ts` | Drains the import queue across users — no cookie (v1.26.0). |
 | `src/app/api/places/import-jobs/route.ts` | Inserts `import_job_items`, which has no INSERT policy on purpose (v1.26.0). |
 | `src/app/api/instagram/import/route.ts` | The `after()` job that reads the post and writes the job's items, after the response has gone (v1.28.0). |

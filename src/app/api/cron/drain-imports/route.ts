@@ -331,30 +331,48 @@ export async function GET(request: NextRequest) {
     // Already asked recently and got nothing — don't pay for the same answer.
     if (reviewsRecentlyChecked(gd)) return false;
 
-    const reviews = await fetchReviews(client!, {
+    const reviewsRequest = {
       cid,
       depth: 50,
       location_coordinate: toLocationCoordinate(
         place.location ? parsePostgisPoint(place.location as string) : null
       ),
       location_name: (place.country as string | null) || "United Kingdom",
-    });
-    if (!reviews || reviews.length === 0) {
+    };
+    // Google's "relevant" set reaches back years — on its own a new place
+    // started life without its recent reviews. A second, newest-sorted fetch
+    // fills the pool tier from day one (see mergeReviews). Both tasks poll
+    // in parallel, so the stage takes no longer than before.
+    const [reviews, newest] = await Promise.all([
+      fetchReviews(client!, reviewsRequest),
+      fetchReviews(client!, { ...reviewsRequest, sort_by: "newest" }),
+    ]);
+    // Counted as before: only a fetch that brought reviews back.
+    if (reviews.length > 0) await trackUsage(item.user_id, "dataforseo_reviews");
+    if (newest.length > 0) await trackUsage(item.user_id, "dataforseo_reviews");
+    if (reviews.length === 0 && newest.length === 0) {
       await stampReviewsChecked(admin, item.place_id);
       return false;
     }
 
-    await trackUsage(item.user_id, "dataforseo_reviews");
+    let merged = mergeReviews(
+      (gd.reviews as GoogleReview[] | undefined) ?? [],
+      transformReviews(reviews),
+      { incomingOrder: "relevant" }
+    );
+    if (newest.length > 0) {
+      merged = mergeReviews(merged, transformReviews(newest), {
+        incomingOrder: "newest",
+      });
+    }
     await admin
       .from("places")
       .update({
         google_data: {
           ...gd,
-          reviews: mergeReviews(
-            (gd.reviews as GoogleReview[] | undefined) ?? [],
-            transformReviews(reviews),
-            { incomingOrder: "relevant" }
-          ),
+          reviews: merged,
+          // Freshness stamp the refresh waves read (lib/places/freshness).
+          reviews_refreshed_at: new Date().toISOString(),
         },
       })
       .eq("id", item.place_id);

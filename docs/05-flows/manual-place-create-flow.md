@@ -2,8 +2,8 @@
 title: Manual Place Create Flow
 type: flow
 domain: places
-version: 1.2.1
-last_updated: 16.10.2026
+version: 1.3.0
+last_updated: 18.11.2026
 status: stable
 sources:
   - src/components/places/add-place-dialog.tsx
@@ -95,13 +95,14 @@ User opens the Add Place dialog from:
 6. POST /api/places/[id]/enrich?step=info  (awaited)
        │  • DataForSEO fetchBusinessInfoLive (or Google if applicable)
        │  • Merges extended fields into google_data
+       │  • Writes user_ratings_total (ratingsTotal — was left empty here before 18.11.2026)
        │  • Downloads main photo to Storage
        │  • UPDATE places — google_data fields filled in, photo_storage_url set
        │
        ▼
 7. POST /api/places/[id]/enrich?step=reviews  (fire-and-forget)
-       │  • Background fetch reviews
-       │  • Merges into google_data.reviews
+       │  • Background fetch reviews — relevant + newest in parallel (18.11.2026)
+       │  • Merges both into google_data.reviews; stamps reviews_refreshed_at
        │  • Takes ~30s; UI doesn't wait
        │  • When ai_features_enabled: chain-fires step=profile (Phase 4) — see [[full-profile-flow]]
        │

@@ -159,7 +159,8 @@ export function AiSettings() {
       <Separator />
 
       {/* Background refresh opt-in (default off) — governs the ENTIRE
-          daily sweep for this user's places: Google data refresh AND,
+          refresh waves for this user's places (lib/places/freshness,
+          cron/refresh-places): Google data refresh AND,
           when the master AI toggle is on, summary regeneration after
           >15 new reviews. Independent of the AI master toggle because
           the data-refresh half isn't an AI feature. */}
@@ -167,10 +168,10 @@ export function AiSettings() {
         <div className="flex-1 min-w-0">
           <h3 className="text-sm font-medium">Background data refresh</h3>
           <p className="text-xs text-muted-foreground mt-1">
-            A daily sweep keeps your places&apos; Google data (reviews,
-            hours, ratings) fresh and — when AI is on — regenerates
-            summaries after 15+ new reviews. When off, your places are
-            never auto-refreshed.
+            All your places are refreshed together: hours, status and
+            ratings on the 1st and 15th of each month, reviews on the 1st.
+            When AI is on, summaries are regenerated after 15+ new reviews.
+            When off, your places are never auto-refreshed.
           </p>
         </div>
         <button

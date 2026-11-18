@@ -2,8 +2,8 @@
 title: DataForSEO Business Data
 type: integration
 domain: integrations
-version: 1.5.0
-last_updated: 16.10.2026
+version: 1.6.0
+last_updated: 18.11.2026
 status: stable
 sources:
   - src/lib/dataforseo/
@@ -64,25 +64,47 @@ Implementation in `src/lib/dataforseo/`:
 | `/api/places/parse-link` | Fallback when Google is disabled or unavailable. |
 | `/api/cron/drain-imports` (`import` stage) | **Primary path for bulk import** — Takeout files and, since v1.28.0, the places an Instagram post adds (their payload URL is `https://maps.google.com/?cid=…`, so the lookup is an exact `cid:` keyword — or `?q=place_id:…` → `place_id:` when Google returned no CID). Every place goes through DataForSEO — unless the duplicate pre-check matched it first, which costs nothing. |
 | `/api/places/[id]/enrich?step=info` | Re-enrich a single place's business info. |
-| `/api/places/[id]/enrich?step=reviews` | Fetch reviews for a place. |
-| `/api/places/[id]/refresh-google-data` | Full re-lookup: info + `newest` reviews **merged** into the corpus (`mergeReviews`, not replace) + chains to `step=profile`. Also runs headless in the cron. |
-| `/api/cron/drain-imports` (`reviews` stage) | Bulk review enrichment for imported places (depth=50). |
+| `/api/places/[id]/enrich?step=reviews` | Fetch reviews for a place: `relevant` + `newest` in parallel (18.11.2026), both merged, stamps `reviews_refreshed_at`. |
+| `/api/places/[id]/refresh-google-data` | Full re-lookup: info + `newest` reviews **merged** into the corpus (`mergeReviews`, not replace) + chains to `step=profile`. |
+| `/api/cron/refresh-places` | The refresh waves — `refreshPlaceGoogleData` with only the parts the waves owe, billed under the `refresh_*` SKUs. See [[../06-ops/runbooks/periodic-refresh]]. |
+| `/api/cron/drain-imports` (`reviews` stage) | Bulk review enrichment for imported places (depth=50): `relevant` + `newest` in parallel (18.11.2026), stamps `reviews_refreshed_at`. |
 
 ## SKUs tracked
 
-- `dataforseo_business_info_live` — Business Info Live calls.
-- `dataforseo_reviews` — Reviews calls.
+- `dataforseo_business_info_live` — Business Info Live calls ($5.4/1k).
+- `dataforseo_reviews` — reviews tasks ($7.5/1k — see below).
+- `refresh_business_info`, `refresh_reviews` — the same calls made by the
+  refresh waves, under their own SKUs so the waves' monthly budget counts only
+  their own spend (18.11.2026).
 
-Each call → +1 in `api_usage`. `cost_per_1k` is set per DataForSEO's price.
+Each call → +1 in `api_usage`. `cost_per_1k` is frozen per row at the first
+insert of the day.
 
 ## Cost model
 
-DataForSEO charges per request. Bulk import of N places ≈ N `business_info` calls + (post-import) ceil(N/5) `reviews` batch calls.
+List prices, checked on dataforseo.com/pricing on 18.11.2026:
 
-Rough cost per 1000 places (verify against current DataForSEO pricing):
+| Call | Mode the code uses | Price |
+|---|---|---|
+| Business Info (`fetchBusinessInfoLive`) | Live | $0.0054 per profile |
+| Reviews (`fetchReviews`, `priority: 2`) | Priority queue | $0.0015 per 10 reviews → **$0.0075** per depth-50 task |
 
-- Business Info: ~$2 / 1000 = $2 for 1000 places.
-- Reviews (depth=50): ~$3 / 1000 = $3 if every place gets reviews.
+The other modes: Business Info Standard $0.0015, Priority $0.003; Reviews
+Standard $0.00075 per 10 (turnaround up to 45 min instead of 1 min).
+
+**Tracker fix (18.11.2026):** `dataforseo_reviews` was priced at $0.75/1k —
+the Standard price of one 10-review block — so the cost tracker showed a tenth
+of the real reviews cost (August 2026: $0.27 shown for 354 tasks, ≈ $2.66 at
+the Priority depth-50 price). Rows written before the fix keep the old frozen
+price.
+
+Measured reference: the August 2026 import of 289 places made 300 Business
+Info calls, 354 reviews tasks and 354 profile generations ≈ $1.62 + ≤ $2.66 +
+~$3.36 ≈ $7.6. Since 18.11.2026 each new place gets two reviews tasks
+(`relevant` + `newest`), +$0.0075 per place.
+
+Refresh waves: see the cost envelope in [[../06-ops/runbooks/periodic-refresh]]
+(289 places ≈ $5.29/month DataForSEO).
 
 Cheap compared to Google Places. The system-level account holds DataForSEO credit.
 

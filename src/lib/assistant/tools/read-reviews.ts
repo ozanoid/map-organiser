@@ -3,6 +3,7 @@ import { z } from "zod";
 import { ToolInputError } from "@/lib/assistant/library";
 import { placeId } from "@/lib/assistant/place-filters";
 import { defineTool } from "@/lib/assistant/tools/types";
+import { reviewsAsOf } from "@/lib/places/freshness";
 import { fold } from "@/lib/text/fold";
 
 interface StoredReview {
@@ -59,13 +60,21 @@ export const readReviews = defineTool({
   async run(ctx, { place_id, about, min_rating, sort, limit }) {
     const { data, error } = await ctx.supabase
       .from("places")
-      .select("id,name,reviews:google_data->reviews,themes:google_data->place_profile->theme_insights")
+      .select(
+        "id,name,reviews:google_data->reviews,themes:google_data->place_profile->theme_insights,enriched_at:google_data->>enriched_at,reviews_refreshed_at:google_data->>reviews_refreshed_at"
+      )
       .eq("user_id", ctx.userId)
       .eq("id", place_id)
       .maybeSingle();
     if (error) throw new Error(error.message);
     if (!data) throw new ToolInputError("No saved place with that id. Use an id from search_places.");
-    const row = data as unknown as { name: string; reviews: StoredReview[] | null; themes: Theme[] | null };
+    const row = data as unknown as {
+      name: string;
+      reviews: StoredReview[] | null;
+      themes: Theme[] | null;
+      enriched_at: string | null;
+      reviews_refreshed_at: string | null;
+    };
 
     const all = (row.reviews ?? []).filter((r): r is StoredReview & { text: string } => Boolean(r?.text?.trim()));
     const terms = (about ?? "")
@@ -107,9 +116,15 @@ export const readReviews = defineTool({
             quotes: t.evidence_quotes?.slice(0, 2),
           }));
 
+    const newest = all.reduce<string>((max, r) => ((r.publish_time ?? "") > max ? r.publish_time ?? "" : max), "");
+
     return {
       place: row.name,
       stored_reviews: all.length,
+      // When the stored set was last fetched, and its newest review — the
+      // reviews can be months behind the place (lib/places/freshness).
+      reviews_as_of: reviewsAsOf(row)?.slice(0, 10),
+      newest_review: newest ? newest.slice(0, 10) : undefined,
       matched: pool.length,
       reviews,
       themes,

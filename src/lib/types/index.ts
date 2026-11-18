@@ -1,3 +1,5 @@
+import type { WaveAttempt } from "@/lib/places/freshness";
+
 export type VisitStatus = "want_to_go" | "booked" | "visited" | "favorite";
 
 export interface Place {
@@ -234,7 +236,14 @@ export interface GooglePlaceData {
     category?: string;
     votes_count?: number;
   }>;
+  /** Last successful business-info lookup — the business-info freshness
+   *  stamp the refresh waves read (src/lib/places/freshness.ts). */
   enriched_at?: string;
+  /** Last reviews fetch that returned reviews (refresh waves). */
+  reviews_refreshed_at?: string;
+  /** Latest refresh-wave attempt per part — retry bookkeeping. */
+  biz_attempt?: WaveAttempt;
+  reviews_attempt?: WaveAttempt;
   /** AI place profile (Phase 4). Carries lite or full completeness. Typed
    *  loosely here to avoid pulling the full Zod schema into client bundles;
    *  the consuming components cast to PlaceProfile from the schema. */

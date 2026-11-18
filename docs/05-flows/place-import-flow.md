@@ -2,8 +2,8 @@
 title: Place Import Flow
 type: flow
 domain: places
-version: 2.1.1
-last_updated: 16.10.2026
+version: 2.2.0
+last_updated: 18.11.2026
 status: stable
 sources:
   - src/app/api/places/import-jobs/route.ts
@@ -75,7 +75,7 @@ User goes to `/import`, picks a CSV or GeoJSON file (typically from Google Takeo
 |---|---|---|
 | `import` | `resolveIdentity` (free) → duplicate pre-check → `fetchBusinessInfoLive` → INSERT places + list_places + place_tags, storing `main_image` | `photo`, or `skipped`/`failed` |
 | `photo` | `ensurePlacePhoto` — CDN fetch of `main_image` → Storage upload. Free unless `main_image` is missing, which costs one business-info lookup | `reviews`, or straight to `done` if the place already has a profile (a repair-only item). A missing photo records a reason and moves on either way |
-| `reviews` | `fetchReviews` (depth 50) → `mergeReviews` into `google_data.reviews` | `profile`, or `done` if the place has no CID or no reviews |
+| `reviews` | Two `fetchReviews` tasks in parallel (depth 50) — `relevant` and, since 18.11.2026, `newest` — both `mergeReviews`d into `google_data.reviews`; stamps `reviews_refreshed_at` for the refresh waves. Each task that returned reviews is counted in `api_usage` | `profile`, or `done` if the place has no CID or no reviews |
 | `profile` | `generatePlaceProfile` — the full Gemini pass, which also applies vocabulary concepts as tags | `done` |
 
 Stage priority in the claim is `import` → `photo` → `reviews` → `profile`, not insertion order. Import is ~17 s per place while reviews poll DataForSEO for up to 110 s; interleaving them would leave the map half-empty for the whole run.

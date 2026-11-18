@@ -2,8 +2,8 @@
 title: Places components
 type: component
 domain: frontend
-version: 1.8.0
-last_updated: 16.10.2026
+version: 1.9.0
+last_updated: 18.11.2026
 status: stable
 sources:
   - src/components/places/add-place-dialog.tsx
@@ -26,6 +26,7 @@ sources:
   - src/components/places/reviews-section.tsx
   - src/components/places/similar-places.tsx
   - src/components/places/visit-status-toggle.tsx
+  - src/lib/places/freshness.ts
 related:
   - "[[_README]]"
   - "[[../hooks/use-places]]"
@@ -367,7 +368,7 @@ reviews filter via `lib/places/topic-match.ts`); zero-match chips are
 muted/non-clickable. Clicking filters ReviewsSection (page owns state).
 
 ### `ReviewsSection`
-`{ reviews, hasPlaceId, provider?, refreshing, enriching, onRefresh }`
+`{ reviews, hasPlaceId, provider?, asOf?, refreshing, enriching, onRefresh }`
 — paginated (5/page) review list with newest-first sort toggle and a
 refresh button. **NF-06 review layer:** `owner_answer` (indented muted
 block + `owner_time_ago`), `images` (thumbnail strip → Dialog lightbox
@@ -375,6 +376,14 @@ with prev/next), `local_guide` chip, `votes_count` ("N people found
 this helpful"). All four fields are optional on `GoogleReview` — they
 exist only on reviews fetched after the v1.17.0 data-layer upgrade, so
 old corpora render exactly as before until refreshed.
+
+> **Freshness labels (18.11.2026):** `PlaceDetailView` shows when its Google
+> data was fetched — "as of 6 Aug" beside the Opening hours heading
+> (`bizAsOf` = `enriched_at`) and, through `ReviewsSection`'s `asOf` prop,
+> "updated 6 Aug" in the reviews header (`reviewsAsOf` =
+> `reviews_refreshed_at`, else `enriched_at`). Formatting is `formatAsOf`
+> (year shown outside the current year); all three live in
+> `src/lib/places/freshness.ts`.
 
 ### `SimilarPlaces` (v1.18.0, NF-05)
 `{ items: Array<{title, cid?, rating?, category?, votes_count?}> }` —

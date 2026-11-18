@@ -285,6 +285,25 @@ export function extractExtendedData(
 }
 
 /**
+ * Google's total review count for a business-info result: `votes_count` when
+ * present, else the sum of the rating distribution.
+ *
+ * One definition for every path that writes `user_ratings_total`. The bulk
+ * import read `votes_count`, the refresh summed the distribution, and adding a
+ * place by link wrote nothing at all, so those places had a distribution but
+ * no count.
+ */
+export function ratingsTotal(raw: RawBusinessInfo): number | undefined {
+  const votes = raw.rating?.votes_count;
+  if (typeof votes === "number" && votes > 0) return votes;
+  const sum = Object.values(raw.rating_distribution ?? {}).reduce(
+    (a, b) => a + (Number(b) || 0),
+    0
+  );
+  return sum > 0 ? sum : undefined;
+}
+
+/**
  * Transform DataForSEO RawReview[] → GoogleReview[].
  * Matches the exact interface the UI expects.
  */

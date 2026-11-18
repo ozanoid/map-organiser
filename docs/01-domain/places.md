@@ -2,8 +2,8 @@
 title: Place
 type: entity
 domain: places
-version: 1.6.1
-last_updated: 16.10.2026
+version: 1.7.0
+last_updated: 18.11.2026
 status: stable
 sources:
   - src/lib/types/index.ts
@@ -31,6 +31,7 @@ sources:
   - src/components/places/ai-summary-card.tsx
   - src/lib/ai/schemas/place-profile.ts
   - src/lib/ai/apply-suggestions.ts
+  - src/lib/places/freshness.ts
 related:
   - "[[categories-and-tags]]"
   - "[[lists]]"
@@ -111,7 +112,10 @@ DataForSEO-only extensions (set when `provider === "dataforseo"`):
 - `business_description?: string`, `book_online_url?: string`.
 - `local_business_links?: Array<{ type, url, title? }>`.
 - `people_also_search?: Array<{ title, cid?, rating? }>`.
-- `enriched_at?: string` — ISO timestamp of last enrichment.
+- `enriched_at?: string` — ISO timestamp of the last successful business-info lookup — the business-info freshness stamp of the refresh waves.
+- `reviews_refreshed_at?: string` — last reviews fetch that returned reviews (18.11.2026). Missing on places saved earlier; `enriched_at` stands in for them.
+- `biz_attempt?`, `reviews_attempt?: { wave, n, at }` — refresh-wave retry bookkeeping (18.11.2026). See `src/lib/places/freshness.ts` and [[../06-ops/runbooks/periodic-refresh]].
+- `user_ratings_total` is written by every path through `ratingsTotal` (votes count, else the rating-distribution sum) since 18.11.2026 — adding a place by link used to leave it empty.
 
 ### `google_data.place_profile` shape (Phase 4)
 
@@ -209,7 +213,7 @@ All `/api/places/*` routes live in `src/app/api/places/`. See [[../02-backend/ap
 | `PATCH` | `/api/places/[id]` | Update. |
 | `DELETE` | `/api/places/[id]` | Delete (with cascade across junctions and trip_day_places). |
 | `POST` | `/api/places/[id]/enrich` | Re-run enrichment (`step=info` or `step=reviews`). |
-| `POST` | `/api/places/[id]/refresh-google-data` | Force re-fetch from Google. |
+| `POST` | `/api/places/[id]/refresh-google-data` | Force re-fetch from Google (business info + newest reviews); counts as done for the current refresh waves. |
 | `POST` | `/api/places/parse-link` | Parse a Google Maps URL → `ParsedPlaceData`. |
 | `POST` | `/api/places/import-jobs` | Queue a Takeout file as a durable import job. |
 | `GET` | `/api/places/import-jobs` | Progress of the newest Takeout job. |

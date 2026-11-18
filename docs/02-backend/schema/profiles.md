@@ -2,8 +2,8 @@
 title: profiles
 type: table
 domain: backend
-version: 1.2.0
-last_updated: 15.07.2026
+version: 1.2.1
+last_updated: 18.11.2026
 status: stable
 sources:
   - Supabase project hukppmaevcapvbrvxtph (live)
@@ -36,7 +36,7 @@ Per-user profile and settings. 1:1 with `auth.users` (the `id` is both PK and FK
 | `dataforseo_password_enc` | text | yes | — | Encrypted DataForSEO password. |
 | `google_places_enabled` | boolean | yes | `true` | Per-user toggle for Google enrichment path. |
 | `ai_features_enabled` | boolean | no | `true` | **Phase 1.** Master kill-switch for every AI feature. Set `false` to: skip `lite_profile` in `parse-link`, skip `step=profile` chain, hide moderation UI, short-circuit `/api/ai/*` + `/api/user/ai-*` routes. Surfaced as the Settings → AI toggle. See [[../../05-flows/full-profile-flow]]. |
-| `cron_refresh_enabled` | boolean | no | `false` | **15.07.2026.** Opt-in for the ENTIRE periodic refresh sweep. Default off — the user's places are never scanned by the cron. When on: daily Google-data refresh + AI summary regeneration past >15 new reviews (if `ai_features_enabled`). Surfaced as the "Background data refresh" toggle in Settings → AI. See [[../../06-ops/runbooks/periodic-refresh]]. |
+| `cron_refresh_enabled` | boolean | no | `false` | **15.07.2026.** Opt-in for the ENTIRE periodic refresh sweep. Default off — the user's places are never scanned by the cron. When on: the refresh waves — business info on the 1st and 15th, reviews on the 1st (since 18.11.2026; was a daily 14-place sweep) — + AI summary regeneration past >15 new reviews (if `ai_features_enabled`). Surfaced as the "Background data refresh" toggle in Settings → AI. See [[../../06-ops/runbooks/periodic-refresh]]. |
 | `created_at` | timestamptz | yes | `now()` | — |
 | `updated_at` | timestamptz | yes | `now()` | App-managed (no DB trigger). |
 

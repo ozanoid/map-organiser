@@ -2,8 +2,8 @@
 title: Places routes
 type: route-group
 domain: backend
-version: 2.1.1
-last_updated: 16.10.2026
+version: 2.2.0
+last_updated: 18.11.2026
 status: stable
 sources:
   - src/lib/places/query-places.ts
@@ -144,8 +144,8 @@ All require auth except `drain-imports`, which is bearer-authed with `CRON_SECRE
 - **External:** DataForSEO `fetchBusinessInfoLive` / `fetchReviews`; `downloadAndStorePhotoFromUrl`; `trackUsage`.
 - **Response:**
   - `info`: `{ ok, cid? }`
-  - `reviews`: `{ ok, reviews: number }`
-- **Notes:** `step=info` (~3–4 s, awaited by client). `step=reviews` (~30 s, fire-and-forget). `cid` source: body (Google path) or existing `google_data.cid` (DataForSEO).
+  - `reviews`: `{ ok, reviews: number, newest: number }` — counts from the `relevant` and the `newest` task
+- **Notes:** `step=info` (~3–4 s, awaited by client) also writes `user_ratings_total` (`ratingsTotal`, 18.11.2026 — this path used to leave it empty). `step=reviews` (~30 s, fire-and-forget) runs a `relevant` and a `newest` task in parallel, merges both and stamps `reviews_refreshed_at` (18.11.2026). `cid` source: body (Google path) or existing `google_data.cid` (DataForSEO).
 
 ### `POST /api/places/[id]/refresh-google-data`
 
@@ -154,7 +154,7 @@ All require auth except `drain-imports`, which is bearer-authed with `CRON_SECRE
 - **DB:** `places` SELECT + UPDATE.
 - **External:** DataForSEO business-info + reviews in one call, photo download, `trackUsage`.
 - **Response:** Updated `Place`. `400` if missing `google_place_id`.
-- **Notes:** All-in-one refresh replacing `info` + `reviews`. Strips legacy `photos` / `editorial_summary` fields.
+- **Notes:** All-in-one refresh replacing `info` + `reviews`. Strips legacy `photos` / `editorial_summary` fields and the old cron marker `refresh_attempted_at`. Stamps the refresh-wave markers (`enriched_at`, `reviews_refreshed_at`, `*_attempt`), so a manual refresh counts as done for the current waves. The cron calls the same `refreshPlaceGoogleData` with only the parts the waves owe, under the `refresh_*` usage SKUs.
 
 ### `POST /api/places/bulk`
 

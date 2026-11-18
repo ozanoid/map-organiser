@@ -28,6 +28,7 @@ import { useLists } from "@/lib/hooks/use-lists";
 import { useCreateSharedLink } from "@/lib/hooks/use-shared-links";
 import type { PlaceProfile } from "@/lib/ai/schemas/place-profile";
 import { googleMapsPlaceUrl } from "@/lib/google/maps-url";
+import { bizAsOf, formatAsOf, reviewsAsOf } from "@/lib/places/freshness";
 import {
   ArrowLeft,
   Share2,
@@ -376,6 +377,9 @@ export function PlaceDetailView({
   }
 
   const googleData = place.google_data || {};
+  // When the hours and the reviews were last fetched (refresh waves).
+  const hoursAsOf = formatAsOf(bizAsOf(googleData));
+  const reviewsFetchedOn = formatAsOf(reviewsAsOf(googleData));
   // Cross-platform Maps link (mobile app can't resolve the stored url).
   const mapsUrl = googleMapsPlaceUrl(
     place.name,
@@ -540,6 +544,14 @@ export function PlaceDetailView({
             <div className="flex items-center gap-2 mb-1.5 font-medium">
               <Clock className="h-4 w-4 text-muted-foreground" />
               Opening hours
+              {hoursAsOf && (
+                <span
+                  className="ml-auto text-[10px] font-normal text-muted-foreground"
+                  title="When the hours were last fetched from Google"
+                >
+                  as of {hoursAsOf}
+                </span>
+              )}
             </div>
             <div className="ml-6 space-y-0.5 text-muted-foreground text-xs">
               {googleData.opening_hours.weekday_text.map(
@@ -688,6 +700,7 @@ export function PlaceDetailView({
           reviews={reviews}
           hasPlaceId={!!place.google_place_id}
           provider={googleData.provider}
+          asOf={reviewsFetchedOn}
           refreshing={refreshing}
           enriching={enrichmentMaybeRunning}
           onRefresh={handleRefreshGoogle}

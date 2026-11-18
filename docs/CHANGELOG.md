@@ -6,6 +6,73 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 18.11.2026 — v1.33.0 — Refresh waves: the whole library refreshed together
+
+**Why.** Places were captured once and never refreshed in practice: the
+periodic refresh existed but is opt-in and every account had it off — 0 of the
+owner's 289 places had ever been refreshed; 286 still carried the 5–6 Aug 2026
+import. Turned on, it would have refreshed at most 14 places a day, each on its
+own 30-day clock (one on the 2nd, another on the 22nd; ~500 places in 5–8
+weeks). And the first review fetch took Google's "relevant" 50, which reach
+back years: on the day of saving the newest stored review was a median 30
+days old.
+
+**What changed.**
+- **Refresh waves** (`src/lib/places/freshness.ts`, new): business info
+  (hours, status, rating, review count) in a wave starting on the 1st and
+  15th of each month, reviews in the wave starting on the 1st (00:00 UTC). A
+  place is done for a wave once its last success is past the wave start, so
+  places saved or refreshed by hand mid-wave join the next one. Failed parts
+  retry after 6 h, at most 3 times per wave (`biz_attempt` /
+  `reviews_attempt` markers in `google_data`).
+- **`cron/refresh-places` rewritten:** every 2 h (`0 */2 * * *`),
+  `maxDuration` 800 (Vercel Pro maximum), 8 workers, no per-run place cap.
+  Trip places (next 30 days) and booked / want-to-go places first. Fetches
+  only the parts the waves owe. Monthly budget per owner = 1.5 × a normal
+  month for their library, enforced from its own `api_usage` SKUs. `?dry=1`
+  (and `&user=<id>`) plans a run without calling DataForSEO or writing.
+- **`refreshPlaceGoogleData`:** `parts` and `usage` options; stamps the
+  attempts before any paid call; writes `reviews_refreshed_at` and
+  `user_ratings_total` via the new shared `ratingsTotal`; drops the old
+  `refresh_attempted_at` marker.
+- **First review fetch = `relevant` + `newest` in parallel** in the drain's
+  `reviews` stage and `enrich?step=reviews` (+$0.0075 per new place); both
+  stamp `reviews_refreshed_at`.
+- **Review count on link-added places:** `enrich?step=info` now writes
+  `user_ratings_total` (4 of the owner's places had a rating distribution but
+  no count). Import and refresh use the same `ratingsTotal`.
+- **Cost tracker:** `dataforseo_reviews` repriced $0.75/1k → $7.5/1k
+  (Priority queue, depth 50 — it showed a tenth of the real cost); new SKUs
+  `refresh_business_info` ($5.4/1k) and `refresh_reviews` ($7.5/1k).
+  Prices checked on dataforseo.com/pricing.
+- **Data age is visible:** `get_places` returns `data_as_of`
+  (business info, reviews, profile); `read_reviews` returns `reviews_as_of`
+  and `newest_review`; the server instructions tell Claude to flag old hours
+  and reviews. The place page shows "as of …" on Opening hours and
+  "updated …" in the reviews header. The settings toggle copy describes the
+  waves.
+
+**Cost (289 places):** DataForSEO ≈ $5.29/month (business info $3.12, reviews
+$2.17), budget $7.93; profiles $0.74–2.75 (bound, not measured). Catch-up
+wave: 288 places due for both parts, ≈ $3.72 — measured with a local dry run
+against production on 18.11.2026.
+
+**Not changed:** the profile prompt blend (35 backbone + 15 freshest) and the
+per-account opt-in, which stays off until the owner turns it on.
+
+Docs: [[06-ops/runbooks/periodic-refresh]] (v2.0.0, rewritten),
+[[04-integrations/dataforseo]], [[02-backend/schema/api_usage]],
+[[04-integrations/claude-mcp]], [[05-flows/ai-enrichment-flow]],
+[[05-flows/full-profile-flow]], [[05-flows/place-import-flow]],
+[[05-flows/manual-place-create-flow]], [[01-domain/places]],
+[[02-backend/api-routes/places]], [[03-frontend/components/places]],
+[[03-frontend/components/settings]], [[06-ops/deployment]],
+[[06-ops/env-vars]], [[02-backend/schema/profiles]],
+[[01-domain/users-and-profiles]], [[02-backend/supabase-clients]],
+[[02-backend/api-routes/_README]], [[00-overview/repo-structure]].
+
+---
+
 ## 17.11.2026 — v1.32.2 — Claude connector connected; similar places filtered
 
 - End to end on production: Ozan added the connector in claude.ai, Claude

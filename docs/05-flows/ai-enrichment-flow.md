@@ -2,8 +2,8 @@
 title: AI Enrichment Flow
 type: flow
 domain: places
-version: 1.8.1
-last_updated: 17.11.2026
+version: 1.9.0
+last_updated: 18.11.2026
 status: stable
 sources:
   - src/app/api/places/[id]/enrich/route.ts
@@ -61,7 +61,7 @@ enrichment engine. The three steps run in sequence:
 step=info     DataForSEO biz-info + photo + extended data   (~3-4 s, awaited)
    │
    ▼
-step=reviews  reviews via cid, depth 50                      (~30 s, fire-and-forget)
+step=reviews  reviews via cid, depth 50, relevant + newest   (~30 s, fire-and-forget)
    │  on success, if ai_features_enabled →
    ▼
 step=profile  Gemini Flash → full place_profile              (~5 s)
@@ -88,7 +88,15 @@ automatically.**
 | **Bulk import** — Takeout file | ❌ the drain skips lite | ✅ `reviews` stage | ✅ `profile` stage | [[place-import-flow]] |
 | **Instagram import** — a shared post (v1.28.0) | ❌ the drain skips lite | ✅ `reviews` stage | ✅ `profile` stage | [[instagram-import-flow]] — the same queue; its own Gemini call (reading the post) happens before any place exists |
 | **Backfill** — Settings → AI | — | ✅ if missing | ✅ that's the point | [[../06-ops/runbooks/profile-backfill]] |
-| **Refresh cron** — daily, stalest ≤14 places of OPT-IN users (`cron_refresh_enabled`, default off) | — | ✅ newest, merged (relevant in Jan/Jul → backbone rebuild) | ✅ only past >15 new reviews | [[../06-ops/runbooks/periodic-refresh]] |
+| **Refresh waves** — every 2 h, whatever the waves owe for OPT-IN users (`cron_refresh_enabled`, default off): business info on the 1st and 15th, reviews on the 1st (18.11.2026; was a daily 14-place sweep) | — | ✅ newest, merged (relevant in Jan/Jul → backbone rebuild) | ✅ only past >15 new reviews | [[../06-ops/runbooks/periodic-refresh]] |
+
+**Fresh reviews from day one (18.11.2026).** Every first reviews fetch —
+`step=reviews` and the drain's `reviews` stage — now runs a `relevant` and a
+`newest` task in parallel and merges both (`mergeReviews`). Before, a new place
+started with Google's most relevant 50 reviews only, which reach back years
+(Sune: Dec 2023 – Jun 2026 on a place saved in Aug 2026; across the library the
+newest stored review was a median 30 days old on the day of saving). Both paths
+stamp `reviews_refreshed_at`, which the refresh waves read.
 
 **The old gap is closed (05.08.2026).** A bulk-imported place used to get
 reviews but no full profile: `bulk-enrich-reviews` did not chain to

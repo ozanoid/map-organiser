@@ -8,6 +8,7 @@ import { fetchBusinessInfoLive } from "@/lib/dataforseo/business-info";
 import {
   transformBusinessInfoToPlaceData,
   extractExtendedData,
+  ratingsTotal,
 } from "@/lib/dataforseo/transform";
 import { downloadAndStorePhotoFromUrl } from "@/lib/dataforseo/photo";
 import type { Category } from "@/lib/types";
@@ -300,7 +301,7 @@ export async function importPlace(
     googleData = {
       types: placeData.types,
       rating: placeData.rating,
-      user_ratings_total: raw.rating?.votes_count,
+      user_ratings_total: ratingsTotal(raw),
       opening_hours: placeData.openingHours,
       website: placeData.website,
       phone: placeData.phone,

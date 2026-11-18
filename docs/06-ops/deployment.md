@@ -2,8 +2,8 @@
 title: Deployment
 type: overview
 domain: ops
-version: 1.1.0
-last_updated: 16.10.2026
+version: 1.2.0
+last_updated: 18.11.2026
 status: stable
 sources:
   - next.config.ts
@@ -125,7 +125,7 @@ Routes that export `maxDuration` (checked 16.10.2026):
 
 | Route | `maxDuration` | Why |
 |---|---|---|
-| `/api/cron/refresh-places` | 300 | daily sweep; 240 s soft deadline |
+| `/api/cron/refresh-places` | 800 | refresh waves; 580 s soft deadline (800 s is the Pro maximum with fluid compute, 18.11.2026) |
 | `/api/cron/drain-imports` | 300 | import queue; 240 s soft deadline |
 | `/api/ai/chat` | 120 | multi-step agent turns (+ the Langfuse flush) |
 | `/api/ai/trip-plan` | 120 | bounded LLM call + one retry on degeneration |
@@ -139,7 +139,7 @@ Configured in `vercel.json` (Vercel Cron fires on **production only**):
 
 | Path | Schedule | What |
 |---|---|---|
-| `/api/cron/refresh-places` | `0 3 * * *` | daily periodic refresh — [[runbooks/periodic-refresh]] |
+| `/api/cron/refresh-places` | `0 */2 * * *` | refresh waves (business info on the 1st and 15th, reviews on the 1st) — [[runbooks/periodic-refresh]] |
 | `/api/cron/drain-imports` | `* * * * *` | the import queue (Takeout and Instagram jobs) — [[../05-flows/place-import-flow]] |
 
 Both require `CRON_SECRET`. On preview deployments the drain only runs from the

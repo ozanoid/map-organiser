@@ -2,8 +2,8 @@
 title: api_usage
 type: table
 domain: backend
-version: 1.4.0
-last_updated: 17.11.2026
+version: 1.5.0
+last_updated: 18.11.2026
 status: stable
 sources:
   - Supabase project hukppmaevcapvbrvxtph (live)
@@ -81,7 +81,8 @@ The composite UNIQUE constraint makes the UPSERT atomic. App code calls this via
     - `text_search_pro`, `place_details_pro`, `reviews_enterprise`, `photos` (Google Places)
     - `text_search_enterprise` (Google Places, v1.28.0 — the Instagram import's candidate search; its field mask asks for website + phone, which puts Text Search on the Enterprise SKU: $35/1k past 1k free. Billed to the user's own Google key)
     - `mapbox_load`, `mapbox_search_session`, `mapbox_directions` (Mapbox — `mapbox_directions` added v1.22.0, $2/1k past 100k free, tracked at both `getRoute` call sites; `mapbox_load` is registered but has no call site)
-    - `dataforseo_business_info_live`, `dataforseo_reviews` (DataForSEO)
+    - `dataforseo_business_info_live` ($5.4/1k), `dataforseo_reviews` (DataForSEO). `dataforseo_reviews` is $7.5/1k since 18.11.2026 — one unit is a Priority-queue depth-50 task ($0.0015 per 10 reviews); it was $0.75/1k, a tenth of the real price, and rows written before the fix keep that frozen price
+    - `refresh_business_info` ($5.4/1k), `refresh_reviews` ($7.5/1k) (18.11.2026) — the same DataForSEO calls made by the refresh waves (`cron/refresh-places`). Separate SKUs so the waves' monthly budget reads only their own spend; see [[../../06-ops/runbooks/periodic-refresh]]
     - `hikerapi_request` (HikerAPI, v1.28.0 — every request the Instagram import makes, $1/1k, no free tier)
     - `mapbox_geocoding` (Mapbox Geocoding v6, 17.11.2026 — one per `near.area` lookup in the assistant's search tools, $0.75/1k past 100k free)
   - `src/lib/ai/track-usage.ts#AI_SKU_CONFIG` (via `trackAiUsage`, same RPC):
@@ -89,7 +90,7 @@ The composite UNIQUE constraint makes the UPSERT atomic. App code calls this via
   - The Instagram import writes its `hikerapi_request` and `text_search_enterprise` rows in a `finally`, so a failed import's calls are still counted; since v1.28.2 the same `finally` writes one `ai_instagram_read` per Gemini call, retries and failed reads included.
   - The cost tracker UI merges both registries (`getMonthlyUsage` spreads `{...SKU_CONFIG, ...AI_SKU_CONFIG}`).
 - **Cost computed in UI, not stored.** The `cost_per_1k` column lets the UI multiply by `count / 1000` for monthly spend; no aggregate is precomputed.
-- Consumed by: `GET /api/user/usage` (monthly aggregate), `CostTracker` UI component, every external API helper in `src/lib/google/` and `src/lib/dataforseo/`, and `checkAiBudget` (`src/lib/ai/track-usage.ts`) — the monthly AI budget gates read these same per-day counters.
+- Consumed by: `GET /api/user/usage` (monthly aggregate), `CostTracker` UI component, every external API helper in `src/lib/google/` and `src/lib/dataforseo/`, `checkAiBudget` (`src/lib/ai/track-usage.ts`) — the monthly AI budget gates read these same per-day counters — and `cron/refresh-places`, which sums the month's `refresh_*` rows (`count × cost_per_1k`) against the waves' budget.
 
 ## Open questions
 

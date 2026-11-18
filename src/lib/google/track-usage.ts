@@ -22,9 +22,26 @@ export const SKU_CONFIG = {
     costPer1k: 5.4,
     freeMonthly: 0,
   },
+  // One unit = one reviews task. fetchReviews posts to the Priority queue
+  // at depth 50: $0.0015 per 10 reviews × 5 = $0.0075 per task (checked on
+  // dataforseo.com/pricing, 18.11.2026). It was $0.75/1k, the Standard
+  // price of a single 10-review block — a tenth of the real cost.
   dataforseo_reviews: {
     name: "DataForSEO Reviews",
-    costPer1k: 0.75,
+    costPer1k: 7.5,
+    freeMonthly: 0,
+  },
+  // Background refresh waves (cron/refresh-places) bill the same DataForSEO
+  // calls under their own SKUs, so the waves' monthly budget counts only
+  // their own spend — a big import must not stall the next wave.
+  refresh_business_info: {
+    name: "Background refresh · Business Info",
+    costPer1k: 5.4,
+    freeMonthly: 0,
+  },
+  refresh_reviews: {
+    name: "Background refresh · Reviews",
+    costPer1k: 7.5,
     freeMonthly: 0,
   },
   mapbox_search_session: {

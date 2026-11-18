@@ -9,6 +9,7 @@ import {
 } from "@/lib/assistant/library";
 import { localDateTime, placeId } from "@/lib/assistant/place-filters";
 import { defineTool } from "@/lib/assistant/tools/types";
+import { bizAsOf, reviewsAsOf } from "@/lib/places/freshness";
 import type { Timetable } from "@/lib/places/open-now";
 
 const DETAIL_SELECT = [
@@ -20,6 +21,7 @@ const DETAIL_SELECT = [
   "g_timetable:google_data->work_timetable,g_hours:google_data->opening_hours",
   "g_popular:google_data->popular_times,g_profile:google_data->place_profile",
   "g_description:google_data->>business_description,g_similar:google_data->people_also_search",
+  "g_enriched_at:google_data->>enriched_at,g_reviews_at:google_data->>reviews_refreshed_at",
 ].join(",");
 
 interface DetailRow {
@@ -49,6 +51,7 @@ interface DetailRow {
   g_hours: { weekday_text?: string[] } | null;
   g_popular: Parameters<typeof busyness>[0];
   g_profile: {
+    generated_at?: string;
     tldr?: string;
     pros?: string[];
     cons?: string[];
@@ -63,7 +66,11 @@ interface DetailRow {
   } | null;
   g_description: string | null;
   g_similar: Array<{ cid?: string; title?: string; rating?: number; votes_count?: number }> | null;
+  g_enriched_at: string | null;
+  g_reviews_at: string | null;
 }
+
+const day = (iso: string | null | undefined) => iso?.slice(0, 10);
 
 const clip = (s: string | null | undefined, n: number) =>
   s ? (s.length > n ? `${s.slice(0, n - 1)}…` : s) : undefined;
@@ -102,7 +109,7 @@ export const getPlaces = defineTool({
   name: "get_places",
   title: "Get place details",
   description:
-    "Full details for 1–5 of the user's saved places by id: the review-derived profile (summary, pros, cons, themes with quotes, what it's good for), weekly opening hours, price, links (Google Maps, website, booking), phone, the user's own status and notes, tags, lists, the Instagram post it came from, and similar places the user has not saved. Pass `at` (local time at the place) to learn whether it is open then and how busy it usually is. Use it to compare places too.",
+    "Full details for 1–5 of the user's saved places by id: the review-derived profile (summary, pros, cons, themes with quotes, what it's good for), weekly opening hours, price, links (Google Maps, website, booking), phone, the user's own status and notes, tags, lists, the Instagram post it came from, similar places the user has not saved, and data_as_of — when the hours, the reviews and the profile were last fetched. Pass `at` (local time at the place) to learn whether it is open then and how busy it usually is. Use it to compare places too.",
   inputSchema: z.object({
     place_ids: z.array(placeId).min(1).max(5),
     at: localDateTime
@@ -208,6 +215,13 @@ export const getPlaces = defineTool({
           good_for: features,
         },
         description: clip(r.g_description, 300),
+        // When each layer was last fetched — hours and status, reviews, and
+        // the AI profile age independently (lib/places/freshness).
+        data_as_of: {
+          business_info: day(bizAsOf({ enriched_at: r.g_enriched_at })),
+          reviews: day(reviewsAsOf({ enriched_at: r.g_enriched_at, reviews_refreshed_at: r.g_reviews_at })),
+          profile: day(profile.generated_at),
+        },
         similar_not_saved: (r.g_similar ?? [])
           .filter(worthSuggesting)
           .filter((s) => !savedCids.has(s.cid))

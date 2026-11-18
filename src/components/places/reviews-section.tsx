@@ -32,6 +32,7 @@ export function ReviewsSection({
   reviews,
   hasPlaceId,
   provider,
+  asOf,
   refreshing,
   enriching,
   onRefresh,
@@ -41,6 +42,8 @@ export function ReviewsSection({
   reviews: GoogleReview[];
   hasPlaceId: boolean;
   provider?: string;
+  /** When the reviews were last fetched, already formatted ("15 Nov"). */
+  asOf?: string | null;
   refreshing: boolean;
   enriching: boolean;
   onRefresh: () => void;
@@ -114,6 +117,14 @@ export function ReviewsSection({
           {provider && (
             <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-muted-foreground">
               via {provider === "dataforseo" ? "DataForSEO" : "Google"}
+            </span>
+          )}
+          {asOf && reviews.length > 0 && (
+            <span
+              className="text-[10px] text-muted-foreground"
+              title="When the reviews were last fetched"
+            >
+              updated {asOf}
             </span>
           )}
           {topicFilter && (

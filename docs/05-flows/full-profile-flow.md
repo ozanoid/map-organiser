@@ -2,8 +2,8 @@
 title: Full Profile Flow (AI Phase 4)
 type: flow
 domain: places
-version: 1.5.0
-last_updated: 05.08.2026
+version: 1.6.0
+last_updated: 18.11.2026
 status: stable
 sources:
   - src/app/api/places/[id]/enrich/route.ts
@@ -52,7 +52,11 @@ Review storage is a **two-tier corpus** (`mergeReviews` in
 relevance-ordered *backbone* from the initial `sort_by:"relevant"` fetch
 (never reshuffled or evicted — Google's "most valuable" picks are the
 quality floor), followed by a rolling newest-first *pool* (total cap 200).
-Refresh fetches use `sort_by: "newest"` to discover what's new. The
+Since 18.11.2026 the initial fetch also runs a `sort_by:"newest"` task in
+parallel, so the pool holds the place's recent reviews from day one — the
+relevant set alone reached back years. Refresh fetches (manual, and the
+refresh waves on the 1st of each month) use `sort_by: "newest"` to discover
+what's new. The
 profile prompt blends both tiers — 35 backbone + 15 freshest
 (`selectReviewsForPrompt`) — never "newest 50" alone, because recency ≠
 signal quality.
@@ -75,7 +79,8 @@ polling.
        │  → google_data filled with extended fields + photo storage
        ▼
 3. POST /api/places/[id]/enrich?step=reviews  (~30s)
-       │  → google_data.reviews merged in (newest-first, cap 200)
+       │  → relevant + newest fetched in parallel, both merged
+       │    into google_data.reviews (cap 200); reviews_refreshed_at
        │
        ▼ NEW (Phase 4)
 4. Reviews handler chains into step=profile (fire-and-forget):

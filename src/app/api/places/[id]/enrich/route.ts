@@ -9,6 +9,7 @@ import {
   transformReviews,
   extractExtendedData,
   mergeReviews,
+  ratingsTotal,
 } from "@/lib/dataforseo/transform";
 import type { GoogleReview } from "@/lib/types";
 import { downloadAndStorePhotoFromUrl } from "@/lib/dataforseo/photo";
@@ -28,7 +29,8 @@ function getDataForSEOClient(): DataForSEOClient | null {
  * POST /api/places/[id]/enrich?step=info|reviews|profile
  *
  * step=info     → biz info + photo + extended data (~3-4s). Client awaits.
- * step=reviews  → reviews via CID (~30s). Client fire-and-forgets. On
+ * step=reviews  → reviews via CID, "relevant" + "newest" fetched in
+ *                 parallel (~30s). Client fire-and-forgets. On
  *                 success, fire-and-forgets step=profile (Phase 4) when
  *                 ai_features_enabled.
  * step=profile  → Gemini Flash structured-output call that produces the
@@ -95,6 +97,10 @@ export async function POST(
       const { data: cur } = await supabase.from("places").select("google_data").eq("id", id).single();
       const curData = (cur?.google_data as Record<string, unknown>) || {};
       const merged = { ...curData, ...extended };
+      // The link-add path never wrote the review count, so these places had
+      // a rating distribution but no total. Same definition as import/refresh.
+      const total = ratingsTotal(raw);
+      if (total !== undefined) merged.user_ratings_total = total;
 
       if (!curData.photo_storage_url && raw.main_image) {
         const photoUrl = await downloadAndStorePhotoFromUrl(
@@ -128,31 +134,56 @@ export async function POST(
 
     console.log(`[enrich:reviews] Starting for ${id}, cid: ${cid}`);
 
-    const rawReviews = await fetchReviews(client, {
+    const reviewsRequest = {
       cid,
       depth: 50,
       location_coordinate: toLocationCoordinate(
         place.location ? parsePostgisPoint(place.location) : null
       ),
       location_name: country,
-    });
+    };
+    // Google's "relevant" set reaches back years — on its own a new place
+    // started life without its recent reviews. A second, newest-sorted fetch
+    // fills the pool tier from day one (see mergeReviews). Both tasks poll
+    // in parallel, so the step takes no longer than before.
+    const [rawReviews, rawNewest] = await Promise.all([
+      fetchReviews(client, reviewsRequest),
+      fetchReviews(client, { ...reviewsRequest, sort_by: "newest" }),
+    ]);
 
-    if (rawReviews.length > 0) {
+    if (rawReviews.length > 0 || rawNewest.length > 0) {
       const reviews = transformReviews(rawReviews);
-      trackUsage(user.id, "dataforseo_reviews").catch(() => {});
+      const newest = transformReviews(rawNewest);
+      if (rawReviews.length > 0) trackUsage(user.id, "dataforseo_reviews").catch(() => {});
+      if (rawNewest.length > 0) trackUsage(user.id, "dataforseo_reviews").catch(() => {});
 
       const { data: cur } = await supabase.from("places").select("google_data").eq("id", id).single();
       const curData = (cur?.google_data as Record<string, unknown>) || {};
-      // Merge, don't replace — re-runs accumulate the corpus. This fetch
-      // uses the default "relevant" sort, so it establishes/refreshes the
-      // relevance backbone (see mergeReviews).
-      const merged = mergeReviews(
+      // Merge, don't replace — re-runs accumulate the corpus. The
+      // "relevant" fetch establishes/refreshes the relevance backbone, the
+      // "newest" one feeds the pool (see mergeReviews).
+      let merged = mergeReviews(
         (curData.reviews as GoogleReview[] | undefined) ?? [],
         reviews,
         { incomingOrder: "relevant" }
       );
-      await supabase.from("places").update({ google_data: { ...curData, reviews: merged } }).eq("id", id);
-      console.log(`[enrich:reviews] ${reviews.length} fetched, ${merged.length} stored for ${id}`);
+      if (newest.length > 0) {
+        merged = mergeReviews(merged, newest, { incomingOrder: "newest" });
+      }
+      await supabase
+        .from("places")
+        .update({
+          google_data: {
+            ...curData,
+            reviews: merged,
+            // Freshness stamp the refresh waves read (lib/places/freshness).
+            reviews_refreshed_at: new Date().toISOString(),
+          },
+        })
+        .eq("id", id);
+      console.log(
+        `[enrich:reviews] ${reviews.length} relevant + ${newest.length} newest fetched, ${merged.length} stored for ${id}`
+      );
 
       // ─── Phase 4: chain into profile generation (fire-and-forget) ───
       // Gated by ai_features_enabled. Errors here never affect the reviews
@@ -180,7 +211,11 @@ export async function POST(
       await stampReviewsChecked(supabase, id);
     }
 
-    return NextResponse.json({ ok: true, reviews: rawReviews.length });
+    return NextResponse.json({
+      ok: true,
+      reviews: rawReviews.length,
+      newest: rawNewest.length,
+    });
   }
 
   // ─── step=profile: Gemini Flash full place_profile ───

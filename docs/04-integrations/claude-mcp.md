@@ -2,8 +2,8 @@
 title: "Claude connector (MCP server)"
 type: integration
 domain: integrations
-version: 1.1.0
-last_updated: 17.11.2026
+version: 1.2.0
+last_updated: 18.11.2026
 status: draft
 sources:
   - src/app/api/mcp/route.ts
@@ -61,8 +61,8 @@ Both new paths are skipped by the session middleware (matcher in `src/middleware
 | `get_library_overview` | read | Countries (spellings merged, e.g. Türkiye + Turkey) with cities, categories with sub-categories, tags and lists — each with counts; visit-status counts (unknown included), closed counts, sources, recently saved, notes on data gaps. |
 | `search_places` | read | Filters: keyword, city/country, near (saved place, lat/lng or a neighbourhood geocoded by Mapbox) + radius, category, sub-category, tags (all must apply), list, visit status (incl. `unknown`), Google rating and review floor, max price, open at a place-local time or now, source, saved since. Closed places out unless `include_closed`. Sort: rating, popularity, distance, recent. ≤ 25 compact rows + total. |
 | `rank_places` | read, AI call | Same filters, then the AI-search judge (Gemini, `rank-engine`) scores up to 30 profiles against an English `intent`. SKU `ai_rank_results`, budget `rank_backstop`; degrades to rating order with a notice. |
-| `get_places` | read | 1–5 places in full: profile (summary, pros, cons, top themes with a quote, `good_for` features), weekly hours, `at` → open?, closes at, busyness at that hour and the day's busiest hours, links (long Google links cut to their path), user status/rating/notes/tags/lists, the Instagram post in the notes, up to 3 "people also search" places not in the library — only listings with ≥ 4.0 and ≥ 20 reviews (a 1-review, 1★ listing showed up in the first live check). |
-| `read_reviews` | read | Stored Google reviews (~50 per place) filtered by words (`about`, any match, folded), min rating; sorted by relevance or date; ≤ 20 quotes cut to 450 chars around the hit. Without `about`, also the review themes. |
+| `get_places` | read | 1–5 places in full: profile (summary, pros, cons, top themes with a quote, `good_for` features), weekly hours, `at` → open?, closes at, busyness at that hour and the day's busiest hours, links (long Google links cut to their path), user status/rating/notes/tags/lists, the Instagram post in the notes, up to 3 "people also search" places not in the library — only listings with ≥ 4.0 and ≥ 20 reviews (a 1-review, 1★ listing showed up in the first live check). `data_as_of` (18.11.2026): the day the business info, the reviews and the profile were last fetched. |
+| `read_reviews` | read | Stored Google reviews (~50 per place) filtered by words (`about`, any match, folded), min rating; sorted by relevance or date; ≤ 20 quotes cut to 450 chars around the hit. Without `about`, also the review themes. `reviews_as_of` and `newest_review` (18.11.2026) say how old the stored set is. The server instructions tell Claude to flag hours older than about two weeks and reviews that are months old. |
 | `update_places` | write | 1–25 places: visit status (stamps `visited_at` / `booked_at` like `PATCH /api/places/[id]`), user rating 1–5 or null, a note appended as `[YYYY-MM-DD] …` (existing notes kept), tags to add (created if missing) or remove. Annotated destructive, so clients ask before running it. |
 
 Filters take **names**, not ids (`resolveNames`): exact folded match, then a unique partial match ("Rooftops" → "Rooftop"); otherwise a `ToolInputError` listing the closest names, which goes back to the model as an error result.
