@@ -13,6 +13,14 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
   tables. Right after the deploy: the trips ↔ plans comparison is run once
   more and the two share links stored as `trip` are renamed to `plan`. The
   trip tables stay, unused, until dropping them is approved separately.
+- **Cutover done (18.11.2026):** main `1763f7c`; production
+  (`https://map-organiser.vercel.app`) serves the new build — `/trips/<id>`
+  answers 308 to `/plans/<id>`, the shared plan payload is the whitelisted
+  one. Compared after the deploy: 7 / 7 plans, 40 / 40 days, 127 / 127 stops,
+  no difference; the last write to the trip tables was on 16.07.2026. The two
+  links were renamed (`shared_links.resource_type`: `trip` → `plan`) and both
+  open on production. Recorded in [[02-backend/schema/shared_links]],
+  [[01-domain/sharing]], [[06-ops/deployment]] (production URL).
 - Decided (Ozan): the public share view keeps showing the owner's own star
   rating of a place. Recorded in [[01-domain/sharing]], which now also says
   that the share page is not the Phase 3 invitation page.

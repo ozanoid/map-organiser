@@ -2,7 +2,7 @@
 title: Shared Link
 type: entity
 domain: sharing
-version: 1.3.1
+version: 1.3.2
 last_updated: 18.11.2026
 status: stable
 sources:
@@ -26,7 +26,7 @@ related:
 
 > **v1.20.0 (NF-18):** `resource_type` widened to include `'place'` — single places are now shareable from the place detail header. The public place payload is a whitelist of rendered fields (no owner-personal data). Save-side fix: original content reads moved to the service client (owner-scoped RLS had blocked every cross-user save since April); re-sharing a deactivated resource reactivates the existing link.
 
-> **v1.37.0:** trips became [[plans]]. A shared plan has `resource_type = 'plan'`; links created as `'trip'` keep working (plans kept the trips' ids) and are renamed at the cutover. The public plan payload is a whitelist — no budget (stop costs, currency, party size), no notes, no stop outcomes, no personal place fields. See [[../02-backend/api-routes/shared]].
+> **v1.37.0:** trips became [[plans]]. A shared plan has `resource_type = 'plan'`; links created as `'trip'` kept working through the cutover (plans kept the trips' ids) and were renamed to `'plan'` on 18.11.2026. The public plan payload is a whitelist — no budget (stop costs, currency, party size), no notes, no stop outcomes, no personal place fields. See [[../02-backend/api-routes/shared]].
 
 A public, read-only slug URL pointing at one of the user's Lists, Plans, or single Places. The mechanism for sharing curated content without exposing the user's account. When viewed by a logged-in user, the page offers a "Save to my account" CTA that copies the resource into the viewer's data — the viral loop.
 

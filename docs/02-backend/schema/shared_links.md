@@ -2,7 +2,7 @@
 title: shared_links
 type: table
 domain: backend
-version: 1.2.2
+version: 1.2.3
 last_updated: 18.11.2026
 status: stable
 sources:
@@ -26,7 +26,7 @@ Public, slug-addressed pointers to a user's list, plan, or single place. The **o
 |---|---|---|---|---|
 | `id` | uuid | no | `gen_random_uuid()` | **PK**. |
 | `user_id` | uuid | no | — | FK → `auth.users.id`. The creator/owner. |
-| `resource_type` | text | no | — | CHECK: `'list'`, `'trip'`, `'plan'` or `'place'`. The app writes `'plan'` since v1.37.0 and reads `'trip'` as a plan (plans kept the trips' ids). The 2 rows of type `'trip'` (18.11.2026) are renamed at the cutover; `'trip'` leaves the CHECK with the contract step. |
+| `resource_type` | text | no | — | CHECK: `'list'`, `'trip'`, `'plan'` or `'place'`. The app writes `'plan'` since v1.37.0 and reads `'trip'` as a plan (plans kept the trips' ids). The 2 rows that were `'trip'` were renamed to `'plan'` at the cutover (18.11.2026) — no row has `'trip'` any more; the value leaves the CHECK with the contract step. |
 | `resource_id` | uuid | no | — | Points at `lists.id`, `plans.id`, or `places.id`. **Not FK-constrained** (polymorphic). |
 | `slug` | text | no | — | **UNIQUE**. Generated via `nanoid(10)`. The path segment in `/shared/<slug>`. |
 | `is_active` | boolean | yes | `true` | Toggle to 404 the link without deleting the row. |

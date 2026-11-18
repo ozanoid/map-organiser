@@ -2,7 +2,7 @@
 title: Deployment
 type: overview
 domain: ops
-version: 1.1.1
+version: 1.1.2
 last_updated: 18.11.2026
 status: stable
 sources:
@@ -33,7 +33,7 @@ Typical Vercel branch mapping (verify in dashboard):
 
 | Branch | Environment | URL |
 |---|---|---|
-| `main` | Production | (the production domain) |
+| `main` | Production | `https://map-organiser.vercel.app` |
 | any other branch / PR | Preview | `<branch-or-commit>.vercel.app` |
 
 The current branch in this worktree is `claude/stoic-jang-554e86` (a Claude Code working branch).
