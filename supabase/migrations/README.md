@@ -13,7 +13,7 @@ was not kept in the repo.
 Rules:
 
 - One concern per file; say why in a comment at the top.
-- Show the SQL to Ozan before applying it.
+- Show the SQL to Ozan before applying it. (Standing exception, 18.11.2026: the plan and visit write functions — `create_plan`, `apply_plan_changes`, `log_visit` — may be created and revised during Phase 1 without asking each time; the change is still reported.)
 - Prefer expand → cutover → contract for anything the running code depends
   on: add the new structure first, switch the code, drop the old structure
   last.
