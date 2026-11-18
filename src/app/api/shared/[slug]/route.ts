@@ -95,11 +95,16 @@ export async function GET(
 // work_timetable, attributes, topics) never leave the server — this is
 // an unauthenticated URL. `notes` stays (consistent with list shares;
 // sharing is a deliberate act).
+// Every read below is scoped to the link's owner: a link row names a
+// resource by id, and nothing at the database stops a signed-in user from
+// writing a link row with someone else's id — the service client must not
+// hand that resource out (v1.40.0; plans were already scoped by getPlan).
 async function handlePlaceShare(supabase: any, link: any, ownerName: string) {
   const { data: place } = await supabase
     .from("places")
     .select("*, category:categories(name, color)")
     .eq("id", link.resource_id)
+    .eq("user_id", link.user_id)
     .single();
 
   if (!place) {
@@ -143,16 +148,19 @@ async function handleListShare(supabase: any, link: any, ownerName: string) {
     .from("lists")
     .select("*")
     .eq("id", link.resource_id)
+    .eq("user_id", link.user_id)
     .single();
 
   if (!list) {
     return NextResponse.json({ error: "List not found" }, { status: 404 });
   }
 
-  // Fetch places in list
+  // Fetch places in list, with the owner's note on each (shown publicly —
+  // Ozan's decision, 18.11.2026: the "what to order" note is what makes a
+  // shared shortlist worth having).
   const { data: listPlaces } = await supabase
     .from("list_places")
-    .select("place_id, sort_order")
+    .select("place_id, sort_order, note")
     .eq("list_id", list.id)
     .order("sort_order", { ascending: true });
 
@@ -162,13 +170,17 @@ async function handleListShare(supabase: any, link: any, ownerName: string) {
     const { data: rawPlaces } = await supabase
       .from("places")
       .select("*, category:categories(*)")
-      .in("id", placeIds);
+      .in("id", placeIds)
+      .eq("user_id", link.user_id);
 
     if (rawPlaces) {
       // Sort by list order; project through the public whitelist.
       const orderMap = new Map<string, number>(listPlaces.map((lp: any) => [lp.place_id, lp.sort_order ?? 0]));
+      const noteMap = new Map<string, string | null>(
+        (listPlaces as { place_id: string; note: string | null }[]).map((lp) => [lp.place_id, lp.note ?? null])
+      );
       places = rawPlaces
-        .map((p: any) => publicPlaceProjection(p))
+        .map((p: any) => ({ ...publicPlaceProjection(p), list_note: noteMap.get(p.id) ?? null }))
         .sort((a: any, b: any) => (orderMap.get(a.id) ?? 0) - (orderMap.get(b.id) ?? 0));
     }
   }

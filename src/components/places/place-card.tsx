@@ -12,6 +12,11 @@ import {
 } from "@/lib/stores/ai-search-store";
 import { googleMapsPlaceUrl } from "@/lib/google/maps-url";
 
+/** The title's link/button, stretched over the whole card (see PlaceCard). */
+const STRETCHED =
+  "text-left after:absolute after:inset-0 after:content-[''] focus-visible:outline-none " +
+  "focus-visible:after:rounded-xl focus-visible:after:ring-2 focus-visible:after:ring-ring";
+
 /**
  * PlaceCard — the canonical visual representation of a saved place.
  *
@@ -27,6 +32,13 @@ import { googleMapsPlaceUrl } from "@/lib/google/maps-url";
  * `className` is forwarded to the inner Card so wrapper components
  * (e.g. SelectablePlaceCard) can apply selection rings without
  * duplicating PlaceCard's body.
+ *
+ * One primary action per card — opening the place — as the "stretched
+ * link": the title's link (or button) spans the whole card through its
+ * ::after layer, and the Maps link sits above that layer. Nothing
+ * interactive is nested in anything interactive (the card used to be
+ * wrapped in a <Link> holding the Maps <a> — invalid HTML, a hydration
+ * error on every list).
  */
 export function PlaceCard({
   place,
@@ -64,9 +76,20 @@ export function PlaceCard({
     return null;
   }
 
-  const card = (
+  const title = onOpenDetail ? (
+    // Mobile grid / map: the detail opens in a bottom sheet on this page.
+    <button type="button" onClick={() => onOpenDetail(place)} className={`${STRETCHED} inline cursor-pointer`}>
+      {place.name}
+    </button>
+  ) : (
+    <Link href={`/places/${place.id}`} prefetch={false} className={STRETCHED}>
+      {place.name}
+    </Link>
+  );
+
+  return (
     <Card
-      className={`overflow-hidden hover:shadow-md transition-shadow cursor-pointer ${
+      className={`relative overflow-hidden hover:shadow-md transition-shadow cursor-pointer ${
         className ?? ""
       }`}
     >
@@ -94,7 +117,7 @@ export function PlaceCard({
         )}
 
         <div className="p-3 space-y-1.5">
-          <h3 className="font-medium text-sm line-clamp-1">{place.name}</h3>
+          <h3 className="font-medium text-sm line-clamp-1">{title}</h3>
 
           {aiRanking ? (
             <p className="text-[11px] italic text-emerald-700 dark:text-emerald-400 line-clamp-2 flex items-start gap-1">
@@ -177,7 +200,7 @@ export function PlaceCard({
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={(e) => e.stopPropagation()}
-                className="inline-flex items-center gap-0.5 text-[10px] text-emerald-600 hover:underline ml-auto"
+                className="relative z-10 inline-flex items-center gap-0.5 text-[10px] text-emerald-600 hover:underline ml-auto"
               >
                 <ExternalLink className="h-2.5 w-2.5" />
                 Maps
@@ -186,39 +209,5 @@ export function PlaceCard({
           </div>
         </div>
       </Card>
-  );
-
-  // Mobile grid / map: open the detail in a bottom-sheet on the current
-  // page. A div-button (not <button>) avoids nesting the inner Maps <a>
-  // inside a button element.
-  if (onOpenDetail) {
-    return (
-      <div
-        role="button"
-        tabIndex={0}
-        onClick={() => onOpenDetail(place)}
-        onKeyDown={(e) => {
-          // Only the card wrapper itself opens the sheet — not keys that
-          // bubbled up from the inner Maps <a> (Enter there must follow
-          // the link, mirroring its onClick stopPropagation).
-          if (
-            e.target === e.currentTarget &&
-            (e.key === "Enter" || e.key === " ")
-          ) {
-            e.preventDefault();
-            onOpenDetail(place);
-          }
-        }}
-        className="block w-full text-left cursor-pointer"
-      >
-        {card}
-      </div>
-    );
-  }
-
-  return (
-    <Link href={`/places/${place.id}`} prefetch={false}>
-      {card}
-    </Link>
   );
 }

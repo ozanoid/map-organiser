@@ -2,7 +2,7 @@
 title: Places components
 type: component
 domain: frontend
-version: 1.9.0
+version: 1.11.0
 last_updated: 18.11.2026
 status: stable
 sources:
@@ -80,6 +80,12 @@ Twenty files under `src/components/places/`. All `"use client"`. The Place-relat
   visit** in the toast. A visit write returns the place's new status and
   rating, which replace the view's copy. The delete confirm counts the
   visits. Components: [[visits]].
+- **Lists (v1.40.0):** the place's lists as badges and, under them, its note
+  on each list ("list name: note"). The picker ticks or unticks one list at a
+  time (`useTogglePlaceOnList` → that list's `PATCH`) — on the place's other
+  lists it keeps its position and note (the old `list_ids` PATCH rewrote all
+  of them). Unticking offers **Undo**, which puts it back with its note and
+  position. A delete refreshes `["lists"]` too. See [[lists]].
 - **Used by:** the `/places/[id]` route (thin wrapper: `onBack=router.back`,
   `onDeleted=router.push("/places")`) and `PlaceDetailSheet`.
 
@@ -312,11 +318,17 @@ Twenty files under `src/components/places/`. All `"use client"`. The Place-relat
 - **Props:** `{ place: Place; className?; onOpenDetail?: (place: Place) => void }`.
 - **No hooks**, no state. Pure presentation.
 - **Renders:** photo (if any), visit-status badge overlay or slim header, name, address, first 2 tags + overflow, category badge with color dot, user rating (orange) and/or Google rating (gray), city/country, Google Maps external link.
-- **Navigation:** by default the card is a `<Link>` to `/places/{place.id}`. When
-  `onOpenDetail` is passed (mobile grid, v1.24.0), it instead renders a
-  `div[role=button]` that calls `onOpenDetail(place)` to open `PlaceDetailSheet`
-  on the current page. The inner Maps `<a>` keeps its `stopPropagation`.
-- **Used by:** `/places` page (grid).
+- **Navigation — a stretched link (v1.40.0):** the title is the card's one
+  primary control and covers the whole card through its `::after` layer (the
+  `Card` is `relative`; the focus ring is drawn on that layer). By default it is
+  a `<Link>` to `/places/{place.id}`; when `onOpenDetail` is passed (mobile
+  grid, v1.24.0) it is a `<button>` that calls `onOpenDetail(place)` to open
+  `PlaceDetailSheet` on the current page. The Maps `<a>` sits above the layer
+  (`relative z-10`). Nothing interactive is nested in anything interactive —
+  until v1.40.0 the card was wrapped in a `<Link>` (or a `div[role=button]`)
+  holding the Maps link: invalid HTML that React reports as a hydration error.
+  `SelectablePlaceCard`'s checkbox is a sibling above the card (`z-10`).
+- **Used by:** `/places` page (grid, via `SelectablePlaceCard`), `/lists/[id]` (list items).
 
 ## `VisitStatusToggle` + `VisitStatusBadge`
 
@@ -357,8 +369,9 @@ v1.17.0 extraction-path fix — stored places gain it on next refresh.
 
 ### `PlaceActionLinks`
 `{ bookOnlineUrl?: string; links?: Array<{type, url, title?}> }` —
-NF-06 (action leg). "Book Online" + one outline button per
-local_business_link (menu icon for `type === "menu"`).
+NF-06 (action leg). "Book Online" + one per local_business_link (menu icon
+for `type === "menu"`), each a link styled with `buttonVariants` (outline,
+sm) that opens in a new tab — until v1.40.0 a `<Button>` inside an `<a>`.
 
 ### `AmenitiesGrid`
 `{ attributes: Record<string, boolean> }` — NF-04 (grid leg). Boolean

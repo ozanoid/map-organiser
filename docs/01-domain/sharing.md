@@ -2,7 +2,7 @@
 title: Shared Link
 type: entity
 domain: sharing
-version: 1.3.2
+version: 1.4.0
 last_updated: 18.11.2026
 status: stable
 sources:
@@ -25,6 +25,8 @@ related:
 # Shared Link
 
 > **v1.20.0 (NF-18):** `resource_type` widened to include `'place'` — single places are now shareable from the place detail header. The public place payload is a whitelist of rendered fields (no owner-personal data). Save-side fix: original content reads moved to the service client (owner-scoped RLS had blocked every cross-user save since April); re-sharing a deactivated resource reactivates the existing link.
+
+> **v1.40.0:** a shared list shows each place's **list note** — the owner's "what to order" (Ozan's decision, 18.11.2026; plan stop notes stay private). Saving a shared list copies the notes with the order. The public read of a place or a list is scoped to the link's owner: a link row written with someone else's resource id no longer exposes it (plans were already scoped).
 
 > **v1.37.0:** trips became [[plans]]. A shared plan has `resource_type = 'plan'`; links created as `'trip'` kept working through the cutover (plans kept the trips' ids) and were renamed to `'plan'` on 18.11.2026. The public plan payload is a whitelist — no budget (stop costs, currency, party size), no notes, no stop outcomes, no personal place fields. See [[../02-backend/api-routes/shared]].
 
@@ -69,7 +71,7 @@ This is the only public-readable user-data table in the schema. Two policies on 
 
 (The "public" role on the second policy still requires `auth.uid()` to return a non-null UUID — anonymous users can't satisfy it. This is just how Supabase generates policies for "authenticated + anon" by default.)
 
-The public read of the shared-links **row** doesn't grant access to the referenced list/plan rows. To resolve those, the API uses the **service-role client** (`createServiceClient` in `src/lib/supabase/server.ts`) which bypasses RLS. The endpoint then carefully selects only what's safe to expose.
+The public read of the shared-links **row** doesn't grant access to the referenced list/plan rows. To resolve those, the API uses the **service-role client** (`createServiceClient` in `src/lib/supabase/server.ts`) which bypasses RLS. The endpoint then carefully selects only what's safe to expose — and only rows owned by the link's owner (`user_id = link.user_id`): the `shared_links` policy lets a user write their own rows, but not check that the resource they name is theirs (v1.40.0).
 
 ## Lifecycle
 
@@ -122,7 +124,7 @@ By resource type (assembled in `GET /api/shared/[slug]`):
 **List:**
 - `resource_type: "list"`
 - `list: { id, name, description, color, place_count }`
-- `places: Place[]` (ordered by `list_places.sort_order`)
+- `places: Place[]` (ordered by `list_places.sort_order`), each with `list_note` — the owner's note on it in this list (v1.40.0)
 
 **Plan (v1.37.0):**
 - `type: "plan"`

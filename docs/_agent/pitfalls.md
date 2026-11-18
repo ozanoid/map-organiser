@@ -2,7 +2,7 @@
 title: Pitfalls
 type: agent-note
 domain: agent
-version: 1.2.0
+version: 1.3.0
 last_updated: 18.11.2026
 status: stable
 related:
@@ -45,6 +45,10 @@ Things that will look right based on training data but will break in this codeba
 
 ## State management
 
+- **`const { data = [] } = useQuery(...)` makes a new array on every render while loading.** Fed into a `useEffect` dependency that sets state, it loops ("Maximum update depth exceeded" — seen 18.11.2026 on the list page). Use a module-level empty constant, or don't copy query data into state at all.
+- **`mutate(vars, { onSuccess })` callbacks don't run once the component that called it unmounts.** A delete that sets the cached item to `null` makes the page render "not found" and unmounts the dialog first — the redirect and toast in those callbacks never happen (plans and lists, until v1.40.0). Use `await mutation.mutateAsync(vars)` and act after it; the hook's own `onSuccess` still runs.
+- **Optimistic writes in a queue:** when writes to one resource share a mutation `scope`, write the server's answer into the cache only for the last one (`queryClient.isMutating({ mutationKey }) <= 1` inside `onSuccess` — the running mutation still counts), or an earlier answer undoes the later optimistic state on screen (`useChangeList`).
+
 - **Don't reach for Context** for shared state. Use Zustand (existing pattern) or TanStack Query (existing pattern).
 - **Don't mix server state into Zustand.** Server-cached data belongs in React Query. Zustand is for UI/transient state.
 
@@ -74,6 +78,8 @@ Things that will look right based on training data but will break in this codeba
 - Map components must be client components (`"use client"`) — they touch `window`.
 
 ## PWA / offline
+
+- **On localhost the service worker serves `/_next/static` stale-while-revalidate.** Dev chunk names don't change with their content, so the first load after a code change can run the OLD JavaScript (a fixed bug "still there", a new prop missing) — reload once more, or unregister the worker for localhost. Production chunk names are content-hashed, so this is a dev-only trap (seen 18.11.2026 on the shared list page).
 
 - Service worker registration lives in `src/components/sw-register.tsx`. Don't move it. Don't duplicate the registration.
 - `/offline` route is the fallback. Anything that has to work offline must be cached deliberately.

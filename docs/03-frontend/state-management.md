@@ -2,7 +2,7 @@
 title: State Management
 type: overview
 domain: frontend
-version: 1.4.0
+version: 1.5.0
 last_updated: 18.11.2026
 status: stable
 sources:
@@ -59,7 +59,7 @@ const [queryClient] = useState(
 | Tags | `["tags"]` | `useTags()` |
 | Tags for a place | `["place-tags", placeId]` | `usePlaceTags(placeId)` |
 | Lists | `["lists"]` | `useLists()` |
-| Lists for a place | `["place-lists", placeId]` | `usePlaceLists(placeId)` |
+| List (detail) | `["lists", listId]` — under the overview's key, so invalidating `["lists"]` refreshes an open list too; changes are optimistic (v1.40.0) | `useList(id)` |
 | Plans (list) | `["plans"]` | `usePlans()` |
 | Plan (detail) | `["plan", planId]` | `usePlan(id)` |
 | Plan day route | `["plan-route", dayId, signature]` | `usePlanRoutes(plan)` |

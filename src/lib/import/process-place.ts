@@ -12,6 +12,8 @@ import {
 import { downloadAndStorePhotoFromUrl } from "@/lib/dataforseo/photo";
 import type { Category } from "@/lib/types";
 import { haversineDistance } from "@/lib/geo";
+import { addPlaceToLists } from "@/lib/lists/write";
+import { log } from "@/lib/telemetry/logger";
 
 /** One place as the Takeout parser produces it. */
 export interface ImportPayload {
@@ -375,9 +377,11 @@ export async function importPlace(
   const listIds = defaults.listIds ?? [];
   const tagIds = defaults.tagIds ?? [];
   if (listIds.length > 0) {
-    await supabase
-      .from("list_places")
-      .insert(listIds.map((lid) => ({ list_id: lid, place_id: inserted.id })));
+    // Through the list write path (src/lib/lists): at the end of each list,
+    // ownership checked. As before, a list problem doesn't fail the import.
+    await addPlaceToLists({ supabase, userId }, inserted.id, listIds).catch((e) =>
+      log.warn("import.lists_failed", { userId, error: e instanceof Error ? e.message : String(e) })
+    );
   }
   if (tagIds.length > 0) {
     await supabase

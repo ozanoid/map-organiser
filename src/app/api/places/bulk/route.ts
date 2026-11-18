@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { errorResponse } from "@/lib/api/http";
+import { addPlacesToList } from "@/lib/lists/write";
 import { plansUsingPlaces } from "@/lib/plans/read";
 import { visitCounts } from "@/lib/visits/read";
 
@@ -117,19 +119,14 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const rows = validIds.map((placeId) => ({
-        list_id,
-        place_id: placeId,
-      }));
-
-      const { error } = await supabase
-        .from("list_places")
-        .upsert(rows, { onConflict: "list_id,place_id", ignoreDuplicates: true });
-
-      if (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
+      // One transaction through the list write path (src/lib/lists): at the
+      // end of the list, places already on it keep their position.
+      try {
+        const result = await addPlacesToList({ supabase, userId: user.id }, list_id, validIds);
+        affected = result.added.length;
+      } catch (e) {
+        return errorResponse(e, "places.bulk.add_to_list");
       }
-      affected = validIds.length;
       break;
     }
 

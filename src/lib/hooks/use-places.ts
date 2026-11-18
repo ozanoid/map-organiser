@@ -99,6 +99,8 @@ export function useCreatePlace() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["places"] });
+      // A new place can go onto lists (list_ids): their counts and items.
+      queryClient.invalidateQueries({ queryKey: ["lists"] });
     },
   });
 }

@@ -16,8 +16,9 @@ import { googleMapsPlaceUrl } from "@/lib/google/maps-url";
 import { FilterPanel } from "@/components/filters/filter-panel";
 import { VisitStatusToggle, VisitStatusBadge } from "@/components/places/visit-status-toggle";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 import { usePlaces } from "@/lib/hooks/use-places";
 import { useCategories } from "@/lib/hooks/use-categories";
 import { useFilters } from "@/lib/hooks/use-filters";
@@ -651,29 +652,25 @@ export function MapContent({ mapboxToken }: { mapboxToken: string }) {
                   </div>
                 )}
 
-                {/* Actions */}
+                {/* Actions — links styled as buttons (a <Button> inside an
+                    <a> would nest one control in another). */}
                 <div className="flex gap-2 pt-2">
                   {mapsUrl && (
                     <a
                       href={mapsUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex-1"
+                      className={cn(buttonVariants({ variant: "outline", size: "sm" }), "flex-1 gap-1.5")}
                     >
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="w-full cursor-pointer gap-1.5"
-                      >
-                        <ExternalLink className="h-3.5 w-3.5" />
-                        Google Maps
-                      </Button>
+                      <ExternalLink className="h-3.5 w-3.5" />
+                      Google Maps
                     </a>
                   )}
-                  <a href={`/places/${detailData.id}`} className="flex-1">
-                    <Button size="sm" className="w-full cursor-pointer gap-1.5">
-                      Full details
-                    </Button>
+                  <a
+                    href={`/places/${detailData.id}`}
+                    className={cn(buttonVariants({ size: "sm" }), "flex-1 gap-1.5")}
+                  >
+                    Full details
                   </a>
                 </div>
               </div>

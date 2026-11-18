@@ -2,7 +2,7 @@
 title: Repo Structure
 type: overview
 domain: overview
-version: 1.12.0
+version: 1.13.0
 last_updated: 18.11.2026
 status: stable
 sources:
@@ -92,7 +92,7 @@ src/
 │       ├── instagram/         import (POST — start from a post URL, work in after()) + import/[id] (GET — dialog progress) — v1.28.0; import/[id]/pick (POST — add the place picked for a skipped venue) — v1.28.1
 │       ├── plans/             list + create; [id] GET / PATCH { set, ops } / DELETE; auto-plan; days/[dayId]/route (v1.37.0, replaced trips/)
 │       ├── visits/            list + log; [id] PATCH / DELETE (v1.38.0)
-│       ├── lists/[id]/reorder
+│       ├── lists/             list + create; [id] GET / PATCH { set, ops } / DELETE (v1.40.0, replaced lists/[id]/reorder)
 │       ├── subcategories/     CRUD (per-user; default seed via signup trigger)
 │       ├── shared/            Create + public-read + save-to-account
 │       ├── stats/             Aggregated stats

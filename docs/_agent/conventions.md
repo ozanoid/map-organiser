@@ -2,7 +2,7 @@
 title: Coding Conventions
 type: agent-note
 domain: agent
-version: 1.0.3
+version: 1.1.0
 last_updated: 18.11.2026
 status: stable
 related:
@@ -103,6 +103,9 @@ Never import the browser client from a Server Component. Never import the server
 - For variants, use `cva` (class-variance-authority) — already a dep.
 - Use `cn()` from `src/lib/utils.ts` for conditional classes.
 - Tokens come from CSS variables defined in `src/app/globals.css` under `@theme`. Don't hardcode colors; use `text-foreground`, `bg-card`, etc.
+- **Never nest a control in a control** (a link or button inside a link or button). React reports `<a>` in `<a>` as a hydration error; any nesting gives two tab stops for one action and confuses screen readers.
+  - A link that looks like a button is the link itself with the button's classes: `<a className={cn(buttonVariants({ variant, size }), "…")}>` (or `<Link …>`) — not a `<Button>` inside an `<a>`.
+  - A card with one primary action and other controls on it is a **stretched link** (`PlaceCard`): the title's link or button covers the card through `after:absolute after:inset-0` (the card is `relative`), and the other controls sit above that layer with `relative z-10`.
 
 ## Forms & validation
 

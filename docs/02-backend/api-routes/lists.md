@@ -2,59 +2,64 @@
 title: Lists routes
 type: route-group
 domain: backend
-version: 1.0.0
-last_updated: 12.05.2026
+version: 2.0.0
+last_updated: 18.11.2026
 status: stable
 sources:
-  - src/app/api/lists/[id]/reorder/route.ts
+  - src/app/api/lists/route.ts
+  - src/app/api/lists/[id]/route.ts
+  - src/lib/lists/schema.ts
+  - src/lib/lists/read.ts
+  - src/lib/lists/write.ts
 related:
   - "[[_README]]"
   - "[[../../01-domain/lists]]"
   - "[[../schema/lists]]"
   - "[[../schema/list_places]]"
+  - "[[../../03-frontend/hooks/use-lists]]"
 ---
 
 # Lists routes
 
-Only **one** dedicated route handler exists for lists: the reorder endpoint. Standard CRUD (create / update / delete a list, add / remove places) is performed via direct Supabase calls from the frontend (`src/lib/hooks/use-lists.ts`) because RLS makes that safe.
+Every list write in the app goes through these routes (v1.40.0) — one call to the module `src/lib/lists`, one call to the Postgres function `save_list`, one transaction. Until then the browser wrote `lists` / `list_places` directly and only reordering had a route (`PATCH /api/lists/[id]/reorder`, removed: a reorder is now an op).
 
 ## At a glance
 
 | Method | Path | Purpose |
 |---|---|---|
-| `PATCH` | `/api/lists/[id]/reorder` | Replace `sort_order` for every list-place pair. |
+| `GET` | `/api/lists` | The user's lists with place counts, newest first (`listLists`). |
+| `POST` | `/api/lists` | New list `{ name, description?, color? }` → 201 `{ id }` (`createList`, `created_via = app`). |
+| `GET` | `/api/lists/[id]` | The list with its items in order — `place_id`, `sort_order`, `note`, `added_at` (`getList`). The places themselves come from `/api/places?list=…`. 404 when it isn't the user's. |
+| `PATCH` | `/api/lists/[id]` | `{ set?, ops? }` → the list as it is afterwards plus `added` / `already` / `removed` / `absent` (place ids). |
+| `DELETE` | `/api/lists/[id]` | Removes the list and its notes; its places stay. |
 
-## Per-route detail
+## `PATCH /api/lists/[id]`
 
-### `PATCH /api/lists/[id]/reorder`
+The body is `listChangesSchema` (`src/lib/lists/schema.ts`) — the same definition Claude's `save_list` takes, so its `.describe()` texts are written for the model too. Every object is strict: an unknown key is a 400.
 
-- **Source:** `src/app/api/lists/[id]/reorder/route.ts`
-- **Auth:** required + ownership check on `lists.id`.
-- **Body:** `{ placeIds: string[] }` — full ordered array of place IDs for this list.
-- **DB:** `lists` SELECT (ownership); `list_places` UPDATE — one UPDATE per place_id, setting `sort_order = index`, via `Promise.all`.
-- **Response:** `{ success: true }`. `200`, `400` on empty placeIds, `404` on list not owned/found.
-- **Notes:** Parallel UPDATEs — a partial failure could leave the list in a half-reordered state. Hasn't bitten anyone yet but worth either a single SQL `CASE...WHEN` or a stored proc when this grows.
+```jsonc
+{
+  "set": { "name": "Solo dinners — November", "description": null },
+  "ops": [
+    { "op": "add_place", "place_id": "…", "note": "order the lamb", "position": 0 },
+    { "op": "remove_place", "place_id": "…" },
+    { "op": "set_note", "place_id": "…", "note": null },
+    { "op": "move_place", "place_id": "…", "position": 2 },
+    { "op": "reorder", "place_ids": ["…", "…"] }
+  ]
+}
+```
 
-## Why no other route handlers
+- Ops apply in order after `set`; the batch lands completely or not at all.
+- `add_place` on a place already on the list keeps its position; only a note with words in it replaces its note. Clearing a note is `set_note` with `null`.
+- `remove_place` of a place that isn't on the list is reported in `absent`, not an error. `reorder` must name every place once.
+- Only the user's own places can go on a list; another user's place refuses the whole call.
+- Responses: 200 `{ list, added, already, removed, absent }` (`list: null` if the list couldn't be read back — the change is committed, the client refetches); 400 with the database's sentence ("place … is not on this list", "a list holds up to 1000 places"); 404 when the list isn't the user's.
 
-The pattern this app uses for any "simple CRUD where RLS is sufficient" is: skip the route handler, call Supabase from the client directly.
+## Errors
 
-For lists, that means:
+`ListInputError` → 400 and `ListNotFoundError` → 404 through `errorResponse` (`src/lib/api/http.ts`); anything else is logged and answered 500 "Something went wrong — nothing was changed".
 
-- **Create:** `supabase.from("lists").insert(...)` in `useLists()` mutations.
-- **Update:** same with `.update(...).eq("id", id)`.
-- **Delete:** same with `.delete().eq("id", id)`.
-- **Add a place to a list:** `supabase.from("list_places").insert({ list_id, place_id, sort_order })`.
-- **Remove a place from a list:** `supabase.from("list_places").delete().match({ list_id, place_id })`.
+## Other routes that put places on lists
 
-RLS guarantees:
-
-- The user can only touch rows where `auth.uid() = user_id` (on `lists`).
-- `list_places` rows go through the indirect predicate that walks up to `lists.user_id`.
-
-The reorder endpoint exists because it does a bulk update of `sort_order` based on an array — that's awkward to express through a single Supabase client call without round-trips, so a dedicated handler made sense.
-
-## Open questions
-
-- **Transactional reorder.** The current `Promise.all` parallel UPDATEs aren't transactional. A failure mid-flight leaves the order partially updated. Replace with a single SQL statement using `CASE`, or a stored proc.
-- **Should there be a `/api/lists` endpoint?** Today the answer is no — RLS-as-API works fine. If we add bulk operations (e.g. "delete these 3 lists"), reconsider.
+They call the same module, not the tables: `POST /api/places` with `list_ids` (`addPlaceToLists`, at the end of each list; a list that is gone is skipped and logged), `PATCH /api/places/[id]` with `list_ids` (`setPlaceLists` — only the lists that change are written), `POST /api/places/bulk` `add_to_list` (`addPlacesToList`, one transaction; `affected` counts the places newly added), `POST /api/shared/[slug]/save` for a list (`createList` with its places and notes), the import drain (`addPlaceToLists`), the in-app assistant's `add_to_list` / `create_list` ([[ai]]).

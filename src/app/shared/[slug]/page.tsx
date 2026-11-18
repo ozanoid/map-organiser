@@ -23,7 +23,9 @@ interface SharedData {
   slug: string;
   ownerName: string;
   list?: { id: string; name: string; description: string | null; color: string };
-  places?: Place[];
+  /** A list's places in order; `list_note` is the owner's note on the place
+   *  in this list ("what to order"). */
+  places?: (Place & { list_note?: string | null })[];
   /** NF-18 (v1.20.0): single-place share payload (reviews/profile stripped server-side). */
   place?: Place;
   /** Whitelisted server-side (handlePlanShare): no costs, notes or outcomes. */
@@ -171,7 +173,7 @@ function SharedListView({
         {/* Place list */}
         <div className="space-y-2">
           {places.map((place, i) => (
-            <PlaceRow key={place.id} place={place} index={i} />
+            <PlaceRow key={place.id} place={place} index={i} note={place.list_note} />
           ))}
         </div>
       </div>
@@ -333,7 +335,18 @@ function NoteRow({ title, index, when }: { title: string; index: number; when?: 
   );
 }
 
-function PlaceRow({ place, index, when }: { place: Place; index: number; when?: string | null }) {
+function PlaceRow({
+  place,
+  index,
+  when,
+  note,
+}: {
+  place: Place;
+  index: number;
+  when?: string | null;
+  /** The owner's note on this place in the shared list. */
+  note?: string | null;
+}) {
   // Cross-platform Maps link (mobile app can't resolve the stored url).
   // Public payload strips google_place_id → name-search fallback.
   const googleUrl = googleMapsPlaceUrl(
@@ -355,6 +368,11 @@ function PlaceRow({ place, index, when }: { place: Place; index: number; when?: 
         <p className="text-sm font-medium truncate">{place.name}</p>
         {place.address && (
           <p className="text-[10px] text-muted-foreground truncate">{place.address}</p>
+        )}
+        {note && (
+          <p className="mt-0.5 text-xs italic text-emerald-700 dark:text-emerald-400 whitespace-pre-line line-clamp-3">
+            {note}
+          </p>
         )}
       </div>
       <div className="flex items-center gap-2 shrink-0">
