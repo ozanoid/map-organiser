@@ -2,8 +2,8 @@
 title: Repo Structure
 type: overview
 domain: overview
-version: 1.9.0
-last_updated: 17.11.2026
+version: 1.10.0
+last_updated: 18.11.2026
 status: stable
 sources:
   - src/
@@ -48,6 +48,7 @@ What every top-level directory contains, why it exists, and where to dig further
 ├── .github/                   Workflows (dependabot only)
 ├── docs/                      This vault
 ├── public/                    Static assets (PWA icons, service worker)
+├── supabase/migrations/       SQL of every schema change since 18.11.2026 (applied through Supabase MCP; see its README)
 ├── scripts/                   Dev scripts — assistant-check/ (17.11.2026): `npm run check:assistant` runs the Claude connector's tools
 │                              against the live DB; instagram-eval/ (v1.28.0): the Instagram import's
 │                              regression run (run.ts, labels.json, README.md, tsconfig.json)
@@ -108,7 +109,7 @@ src/
 │   ├── sw-register.tsx        Service worker registration (client component)
 │   └── ui/                    shadcn primitives (avatar, badge, button, card, command, dialog, dropdown-menu, input, input-group, popover, select, separator, sheet, skeleton, sonner, tabs, textarea)
 └── lib/
-    ├── assistant/             The Claude connector (17.11.2026): tools/ (six transport-free tool definitions), library.ts (light
+    ├── assistant/             The Claude connector (17.11.2026): tools/ (transport-free tool definitions), library.ts (light
     │                          place projection, name resolution, time + busyness helpers), place-filters.ts, mcp.ts (MCP server),
     │                          verify-token.ts, oauth.ts (resource paths, redirect allowlist), owner.ts — see [[../04-integrations/claude-mcp]]
     ├── auth/                  safe-next.ts — same-site `next` validation for login and the OAuth callback (17.11.2026)
@@ -124,6 +125,8 @@ src/
     │                          open-now.ts (tz-aware render-time isOpenNow, v1.18.0; +day-granular isOpenOnDate for the AI trip planner, v1.22.0);
     │                          attribute-icons.ts (NF-04 group/icon map);
     │                          query-places.ts + user-stats.ts (v1.21.0 — extracted route engines shared with chat tools)
+    ├── place-search/          PlaceSearch interface + the DataForSEO Google Maps provider (18.11.2026) — used by the
+    │                          assistant's search_google_maps tool
     ├── dataforseo/            DataForSEO client + types + adapters + transform (mergeReviews) + reviews + photo
     ├── google/                Google Places + URL parser + category mapping + Takeout parser + usage tracker + key access;
     │                          place-candidates.ts (multi-candidate Text Search for the Instagram import, v1.28.0)

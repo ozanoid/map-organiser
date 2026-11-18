@@ -2,8 +2,8 @@
 title: trip_day_places
 type: table
 domain: backend
-version: 1.1.0
-last_updated: 16.07.2026
+version: 1.1.1
+last_updated: 18.11.2026
 status: stable
 sources:
   - Supabase project hukppmaevcapvbrvxtph (live)
@@ -16,6 +16,8 @@ related:
 ---
 
 # `trip_day_places`
+
+> **Being replaced (18.11.2026).** The plan model — [[plans]] — now exists next to this table and holds a copy of its rows. The app still reads and writes here until the cutover; after it this table is dropped. See [[../../_plans/phase-1-planning]].
 
 > **v1.22.0 (NF-08/AI-09):** new `cost_estimate` + `currency` columns (migration `add_trip_day_places_cost_columns` + `backfill_trip_day_places_cost_from_price_level`) — per-person budget estimates, seeded from `google_data.price_level` on insert and inline-editable in the trip UI. `time_slot` and `notes` gained their first UI render + a structured writer: the AI trip planner (`POST /api/ai/trip-plan`) sets `time_slot` (morning/afternoon/evening/night) and an optional per-stop note. All delete+insert rewrite paths (move, auto-plan, AI plan) now carry these row fields — before v1.22.0 they were silently destroyed.
 

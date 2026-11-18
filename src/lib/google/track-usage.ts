@@ -47,6 +47,14 @@ export const SKU_CONFIG = {
     costPer1k: 0.75,
     freeMonthly: 100000,
   },
+  // Assistant tools: Google Maps search through DataForSEO's SERP API
+  // (live). $0.002 per search of up to 100 results; confirmed by the `cost`
+  // field of live responses on 18.11.2026.
+  dataforseo_maps_search: {
+    name: "DataForSEO Maps Search",
+    costPer1k: 2.0,
+    freeMonthly: 0,
+  },
   // Instagram import: candidate search asks for website + phone, which puts
   // Text Search on the Enterprise SKU ($35/1K after 1K free per month).
   text_search_enterprise: {

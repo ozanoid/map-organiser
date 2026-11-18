@@ -6,6 +6,102 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 18.11.2026 — v1.36.0 — Phase 1 schema applied: plans, visits
+
+- Applied to the live database (Ozan approved the SQL): `plans_tables`
+  (`plans` / `plan_days` / `plan_stops` + RLS + indexes + a copy of the 7
+  trips under the same ids; `shared_links.resource_type` accepts `plan`),
+  `visits`, `list_place_notes` (`list_places.note`), `assistant_source`
+  (`places.source` and `import_jobs.kind` accept `assistant`). The files in
+  `supabase/migrations/` now carry the versions Supabase recorded.
+- Verified: 7 / 40 / 127 rows copied, every derived day date and end date
+  equals the stored one, cost totals equal; policies exercised as a signed-in
+  user in a rolled-back transaction (foreign-place stop and visit blocked,
+  other accounts and anon see nothing); the security advisor reports nothing
+  for the new tables.
+- No application code uses the new tables yet; the trip tables keep serving
+  the app until the cutover.
+- Docs: new [[02-backend/schema/plans]], [[02-backend/schema/visits]];
+  updated [[02-backend/schema/_README]], [[02-backend/rls-policies]],
+  [[02-backend/schema/list_places]], [[02-backend/schema/places]],
+  [[02-backend/schema/import-jobs]], [[02-backend/schema/shared_links]];
+  "being replaced" notes on the trip docs; [[_plans/phase-1-planning]] v2.2.0.
+
+---
+
+## 18.11.2026 — v1.35.1 — Root CLAUDE.md: how to design changes
+
+- `CLAUDE.md` gained a "How to design changes" section at Ozan's request:
+  model first and existing code second, structure decided up front, what a
+  proposal must carry, the schema-change routine, and how to state costs. It
+  also points at [[_plans/personal-assistant]] as the current direction.
+
+---
+
+## 18.11.2026 — v1.35.0 — Phase 1 approved: schema SQL written, Google Maps search tool
+
+- Ozan approved the Phase 1 design v2 ([[_plans/phase-1-planning]] v2.1.0,
+  now `stable`): one `plans` model, `visits`, free-text stops, cancel instead
+  of delete, place search through DataForSEO.
+- Schema SQL written, **not applied** (awaiting Ozan):
+  `supabase/migrations/` — `plans_tables` (plans / plan_days / plan_stops
+  with RLS and indexes, plus a copy of the 7 existing trips under the same
+  ids), `visits`, `list_place_notes`, `assistant_source`. Rollout changed
+  from rename-with-a-short-outage to expand → cutover → contract, with no
+  outage; the old trip tables are dropped last, after a separate approval.
+- New convention: schema SQL lives in the repo (`supabase/migrations/`,
+  README there); [[_agent/common-tasks]] updated.
+- New tool `search_google_maps` (7 tools now): Google Maps search through
+  DataForSEO's SERP API behind a `PlaceSearch` interface
+  (`src/lib/place-search/`). Verified live: the returned `cid` matches the
+  library's, chain branches come back separately, $0.002 per search, 2.6–12.4
+  s; `price_level` is empty in live results. New SKU
+  `dataforseo_maps_search`. `npm run check:assistant`: 32 checks pass.
+- Docs: [[04-integrations/claude-mcp]], [[04-integrations/dataforseo]],
+  [[02-backend/schema/api_usage]], [[00-overview/repo-structure]],
+  [[_plans/personal-assistant]].
+
+---
+
+## 18.11.2026 — v1.34.0 — Phase 1 design v2: one plan model, visits, DataForSEO search
+
+- [[_plans/phase-1-planning]] rewritten (v2.0.0, draft, awaiting Ozan) after
+  he asked whether v1 was shaped by what already exists. The model is now
+  derived from twelve scenarios first and then compared with the code:
+  ten evidence-backed gaps (visits flattened onto the place and logged as
+  dated note lines, free-text time, dates stored in two places — the cause of
+  the date-change bug —, mandatory dates, non-atomic writes, no stop outcome,
+  no cancel, place-only stops, the "trip" name, schema SQL missing from the
+  repo). Proposal: evolve the trip tables into one `plans` model (derived
+  day dates, nullable start, structured time, status), add `visits` as an
+  entity, keep lists for undated shortlists, atomic writes through Postgres
+  functions, eight tools, five ordered slices, migration and regression list.
+- Place search: measured Google Text Search usage (3 this month, 114 last
+  month — never past the free allowance) and verified prices from the
+  official pages; proposes DataForSEO's Google Maps search behind a
+  `PlaceSearch` interface. Not verified live: DataForSEO credentials are not
+  in the local env.
+- Noted: `text_search_pro` is priced $17/1k in the SKU registry, $32 on
+  Google's price list.
+- [[_plans/personal-assistant]] points at v2.
+
+---
+
+## 17.11.2026 — v1.33.0 — Phase 1 (planning) design proposal
+
+- New [[_plans/phase-1-planning]] (draft, awaiting Ozan): eight planning
+  scenarios mapped to the existing trip and list models with evidence;
+  recommendation — dated plans are trips (outing = one-day trip), undated
+  goals are lists; add a per-stop status (`planned | done | skipped`) and an
+  `assistant` source/kind; shared trip functions that also fix the date-change
+  bug (`PATCH /api/trips/[id]` never moved `trip_days`); six new tools
+  (`get_plans`, `create_plan`, `update_plan`, `delete_plan`, `save_list`,
+  `add_place`); small UI changes (stop status chip, "Plans" tab). Seven open
+  decisions listed.
+- [[_plans/personal-assistant]] links it from Phase 1.
+
+---
+
 ## 17.11.2026 — v1.32.2 — Claude connector connected; similar places filtered
 
 - End to end on production: Ozan added the connector in claude.ai, Claude

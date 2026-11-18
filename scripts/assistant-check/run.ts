@@ -119,6 +119,32 @@ async function main() {
 
   // ── Test account: paid calls and the write ─────────────────────────
   await call("near area Shoreditch (Mapbox geocoding)", tester, "search_places", { near: { area: "Shoreditch, London", radius_m: 1500 }, limit: 3 }, 600);
+  // Google Maps search (DataForSEO, $0.002 each): a known place by name,
+  // then a place the tester has saved — it must come back marked as saved.
+  const dandan = await call(
+    "search_google_maps DanDan Aldgate",
+    tester,
+    "search_google_maps",
+    { query: "DanDan Aldgate", near: { lat: 51.5145, lng: -0.072, radius_m: 2000 }, limit: 5 },
+    700
+  );
+  expect("maps search finds the place with Google's cid", dandan?.results?.[0]?.google_cid === "9577570098796810468");
+  const own = await call("tester: one saved London place", tester, "search_places", { city: "London", limit: 1 }, 200);
+  const ownPlace = own?.places?.[0];
+  if (ownPlace) {
+    const again = await call(
+      `search_google_maps "${ownPlace.name}" near itself`,
+      tester,
+      "search_google_maps",
+      { query: ownPlace.name, near: { place_id: ownPlace.id, radius_m: 800 }, limit: 5 },
+      600
+    );
+    expect(
+      "a saved place comes back marked as saved",
+      again?.results?.some((r: any) => r.saved_place_id === ownPlace.id) === true
+    );
+  }
+
   await call("rank_places romantic dinner (Gemini)", tester, "rank_places", { intent: "romantic, intimate dinner spot, not loud", city: "London", limit: 3 }, 900);
 
   const { data: target } = await admin

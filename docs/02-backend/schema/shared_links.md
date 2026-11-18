@@ -2,8 +2,8 @@
 title: shared_links
 type: table
 domain: backend
-version: 1.2.0
-last_updated: 15.07.2026
+version: 1.2.1
+last_updated: 18.11.2026
 status: stable
 sources:
   - Supabase project hukppmaevcapvbrvxtph (live)
@@ -26,7 +26,7 @@ Public, slug-addressed pointers to a user's list, trip, or single place. The **o
 |---|---|---|---|---|
 | `id` | uuid | no | `gen_random_uuid()` | **PK**. |
 | `user_id` | uuid | no | — | FK → `auth.users.id`. The creator/owner. |
-| `resource_type` | text | no | — | CHECK: `'list'`, `'trip'`, or `'place'` (v1.20.0). |
+| `resource_type` | text | no | — | CHECK: `'list'`, `'trip'`, `'plan'` or `'place'`. `'plan'` allowed since 18.11.2026 (`plans_tables`) for the cutover from trips to plans; no row uses it yet. |
 | `resource_id` | uuid | no | — | Points at `lists.id`, `trips.id`, or `places.id`. **Not FK-constrained** (polymorphic). |
 | `slug` | text | no | — | **UNIQUE**. Generated via `nanoid(10)`. The path segment in `/shared/<slug>`. |
 | `is_active` | boolean | yes | `true` | Toggle to 404 the link without deleting the row. |

@@ -2,11 +2,12 @@
 title: DataForSEO Business Data
 type: integration
 domain: integrations
-version: 1.5.0
-last_updated: 16.10.2026
+version: 1.6.0
+last_updated: 18.11.2026
 status: stable
 sources:
   - src/lib/dataforseo/
+  - src/lib/place-search/
 related:
   - "[[../01-domain/places]]"
   - "[[google-places]]"
@@ -57,6 +58,15 @@ Implementation in `src/lib/dataforseo/`:
 | `price-level-adapter.ts` | DataForSEO `price_level` → numeric 0–4. |
 | `photo.ts` | `downloadAndStorePhotoFromUrl(url, ...)` → uploads to Supabase Storage. |
 
+### Google Maps search (SERP API) — 18.11.2026
+
+`src/lib/place-search/dataforseo-maps.ts` calls a second DataForSEO product, the SERP API: `POST /v3/serp/google/maps/live/advanced` with `keyword`, `location_coordinate` (`lat,lng,<zoom>z` — zoom derived from the wanted radius) and `depth`. It is the provider behind the `PlaceSearch` interface (`src/lib/place-search/`), used by the assistant's `search_google_maps` tool ([[claude-mcp]]).
+
+- Each `maps_search` item carries `title`, `address`, `cid`, `place_id`, coordinates, `rating.value` / `rating.votes_count`, `category`, `phone`, `url`, `work_hours.current_status`. `price_level` came back null in every live result checked.
+- The `cid` equals the one Business Info stores in `google_data.cid` (checked on a saved place), so results can be matched against the library and fed to the import pipeline.
+- $0.002 per search of up to 100 results (the response's `cost` field); latency 2.6–12.4 s in six live calls.
+- `client.ts` gained `dataForSeoClientFromEnv()` and an optional abort signal on `post`.
+
 ## Where it's used
 
 | Caller | Purpose |
@@ -72,6 +82,7 @@ Implementation in `src/lib/dataforseo/`:
 
 - `dataforseo_business_info_live` — Business Info Live calls.
 - `dataforseo_reviews` — Reviews calls.
+- `dataforseo_maps_search` — Google Maps searches by the assistant's `search_google_maps` tool ($2 per 1,000; 18.11.2026).
 
 Each call → +1 in `api_usage`. `cost_per_1k` is set per DataForSEO's price.
 

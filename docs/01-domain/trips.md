@@ -2,8 +2,8 @@
 title: Trip
 type: entity
 domain: trips
-version: 1.1.0
-last_updated: 16.07.2026
+version: 1.1.1
+last_updated: 18.11.2026
 status: stable
 sources:
   - src/lib/types/index.ts
@@ -34,6 +34,8 @@ related:
 ---
 
 # Trip
+
+> **Being replaced (18.11.2026).** Trips become **plans** (one model for an evening out and a multi-day trip); visits become their own entity. The new tables exist ([[../02-backend/schema/plans]], [[../02-backend/schema/visits]]); this page describes the code that still runs until the cutover. Design: [[../_plans/phase-1-planning]].
 
 > **v1.22.0 (S4 Trip Intelligence):** per-day **route mode** (`trip_days.routing_profile`, NF-07), per-stop **budget estimates** (`trip_day_places.cost_estimate/currency` + `trips.party_size`, NF-08), and the **AI trip planner** (`POST /api/ai/trip-plan`, AI-09 — see [[../05-flows/ai-trip-plan-flow]]). `time_slot` and day/stop `notes` are rendered in the UI for the first time.
 

@@ -2,8 +2,8 @@
 title: trips
 type: table
 domain: backend
-version: 1.1.0
-last_updated: 16.07.2026
+version: 1.1.1
+last_updated: 18.11.2026
 status: stable
 sources:
   - Supabase project hukppmaevcapvbrvxtph (live)
@@ -16,6 +16,8 @@ related:
 ---
 
 # `trips`
+
+> **Being replaced (18.11.2026).** The plan model — [[plans]] — now exists next to this table and holds a copy of its rows. The app still reads and writes here until the cutover; after it this table is dropped. See [[../../_plans/phase-1-planning]].
 
 > **v1.22.0 (NF-08):** new `party_size` column (migration `add_trips_party_size`) — the trip header's budget total is `Σ per-person cost_estimate × party_size`, adjustable via a stepper in the UI. Stripped from the public share payload (owner-private). Alongside it, `PATCH /api/trips/[id]` switched from a raw-body spread (every column client-writable, `user_id` included) to a Zod whitelist.
 

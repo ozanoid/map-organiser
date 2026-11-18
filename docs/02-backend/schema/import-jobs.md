@@ -2,8 +2,8 @@
 title: Import job tables
 type: table
 domain: backend
-version: 1.2.0
-last_updated: 16.10.2026
+version: 1.2.1
+last_updated: 18.11.2026
 status: stable
 sources:
   - src/app/api/places/import-jobs/route.ts
@@ -58,7 +58,7 @@ One row per upload (Takeout) or per shared post (Instagram).
 |---|---|---|
 | `id` | `uuid` pk | |
 | `user_id` | `uuid` → `auth.users` | cascade delete |
-| `kind` | `text` not null, default `'takeout'`, CHECK `takeout` \| `instagram` | Since 16.10.2026 ([[#instagram-migration]]). Decides `places.source` in the drain and which UI reports the job. |
+| `kind` | `text` not null, default `'takeout'`, CHECK `takeout` \| `instagram` \| `assistant` | Since 16.10.2026 ([[#instagram-migration]]). Decides `places.source` in the drain and which UI reports the job. `assistant` allowed since 18.11.2026 (`assistant_source`) for the `add_place` tool; no code creates such jobs yet. |
 | `file_name` | `text` | Takeout: the file name, shown in the UI. Instagram: the canonical post URL (`https://www.instagram.com/p/<shortcode>/`) — the 10-minute reuse check matches on it. |
 | `total` | `int` | Takeout: places parsed out of the file. Instagram: places queued + places already saved, written once the post is read; +1 for each picked place sent back into the queue. |
 | `status` | `text` | `running` \| `done` \| `cancelled`, plus `reading` for an Instagram job while its post is being read. No CHECK constraint (verified 16.10.2026). |

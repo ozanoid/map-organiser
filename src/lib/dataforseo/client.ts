@@ -31,7 +31,7 @@ export class DataForSEOClient {
       Buffer.from(`${creds.login}:${creds.password}`).toString("base64");
   }
 
-  async post<T>(endpoint: string, body: unknown[]): Promise<T> {
+  async post<T>(endpoint: string, body: unknown[], opts: { signal?: AbortSignal } = {}): Promise<T> {
     const url = `${DATAFORSEO_BASE}${endpoint}`;
     console.log(`[DataForSEO REQUEST] POST ${url} | tasks: ${body.length}`);
 
@@ -42,6 +42,7 @@ export class DataForSEOClient {
         "Content-Type": "application/json",
       },
       body: JSON.stringify(body),
+      signal: opts.signal,
     });
 
     const responseBody = await res.text();
@@ -102,4 +103,13 @@ export class DataForSEOClient {
 
     return data as T;
   }
+}
+
+/** The system DataForSEO account (DATAFORSEO_LOGIN / DATAFORSEO_PASSWORD), or
+ *  null when the server has no credentials. */
+export function dataForSeoClientFromEnv(): DataForSEOClient | null {
+  const login = process.env.DATAFORSEO_LOGIN;
+  const password = process.env.DATAFORSEO_PASSWORD;
+  if (!login || !password) return null;
+  return new DataForSEOClient({ login, password });
 }

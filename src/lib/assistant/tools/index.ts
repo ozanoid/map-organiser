@@ -2,6 +2,7 @@ import { getLibraryOverview } from "@/lib/assistant/tools/get-library-overview";
 import { getPlaces } from "@/lib/assistant/tools/get-places";
 import { rankPlaces } from "@/lib/assistant/tools/rank-places";
 import { readReviews } from "@/lib/assistant/tools/read-reviews";
+import { searchGoogleMaps } from "@/lib/assistant/tools/search-google-maps";
 import { searchPlaces } from "@/lib/assistant/tools/search-places";
 import type { AssistantTool } from "@/lib/assistant/tools/types";
 import { updatePlaces } from "@/lib/assistant/tools/update-places";
@@ -13,5 +14,6 @@ export const ASSISTANT_TOOLS: AssistantTool[] = [
   rankPlaces,
   getPlaces,
   readReviews,
+  searchGoogleMaps,
   updatePlaces,
 ] as unknown as AssistantTool[];

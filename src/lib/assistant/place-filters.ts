@@ -37,7 +37,7 @@ export const localDateTime = z
 
 export const VISIT_STATUSES = ["want_to_go", "booked", "visited", "favorite"] as const;
 
-const near = z
+export const nearSchema = z
   .object({
     place_id: placeId.optional().describe("Centre on one of the user's saved places"),
     lat: z.number().min(-90).max(90).optional(),
@@ -66,7 +66,7 @@ export const placeFilterShape = {
     .optional()
     .describe("City or district. Also matches the address, so 'Istanbul' finds places stored under Kadıköy."),
   country: z.string().max(60).optional(),
-  near: near.optional(),
+  near: nearSchema.optional(),
   category: z.string().max(60).optional().describe("Category name from get_library_overview, e.g. 'Restaurant'"),
   subcategory: z.string().max(60).optional().describe("Sub-category name, e.g. 'Cocktail Bar'"),
   tags: z
@@ -120,14 +120,26 @@ export interface FilteredLibrary {
   openAtResult: Map<string, { open: boolean; closesAt?: string } | null>;
 }
 
-async function resolveAnchor(
+/** A `near` input → a point. Pass the loaded library when there is one;
+ *  without it a place_id anchor is read on its own. */
+export async function resolveAnchor(
   ctx: AssistantContext,
-  n: NonNullable<PlaceFilters["near"]>,
-  library: LibraryRow[]
+  n: z.infer<typeof nearSchema>,
+  library?: LibraryRow[]
 ): Promise<Anchor> {
   const radius = n.radius_m ?? 1500;
   if (n.place_id) {
-    const row = library.find((r) => r.id === n.place_id);
+    let row: { name: string; location: unknown } | undefined = library?.find((r) => r.id === n.place_id);
+    if (!library) {
+      const { data, error } = await ctx.supabase
+        .from("places")
+        .select("name,location")
+        .eq("user_id", ctx.userId)
+        .eq("id", n.place_id)
+        .maybeSingle();
+      if (error) throw new Error(error.message);
+      row = data ?? undefined;
+    }
     const c = row ? coords(row) : null;
     if (!row || !c) throw new ToolInputError(`No saved place with id ${n.place_id} (or it has no location).`);
     return { label: row.name, ...c, radius_m: radius };

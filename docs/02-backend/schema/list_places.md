@@ -2,8 +2,8 @@
 title: list_places
 type: table
 domain: backend
-version: 1.0.0
-last_updated: 12.05.2026
+version: 1.1.0
+last_updated: 18.11.2026
 status: stable
 sources:
   - Supabase project hukppmaevcapvbrvxtph (live)
@@ -26,6 +26,7 @@ Junction connecting `lists` ↔ `places` with explicit ordering. 95 rows in snap
 | `place_id` | uuid | no | — | FK → `places.id`. |
 | `sort_order` | int | yes | `0` | Within-list display order. |
 | `added_at` | timestamptz | yes | `now()` | When the place was added to this list. |
+| `note` | text | yes | — | Why the place is on this list / what to order (18.11.2026, `list_place_notes`). Not read or written by code yet — Phase 1, slice 4. |
 
 **Primary key:** `(list_id, place_id)` composite.
 
