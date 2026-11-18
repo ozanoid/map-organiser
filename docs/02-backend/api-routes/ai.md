@@ -2,7 +2,7 @@
 title: AI routes
 type: route-group
 domain: backend
-version: 1.9.0
+version: 1.9.1
 last_updated: 18.11.2026
 status: stable
 sources:
@@ -216,7 +216,7 @@ S2 F-04 (v1.19.0). Side-by-side AI comparison of 2-4 saved places.
 
 S3 AI-02 v1 (v1.21.0). The assistant agent loop — the group's only STREAMING route (deliberate exception to the "never streamText" rule, amended in [[../../04-integrations/gemini]]).
 
-- **Body:** `{ messages: UIMessage[], sessionId?: string }`. History is client-held (session-only memory — no DB table in v1); the server additionally trims to the last 30 messages.
+- **Body:** `{ messages: UIMessage[], sessionId?: string, timeZone?: string }`. `timeZone` is the browser's IANA zone (v1.39.0): the system prompt's "today" is the user's date there, UTC when it is missing or not a zone — before, it was the server's UTC date, a day behind on an Istanbul night. History is client-held (session-only memory — no DB table in v1); the server additionally trims to the last 30 messages.
 - **Gates:** same four gates BEFORE the stream starts (auth → `after(flushLangfuse)` → `ai_features_enabled` → client → **budget `chat`**: SKU `ai_chat`, cap `AI_MONTHLY_CHAT_CAP = 200`/month → 429). Mid-stream LLM failures surface as stream error parts, not HTTP statuses.
 - **Agent loop:** `streamText` + `stopWhen: stepCountIs(6)` + 8 tools from `src/lib/ai/chat-tools.ts`, all executing under the request's cookie client (RLS = ownership boundary):
   - read-only: `search_places` (shared `queryPlaces()` engine — same JS post-filters as GET /api/places), `get_place_details`, `compare_places` (data-only; the CHAT model verbalises — no nested ai_compare LLM call/unit), `get_stats` (shared `computeUserStats()`).

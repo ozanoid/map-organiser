@@ -3,7 +3,7 @@ import { z } from "zod";
 import { clip, ToolInputError, type AssistantContext } from "@/lib/assistant/library";
 import { defineTool } from "@/lib/assistant/tools/types";
 import { trackUsage } from "@/lib/google/track-usage";
-import { planPhase, todayAt, weekdayName, type PlanPhase } from "@/lib/plans/dates";
+import { addDays, planPhase, todayAt, weekdayName, type PlanPhase } from "@/lib/plans/dates";
 import {
   dayRoute,
   getPlan,
@@ -29,7 +29,9 @@ import type { Plan, PlanDay, PlanRoute, PlanStop } from "@/lib/types";
  * A plan is upcoming until its last day is over where it takes place: "today"
  * is the date in the time zone of the plan's last stop at a located place
  * (UTC when it has none) — not the server's date, which is already tomorrow
- * during a New York evening.
+ * during a New York evening. A zone moves the date at most a day from UTC's,
+ * so only plans whose last day is within a day of today (UTC) need their
+ * zone looked up; the rest are judged by the UTC date with the same result.
  */
 
 const PHASES = ["upcoming", "unscheduled", "past", "cancelled"] as const satisfies readonly PlanPhase[];
@@ -260,8 +262,20 @@ export const getPlans = defineTool({
       return { plan };
     }
 
-    const [all, outlines] = await Promise.all([listPlans(ctx), planOutlines(ctx)]);
-    const phases = new Map(all.map((p) => [p.id, phaseOf(p, outlines.get(p.id))]));
+    const all = await listPlans(ctx);
+    const utcToday = todayAt(null);
+    const nearToday = all.filter(
+      (p) =>
+        p.status === "planned" &&
+        p.end_date !== null &&
+        p.end_date >= addDays(utcToday, -1) &&
+        p.end_date <= addDays(utcToday, 1)
+    );
+    const zoned = await planOutlines(
+      ctx,
+      nearToday.map((p) => p.id)
+    );
+    const phases = new Map(all.map((p) => [p.id, phaseOf(p, zoned.get(p.id))]));
     const counts: Record<PlanPhase, number> = { upcoming: 0, unscheduled: 0, past: 0, cancelled: 0 };
     for (const p of all) counts[phases.get(p.id)!]++;
 
@@ -286,9 +300,15 @@ export const getPlans = defineTool({
       .filter((p) => !needle || fold(p.name).includes(needle))
       .sort(byPhaseThenDate(phases));
     const shown = matches.slice(0, limit);
+    // Stop names for the plans shown — read only for those.
+    const named = await planOutlines(
+      ctx,
+      shown.filter((p) => !zoned.has(p.id)).map((p) => p.id)
+    );
+    const stopsOf = (id: string) => (zoned.get(id) ?? named.get(id))?.stops ?? [];
 
     return {
-      plans: shown.map((p) => planSummary(ctx, p, phases.get(p.id)!, outlines.get(p.id)?.stops ?? [])),
+      plans: shown.map((p) => planSummary(ctx, p, phases.get(p.id)!, stopsOf(p.id))),
       more: matches.length > shown.length ? matches.length - shown.length : undefined,
       all_plans: counts,
       note: shown.length === 0 ? "No plans match. all_plans counts every plan of the user by phase." : undefined,

@@ -37,8 +37,8 @@ Claude can now read, save and change the user's plans through the connector.
   `/map`. A signed-in visit to `/login?next=…` goes straight on. API paths
   get no `next`. Only same-site paths are followed (`safeNextPath`).
 - **Read helper:** `planOutlines` (`src/lib/plans/read.ts`) — each plan's
-  stops by name and its time zone (the last located stop's), for one plan or
-  all. `clip` moved into the assistant library; `todayAt` (today in a zone,
+  stops by name and its time zone (the last located stop's), for the plans
+  asked for. `clip` moved into the assistant library; `todayAt` (today in a zone,
   UTC without one) is shared by plans and visits in `src/lib/plans/dates.ts`.
 - **Review fixes** (an independent review of the first commit, 18.11.2026):
   - *Open redirect:* `safeNextPath` checked the raw `next` only; parsing
@@ -55,7 +55,13 @@ Claude can now read, save and change the user's plans through the connector.
     is a place or a text, not both.
   - *Where "today" is:* a plan's phase in `get_plans` follows the time zone
     of its last located stop, not the server's UTC date (a New York evening
-    is already tomorrow in UTC).
+    is already tomorrow in UTC). The zone is looked up only for plans whose
+    last day is within a day of today (UTC) — no other plan can change phase
+    by it — and stop names only for the plans shown. The same class, found
+    by the re-review and a scan: `get_places`' upcoming plans now use the
+    place's date, and the in-app chat sends the browser's zone so its prompt
+    carries the user's date. (Client components already used the browser's
+    date; the overview's rolling 30-day visit count is left on UTC.)
   - *Name search* covers every phase, so a past or cancelled trip is found.
   - *Currency:* the dollar cost default is no longer written onto a stop in
     another currency.

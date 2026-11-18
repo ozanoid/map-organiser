@@ -2,8 +2,8 @@
 title: AI Chat Flow
 type: flow
 domain: ai
-version: 1.1.0
-last_updated: 16.07.2026
+version: 1.1.1
+last_updated: 18.11.2026
 status: stable
 sources:
   - src/app/api/ai/chat/route.ts
@@ -50,8 +50,9 @@ mobile).
        │
        ▼
 3. streamText agent loop (stopWhen: stepCountIs(6))
-       │  • system = buildChatSystemPrompt(buildUserContext()) —
-       │    real taxonomy ids injected; "never invent ids" rule
+       │  • system = buildChatSystemPrompt(buildUserContext(), today) —
+       │    real taxonomy ids injected; "never invent ids" rule; today =
+       │    the user's date in the browser's zone (body.timeZone, v1.39.0)
        │  • tools (cookie client, RLS = ownership boundary):
        │      search_places      → shared queryPlaces() engine
        │      rank_places        → v1.23.0 parity: queryPlaces + LLM-as-judge

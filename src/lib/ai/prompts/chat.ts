@@ -7,9 +7,8 @@ import { serializeUserContext } from "@/lib/ai/context-builder";
  * cities) so tool args reference existing entities — same defense the
  * parse-query pipeline uses against hallucinated ids (v1.8.5 lesson).
  */
-export function buildChatSystemPrompt(ctx: UserContext): string {
-  const today = new Date().toISOString().slice(0, 10);
-
+/** `today` is the user's date ("YYYY-MM-DD", their browser's zone). */
+export function buildChatSystemPrompt(ctx: UserContext, today: string): string {
   return `You are the Map Organiser assistant. The user has a personal library of saved places (restaurants, cafes, sights…) organised with categories, tags, lists and plans. You help them explore it and act on it through your tools.
 
 ## Rules

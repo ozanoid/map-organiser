@@ -248,21 +248,20 @@ export interface PlanOutline {
   timeZone: string | null;
 }
 
-/** Each plan's stops in day and visiting order, names only, and its time
- *  zone — for a list of plans that says what is in each and whether it is
- *  over (the assistant's get_plans). Without `planIds`, every plan of the
- *  user. */
-export async function planOutlines(ctx: PlanContext, planIds?: string[]): Promise<Map<string, PlanOutline>> {
+/** These plans' stops in day and visiting order, names only, and each plan's
+ *  time zone — for a list of plans that says what is in each and whether it
+ *  is over (the assistant's get_plans). Reading the zone opens each stop's
+ *  place data, so callers ask only for the plans they need. */
+export async function planOutlines(ctx: PlanContext, planIds: string[]): Promise<Map<string, PlanOutline>> {
   const out = new Map<string, PlanOutline>();
-  if (planIds && planIds.length === 0) return out;
-  let query = ctx.supabase
+  if (planIds.length === 0) return out;
+  const { data, error } = await ctx.supabase
     .from("plans")
     .select(
       "id,days:plan_days(day_number,stops:plan_stops(sort_order,title,start_time,day_part,status,place:places(name,tz:google_data->>tz)))"
     )
-    .eq("user_id", ctx.userId);
-  if (planIds) query = query.in("id", planIds);
-  const { data, error } = await query;
+    .eq("user_id", ctx.userId)
+    .in("id", planIds);
   if (error) throw new Error(error.message);
 
   type Row = {

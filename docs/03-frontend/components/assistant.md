@@ -2,8 +2,8 @@
 title: Assistant components
 type: component
 domain: frontend
-version: 1.1.0
-last_updated: 16.07.2026
+version: 1.1.1
+last_updated: 18.11.2026
 status: stable
 sources:
   - src/components/assistant/assistant-panel.tsx
@@ -33,7 +33,8 @@ twMerge replaces rather than duels); full-width on mobile.
 
 - **State:** `useChat({ chat })` from `@ai-sdk/react` with a
   module-scope `Chat` instance (`DefaultChatTransport` →
-  `/api/ai/chat`, sessionId in body). Panel close/reopen keeps the
+  `/api/ai/chat`, sessionId and the browser's time zone in body — the
+  server tells the model the user's date, v1.39.0). Panel close/reopen keeps the
   conversation; "New chat" resets instance + sessionId. No zustand
   store — the Chat instance IS the session state.
 - **Message rendering:** user bubbles right-aligned emerald; assistant

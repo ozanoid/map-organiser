@@ -57,7 +57,7 @@ Things that will look right based on training data but will break in this codeba
 ## Assistant tools (MCP)
 
 - **zod objects drop unknown keys silently.** A model that writes `date` for `visited_on` or `time` for `start_time` would get a call that ignores the field (a visit logged today, a stop without its time). Tool inputs are strict at the top (`defineTool` in `src/lib/assistant/tools/types.ts`) and the plan schemas are `z.strictObject` all the way down; keep new schemas strict, and name output fields as the input names them, so what the model reads it can write back.
-- **A tool result is not the place to guess "today".** Plans and visits are judged by the date where they take place (`todayAt(place tz)` in `src/lib/plans/dates.ts`), not by the server's UTC date.
+- **"Today" on the server is not the user's today.** Vercel runs in UTC — a day ahead during a New York evening, a day behind on an Istanbul night. Plans and visits are judged by the date where they take place (`todayAt(place tz)` in `src/lib/plans/dates.ts`); the in-app chat by the browser's zone (sent in the request body). Client components use the browser's date already.
 
 ## URLs and redirects
 

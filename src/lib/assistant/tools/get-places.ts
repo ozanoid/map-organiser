@@ -12,7 +12,7 @@ import { localDateTime, placeId } from "@/lib/assistant/place-filters";
 import { defineTool } from "@/lib/assistant/tools/types";
 import type { UserContext } from "@/lib/db/context";
 import type { Timetable } from "@/lib/places/open-now";
-import { dayDate, todayIso } from "@/lib/plans/dates";
+import { dayDate, todayAt } from "@/lib/plans/dates";
 import { listVisits } from "@/lib/visits/read";
 
 const DETAIL_SELECT = [
@@ -99,10 +99,13 @@ function worthSuggesting(s: Similar): s is Similar & { cid: string } {
 const INSTAGRAM_POST = /https?:\/\/(?:www\.)?instagram\.com\/(?:p|reel|reels|tv)\/[A-Za-z0-9_-]+\/?/;
 
 /** Plans still ahead (or not scheduled yet) that have a planned stop at
- *  these places. */
+ *  these places. "Ahead" is judged by today's date at the place (its time
+ *  zone), so tonight's dinner in New York isn't dropped because it is
+ *  already tomorrow in UTC. */
 async function upcomingPlansOf(
   ctx: UserContext,
-  placeIds: string[]
+  placeIds: string[],
+  timeZoneOf: Map<string, string | null>
 ): Promise<Map<string, Array<{ plan: string; plan_id: string; date?: string }>>> {
   const { data, error } = await ctx.supabase
     .from("plan_stops")
@@ -116,11 +119,10 @@ async function upcomingPlansOf(
     place_id: string;
     plan_days: { day_number: number; plans: { id: string; name: string; start_date: string | null } };
   };
-  const today = todayIso();
   const out = new Map<string, Array<{ plan: string; plan_id: string; date?: string }>>();
   for (const r of (data ?? []) as unknown as Row[]) {
     const date = dayDate(r.plan_days.plans.start_date, r.plan_days.day_number);
-    if (date && date < today) continue; // that day has passed
+    if (date && date < todayAt(timeZoneOf.get(r.place_id))) continue; // that day has passed
     const list = out.get(r.place_id) ?? [];
     list.push({ plan: r.plan_days.plans.name, plan_id: r.plan_days.plans.id, date: date ?? undefined });
     out.set(r.place_id, list);
@@ -155,7 +157,7 @@ export const getPlaces = defineTool({
       ctx.supabase.from("place_tags").select("place_id, tags(name)").in("place_id", ids),
       ctx.supabase.from("list_places").select("place_id, lists(name)").in("place_id", ids),
       listVisits(ctx, { placeIds: ids, limit: 200 }),
-      upcomingPlansOf(ctx, ids),
+      upcomingPlansOf(ctx, ids, new Map(rows.map((r) => [r.id, r.g_tz]))),
     ]);
     const visitsOf = new Map<string, typeof visits>();
     for (const v of visits) visitsOf.set(v.place_id, [...(visitsOf.get(v.place_id) ?? []), v]);
