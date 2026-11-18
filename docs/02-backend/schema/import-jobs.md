@@ -2,7 +2,7 @@
 title: Import job tables
 type: table
 domain: backend
-version: 1.2.1
+version: 1.3.1
 last_updated: 18.11.2026
 status: stable
 sources:
@@ -17,6 +17,10 @@ sources:
   - src/lib/import/process-place.ts
   - src/lib/import/kick-drain.ts
   - src/lib/hooks/use-import-job.ts
+  - src/lib/instagram/start-import.ts
+  - src/lib/instagram/view.ts
+  - src/lib/instagram/pick.ts
+  - src/lib/places/add.ts
 related:
   - "[[_README]]"
   - "[[places]]"
@@ -58,29 +62,50 @@ One row per upload (Takeout) or per shared post (Instagram).
 |---|---|---|
 | `id` | `uuid` pk | |
 | `user_id` | `uuid` → `auth.users` | cascade delete |
-| `kind` | `text` not null, default `'takeout'`, CHECK `takeout` \| `instagram` \| `assistant` | Since 16.10.2026 ([[#instagram-migration]]). Decides `places.source` in the drain and which UI reports the job. `assistant` allowed since 18.11.2026 (`assistant_source`) for the `add_place` tool; no code creates such jobs yet. |
+| `kind` | `text` not null, default `'takeout'`, CHECK `takeout` \| `instagram` \| `assistant` | Since 16.10.2026 ([[#instagram-migration]]). Decides `places.source` in the drain and which UI reports the job. `assistant` allowed since 18.11.2026 (`assistant_source`); created by Claude's `add_places` since v1.41.0 — see [[#assistant-jobs]]. |
 | `file_name` | `text` | Takeout: the file name, shown in the UI. Instagram: the canonical post URL (`https://www.instagram.com/p/<shortcode>/`) — the 10-minute reuse check matches on it. |
 | `total` | `int` | Takeout: places parsed out of the file. Instagram: places queued + places already saved, written once the post is read; +1 for each picked place sent back into the queue. |
-| `status` | `text` | `running` \| `done` \| `cancelled`, plus `reading` for an Instagram job while its post is being read. No CHECK constraint (verified 16.10.2026). |
+| `status` | `text` | `running` \| `done` \| `cancelled`, plus `reading` for an Instagram job while its post is being read and `preparing` (v1.41.0) for a Takeout or assistant job while its items are written. No CHECK constraint (verified 16.10.2026 and 18.11.2026). |
 | `visit_status` | `text` | import-time default applied to every place (Instagram: always `want_to_go`) |
 | `list_ids` | `uuid[]` | ditto (Instagram: none) |
 | `tag_ids` | `uuid[]` | ditto (Instagram: the user's `instagram` tag) |
-| `meta` | `jsonb` not null, default `'{}'` | Since 16.10.2026. Instagram only: `{ phase, shortcode, post?: { owner, ownerFullName, caption (≤ 280 chars), locationName }, error? }` — `InstagramJobMeta` in `src/lib/instagram/types.ts`. |
+| `meta` | `jsonb` not null, default `'{}'` | Since 16.10.2026. Instagram only: `{ phase, shortcode, post?: { owner, ownerFullName, caption (≤ 280 chars), locationName }, error?, via? }` — `InstagramJobMeta` in `src/lib/instagram/types.ts`. `via: 'assistant'` (v1.41.0) when Claude's `add_places` started it; absent for the app. |
 | `created_at` | `timestamptz` | |
 | `finished_at` | `timestamptz` | set when the job closes |
 
 `status` is the cancel switch: `claim_import_items` only reads from `running`
 jobs, so flipping the row stops the drain from taking anything new.
 
-### Two kinds of job
+### Three kinds of job
 
-| | `takeout` | `instagram` |
-|---|---|---|
-| Created by | `POST /api/places/import-jobs` | `POST /api/instagram/import` |
-| Items written | all at once, in the request | after the response, once the post is read (`after()`) |
-| Status path | `running` → `done` / `cancelled` | `reading` → `running` → `done`, or `reading` → `done` when nothing needs importing or the read failed; a pick turns a `done` job back to `running` until the picked place is through |
-| New places get `source` | `import` | `instagram` |
-| Reported by | `GET /api/places/import-jobs` (filters `kind = 'takeout'`) | `GET /api/instagram/import/[id]` |
+| | `takeout` | `instagram` | `assistant` (v1.41.0) |
+|---|---|---|---|
+| Created by | `POST /api/places/import-jobs` | `startInstagramImport` (`src/lib/instagram/start-import.ts`) — the app's `POST /api/instagram/import` and Claude's `add_places` | `addPlacesFromGoogle` (`src/lib/places/add.ts`) — Claude's `add_places` |
+| Items written | all at once, in the request | once the post is read — after the response (`after()`) for the app, inside the tool call for Claude | in the request, one per place it just created, at stage `photo` |
+| Status path | `preparing` → `running` → `done` / `cancelled` | `reading` → `running` → `done`, or `reading` → `done` when nothing needs importing or the read failed; a pick turns a `done` job back to `running` until the picked place is through | `preparing` → `running` → `done` |
+| New places get `source` | `import` | `instagram` | `assistant` (made by the tool; the drain maps the kind the same way if one is ever queued at `import`) |
+| Reported by | `GET /api/places/import-jobs` (filters `kind = 'takeout'`) | `GET /api/instagram/import/[id]` (`getInstagramImportView`, shared with the tool) | nobody — the tool answers with the places; this job only enriches them |
+
+**Why `preparing`** (v1.41.0). `finalizeJobs` marks every `running` job with no
+active items `done`, and the claim only takes items of `running` jobs — so a job
+born `running` could be closed by a drain run between its insert and its
+items', which would then never be drained. Takeout and assistant jobs are born
+`preparing` and turn `running` once their items exist (a Takeout file whose
+item insert fails part-way still turns `running`, so the rows that landed are
+drained). Found by the slice-5 review; the Takeout create route had the same
+window since v1.26.0.
+
+### Assistant jobs
+
+`add_places` creates the place itself, inside the tool call, with the same
+`importPlace` the drain runs — so Claude can answer with the saved place, and
+a large import in the shared queue never holds it up. What takes minutes is
+left to the queue: one `assistant` job (`total` = places, no `file_name`, no
+defaults) and one item per new place at stage `photo` with `place_id` set. The
+drain treats them like any item past `import`: photo → reviews → profile →
+done, and `finalizeJobs` closes the job. Written with the service role for the
+verified user; if writing them fails the places stay saved without photo,
+reviews and profile, and the tool says so.
 
 **Why `reading`.** An Instagram job has no items until its post has been read.
 Created as `running`, it would be closed at once by the drain's `finalizeJobs`,
@@ -159,6 +184,10 @@ Three properties matter:
 - **Stage priority** puts every place on the map before any of them get enriched,
   then gives them a picture before the slow part. Import is ~17 s per place and
   `photo` is a CDN fetch, while `reviews` polls DataForSEO for up to 110 s.
+  `RETURNING` does not keep the subquery's order, so the drain sorts the claimed
+  rows by stage again before working them (v1.41.0) — before that, a picked
+  Instagram place's import waited 87 s behind reviews claimed in the same run
+  (measured 18.11.2026).
 - **The stale window** returns an item whose runner died, and `attempts` stops a
   poison item from doing that forever. The drain resets `attempts` on every
   successful stage advance, so the cap counts failures at one stage rather than

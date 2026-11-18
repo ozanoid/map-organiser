@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { resolveCategoryId } from "@/lib/google/category-mapping";
+import { isUniqueViolation } from "@/lib/db/errors";
 import { addPlaceToLists } from "@/lib/lists/write";
 import { queryPlaces } from "@/lib/places/query-places";
 import { log } from "@/lib/telemetry/logger";
@@ -183,6 +184,22 @@ export async function POST(request: NextRequest) {
     .single();
 
   if (error) {
+    // Saved by another request between the check above and this insert
+    // (places_user_google_place_id_key): the same answer as the check gives.
+    if (isUniqueViolation(error) && google_place_id) {
+      const { data: winner } = await supabase
+        .from("places")
+        .select("id")
+        .eq("user_id", user.id)
+        .eq("google_place_id", google_place_id)
+        .maybeSingle();
+      if (winner) {
+        return NextResponse.json(
+          { error: "This place is already saved", existingId: winner.id },
+          { status: 409 }
+        );
+      }
+    }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 

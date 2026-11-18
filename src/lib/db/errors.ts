@@ -13,6 +13,13 @@ import type { PostgrestError } from "@supabase/supabase-js";
 export class InputError extends Error {}
 export class NotFoundError extends Error {}
 
+/** A unique index refused the row because an equal one is already there —
+ *  e.g. two adds of one place at once (places_user_google_place_id_key).
+ *  Callers treat it as "already saved", not as a failure. */
+export function isUniqueViolation(error: { code?: string } | null | undefined): boolean {
+  return error?.code === "23505";
+}
+
 /** Postgres error codes that mean "this value isn't acceptable": a CHECK,
  *  a bad date / time / number / uuid, a missing reference, a missing value. */
 const INVALID_VALUE_CODES = new Set(["23514", "22007", "22008", "22P02", "23503", "23502"]);

@@ -2,7 +2,7 @@
 title: User & Profile
 type: entity
 domain: users
-version: 1.4.1
+version: 1.4.2
 last_updated: 18.11.2026
 status: stable
 sources:
@@ -44,7 +44,7 @@ Auth credentials, password hashes, and OAuth identities all live in `auth.*` (ma
 | `id` | uuid | yes | **PK + FK** → `auth.users.id`. Matches the auth user 1:1. |
 | `full_name` | text | no | Pulled from `raw_user_meta_data.full_name`/`name` on signup. |
 | `avatar_url` | text | no | Pulled from `raw_user_meta_data.avatar_url`. |
-| `is_admin` | boolean | yes | Default `false`. Read by `getUserApiKeys` (`src/lib/google/get-user-api-keys.ts`): an admin — or a user with no profile row — gets the server's env keys (`GOOGLE_PLACES_API_KEY`, `NEXT_PUBLIC_MAPBOX_TOKEN`) instead of their own encrypted ones. `GET /api/user/api-keys` also returns it, and Settings → API shows "Admin account — using system API keys". |
+| `is_admin` | boolean | yes | Default `false`. Read by `getUserApiKeys` (`src/lib/google/get-user-api-keys.ts`): an admin — or a user with no profile row — gets the server's env keys (`GOOGLE_PLACES_API_KEY`, `NEXT_PUBLIC_MAPBOX_TOKEN`) instead of their own encrypted ones. Without a cookie session (the MCP endpoint) the caller passes its own client (`getUserApiKeys(userId, client)`, v1.41.0); the cookie client would read no profile and hand out the env keys. `GET /api/user/api-keys` also returns it, and Settings → API shows "Admin account — using system API keys". |
 | `google_api_key_enc` | text | no | AES-256-GCM-encrypted Google Places API key. Never returned to client. |
 | `mapbox_token_enc` | text | no | Encrypted personal Mapbox token (if user opts to use their own). |
 | `dataforseo_login_enc` | text | no | Encrypted DataForSEO username. |

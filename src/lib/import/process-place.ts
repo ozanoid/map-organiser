@@ -1,6 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { parseMapsUrl } from "@/lib/google/parse-maps-url";
+import { parseMapsUrl, type ParseMapsUrlOptions } from "@/lib/google/parse-maps-url";
 import { resolveCategoryId } from "@/lib/google/category-mapping";
 import { trackUsage } from "@/lib/google/track-usage";
 import type { DataForSEOClient } from "@/lib/dataforseo/client";
@@ -13,11 +13,15 @@ import { downloadAndStorePhotoFromUrl } from "@/lib/dataforseo/photo";
 import type { Category } from "@/lib/types";
 import { haversineDistance } from "@/lib/geo";
 import { addPlaceToLists } from "@/lib/lists/write";
+import { isUniqueViolation } from "@/lib/db/errors";
 import { log } from "@/lib/telemetry/logger";
 
-/** One place as the Takeout parser produces it. */
+/** One place to add: what the Takeout parser, the Instagram reader or the
+ *  assistant's add hands the import. */
 export interface ImportPayload {
-  name: string;
+  /** The place's name. The assistant's add has only a Google id or a Maps
+   *  link — Google's name is used then. */
+  name?: string | null;
   address?: string | null;
   lat?: number | null;
   lng?: number | null;
@@ -30,8 +34,21 @@ export interface ImportDefaults {
   listIds?: string[];
   tagIds?: string[];
   /** `places.source` for the new row; Takeout imports leave it as "import". */
-  source?: "import" | "instagram";
+  source?: "import" | "instagram" | "assistant";
+  /**
+   * Add only a place Google Maps has a record of, and never mistake a failed
+   * lookup for "no record": no record → skipped NOT_ON_GOOGLE_MAPS (no thin
+   * row built from the URL's coordinates), a failed lookup throws. The
+   * assistant's add sets it. Takeout and Instagram keep the forgiving
+   * default: there a saved coordinate is worth a thin row.
+   */
+  requireLookup?: boolean;
+  /** Bounds the business-info lookup — the assistant answers within one call. */
+  signal?: AbortSignal;
 }
+
+/** Skip reason when Google Maps (through DataForSEO) has no such place. */
+export const NOT_ON_GOOGLE_MAPS = "Not on Google Maps";
 
 export type ImportOutcome =
   | { status: "imported"; placeId: string; enriched: boolean }
@@ -82,15 +99,18 @@ export interface PlaceIdentity {
  * is regex over the URL. The CID and place_id this yields are what make the
  * duplicate pre-check possible.
  */
-export async function resolveIdentity(payload: ImportPayload): Promise<PlaceIdentity> {
+export async function resolveIdentity(
+  payload: ImportPayload,
+  opts: ParseMapsUrlOptions = {}
+): Promise<PlaceIdentity> {
   let lat = payload.lat ?? null;
   let lng = payload.lng ?? null;
   let cid: string | null = null;
   let placeId: string | null = null;
-  let keyword = payload.name;
+  let keyword = payload.name?.trim() ?? "";
 
   if (payload.googleMapsUrl) {
-    const parsed = await parseMapsUrl(payload.googleMapsUrl);
+    const parsed = await parseMapsUrl(payload.googleMapsUrl, opts);
     // parseMapsUrl follows short links, so prefer the resolved URL — a
     // maps.app.goo.gl link carries no CID until it has been expanded.
     cid =
@@ -190,7 +210,7 @@ export async function ensurePlacePhoto(
       keyword: gpid.startsWith("ChIJ") ? `place_id:${gpid}` : `cid:${gpid}`,
       location_name: (place.country as string | null) ?? undefined,
     });
-    await trackUsage(userId, "dataforseo_business_info_live");
+    await trackUsage(userId, "dataforseo_business_info_live", supabase);
     imageUrl = raw?.main_image ?? undefined;
     if (!imageUrl) return "unavailable";
     gd.main_image = imageUrl;
@@ -244,7 +264,13 @@ export async function importPlace(
   if (already) {
     return { status: "skipped", reason: "Already exists", placeId: already };
   }
+  // Nothing to look up by: no Google id, no query, no name.
+  if (!identity.keyword) {
+    return { status: "skipped", reason: NOT_ON_GOOGLE_MAPS };
+  }
 
+  const givenName = payload.name?.trim() || null;
+  let name = givenName;
   let address = payload.address ?? null;
   let country: string | null = null;
   let city: string | null = null;
@@ -254,11 +280,13 @@ export async function importPlace(
   let photoRef: string | null = null;
   let googleData: Record<string, unknown> = {};
 
-  let raw = await fetchBusinessInfoLive(client, {
-    keyword: identity.keyword,
-    location_coordinate: identity.locationCoordinate,
-  });
-  await trackUsage(userId, "dataforseo_business_info_live");
+  const lookup = { signal: defaults.signal, throwOnError: defaults.requireLookup };
+  let raw = await fetchBusinessInfoLive(
+    client,
+    { keyword: identity.keyword, location_coordinate: identity.locationCoordinate },
+    lookup
+  );
+  await trackUsage(userId, "dataforseo_business_info_live", supabase);
 
   // A `cid:` DataForSEO holds no record for returns nothing at all, and the
   // place then lands with a name, a coordinate and nothing else: no address, no
@@ -268,12 +296,13 @@ export async function importPlace(
   // Retry by name, and only when we have a coordinate to bound it with: a bare
   // name search would happily return a same-named place in another city. Even
   // so the answer is verified below before it is trusted.
-  if (!raw && identity.locationCoordinate && identity.keyword !== payload.name) {
-    raw = await fetchBusinessInfoLive(client, {
-      keyword: payload.name,
-      location_coordinate: identity.locationCoordinate,
-    });
-    await trackUsage(userId, "dataforseo_business_info_live");
+  if (!raw && givenName && identity.locationCoordinate && identity.keyword !== givenName) {
+    raw = await fetchBusinessInfoLive(
+      client,
+      { keyword: givenName, location_coordinate: identity.locationCoordinate },
+      lookup
+    );
+    await trackUsage(userId, "dataforseo_business_info_live", supabase);
 
     // The coordinate is a bias, not a filter, and chains put two branches
     // inside one radius. Anything further than NAME_FALLBACK_MAX_KM from the
@@ -289,9 +318,15 @@ export async function importPlace(
     }
   }
 
+  // The assistant's add: a place Google doesn't know isn't added at all.
+  if (!raw && defaults.requireLookup) {
+    return { status: "skipped", reason: NOT_ON_GOOGLE_MAPS };
+  }
+
   if (raw) {
     const placeData = transformBusinessInfoToPlaceData(raw);
     const extended = extractExtendedData(raw);
+    name = name || placeData.name || null;
     googlePlaceId = placeData.placeId || null;
     address = placeData.address || address;
     country = placeData.country || country;
@@ -311,7 +346,7 @@ export async function importPlace(
       ...extended,
     };
     if (placeData.types?.length && userCategories?.length) {
-      categoryId = resolveCategoryId(placeData.types, userCategories, payload.name);
+      categoryId = resolveCategoryId(placeData.types, userCategories, name ?? undefined);
     }
   }
 
@@ -330,6 +365,9 @@ export async function importPlace(
   if (!lat || !lng) {
     return { status: "skipped", reason: "No coordinates" };
   }
+  if (!name) {
+    return { status: "skipped", reason: "No name" };
+  }
 
   // The lookup can resolve to a place already held under a different URL, so
   // re-check with the authoritative id before inserting.
@@ -345,7 +383,7 @@ export async function importPlace(
     .from("places")
     .insert({
       user_id: userId,
-      name: payload.name,
+      name,
       address,
       country,
       city,
@@ -367,6 +405,12 @@ export async function importPlace(
     .single();
 
   if (error || !inserted) {
+    // Another add of the same place got there first, between the check above
+    // and this insert (places_user_google_place_id_key).
+    if (isUniqueViolation(error) && googlePlaceId) {
+      const winner = await findExisting(supabase, userId, { placeId: googlePlaceId, cid: null });
+      if (winner) return { status: "skipped", reason: "Already exists", placeId: winner };
+    }
     return { status: "failed", reason: error?.message || "Insert failed" };
   }
 

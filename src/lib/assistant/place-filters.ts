@@ -91,7 +91,7 @@ export const placeFilterShape = {
     .optional()
     .describe("Include permanently or temporarily closed places (default false)"),
   source: z
-    .enum(["instagram", "import", "link", "manual", "mapbox_search", "similar", "shared"])
+    .enum(["instagram", "import", "link", "manual", "mapbox_search", "similar", "shared", "assistant"])
     .optional()
     .describe("How the place was saved, e.g. 'instagram'"),
   saved_since: z

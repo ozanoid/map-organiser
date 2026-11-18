@@ -2,8 +2,8 @@
 title: Manual Place Create Flow
 type: flow
 domain: places
-version: 1.2.1
-last_updated: 16.10.2026
+version: 1.2.2
+last_updated: 18.11.2026
 status: stable
 sources:
   - src/components/places/add-place-dialog.tsx
@@ -134,7 +134,7 @@ The preview UI shows which provider was used and the fetch time (`_provider`, `_
 - **Place not found (step 3):** `404`. Dialog shows toast.
 - **Both providers down (step 3):** `500`. Dialog shows generic error.
 - **Save fails (step 5):** Dialog stays open with the user's choices preserved. Network glitch — retry usually works.
-- **Duplicate (step 5):** `409`. The user already has this `google_place_id`. UI surfaces "this place is already in your collection".
+- **Duplicate (step 5):** `409`. The user already has this `google_place_id`. UI surfaces "this place is already in your collection". Since v1.41.0 the database holds it too (`places_user_google_place_id_key`): a concurrent save of the same place gets the same 409 instead of a second row.
 - **Enrich info fails (step 6):** Place is still saved; user just doesn't get extended data immediately. Manual "Refresh Google data" from detail page can re-run.
 - **Enrich reviews fails (step 7):** Silent. Reviews can be fetched later via `/api/places/[id]/enrich?step=reviews`.
 

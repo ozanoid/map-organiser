@@ -2,8 +2,8 @@
 title: Instagram routes
 type: route-group
 domain: backend
-version: 1.1.0
-last_updated: 16.10.2026
+version: 1.2.0
+last_updated: 18.11.2026
 status: stable
 sources:
   - src/app/api/instagram/import/route.ts
@@ -13,6 +13,9 @@ sources:
   - src/lib/instagram/provenance.ts
   - src/lib/instagram/types.ts
   - src/lib/instagram/url.ts
+  - src/lib/instagram/start-import.ts
+  - src/lib/instagram/view.ts
+  - src/lib/instagram/pick.ts
 related:
   - "[[_README]]"
   - "[[places]]"
@@ -32,6 +35,15 @@ runs after the response (`after()`), and the places are created by the shared
 import queue (`/api/cron/drain-imports`). Full sequence:
 [[../../05-flows/instagram-import-flow]].
 
+> **Shared with Claude (v1.41.0).** The routes are thin: the gates and the job
+> are `startInstagramImport` (`src/lib/instagram/start-import.ts`), the
+> progress view `getInstagramImportView` (`view.ts`), the pick
+> `pickInstagramOption` (`pick.ts`) — the same code Claude's `add_places` tool
+> calls ([[../../04-integrations/claude-mcp#adding-places]]). Requests,
+> responses and status codes are unchanged; a refusal from the start is
+> `InstagramImportRefused` with its 400 / 503, a pick's not-found is 404 and its
+> refusal 409.
+>
 > **Database:** relies on the Instagram migration in
 > [[../schema/import-jobs#instagram-migration]] (`import_jobs.kind`,
 > `import_jobs.meta`, `places.source = 'instagram'`), applied to the live DB on

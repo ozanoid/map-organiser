@@ -2,7 +2,7 @@
 title: Shared routes
 type: route-group
 domain: backend
-version: 1.5.0
+version: 1.5.1
 last_updated: 18.11.2026
 status: stable
 sources:
@@ -88,7 +88,7 @@ The `/api/shared/*` prefix is explicitly exempt from the auth-required middlewar
   - **Place path (v1.20.0):** read the single source place (service); dedupe by `google_place_id`; INSERT with `source: 'shared'`, omitting rating/visit_status/category (categories are per-user).
 - **External:** `parsePostgisPoint` for location transform.
 - **Response:** `{ type, id: newResourceId }` (place path adds `deduped: true` when reused). `200`, `401`, `404`.
-- **Notes:** **Dedup by `google_place_id`** — if the viewer already has a place with that ID, reuses it; otherwise creates a new place row owned by the viewer. Places without `google_place_id` are always copied (no fingerprint to match on). Dedupe is check-then-insert without a unique constraint — a concurrent double-tap can duplicate; accepted.
+- **Notes:** **Dedup by `google_place_id`** — if the viewer already has a place with that ID, reuses it; otherwise creates a new place row owned by the viewer. Places without `google_place_id` are always copied (no fingerprint to match on). A concurrent double-tap that passes the check twice is refused by `places_user_google_place_id_key` (v1.41.0) and answered with the existing place (`deduped: true`; the list copy reuses it too) — before, it could duplicate.
 
 ## Cross-route concerns
 

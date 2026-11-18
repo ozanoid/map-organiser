@@ -2,8 +2,8 @@
 title: Instagram Import Flow
 type: flow
 domain: places
-version: 1.1.2
-last_updated: 17.11.2026
+version: 1.2.0
+last_updated: 18.11.2026
 status: stable
 sources:
   - src/components/map/map-content.tsx
@@ -33,6 +33,9 @@ sources:
   - src/lib/google/track-usage.ts
   - scripts/instagram-eval/run.ts
   - scripts/instagram-eval/labels.json
+  - src/lib/instagram/start-import.ts
+  - src/lib/instagram/view.ts
+  - src/lib/instagram/pick.ts
 related:
   - "[[place-import-flow]]"
   - "[[share-target-flow]]"
@@ -150,6 +153,12 @@ sequenceDiagram
    watches the job in the background instead (step 26).
 
 ### B. Request — `POST /api/instagram/import`
+
+Steps 3–6 are `startInstagramImport` (`src/lib/instagram/start-import.ts`,
+v1.41.0), shared with Claude's `add_places` tool, which passes `via:
+'assistant'` (kept on every `meta` the run writes), its own `visit_status` and
+`list_ids`, and runs the read inside the tool call instead of `after()`. The
+route keeps the session and body checks and maps a refusal to its status.
 
 3. Gates, in order: session (401) → body `{ url }` (Zod, 400) → it is an
    Instagram post link (400) → `HIKERAPI_KEY` and `GOOGLE_GENERATIVE_AI_API_KEY`
@@ -510,8 +519,8 @@ Remaining misses, by reason (the runner prints them):
 
 | Call | Count | SKU | Price |
 |---|---|---|---|
-| HikerAPI | ≈ 4 | `hikerapi_request` | $1 / 1,000 |
-| Google Text Search (Enterprise) | ≈ 3 | `text_search_enterprise` | $35 / 1,000 after 1,000 free a month — on the user's Google key |
+| HikerAPI | ≈ 4 when written; 8 and 12 in two reads on 18.11.2026 | `hikerapi_request` | $1 / 1,000 |
+| Google Text Search (Enterprise) | ≈ 3 when written; 19 and 26 in two reads on 18.11.2026, 9.5 a read on average in October | `text_search_enterprise` | $35 / 1,000 after 1,000 free a month — on the user's Google key |
 | Gemini read | 1 | `ai_instagram_read` | $1.5 / 1,000 (≈ 1.2k in / 0.3k out tokens) |
 | DataForSEO + profile, per place added | as for any import | see [[place-import-flow]] | |
 
@@ -569,9 +578,10 @@ The monthly `instagram` budget (300 posts per user) bounds the first three.
 
 - `src/lib/instagram/url.ts` — `parseInstagramPostUrl`, `isInstagramUrl` (client-safe).
 - `src/lib/instagram/types.ts` — job meta, item info (incl. `InstagramPlaceOption`) and the dialog's view shapes (client-safe).
-- `src/app/api/instagram/import/route.ts` — create / reuse a job, `after()`.
-- `src/app/api/instagram/import/[id]/route.ts` — the dialog's progress view.
-- `src/app/api/instagram/import/[id]/pick/route.ts` — add the place picked for a skipped venue.
+- `src/app/api/instagram/import/route.ts` — session and body checks, `startInstagramImport`, `after()`.
+- `src/app/api/instagram/import/[id]/route.ts` — the dialog's progress view (`getInstagramImportView`).
+- `src/app/api/instagram/import/[id]/pick/route.ts` — add the place picked for a skipped venue (`pickInstagramOption`).
+- `src/lib/instagram/start-import.ts`, `view.ts`, `pick.ts` — the gates and job, the view, the pick; shared by the routes and Claude's `add_places` (v1.41.0, [[../04-integrations/claude-mcp#adding-places]]).
 - `src/lib/instagram/import-job.ts` — `runInstagramImportJob`: budget, usage, item rows (options, `near`, `searchName`), finish.
 - `src/lib/instagram/analyze.ts` — `analyzeInstagramPost`: accounts, verification, candidates, area, `near`.
 - `src/lib/instagram/read-post.ts` — the Gemini read and `PostReadingSchema`.

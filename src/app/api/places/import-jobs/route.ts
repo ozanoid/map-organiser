@@ -75,7 +75,10 @@ export async function POST(request: NextRequest) {
       user_id: user.id,
       file_name: fileName,
       total: places.length,
-      status: "running",
+      // Running once its items exist (below): the drain's finalizeJobs closes
+      // a running job with no active items, so a job born running could be
+      // closed before its first items land and never be drained.
+      status: "preparing",
       visit_status: options.visit_status || null,
       list_ids: options.list_ids,
       tag_ids: options.tag_ids,
@@ -95,6 +98,7 @@ export async function POST(request: NextRequest) {
   // drain, and leaving the table unwritable from a session keeps it that way.
   // `user_id` comes from the verified session above, never from the request.
   const admin = createServiceClient();
+  const start = () => admin.from("import_jobs").update({ status: "running" }).eq("id", job.id);
 
   for (let i = 0; i < places.length; i += INSERT_CHUNK) {
     const { error } = await admin.from("import_job_items").insert(
@@ -108,10 +112,16 @@ export async function POST(request: NextRequest) {
       // Leave the partial job in place rather than orphaning what landed; the
       // drain will work through the rows that made it.
       console.error("[import-jobs] item insert failed:", error);
+      await start();
+      kickDrain(request.nextUrl.origin);
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
   }
 
+  const { error: startError } = await start();
+  if (startError) {
+    return NextResponse.json({ error: startError.message }, { status: 500 });
+  }
   kickDrain(request.nextUrl.origin);
 
   return NextResponse.json({ jobId: job.id, total: places.length });

@@ -2,7 +2,7 @@
 title: Place Import Flow
 type: flow
 domain: places
-version: 2.1.2
+version: 2.2.1
 last_updated: 18.11.2026
 status: stable
 sources:
@@ -32,6 +32,8 @@ related:
 Server-driven bulk import of saved Google Maps places from a Takeout export. The work list lives in the database, so a run survives a closed tab, a sleeping laptop, and a dropped connection.
 
 > **Shared queue (v1.28.0).** The Instagram import feeds the same `import_jobs` / `import_job_items` queue and the same drain — its jobs carry `kind = 'instagram'` and their places get `source = 'instagram'`; when `finalizeJobs` closes such a job it also sets its `meta.phase` to `done`, and a branch picked in the Instagram dialog re-opens it with one more `import` item (v1.28.1). This page's progress (`GET /api/places/import-jobs`) shows Takeout jobs only. See [[instagram-import-flow]]; the `kind` column came with the Instagram migration, applied 16.10.2026 — [[../02-backend/schema/import-jobs#instagram-migration]].
+>
+> **Claude's adds (v1.41.0).** `add_places` runs the same `importPlace` inside the tool call, then queues an `assistant` job whose items start at `photo` — the drain only enriches those places ([[../02-backend/schema/import-jobs#assistant-jobs]]). Its options: no payload name (Google's title is used), `requireLookup` (no thin row when Google has no record; a failed lookup throws), a lookup `signal`. The drain maps job kind → `source` (`takeout` → `import`, `instagram`, `assistant`).
 
 ## Trigger
 
@@ -45,7 +47,9 @@ User goes to `/import`, picks a CSV or GeoJSON file (typically from Google Takeo
        ▼
 2. POST /api/places/import-jobs  (multipart: file + options JSON)
        │  • Parses CSV / GeoJSON server-side
-       │  • INSERT import_jobs (1 row) + import_job_items (1 row per place)
+       │  • INSERT import_jobs (1 row, status 'preparing') + import_job_items
+       │    (1 row per place), then status → 'running' (v1.41.0: a job born
+       │    running could be closed by the drain before its items landed)
        │  • Fires a non-awaited kick at the drain (kickDrain, src/lib/import/kick-drain.ts)
        │  • Returns { jobId, total } and the request is over
        ▼
@@ -73,12 +77,12 @@ User goes to `/import`, picks a CSV or GeoJSON file (typically from Google Takeo
 
 | Stage | What happens | Next |
 |---|---|---|
-| `import` | `resolveIdentity` (free) → duplicate pre-check → `fetchBusinessInfoLive` → INSERT places + place_tags, storing `main_image`; the chosen lists through `addPlaceToLists` (`save_list`, at the end of each list — v1.40.0; a list problem is logged, not an import failure) | `photo`, or `skipped`/`failed` |
+| `import` | `resolveIdentity` (free) → duplicate pre-check → `fetchBusinessInfoLive` → INSERT places + place_tags, storing `main_image`; the chosen lists through `addPlaceToLists` (`save_list`, at the end of each list — v1.40.0; a list problem is logged, not an import failure). A concurrent add of the same place that wins the insert (`places_user_google_place_id_key`, v1.41.0) makes this one `skipped / Already exists` with that place's id | `photo`, or `skipped`/`failed` |
 | `photo` | `ensurePlacePhoto` — CDN fetch of `main_image` → Storage upload. Free unless `main_image` is missing, which costs one business-info lookup | `reviews`, or straight to `done` if the place already has a profile (a repair-only item). A missing photo records a reason and moves on either way |
 | `reviews` | `fetchReviews` (depth 50) → `mergeReviews` into `google_data.reviews` | `profile`, or `done` if the place has no CID or no reviews |
 | `profile` | `generatePlaceProfile` — the full Gemini pass, which also applies vocabulary concepts as tags | `done` |
 
-Stage priority in the claim is `import` → `photo` → `reviews` → `profile`, not insertion order. Import is ~17 s per place while reviews poll DataForSEO for up to 110 s; interleaving them would leave the map half-empty for the whole run.
+Stage priority in the claim is `import` → `photo` → `reviews` → `profile`, not insertion order. Import is ~17 s per place while reviews poll DataForSEO for up to 110 s; interleaving them would leave the map half-empty for the whole run. The claim's `RETURNING` doesn't keep that order, so the drain sorts the claimed items by stage before working them (v1.41.0; measured before: a picked place's import waited 87 s behind reviews claimed in the same run).
 
 ## Inputs / outputs
 

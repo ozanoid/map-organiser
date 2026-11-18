@@ -23,9 +23,25 @@ export interface BusinessInfoRequest {
   language_code?: string;
 }
 
+/** DataForSEO's task status for "nothing found". */
+const NO_RESULTS = 40102;
+
+export interface BusinessInfoOptions {
+  /** Abort the request (a caller answering within one request bounds it). */
+  signal?: AbortSignal;
+  /**
+   * Throw when the request itself fails — network, HTTP status, abort —
+   * instead of returning null. Null then means only "DataForSEO has no
+   * record". Callers that must not mistake an outage for "not found" (the
+   * assistant's add) set it; the others keep the forgiving default.
+   */
+  throwOnError?: boolean;
+}
+
 export async function fetchBusinessInfoLive(
   client: DataForSEOClient,
-  request: BusinessInfoRequest
+  request: BusinessInfoRequest,
+  opts: BusinessInfoOptions = {}
 ): Promise<RawBusinessInfo | null> {
   // DataForSEO requires at least one location param.
   // Priority: location_coordinate > location_code > location_name > fallback
@@ -46,7 +62,8 @@ export async function fetchBusinessInfoLive(
   try {
     const response = await client.post<BusinessInfoResponse>(
       "/business_data/google/my_business_info/live",
-      taskBody
+      taskBody,
+      { signal: opts.signal }
     );
 
     const task = response.tasks?.[0];
@@ -54,6 +71,11 @@ export async function fetchBusinessInfoLive(
       console.warn(
         `[DataForSEO] Business info task failed: ${task?.status_code} - ${task?.status_message}`
       );
+      // 40102 "No Search Results" is DataForSEO's "no such business"; any
+      // other task status (balance, bad request, internal error) is a failure.
+      if (opts.throwOnError && task?.status_code !== NO_RESULTS) {
+        throw new Error(`DataForSEO business info: ${task?.status_code ?? "no task"} ${task?.status_message ?? ""}`.trim());
+      }
       return null;
     }
 
@@ -66,6 +88,7 @@ export async function fetchBusinessInfoLive(
     return result.items[0];
   } catch (error) {
     console.error("[DataForSEO] Business info fetch error:", error);
+    if (opts.throwOnError) throw error;
     return null;
   }
 }

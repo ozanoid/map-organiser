@@ -2,7 +2,7 @@
 title: Supabase Clients
 type: overview
 domain: backend
-version: 1.1.5
+version: 1.2.0
 last_updated: 18.11.2026
 status: stable
 sources:
@@ -85,8 +85,9 @@ const supabase = createServiceClient(); // bypasses RLS — use with care
 | `src/app/api/cron/refresh-places/route.ts` | Daily sweep across users — no cookie. |
 | `src/app/api/cron/drain-imports/route.ts` | Drains the import queue across users — no cookie (v1.26.0). |
 | `src/app/api/places/import-jobs/route.ts` | Inserts `import_job_items`, which has no INSERT policy on purpose (v1.26.0). |
-| `src/app/api/instagram/import/route.ts` | The `after()` job that reads the post and writes the job's items, after the response has gone (v1.28.0). |
-| `src/app/api/instagram/import/[id]/pick/route.ts` | Moves a skipped item back into the queue (or marks it `Already exists`) after the session client has read the job and the item under RLS — `import_job_items` has no UPDATE policy (v1.28.1). |
+| `src/lib/instagram/start-import.ts` (the read it returns) | Reads the post and writes the job's items — after the response for the route (`after()`, v1.28.0), inside the call for Claude's `add_places` (v1.41.0). |
+| `src/lib/instagram/pick.ts` (the pick route and `add_places`) | Moves a skipped item back into the queue (or marks it `Already exists`) after the caller's own client has read the job and the item, filtered by the user — `import_job_items` has no UPDATE policy (v1.28.1; shared since v1.41.0). |
+| `src/lib/places/add.ts` (`add_places`) | Writes the `assistant` job and its `photo` items for places the tool just created, for the verified user (v1.41.0). |
 
 Every query on this client filters by `user_id` (or by an id the server itself
 created, or has just read through the session client) explicitly — RLS is not

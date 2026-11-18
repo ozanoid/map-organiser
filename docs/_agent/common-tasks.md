@@ -2,7 +2,7 @@
 title: Common Tasks
 type: agent-note
 domain: agent
-version: 1.5.0
+version: 1.6.0
 last_updated: 18.11.2026
 status: stable
 related:
@@ -38,7 +38,7 @@ Checklists for frequent operations. Treat these as authoritative — if a checkl
 7. If you need generated types, regenerate them per the runbook (TBD — see `[[../06-ops/runbooks/regenerate-db-types]]` once it exists).
 8. Log in [[../CHANGELOG]].
 
-## Change how plans, visits or lists are written
+## Change how plans, visits, lists or new places are written
 
 Plans, visits and lists each have one write path; keep it one.
 
@@ -48,7 +48,8 @@ Plans, visits and lists each have one write path; keep it one.
 4. Add a check to `scripts/assistant-check/plans.ts` and run `npm run check:assistant -- plans`; for what Claude sees (tool output, schema conversion, links), `scripts/assistant-check/plan-tools.ts` and `-- plan-tools`.
 5. Visits the same way: `logVisit` / `editVisit` / `deleteVisit` in `src/lib/visits/write.ts` → `log_visit` / `delete_visit`. Rules that touch both (a stop is done when a visit fulfils it) live in the SQL functions, never in a route or a component. Checks: `scripts/assistant-check/visits.ts`, `npm run check:assistant -- visits`.
 6. Lists: `createList` / `changeList` / `deleteList` and the helpers (`addPlacesToList`, `addPlaceToLists`, `setPlaceLists`) in `src/lib/lists/write.ts` → `save_list`. A new kind of list edit is a new op in the SQL function and in `listOpSchema` (with a `.describe()` — Claude's `save_list` reads it) and, if the list page should show it before the server answers, in `applyListChanges` (`src/lib/lists/local.ts`). Checks: `scripts/assistant-check/lists.ts`, `npm run check:assistant -- lists`.
-7. Routes over these modules use `requestContext` / `errorResponse` from `src/lib/api/http.ts`; module errors subclass `InputError` / `NotFoundError` (`src/lib/db/errors.ts`).
+7. Places that come in from outside (a Google id, a Maps link, an import): through `importPlace` (`src/lib/import/process-place.ts`) — identity first, the duplicate check before any paid lookup, one row per Google place (23505 = already saved) — and photo / reviews / profile through the import queue. Claude's path is `addPlacesFromGoogle` (`src/lib/places/add.ts`, inline import + an `assistant` job at `photo`); the Instagram import's gates, view and pick are `src/lib/instagram/start-import.ts`, `view.ts`, `pick.ts`, shared by the routes and the tool. Checks: `scripts/assistant-check/add-places.ts`, `npm run check:assistant -- add-places` (paid, ≈ $0.04, test account; it removes what it makes).
+8. Routes over these modules use `requestContext` / `errorResponse` from `src/lib/api/http.ts`; module errors subclass `InputError` / `NotFoundError` (`src/lib/db/errors.ts`).
 
 ## Add a new domain entity
 

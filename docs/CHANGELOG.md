@@ -6,10 +6,117 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
-## 18.11.2026 — v1.40.0 — Lists: one write path, notes, Claude (Phase 1, slice 4)
+## 18.11.2026 — v1.41.0 — Claude saves places: add_places (Phase 1, slice 5)
 
 Written on the branch `feat/personal-assistant`; not merged yet. Ozan's
-decisions are in [[_plans/phase-1-planning]] ("Dilim 4 kararları").
+decisions are in [[_plans/phase-1-planning]] ("Dilim 5 kararları") — he
+approved every proposal.
+
+- **Database** (applied with Ozan's approval): `places_unique_google_place_id`
+  — one place per Google place per user (`places (user_id, google_place_id)`
+  unique where set; 0 duplicates when applied), replacing the non-unique
+  `idx_places_google_id`.
+- **`add_places`** (16th tool): by `google_cid` (from `search_google_maps`) or
+  a Google Maps link, 1–5 at once — only an exact identity; the place is
+  created inside the call through the import's `importPlace` (one DataForSEO
+  lookup, ~10 s; Google's name; `source = 'assistant'`; `want_to_go` unless
+  Claude passes another status; a note for new places), and photo, reviews
+  and profile are queued as an `assistant` job at `photo`. A place already
+  saved is left as it was and costs nothing; a link that names no place and a
+  place Google doesn't know are refused without a row. `list_id` (+
+  `list_note`) puts the places on a list through `save_list`. By Instagram
+  link: the app's import, read inside the call, waited on for up to 45 s;
+  added / still adding / already saved / not added with options, and
+  `instagram_pick` to add the option the user chooses.
+- **Shared code instead of two copies:** `src/lib/places/add.ts`; the
+  Instagram import's gates, view and pick moved out of the routes into
+  `src/lib/instagram/start-import.ts`, `view.ts`, `pick.ts` — the routes give
+  the same answers. `importPlace`: optional name, `requireLookup`, a lookup
+  `signal`, 23505 → "Already exists", usage tracked on the caller's client.
+  `fetchBusinessInfoLive` can throw instead of returning null
+  (`throwOnError`; 40102 stays "not found"). `getUserApiKeys(userId, client)`
+  — on the MCP endpoint the cookie client read no profile and fell back to
+  the server's Google key.
+- **Duplicates:** `POST /api/places` (409) and the shared-save route (single
+  place and list copy) now answer a lost race with the place that won,
+  instead of 500 or a second row.
+- **Older bug fixed:** the drain worked claimed items in `RETURNING` order, not
+  stage order — a picked Instagram place's import waited 87 s behind reviews
+  from the same claim. It sorts them by stage now.
+- **Smaller:** the drain maps job kind → `source` (`assistant` included);
+  `search_places` filters by `source = 'assistant'`; the server instructions
+  tell Claude to add only what the user asks for and to offer Instagram
+  options.
+- **Review round** (an independent agent read the diff; nothing high): five
+  bugs fixed — a short link that couldn't be followed was reported as "names
+  no place" and the follow had no time bound (now `failed`, 10 s); a job born
+  `running` could be closed by the drain before its items existed, so its
+  places would never be enriched (now born `preparing`; the Takeout create
+  route had the same window since v1.26.0 and is fixed too); `instagram_pick`
+  with `list_id` put every saved place of the post on the list (now only the
+  pick); `not_found` said "no such place" when the data source only returned
+  nothing; the check script left a race job running and cleaned up by time.
+  Smaller ones done as well: a list note already there is kept, a reused
+  Instagram import says the asked status wasn't applied, `instagram_pick`
+  refuses `visit_status`, "Try again" only where another try helps, one place
+  given in two forms comes back `added` twice, `idempotentHint` false. Left as
+  is: the drain kick sends `CRON_SECRET` to the request's host — only the
+  owner's token reaches the tool and Vercel sets that host.
+- **Checks:** `npm run check:assistant -- add-places` — 36 checks on the live
+  database, test account (a new place, two adds of one place at once → one
+  row, one place by CID and by link in one call → one row, a CID Google
+  doesn't know, an Instagram post read again; each enrichment job cancelled
+  at once, clean-up by id). Lists, plan-tool, plan and visit suites pass;
+  `tsc`, `eslint` (0 errors), `next build`. In Chrome, the app's Instagram
+  dialog on the test account: read, progress, `?ig=`, picking a branch.
+- **Cost, disclosed:** testing spent ≈ $0.19 on the test account (17
+  business-info lookups $0.092, 5 profiles $0.048, 28 HikerAPI requests
+  $0.028, reviews and reads $0.009, plus 2 lookups measured by hand $0.011)
+  against an estimate under $0.10 — the dialog test re-added six places the
+  account no longer had (deleted after October), the queue enriched some
+  before the job was stopped, and the suite ran twice. Everything made was
+  removed, including 7 photos left in Storage by deleted test places.
+- **Finding for Phase 5:** an Instagram read used 16–26 Google Text Search
+  (Enterprise) calls on these multi-venue posts — about 2–3 per venue — not
+  the ≈ 3 a post the docs assumed. Free up to 1,000 a month, then $35 per
+  1,000: the bulk import estimate in the plan (500 posts ≈ 1,500 searches)
+  needs redoing with the venue count.
+- Docs: [[04-integrations/claude-mcp]], [[02-backend/schema/places]],
+  [[02-backend/schema/import-jobs]], [[02-backend/api-routes/instagram]],
+  [[02-backend/api-routes/places]], [[02-backend/api-routes/shared]],
+  [[05-flows/place-import-flow]], [[05-flows/instagram-import-flow]],
+  [[05-flows/manual-place-create-flow]], [[01-domain/places]],
+  [[_agent/pitfalls]], [[_agent/common-tasks]], [[02-backend/supabase-clients]],
+  [[01-domain/users-and-profiles]], [[_plans/phase-1-planning]],
+  [[_plans/personal-assistant]].
+
+---
+
+## 18.11.2026 — v1.40.1 — Lists on main
+
+- Phase 1, slice 4 merged to main with Ozan's approval (merge `05cc911`;
+  main had not moved since the plan-tools merge, and the merged tree equals
+  the branch tree). The nested-controls fix (`PlaceCard` and two
+  link-wrapped buttons) went in with it, as Ozan asked. The slice's database
+  changes had been applied before the merge; main's older code ran on them
+  without trouble in the meantime.
+- Vercel built the branch's preview and then production successfully.
+  Checked in production: signed-out `/lists/<id>` goes to
+  `/login?next=…`; the public shared-list API returns each place's
+  `list_note` (new in this slice); a connector call with the real token
+  (`get_places`) runs the new code and returns the place's lists (none on
+  that account). `get_lists` and `save_list` weren't called through the
+  connector: this Claude Code session keeps the tool list it started with —
+  they appear in new claude.ai conversations.
+- Docs: [[_plans/phase-1-planning]], [[_plans/personal-assistant]],
+  [[04-integrations/claude-mcp]].
+
+---
+
+## 18.11.2026 — v1.40.0 — Lists: one write path, notes, Claude (Phase 1, slice 4)
+
+Written on the branch `feat/personal-assistant`; on main since v1.40.1.
+Ozan's decisions are in [[_plans/phase-1-planning]] ("Dilim 4 kararları").
 
 - **Database** (applied with Ozan's approval; bodies hash-match the files):
   `list_items_order_and_access` — the order in every list made 0..n-1 (three

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
+import { isUniqueViolation } from "@/lib/db/errors";
 import { parsePostgisPoint } from "@/lib/geo";
 import { getList } from "@/lib/lists/read";
 import type { ListOp } from "@/lib/lists/schema";
@@ -69,20 +70,22 @@ async function savePlace(supabase: any, admin: any, link: any, userId: string) {
     return NextResponse.json({ error: "Place not found" }, { status: 404 });
   }
 
-  // Dedupe by google_place_id when present. Check-then-insert without a
-  // unique constraint (idx_places_google_id is non-unique) — a concurrent
-  // double-tap can produce a duplicate copy; accepted, matches the
-  // list/plan savers' posture.
-  if (op.google_place_id) {
+  // Dedupe by google_place_id when present. A concurrent double-tap that
+  // passes this check together is refused by places_user_google_place_id_key
+  // and answered with the same "deduped" below.
+  const own = async () => {
+    if (!op.google_place_id) return null;
     const { data: existing } = await supabase
       .from("places")
       .select("id")
       .eq("user_id", userId)
       .eq("google_place_id", op.google_place_id)
       .maybeSingle();
-    if (existing) {
-      return NextResponse.json({ type: "place", id: existing.id, deduped: true });
-    }
+    return (existing?.id as string | undefined) ?? null;
+  };
+  const existing = await own();
+  if (existing) {
+    return NextResponse.json({ type: "place", id: existing, deduped: true });
   }
 
   const loc = parsePostgisPoint(op.location);
@@ -104,6 +107,10 @@ async function savePlace(supabase: any, admin: any, link: any, userId: string) {
     .single();
 
   if (error || !newPlace) {
+    if (isUniqueViolation(error)) {
+      const winner = await own();
+      if (winner) return NextResponse.json({ type: "place", id: winner, deduped: true });
+    }
     return NextResponse.json(
       { error: error?.message || "Failed to save place" },
       { status: 500 }
@@ -259,17 +266,20 @@ async function copyPlaceFor(
   op: SharedPlaceRow,
   opts: { withNotes?: boolean } = {}
 ): Promise<string | null> {
-  if (op.google_place_id) {
+  const own = async () => {
+    if (!op.google_place_id) return null;
     const { data: existing } = await supabase
       .from("places")
       .select("id")
       .eq("user_id", userId)
       .eq("google_place_id", op.google_place_id)
       .maybeSingle();
-    if (existing) return existing.id;
-  }
+    return (existing?.id as string | undefined) ?? null;
+  };
+  const existing = await own();
+  if (existing) return existing;
   const loc = parsePostgisPoint(op.location);
-  const { data: created } = await supabase
+  const { data: created, error } = await supabase
     .from("places")
     .insert({
       user_id: userId,
@@ -285,5 +295,8 @@ async function copyPlaceFor(
     })
     .select("id")
     .single();
+  // A concurrent save of the same place got there first
+  // (places_user_google_place_id_key): reuse it.
+  if (isUniqueViolation(error)) return own();
   return created?.id ?? null;
 }
