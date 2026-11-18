@@ -2,8 +2,8 @@
 title: Map components
 type: component
 domain: frontend
-version: 1.4.0
-last_updated: 16.10.2026
+version: 1.4.1
+last_updated: 18.11.2026
 status: stable
 sources:
   - src/components/map/map-view.tsx
@@ -104,6 +104,9 @@ Two components. `MapView` is a self-contained Mapbox renderer; `MapContent` is t
   - `SearchResultPanel` (search → save), `AddPlaceDialog`.
   - Marker detail: the inline side-panel on desktop; `PlaceDetailSheet`
     (full detail bottom-sheet) on mobile — gated by `useIsDesktop` (v1.24.0).
+    The side panel ends with **Google Maps** (new tab) and **Full details**
+    (`/places/[id]`, a full page load — a plain `<a>`), both links styled
+    with `buttonVariants` (until v1.40.0 a `<Button>` inside each `<a>`).
   - Skeletons, badges, buttons from shadcn.
 - **Behavior:**
   - Reads `?add=<url>` whenever it appears — on mount, and when the header's Add Place hands an Instagram post link over while the page is open (v1.28.1) — and opens the Add Place dialog with `initialUrl`. `sharedHandled` keeps the last value handled and resets once the param is gone, so the same link can come in again. It then removes only `add` with `router.replace`, keeping the rest of the query string (the filters). An Instagram post/reel link puts the dialog in Instagram mode — see [[../../05-flows/instagram-import-flow]].

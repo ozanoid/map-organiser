@@ -74,8 +74,19 @@ decisions are in [[_plans/phase-1-planning]] ("Dilim 4 kararları").
   took it off that list. It was put back (at the end — its old position
   wasn't recorded); the checks now use places on no list and verify the
   account's lists are untouched.
-- **Not changed (older):** `PlaceCard` nests the Maps link inside the card's
-  link — a console error on the list and places pages.
+- **Nested controls (older, fixed):** `PlaceCard` was a `<Link>` holding the
+  Maps `<a>` (in the mobile grid, a `div[role=button]` around it) — invalid
+  HTML that React reports as a hydration error, on the places and list pages.
+  It is now a stretched link: the title's link (or, where the detail opens in
+  a sheet, a button) covers the card through `::after`, and the Maps link sits
+  above it — the same targets as before. A scan of the source for the same
+  class found a `<Button>` inside an `<a>` on the map's desktop detail panel
+  (Google Maps, Full details) and the place page's Book Online / business
+  links; they are now links styled with `buttonVariants`. The rule is in
+  [[_agent/conventions]]. Checked in Chrome: no nested controls on the places,
+  list, place and map pages and no console errors; a card opens its place, the
+  Maps link opens Maps, the selection box selects, the mobile grid opens the
+  sheet.
 - Docs: [[01-domain/lists]], [[01-domain/sharing]],
   [[02-backend/schema/lists]], [[02-backend/schema/list_places]],
   [[02-backend/api-routes/lists]], [[02-backend/api-routes/places]],
@@ -83,9 +94,10 @@ decisions are in [[_plans/phase-1-planning]] ("Dilim 4 kararları").
   [[02-backend/rls-policies]], [[03-frontend/hooks/use-lists]],
   [[03-frontend/hooks/_README]], [[03-frontend/components/lists]],
   [[03-frontend/components/places]], [[03-frontend/components/_README]],
-  [[04-integrations/claude-mcp]], [[05-flows/share-flow]],
-  [[05-flows/ai-chat-flow]], [[05-flows/place-import-flow]],
-  [[_agent/pitfalls]], [[_agent/common-tasks]],
+  [[03-frontend/components/map]], [[04-integrations/claude-mcp]],
+  [[05-flows/share-flow]], [[05-flows/ai-chat-flow]],
+  [[05-flows/place-import-flow]], [[_agent/pitfalls]],
+  [[_agent/common-tasks]], [[_agent/conventions]],
   [[_plans/phase-1-planning]], [[_plans/personal-assistant]].
 
 ---
