@@ -191,6 +191,53 @@ export interface PlanStop {
   created_at: string;
   // Joined
   place?: PlanPlace | null;
+  /** The visit that fulfils this stop (status "done" at a saved place). */
+  visit?: PlanStopVisit | null;
+}
+
+export interface PlanStopVisit {
+  id: string;
+  visited_on: string;
+  rating: number | null;
+  notes: string | null;
+}
+
+/**
+ * A visit: one saved place on one day — what actually happened, with this
+ * visit's own rating and notes. See docs/01-domain/visits.md.
+ */
+export interface Visit {
+  id: string;
+  place_id: string;
+  /** Local date at the place, "YYYY-MM-DD". */
+  visited_on: string;
+  rating: number | null;
+  notes: string | null;
+  /** The planned stop this visit fulfils. */
+  plan_stop_id: string | null;
+  created_via: "app" | "assistant" | "feedback";
+  created_at: string;
+  updated_at: string;
+  // Joined
+  place: VisitPlace | null;
+  /** The plan whose stop this visit fulfils. */
+  plan: { id: string; name: string; day_number: number } | null;
+}
+
+export interface VisitPlace {
+  id: string;
+  name: string;
+  city: string | null;
+  country: string | null;
+  maps_url: string | null;
+  category: { name: string; color: string } | null;
+}
+
+/** A place's summary after one of its visits changed. */
+export interface PlaceVisitSummary {
+  id: string;
+  visit_status: VisitStatus | null;
+  rating: number | null;
 }
 
 export interface PlacePhoto {

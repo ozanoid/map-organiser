@@ -2,7 +2,7 @@
 title: Backend Overview
 type: overview
 domain: backend
-version: 1.1.1
+version: 1.1.2
 last_updated: 18.11.2026
 status: stable
 sources:
@@ -76,7 +76,7 @@ These apply to **every** API route. Enforced informally — see [[../_agent/conv
 1. **Auth check at the top.** `const { data: { user } } = await supabase.auth.getUser(); if (!user) return ...401`. Exceptions: `/api/shared/[slug]` (public) and `/api/share-target` (PWA inbound — see its doc for the gate).
 2. **Zod every body.** Validate before touching the DB. Return `400` with the Zod error on failure.
 3. **`Response.json(data, { status })`.** Never bare `Response.json(data)` for non-200s.
-4. **RLS does the access control, not the route.** The user-scoped client is enough — `WHERE user_id = auth.uid()` is implicit on every query. Don't add `eq("user_id", user.id)` explicitly in a route's own queries — it's redundant and gets out of sync with RLS. **Exception:** the shared modules that are also called with the service role (`src/lib/assistant/`, `src/lib/plans/`) take the user id as a parameter and filter by it on every query — there RLS isn't in play, and the filter is the access control.
+4. **RLS does the access control, not the route.** The user-scoped client is enough — `WHERE user_id = auth.uid()` is implicit on every query. Don't add `eq("user_id", user.id)` explicitly in a route's own queries — it's redundant and gets out of sync with RLS. **Exception:** the shared modules that are also called with the service role (`src/lib/assistant/`, `src/lib/plans/`, `src/lib/visits/`) take the user id as a parameter and filter by it on every query — there RLS isn't in play, and the filter is the access control.
 5. **Service-role client only where no session can do the job** — the public share read, the cron routes, the import-queue writes and the Instagram import's background job ([[supabase-clients]] keeps the list). Every query on it filters by `user_id` explicitly; never hand it to anything a request can steer.
 6. **Server-only env vars never reach the client.** `GOOGLE_PLACES_API_KEY`, `ENCRYPTION_SECRET`, `SUPABASE_SERVICE_ROLE_KEY`, `DATAFORSEO_*`, `HIKERAPI_KEY` — all no-`NEXT_PUBLIC_` prefix. Full list: [[../06-ops/env-vars]].
 7. **Cost-tracked external calls go through `increment_api_usage`** RPC so they show up in `api_usage` and the user's cost tracker.

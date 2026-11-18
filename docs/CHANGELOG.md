@@ -6,6 +6,79 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 18.11.2026 — v1.38.1 — Visits on main
+
+- Phase 1, slice 2 merged to main with Ozan's approval (main had not moved
+  since the plans merge; the merged tree equals the branch tree). The
+  database side (one visit a day, `log_visit` / `delete_visit`,
+  `apply_plan_changes` v3) was already applied; production picks up the code
+  with this deploy. No data to move: there were no visits and every stop was
+  planned.
+- Docs: [[_plans/phase-1-planning]], [[_plans/personal-assistant]],
+  [[01-domain/visits]].
+
+---
+
+## 18.11.2026 — v1.38.0 — Visits (Phase 1, slice 2)
+
+Written on the branch `feat/personal-assistant`; on main since v1.38.1.
+"I went" becomes a record: one saved place on one day, with that visit's rating and notes.
+
+- **Database** (applied; bodies hash-match the files): `visits_one_per_day`
+  (unique `(user_id, place_id, visited_on)` — Ozan approved), `visit_functions`
+  (`log_visit`, `delete_visit`, `visit_sync_rating`), `stop_status_follows_visits`
+  (`apply_plan_changes` v3). Rules, all Ozan's decisions of 18.11.2026: the same
+  place and day again updates the visit; logging marks the place visited (a
+  favourite stays); the place's rating follows its latest rated visit and a
+  hand-given star stays until that changes; a visit ticks off a planned stop
+  at that place that day, deleting it reopens the stop; a stop at a saved
+  place is done only through its visit; no future dates. 21 scenarios run in a
+  rolled-back transaction as the signed-in test user before any code.
+- **Shared module `src/lib/visits/`** (schema, read, write) and `/api/visits`
+  (GET, POST), `/api/visits/[id]` (PATCH, DELETE). Write responses carry the
+  place's new status and rating.
+- **Shared helpers** pulled out of the plan module so visits use the same
+  ones: `src/lib/db/context.ts` (`UserContext`; `PlanContext` and
+  `AssistantContext` are aliases now), `src/lib/db/errors.ts` (`InputError`,
+  `NotFoundError`, `classifyPostgrestError`), `src/lib/api/http.ts`
+  (`requestContext`, `errorResponse`; replaces `src/lib/plans/http.ts`),
+  `src/components/ui/icon-button.ts` (`ICON_BUTTON`).
+- **UI:** place page — summary line + **Log a visit**, the **Visits** list
+  (edit, delete), **Log the visit** in the toast after marking Visited, the
+  delete confirm counts visits; plan page — stop menu **Mark as done…** (logs
+  the visit), **Edit visit…**, **Mark as not done…**, **Mark as skipped** /
+  **planned**, a done stop shows its visit's rating. New components in
+  `src/components/visits/`, hook `use-visits.ts`. Bulk delete check renamed
+  `check_plans` → `check_delete` and counts visits.
+- **Claude:** new `log_visit` and `get_visits`; `update_places` notes no
+  longer get a date prefix and its description sends "I went…" to `log_visit`;
+  `get_places` returns the last 3 visits and upcoming plans (the `visited`
+  date is gone); `get_library_overview` counts visits; data-module refusals go
+  back to the model as correctable errors; server instructions updated.
+- **Checked:** `npm run check:assistant` — all sets pass (visits 30, plans 44;
+  the full set ran twice by mistake, so its paid calls — 2 DataForSEO searches
+  and 1 Gemini ranking per run — ran twice); `tsc`, `eslint`; in Chrome on the
+  test account: logging, same-day prefill, future date blocked, the rating
+  rules, edit, delete, the toast shortcut, and the stop menu on the plan page.
+  The visits written by the checks were deleted and the places restored.
+- **Docs — new:** [[01-domain/visits]], [[02-backend/api-routes/visits]],
+  [[03-frontend/hooks/use-visits]], [[03-frontend/components/visits]],
+  [[05-flows/visit-flow]]. **Updated:** [[02-backend/schema/visits]] (index,
+  functions), [[02-backend/schema/plans]] (stop status follows visits),
+  [[02-backend/schema/_README]], [[02-backend/_README]],
+  [[02-backend/api-routes/_README]], [[02-backend/api-routes/plans]],
+  [[02-backend/api-routes/places]], [[01-domain/plans]], [[01-domain/places]],
+  [[03-frontend/components/plans]], [[03-frontend/components/places]],
+  [[03-frontend/hooks/use-plans]], [[03-frontend/hooks/_README]],
+  [[03-frontend/routing]], [[03-frontend/state-management]],
+  [[04-integrations/claude-mcp]], [[00-overview/glossary]],
+  [[00-overview/repo-structure]], [[00-overview/system-overview]],
+  [[_agent/common-tasks]], [[_agent/conventions]], [[_plans/phase-1-planning]]
+  (slice 2 decisions and status), [[_plans/personal-assistant]],
+  [[_agent/pitfalls]] (new: a dev-server CSS cache trap met while checking the UI).
+
+---
+
 ## 18.11.2026 — v1.37.2 — Plans on main
 
 - Phase 1, slice 1 merged to main with Ozan's approval (main had not moved;
@@ -13,6 +86,14 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
   tables. Right after the deploy: the trips ↔ plans comparison is run once
   more and the two share links stored as `trip` are renamed to `plan`. The
   trip tables stay, unused, until dropping them is approved separately.
+- **Cutover done (18.11.2026):** main `1763f7c`; production
+  (`https://map-organiser.vercel.app`) serves the new build — `/trips/<id>`
+  answers 308 to `/plans/<id>`, the shared plan payload is the whitelisted
+  one. Compared after the deploy: 7 / 7 plans, 40 / 40 days, 127 / 127 stops,
+  no difference; the last write to the trip tables was on 16.07.2026. The two
+  links were renamed (`shared_links.resource_type`: `trip` → `plan`) and both
+  open on production. Recorded in [[02-backend/schema/shared_links]],
+  [[01-domain/sharing]], [[06-ops/deployment]] (production URL).
 - Decided (Ozan): the public share view keeps showing the owner's own star
   rating of a place. Recorded in [[01-domain/sharing]], which now also says
   that the share page is not the Phase 3 invitation page.

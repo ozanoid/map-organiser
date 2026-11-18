@@ -2,7 +2,7 @@
 title: Plans routes
 type: route-group
 domain: backend
-version: 1.0.0
+version: 1.1.0
 last_updated: 18.11.2026
 status: stable
 sources:
@@ -10,7 +10,7 @@ sources:
   - src/app/api/plans/[id]/route.ts
   - src/app/api/plans/[id]/auto-plan/route.ts
   - src/app/api/plans/[id]/days/[dayId]/route/route.ts
-  - src/lib/plans/http.ts
+  - src/lib/api/http.ts
   - src/lib/plans/schema.ts
   - src/lib/plans/read.ts
   - src/lib/plans/write.ts
@@ -26,7 +26,7 @@ related:
 
 # Plans routes
 
-Five handlers in four files. They are thin: auth, zod, one call into `src/lib/plans/` ([[../../01-domain/plans#One write path]]), and `planErrorResponse` to turn the module's errors into a status.
+Five handlers in four files. They are thin: auth, zod, one call into `src/lib/plans/` ([[../../01-domain/plans#One write path]]), and `errorResponse` (`src/lib/api/http.ts`, shared with the visit routes) to turn the module's errors into a status.
 
 All require a signed-in user (401 otherwise; the middleware redirects signed-out requests to `/login` before they get here).
 
@@ -69,6 +69,7 @@ The only way the UI changes a plan. The body is `planChangesSchema` (`src/lib/pl
 - `set` first, then `ops` in order; all in one transaction — one bad op refuses the whole request and nothing is applied.
 - A day is named by `day_id` or by `day` (its number, 1-based) — one of the two; `swap_days` takes `a_id` + `b_id` or `a` + `b`. The app sends ids, so a change queued behind a renumbering, or sent from a tab that is behind, lands on the day that was shown or is refused — never on another day. Stops are named by id; stop positions are 0-based.
 - Limits: 60 days a plan, 200 stops a day (zod and the database).
+- A stop at a saved place can't be set `done` here, and a stop with a visit can't change status here — that goes through its visit ([[visits]]). A free-text stop can.
 - `null` clears (`start_date: null` unschedules the plan; `start_time: null` clears a time); a missing key is left alone.
 - `add_stop` without a `cost_estimate` gets the default for the place's price level; `cost_estimate: null` means "no estimate" and stays empty.
 - The change is committed before the plan is read back. If that read fails the response is still 200, with `plan: null` — the client refetches.

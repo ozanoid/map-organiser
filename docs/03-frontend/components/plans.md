@@ -2,7 +2,7 @@
 title: Plans components
 type: component
 domain: frontend
-version: 1.1.0
+version: 1.2.0
 last_updated: 18.11.2026
 status: stable
 sources:
@@ -31,7 +31,7 @@ Everything under `src/components/plans/` plus the plan page. All client componen
 | `plans-tab.tsx` | `PlansTab` | The Plans tab of `/lists`: plan cards grouped Upcoming / No date yet / Past / Cancelled, "New Plan". |
 | `create-plan-dialog.tsx` | `CreatePlanDialog` | Name, date (optional), number of days (stepper), start empty or from a list. Opens the new plan when it is created. |
 | `plan-day.tsx` | `PlanDayTimeline` | One day: header (date, route length, day cost, route-mode button, day menu), its stops with the legs between them, "Add stop". Drag to reorder. |
-| `stop-row.tsx` | `StopRow` | One stop: drag handle, name or text, note or address, time, cost, menu (move to another day, remove). |
+| `stop-row.tsx` | `StopRow` | One stop: drag handle, name or text, note or address, the visit's rating when done, time, cost, menu (done / skipped, move to another day, remove). |
 | `add-stop-dialog.tsx` | `AddStopDialog` | Search the saved places, or add the typed text as a stop without a place. |
 | `plan-menu.tsx` | `PlanMenu`, `PlanDatesDialog` | Share link, dates, rename, cancel / restore, delete (with a confirmation dialog). |
 | `ai-plan-button.tsx` | `AiPlanButton` | The AI Plan entry and dialog ([[../../05-flows/ai-plan-flow]]). Hidden unless AI is enabled and available. |
@@ -51,10 +51,10 @@ Everything under `src/components/plans/` plus the plan page. All client componen
 - **Cancel a plan** is also undoable from the toast. **Delete** asks first — it can't be undone.
 - **Time** (`StopTime`): a popover with an exact time or one of four parts of the day, and "Clear time". Setting one clears the other (the server's rule).
 - **Cost** (`CostBadge`): tap, type, Enter or leave the field. Empty clears; a comma decimal is accepted.
-- **Touch:** nothing depends on hover. Icon buttons are 36 px with a 44 px hit area (`ICON_BUTTON`); menu items are 36 px tall or more.
+- **Touch:** nothing depends on hover. Icon buttons are 36 px with a 44 px hit area (`ICON_BUTTON` in `src/components/ui/icon-button.ts`, shared with the visit components); menu items are 36 px tall or more.
 - **AI Plan** can't be dismissed while it is generating, and other edits wait behind it (same write queue) — its result rewrites the days.
 - **Add day** stops at 60 days (the database's limit too).
-- **Stops that happened:** `done` shows a check, `skipped` a struck-through name and a chip. They can't be set from this page yet (Phase 1, slice 2).
+- **Done and skipped** (stop menu): at a saved place **Mark as done…** opens the visit dialog for that place and the stop's day (today if the day hasn't come) — saving logs the visit and ticks the stop; then **Edit visit…** and **Mark as not done…** (deletes the visit after a confirmation, the stop is planned again). A free-text stop has **Mark as done** / **Mark as not done** directly. Any planned stop can be **Mark as skipped**, and back with **Mark as planned**. `done` shows a check and the visit's ★ rating; `skipped` a struck-through name and a chip. See [[visits]].
 
 ## Checked in the browser
 

@@ -24,7 +24,12 @@ import { AmenitiesGrid } from "@/components/places/amenities-grid";
 import { PlaceTopics } from "@/components/places/place-topics";
 import { ReviewsSection } from "@/components/places/reviews-section";
 import { SimilarPlaces } from "@/components/places/similar-places";
+import { DeleteVisitDialog } from "@/components/visits/delete-visit-dialog";
+import { PlaceVisitList, PlaceVisitSummary } from "@/components/visits/place-visits";
+import { VisitDialog, type VisitDialogTarget } from "@/components/visits/visit-dialog";
 import { useLists } from "@/lib/hooks/use-lists";
+import { useVisits } from "@/lib/hooks/use-visits";
+import { todayIso } from "@/lib/plans/dates";
 import { useCreateSharedLink } from "@/lib/hooks/use-shared-links";
 import type { PlaceProfile } from "@/lib/ai/schemas/place-profile";
 import { googleMapsPlaceUrl } from "@/lib/google/maps-url";
@@ -42,7 +47,7 @@ import {
   Check,
 } from "lucide-react";
 import { toast } from "sonner";
-import type { Place, VisitStatus } from "@/lib/types";
+import type { Place, PlaceVisitSummary as VisitSummary, Visit, VisitStatus } from "@/lib/types";
 
 export interface PlaceDetailViewProps {
   /** Place id to load (replaces the route param when used outside the page). */
@@ -93,6 +98,9 @@ export function PlaceDetailView({
   const [topicFilter, setTopicFilter] = useState<string | null>(null);
   const { data: allLists = [] } = useLists();
   const createSharedLink = useCreateSharedLink();
+  const { data: visits = [], isLoading: visitsLoading } = useVisits(placeId);
+  const [visitDialog, setVisitDialog] = useState<VisitDialogTarget | null>(null);
+  const [visitToDelete, setVisitToDelete] = useState<Visit | null>(null);
 
   const fetchPlace = useCallback(() => {
     return fetch(`/api/places/${placeId}`)
@@ -185,11 +193,26 @@ export function PlaceDetailView({
     placeId,
   ]);
 
+  // A visit write changes the place's visit status and rating; show them.
+  function applyVisitSummary(summary: VisitSummary) {
+    setPlace((prev) =>
+      prev ? { ...prev, visit_status: summary.visit_status, rating: summary.rating } : prev
+    );
+  }
+
+  function openLogVisit() {
+    if (!place) return;
+    setVisitDialog({ kind: "log", placeId, placeName: place.name, defaultDate: todayIso() });
+  }
+
   async function handleDelete() {
     const planNames = ((place as { plans?: { name: string }[] } | undefined)?.plans ?? []).map((p) => p.name);
     let msg = "Are you sure you want to delete this place?";
     if (planNames.length > 0) {
       msg += `\n\nThis place is part of ${planNames.length} plan${planNames.length > 1 ? "s" : ""}: ${planNames.join(", ")}. It will be removed from those plans too.`;
+    }
+    if (visits.length > 0) {
+      msg += `\n\nIts ${visits.length} logged visit${visits.length > 1 ? "s" : ""} will be deleted too.`;
     }
     if (!confirm(msg)) return;
 
@@ -198,6 +221,7 @@ export function PlaceDetailView({
       queryClient.invalidateQueries({ queryKey: ["places"] });
       queryClient.invalidateQueries({ queryKey: ["plans"] });
       queryClient.invalidateQueries({ queryKey: ["plan"] });
+      queryClient.invalidateQueries({ queryKey: ["visits"] });
       toast.success("Place deleted");
       onDeleted();
     } else {
@@ -215,7 +239,15 @@ export function PlaceDetailView({
       const updated = await res.json();
       setPlace((prev) => (prev ? { ...prev, ...updated, tags: prev.tags, lists: prev.lists } : prev));
       queryClient.invalidateQueries({ queryKey: ["places"] });
-      toast.success(status ? `Marked as ${status.replace("_", " ")}` : "Status cleared");
+      if (status === "visited") {
+        // The flag alone has no date; offer to record the visit itself.
+        toast.success("Marked as visited", {
+          action: { label: "Log the visit", onClick: openLogVisit },
+          duration: 8000,
+        });
+      } else {
+        toast.success(status ? `Marked as ${status.replace("_", " ")}` : "Status cleared");
+      }
     } else {
       toast.error("Failed to update status");
     }
@@ -444,6 +476,7 @@ export function PlaceDetailView({
         onChange={handleVisitStatusChange}
         size="sm"
       />
+      <PlaceVisitSummary visits={visits} loading={visitsLoading} onLog={openLogVisit} />
 
       {/* Photo */}
       {photoUrl && (
@@ -808,6 +841,14 @@ export function PlaceDetailView({
         )}
       </section>
 
+      {/* Visits — what happened, newest first */}
+      <PlaceVisitList
+        visits={visits}
+        onLog={openLogVisit}
+        onEdit={(visit) => setVisitDialog({ kind: "edit", placeName: place.name, visit })}
+        onDelete={setVisitToDelete}
+      />
+
       {/* Notes Section */}
       <section className="space-y-2">
         <div className="flex items-center justify-between">
@@ -863,6 +904,25 @@ export function PlaceDetailView({
           <p className="text-xs text-muted-foreground">No notes yet.</p>
         )}
       </section>
+
+      {visitDialog && (
+        <VisitDialog
+          key={visitDialog.kind === "edit" ? visitDialog.visit.id : "log"}
+          target={visitDialog}
+          open
+          onOpenChange={(open) => !open && setVisitDialog(null)}
+          onSaved={(result) => applyVisitSummary(result.place)}
+        />
+      )}
+      {visitToDelete && (
+        <DeleteVisitDialog
+          visit={visitToDelete}
+          fulfilsStop={!!visitToDelete.plan_stop_id}
+          open
+          onOpenChange={(open) => !open && setVisitToDelete(null)}
+          onDeleted={(result) => applyVisitSummary(result.place)}
+        />
+      )}
     </div>
   );
 }

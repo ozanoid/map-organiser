@@ -2,7 +2,7 @@
 title: Place
 type: entity
 domain: places
-version: 1.7.0
+version: 1.8.0
 last_updated: 18.11.2026
 status: stable
 sources:
@@ -35,6 +35,7 @@ related:
   - "[[categories-and-tags]]"
   - "[[lists]]"
   - "[[plans]]"
+  - "[[visits]]"
   - "[[sharing]]"
   - "[[geo-and-s2]]"
   - "[[users-and-profiles]]"
@@ -134,8 +135,9 @@ Schema definition: `src/lib/ai/schemas/place-profile.ts` (Zod). See [[../05-flow
 
 - **One owner.** A place belongs to exactly one user; no sharing of mutable state across users. Public sharing copies the place's data into the viewer's account if they save it (it does **not** create a multi-tenant ownership).
 - **One category, many tags.** `category_id` is nullable but at most one. Tags are M:N via `place_tags`.
-- **Rating is the user's, not Google's.** The 1–5 `rating` column is set by the user. Public/aggregate rating lives in `google_data.rating`.
+- **Rating is the user's, not Google's.** The 1–5 `rating` column is the user's. Public/aggregate rating lives in `google_data.rating`. Since v1.38.0 it **follows the latest rated [[visits|visit]]** (changes only when that visit changes); a star given by hand on the place page stays until then.
 - **`visit_status` controls timestamps.** Transitioning to `visited` sets `visited_at`; transitioning to `booked` sets `booked_at`. Other transitions are no-ops for those columns.
+- **`visit_status` is a summary; [[visits]] are the facts.** Logging a visit sets `visited` (a `favorite` stays); deleting a visit doesn't unset it. A place can be marked visited without any visit (an old visit with no date). Dated visits — with their own rating and notes — are in `visits`; `visited_at` only says when the place was first marked visited.
 - **`location` is always present.** No place is inserted without coords (sometimes derived from S2 FTid decode when URL parsing).
 - **`google_data` is opaque to RLS.** It's stored but never used in policy predicates.
 
@@ -189,13 +191,14 @@ See [[../05-flows/place-import-flow]] for the import path, [[../05-flows/instagr
 | [[lists\|List]] | M:N | `list_places` junction with `sort_order` |
 | Place Photo | 1:N | `place_photos.place_id` (CASCADE) |
 | [[plans\|Plan Stop]] | 1:N | `plan_stops.place_id` (CASCADE) |
+| [[visits\|Visit]] | 1:N | `visits.place_id` (CASCADE) |
 
 When a Place is deleted:
 
 - `place_tags` rows are removed (cascade).
 - `list_places` rows are removed (cascade).
 - `place_photos` rows are removed (cascade).
-- `plan_stops` rows are removed (cascade) — a plan loses that stop. Both delete paths warn first, naming the plans: the place detail reads `plans` from `GET /api/places/[id]`, the bulk bar runs `check_plans` (both use `plansUsingPlaces`).
+- `plan_stops` rows are removed (cascade) — a plan loses that stop — and so are its `visits`. Both delete paths warn first: the place detail names the plans (`plans` from `GET /api/places/[id]`) and counts the visits it shows; the bulk bar runs `check_delete` (`plansUsingPlaces` + `visitCounts`).
 
 ## API surface
 
@@ -213,7 +216,7 @@ All `/api/places/*` routes live in `src/app/api/places/`. See [[../02-backend/ap
 | `POST` | `/api/places/parse-link` | Parse a Google Maps URL → `ParsedPlaceData`. |
 | `POST` | `/api/places/import-jobs` | Queue a Takeout file as a durable import job. |
 | `GET` | `/api/places/import-jobs` | Progress of the newest Takeout job. |
-| `POST` | `/api/places/bulk` | Bulk operations (delete, list assignment, tag assignment, category, visit status; `check_plans` pre-check). |
+| `POST` | `/api/places/bulk` | Bulk operations (delete, list assignment, tag assignment, category, visit status; `check_delete` pre-check). |
 | `GET` | `/api/cron/drain-imports` | Drains the import queue (Takeout and Instagram jobs): insert → photo → reviews → profile. |
 | `POST` | `/api/instagram/import` | Start an Instagram import for a post URL — see [[../02-backend/api-routes/instagram]]. |
 | `GET` | `/api/instagram/import/[id]` | Progress and result of one Instagram import. |

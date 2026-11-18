@@ -2,7 +2,7 @@
 title: Places components
 type: component
 domain: frontend
-version: 1.8.1
+version: 1.9.0
 last_updated: 18.11.2026
 status: stable
 sources:
@@ -74,6 +74,12 @@ Twenty files under `src/components/places/`. All `"use client"`. The Place-relat
   header ✕/title (the enclosing `BottomSheet` drag header supplies both, so
   only the Share/Delete pair renders); `variant="page"` keeps the
   max-width-centered layout + "← Back".
+- **Visits (v1.38.0):** under the visit-status toggle a one-line summary
+  ("2 visits · last on Sat 14 Nov") with **Log a visit**; above Notes the
+  **Visits** list (edit, delete). Marking the place Visited offers **Log the
+  visit** in the toast. A visit write returns the place's new status and
+  rating, which replace the view's copy. The delete confirm counts the
+  visits. Components: [[visits]].
 - **Used by:** the `/places/[id]` route (thin wrapper: `onBack=router.back`,
   `onDeleted=router.push("/places")`) and `PlaceDetailSheet`.
 
@@ -271,8 +277,8 @@ Twenty files under `src/components/places/`. All `"use client"`. The Place-relat
 - **API call:** `POST /api/places/bulk` with action and payload.
 - **State:** `loading` (mutation in-flight).
 - **Renders:** fixed bottom bar — selection count + clear, **Compare (v1.19.0 — enabled only for 2-4 selections → `/places/compare?ids=…`)**, four action dropdowns (Category, Tag, List, Status), and a delete button.
-- **Pre-delete:** runs the `check_plans` action first; if the places are stops of any plan, the confirm names those plans.
-- **Cache invalidation on success:** `["places"]`, `["lists"]`, `["plans"]`, `["plan"]`.
+- **Pre-delete:** runs the `check_delete` action first; the confirm names the plans the places are stops of and counts the visits that go with them.
+- **Cache invalidation on success:** `["places"]`, `["lists"]`, `["plans"]`, `["plan"]`, `["visits"]`.
 - **Used by:** `/places` page when one or more places are selected.
 
 ## `InlineCategoryCreator`

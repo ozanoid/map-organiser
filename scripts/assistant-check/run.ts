@@ -7,6 +7,7 @@
  *
  *   npm run check:assistant            everything
  *   npm run check:assistant -- plans   only the plan checks (no paid calls)
+ *   npm run check:assistant -- visits  only the visit checks (no paid calls)
  *
  * Uses the service-role key: RLS is bypassed, so this relies on every tool
  * query also filtering by user_id (which they do).
@@ -16,6 +17,7 @@ import { isAllowedOAuthRedirect } from "@/lib/assistant/oauth";
 import { ASSISTANT_TOOLS } from "@/lib/assistant/tools";
 import { safeNextPath } from "@/lib/auth/safe-next";
 import { checkPlans } from "./plans";
+import { checkVisits } from "./visits";
 
 const OWNER = "ozan@maporganiser.com";
 const TESTER = "admin@maporganiser.com";
@@ -64,8 +66,8 @@ async function main() {
   const owner = await userIdOf(OWNER);
   const tester = await userIdOf(TESTER);
 
-  if (process.argv[2] === "plans") {
-    await checkPlans(admin, expect, tester, owner);
+  if (process.argv[2] === "plans" || process.argv[2] === "visits") {
+    await (process.argv[2] === "plans" ? checkPlans : checkVisits)(admin, expect, tester, owner);
     console.log(`\n${failures === 0 ? "ALL CHECKS PASSED" : `${failures} CHECK(S) FAILED`}`);
     process.exit(failures === 0 ? 0 : 1);
   }
@@ -199,8 +201,9 @@ async function main() {
     void written;
   }
 
-  // ── Plans (src/lib/plans) ─────────────────────────────────────────
+  // ── Plans (src/lib/plans) and visits (src/lib/visits) ─────────────
   await checkPlans(admin, expect, tester, owner);
+  await checkVisits(admin, expect, tester, owner);
 
   // ── Pure helpers ──────────────────────────────────────────────────
   for (const [raw, want] of [

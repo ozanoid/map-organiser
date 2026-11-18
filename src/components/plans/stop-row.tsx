@@ -4,7 +4,9 @@ import { useState } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { toast } from "sonner";
-import { CheckCircle2, Clock, GripVertical, MoreHorizontal, StickyNote, Trash2 } from "lucide-react";
+import {
+  CheckCircle2, Circle, Clock, GripVertical, MoreHorizontal, Pencil, SkipForward, Star, StickyNote, Trash2,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -16,11 +18,15 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { DeleteVisitDialog } from "@/components/visits/delete-visit-dialog";
+import { VisitDialog, type VisitDialogTarget } from "@/components/visits/visit-dialog";
+import { todayIso } from "@/lib/plans/dates";
 import { dayColor } from "@/lib/plans/day-colors";
 import { DAY_PARTS } from "@/lib/plans/schema";
 import { cn } from "@/lib/utils";
 import type { DayPart, PlanDay, PlanStop } from "@/lib/types";
-import { ICON_BUTTON, UNDO_TOAST_MS, usePlanEditor } from "./use-plan-editor";
+import { ICON_BUTTON } from "@/components/ui/icon-button";
+import { UNDO_TOAST_MS, usePlanEditor } from "./use-plan-editor";
 
 const DAY_PART_LABELS: Record<DayPart, string> = {
   morning: "Morning",
@@ -35,7 +41,12 @@ export function stopLabel(stop: PlanStop): string {
 
 /**
  * One stop of a day: drag handle, what it is, when, the per-person cost and
- * a menu (move to another day, remove).
+ * a menu (done / skipped, move to another day, remove).
+ *
+ * Done means different things for the two kinds of stop. At a saved place it
+ * is a visit: "Mark as done…" logs the visit (date, rating, notes) and the
+ * database marks the stop done with it; "Mark as not done" deletes that
+ * visit. A free-text stop is just ticked off.
  *
  * `apply` is the day's: "Undo" in the toast runs after this row is gone, and
  * a change sent through an unmounted row's own hook would fail silently.
@@ -98,6 +109,34 @@ export function StopRow({
     );
   }
 
+  // ── Done / skipped ──
+  const [visitDialog, setVisitDialog] = useState<VisitDialogTarget | null>(null);
+  const [deleteVisitOpen, setDeleteVisitOpen] = useState(false);
+  const atPlace = !!stop.place_id && !!stop.place;
+
+  function setStatus(status: "planned" | "done" | "skipped") {
+    apply({ ops: [{ op: "update_stop", stop_id: stop.id, status }] });
+  }
+
+  function markDone() {
+    if (!atPlace) return setStatus("done");
+    // The visit's date: the stop's day if it has come, otherwise today.
+    const today = todayIso();
+    const dayDateIso = days.find((d) => d.id === dayId)?.date ?? null;
+    setVisitDialog({
+      kind: "log",
+      placeId: stop.place_id!,
+      placeName: label,
+      planStopId: stop.id,
+      defaultDate: dayDateIso && dayDateIso <= today ? dayDateIso : today,
+    });
+  }
+
+  function markNotDone() {
+    if (atPlace && stop.visit) return setDeleteVisitOpen(true);
+    setStatus("planned");
+  }
+
   function moveTo(day: PlanDay) {
     apply(
       { ops: [{ op: "move_stop", stop_id: stop.id, day_id: day.id }] },
@@ -151,6 +190,15 @@ export function StopRow({
             <span className={cn("truncate", stop.status === "skipped" && "text-muted-foreground line-through")}>
               {label}
             </span>
+            {stop.visit?.rating != null && (
+              <span
+                className="inline-flex shrink-0 items-center gap-0.5 text-[11px] font-normal text-emerald-700 dark:text-emerald-400"
+                aria-label={`Rated ${stop.visit.rating} of 5`}
+              >
+                <Star className="h-3 w-3 fill-current" aria-hidden />
+                {stop.visit.rating}
+              </span>
+            )}
             {stop.status === "skipped" && (
               <span className="shrink-0 rounded border px-1 py-px text-[10px] font-normal text-muted-foreground">
                 skipped
@@ -178,7 +226,46 @@ export function StopRow({
           <DropdownMenuTrigger className={ICON_BUTTON} aria-label={`Actions for ${label}`}>
             <MoreHorizontal className="h-4 w-4" />
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-48">
+          <DropdownMenuContent align="end" className="w-52">
+            <DropdownMenuGroup>
+              {stop.status === "done" ? (
+                <>
+                  {atPlace && stop.visit && (
+                    <DropdownMenuItem
+                      className="cursor-pointer py-2"
+                      onClick={() =>
+                        setVisitDialog({ kind: "edit", placeName: label, visit: stop.visit! })
+                      }
+                    >
+                      <Pencil />
+                      Edit visit…
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem className="cursor-pointer py-2" onClick={markNotDone}>
+                    <Circle />
+                    {atPlace && stop.visit ? "Mark as not done…" : "Mark as not done"}
+                  </DropdownMenuItem>
+                </>
+              ) : (
+                <DropdownMenuItem className="cursor-pointer py-2" onClick={markDone}>
+                  <CheckCircle2 />
+                  {atPlace ? "Mark as done…" : "Mark as done"}
+                </DropdownMenuItem>
+              )}
+              {stop.status === "planned" && (
+                <DropdownMenuItem className="cursor-pointer py-2" onClick={() => setStatus("skipped")}>
+                  <SkipForward />
+                  Mark as skipped
+                </DropdownMenuItem>
+              )}
+              {stop.status === "skipped" && (
+                <DropdownMenuItem className="cursor-pointer py-2" onClick={() => setStatus("planned")}>
+                  <Circle />
+                  Mark as planned
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuGroup>
+            <DropdownMenuSeparator />
             {otherDays.length > 0 && (
               <>
                 <DropdownMenuGroup>
@@ -206,6 +293,18 @@ export function StopRow({
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+      )}
+
+      {visitDialog && (
+        <VisitDialog target={visitDialog} open onOpenChange={(open) => !open && setVisitDialog(null)} />
+      )}
+      {deleteVisitOpen && stop.visit && (
+        <DeleteVisitDialog
+          visit={stop.visit}
+          fulfilsStop
+          open
+          onOpenChange={setDeleteVisitOpen}
+        />
       )}
     </div>
   );

@@ -2,7 +2,7 @@
 title: Places routes
 type: route-group
 domain: backend
-version: 2.2.0
+version: 2.3.0
 last_updated: 18.11.2026
 status: stable
 sources:
@@ -60,7 +60,7 @@ Route handler files under `/api/places/*`, plus the import drain under `/api/cro
 | `DELETE` | `/api/places/[id]` | Delete with cascade across junctions. |
 | `POST` | `/api/places/[id]/enrich` | Re-run enrichment (`step=info` or `step=reviews`). |
 | `POST` | `/api/places/[id]/refresh-google-data` | Full re-fetch: info + `newest` reviews merged into the corpus (not replace) + photo, then chains to `step=profile`. Core logic in `src/lib/places/refresh-google-data.ts` (shared with the cron). |
-| `POST` | `/api/places/bulk` | Bulk update_category / add_tags / add_to_list / update_status / delete / check_plans. |
+| `POST` | `/api/places/bulk` | Bulk update_category / add_tags / add_to_list / update_status / delete / check_delete. |
 | `POST` | `/api/places/import-jobs` | Queue a Takeout file as a durable import job. |
 | `GET` | `/api/places/import-jobs` | Progress of the newest **Takeout** job. |
 | `PATCH` | `/api/places/import-jobs/[id]` | Cancel a running job. |
@@ -133,7 +133,7 @@ All require auth except `drain-imports`, which is bearer-authed with `CRON_SECRE
 - **Source:** `src/app/api/places/[id]/route.ts`
 - **Auth:** required + ownership.
 - **DB:** `places` DELETE → cascades to `place_tags`, `place_photos`, `list_places`, and **`plan_stops`** (CASCADE on `place_id`).
-- **Notes:** The place's stops vanish from its plans. Both delete flows warn first, naming the plans (place detail: `plans` from the GET; bulk: `check_plans`).
+- **Notes:** The place's stops vanish from its plans and its visits are deleted. Both delete flows warn first, naming the plans and counting the visits (place detail: `plans` from the GET and the visits it shows; bulk: `check_delete`).
 
 ### `POST /api/places/[id]/enrich?step=info|reviews`
 
@@ -166,9 +166,9 @@ All require auth except `drain-imports`, which is bearer-authed with `CRON_SECRE
   - `add_to_list` — `{ list_id }` (UPSERT into `list_places`)
   - `update_status` — `{ visit_status }` (+ timestamp side effects)
   - `delete` — bulk DELETE
-  - `check_plans` — read-only, returns `{ affected: 0, planNames: string[], placesInPlans: number }`
-- **DB:** varies by action — `places`, `place_tags`, `list_places`, `plan_stops` (read for `check_plans`).
-- **Response:** `{ success: true, affected: number }` (or `check_plans` shape).
+  - `check_delete` — read-only, returns `{ affected: 0, planNames: string[], placesInPlans: number, visits: number, placesWithVisits: number }` — what else goes if these places are deleted (plan stops and visits cascade)
+- **DB:** varies by action — `places`, `place_tags`, `list_places`, `plan_stops` and `visits` (read for `check_delete`).
+- **Response:** `{ success: true, affected: number }` (or `check_delete` shape).
 
 ### `POST /api/places/import-jobs`
 

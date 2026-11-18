@@ -2,7 +2,7 @@
 title: plans, plan_days, plan_stops
 type: table
 domain: backend
-version: 1.2.1
+version: 1.3.0
 last_updated: 18.11.2026
 status: draft
 sources:
@@ -10,6 +10,7 @@ sources:
   - supabase/migrations/20261118005355_plans_tables.sql
   - supabase/migrations/20261118010309_plan_functions.sql
   - supabase/migrations/20261118020401_plan_changes_by_day_id.sql
+  - supabase/migrations/20261118025229_stop_status_follows_visits.sql
 related:
   - "[[_README]]"
   - "[[visits]]"
@@ -131,7 +132,7 @@ Ops of `apply_plan_changes`. Where an op names a day it takes `day` (the day's n
 | `swap_days` | `a`, `b` — or `a_id`, `b_id` | Both must be days of the plan. |
 | `set_day` | `day` \| `day_id`, `notes?`, `routing_profile?` | — |
 | `add_stop` | `day` \| `day_id`, `position?` (0-based), stop fields | Default: end of the day. At most 200 stops a day. |
-| `update_stop` | `stop_id`, `title?`, `start_time?`, `day_part?`, `notes?`, `cost_estimate?`, `currency?`, `status?` | Setting a time clears the day part and the other way round; a status change stamps `status_at`. |
+| `update_stop` | `stop_id`, `title?`, `start_time?`, `day_part?`, `notes?`, `cost_estimate?`, `currency?`, `status?` | Setting a time clears the day part and the other way round; a status change stamps `status_at`. A stop at a saved place gets `done` (and leaves it) only through its visit — see below. |
 | `move_stop` | `stop_id`, `day` \| `day_id`, `position?` | Within a day or across days; both days stay densely ordered. |
 | `remove_stop` | `stop_id` | — |
 | `reorder_stops` | `day` \| `day_id`, `stop_ids[]` | Must list every stop of the day. |
@@ -144,7 +145,7 @@ Ops of `apply_plan_changes`. Where an op names a day it takes `day` (the day's n
 
 Tested on 18.11.2026 — first as a dry run in a rolled-back transaction, as a signed-in user: create with a place stop and a free-text stop; a foreign place and a blank name refused with nothing left behind; a batch of six edits; swapping days and inserting a day at the front; removing a non-empty day refused with the reason; reorder + remove; a batch with one bad op refused **entirely**; cancel and unschedule; acting for another user, another user editing the plan, and `anon` all refused. The function bodies in the database hash-match the repo files (after the revision: `apply_plan_changes` md5 `5d6f93ee…`, same in both).
 
-Marking a stop `done` does not yet create a visit; that arrives with `log_visit` (slice 2).
+**A stop's status follows its visit** (`stop_status_follows_visits`, 18.11.2026 — the third version of `apply_plan_changes`). A stop at a saved place is `done` exactly when a visit fulfils it: `log_visit` marks it done together with the visit, `delete_visit` makes it planned again. So `update_stop` refuses `status: done` for a stop with a place that isn't done yet ("a stop at a saved place is marked done by logging the visit") and any other status for a stop that has a visit ("this stop has a visit; delete the visit to change its status"). A free-text stop is ticked off with `update_stop` as before. See [[visits]].
 
 Callers: `createPlan` / `changePlan` in `src/lib/plans/write.ts` — the only code that calls these functions. `npm run check:assistant -- plans` exercises them through that module against the live database (44 checks on 18.11.2026, including a change by day id, an unknown day id refused, a gap in the order healed, and the 61st day refused).
 

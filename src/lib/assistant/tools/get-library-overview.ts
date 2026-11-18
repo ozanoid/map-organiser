@@ -8,7 +8,7 @@ export const getLibraryOverview = defineTool({
   name: "get_library_overview",
   title: "Library overview",
   description:
-    "Overview of the user's saved places: countries and cities, categories with sub-categories, tags and lists — each with a count — plus visit-status counts and recently saved places. Call it first when you need the exact names other tools take as filters, or to see what the library holds.",
+    "Overview of the user's saved places: countries and cities, categories with sub-categories, tags and lists — each with a count — plus visit-status counts, logged visits and recently saved places. Call it first when you need the exact names other tools take as filters, or to see what the library holds.",
   inputSchema: z.object({}),
   annotations: { readOnlyHint: true, openWorldHint: false },
   async run(ctx) {
@@ -77,12 +77,26 @@ export const getLibraryOverview = defineTool({
           .map(([sub, places]) => ({ name: sub, places })),
       }));
 
-    const [{ data: tagRows, error: tagErr }, { data: listRows, error: listErr }] = await Promise.all([
+    const [
+      { data: tagRows, error: tagErr },
+      { data: listRows, error: listErr },
+      { data: visitRows, error: visitErr },
+    ] = await Promise.all([
       ctx.supabase.from("tags").select("name, place_tags(count)").eq("user_id", ctx.userId),
       ctx.supabase.from("lists").select("name, list_places(count)").eq("user_id", ctx.userId),
+      ctx.supabase.from("visits").select("place_id, visited_on").eq("user_id", ctx.userId),
     ]);
     if (tagErr) throw new Error(tagErr.message);
     if (listErr) throw new Error(listErr.message);
+    if (visitErr) throw new Error(visitErr.message);
+    const visitList = (visitRows ?? []) as { place_id: string; visited_on: string }[];
+    const monthAgo = new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10);
+    const visits = {
+      logged: visitList.length,
+      places: new Set(visitList.map((v) => v.place_id)).size,
+      last_30_days: visitList.filter((v) => v.visited_on >= monthAgo).length,
+      last: visitList.reduce<string | undefined>((max, v) => (!max || v.visited_on > max ? v.visited_on : max), undefined),
+    };
     const countOf = (v: unknown) => (Array.isArray(v) && typeof v[0]?.count === "number" ? v[0].count : 0);
     const tags = (tagRows ?? [])
       .map((t) => ({ name: t.name as string, places: countOf(t.place_tags) }))
@@ -102,6 +116,9 @@ export const getLibraryOverview = defineTool({
       );
     }
     if (rated === 0) notes.push("The user hasn't rated any place yet; Google ratings are the only rating signal.");
+    if (visits.logged === 0) {
+      notes.push("No visits logged yet. When the user says they went somewhere, record it with log_visit.");
+    }
     if (merged.length) notes.push(`Country names stored two ways were merged: ${merged.join("; ")}.`);
     if (closed.permanently + closed.temporarily > 0) {
       notes.push("Closed places are left out of searches unless include_closed is set.");
@@ -110,6 +127,7 @@ export const getLibraryOverview = defineTool({
     return {
       total_places: total,
       visit_status: visit,
+      visits,
       rated_by_user: rated,
       closed,
       countries: countryList,

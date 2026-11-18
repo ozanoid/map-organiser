@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { plansUsingPlaces } from "@/lib/plans/read";
+import { visitCounts } from "@/lib/visits/read";
 
 type BulkAction =
   | "update_category"
@@ -8,7 +9,7 @@ type BulkAction =
   | "add_to_list"
   | "update_status"
   | "delete"
-  | "check_plans";
+  | "check_delete";
 
 interface BulkRequest {
   action: BulkAction;
@@ -173,13 +174,17 @@ export async function POST(request: NextRequest) {
       break;
     }
 
-    case "check_plans": {
-      // Which plans would lose stops if these places were deleted.
-      const used = await plansUsingPlaces({ supabase, userId: user.id }, validIds);
+    case "check_delete": {
+      // What else goes if these places are deleted: their plan stops and
+      // their visits (both cascade).
+      const ctx = { supabase, userId: user.id };
+      const [used, visits] = await Promise.all([plansUsingPlaces(ctx, validIds), visitCounts(ctx, validIds)]);
       return NextResponse.json({
         affected: 0,
         planNames: used.plans.map((p) => p.name),
         placesInPlans: used.placeIds.length,
+        visits: [...visits.values()].reduce((n, c) => n + c, 0),
+        placesWithVisits: visits.size,
       });
     }
 

@@ -2,8 +2,8 @@
 title: Pitfalls
 type: agent-note
 domain: agent
-version: 1.0.0
-last_updated: 12.05.2026
+version: 1.1.0
+last_updated: 18.11.2026
 status: stable
 related:
   - "[[conventions]]"
@@ -40,6 +40,7 @@ Things that will look right based on training data but will break in this codeba
 - **No `tailwind.config.js`.** Config is CSS-side in `src/app/globals.css` via `@theme`. Adding a new color/token means editing the `@theme` block, not a JS config.
 - **CSS variables are first-class.** Tokens are `--color-foreground`, etc. Reference them in arbitrary classes via `text-[--color-foreground]` if needed.
 - **`@apply` works but is discouraged** — prefer composing utilities inline or with `cva`.
+- **A class used only by a file created since the dev server last compiled CSS can be missing in `next dev`** (seen 18.11.2026: `gap-x-2` in a new component rendered with no gap). The persistent Turbopack cache in `.next/dev` reuses the old stylesheet. Touch `src/app/globals.css` (or restart with the cache cleared) before judging a layout; `next build` compiles from scratch and is not affected.
 
 ## State management
 
