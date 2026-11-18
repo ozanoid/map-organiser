@@ -1,5 +1,5 @@
 import "server-only";
-import type { SupabaseClient } from "@supabase/supabase-js";
+import type { UserContext } from "@/lib/db/context";
 import { haversineDistance, parsePostgisPoint } from "@/lib/geo";
 import { openStatus, type Timetable } from "@/lib/places/open-now";
 import { fold } from "@/lib/text/fold";
@@ -15,11 +15,9 @@ import { fold } from "@/lib/text/fold";
  * places moves ~20 MB. Only the JSON paths a tool needs are selected.
  */
 
-export interface AssistantContext {
-  /** Client carrying the user's access token — RLS applies. */
-  supabase: SupabaseClient;
-  userId: string;
-}
+/** Who the tool runs for — see src/lib/db/context.ts. The MCP server passes
+ *  a client carrying the user's access token, so RLS applies. */
+export type AssistantContext = UserContext;
 
 /** A problem with the caller's input; its message goes back to the model. */
 export class ToolInputError extends Error {}

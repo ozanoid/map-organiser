@@ -51,7 +51,7 @@ export const updatePlaces = defineTool({
   name: "update_places",
   title: "Update saved places",
   description:
-    "Write to the user's own records for 1–25 saved places: visit status (want_to_go, booked, visited, favorite; null clears it), the user's rating 1–5 (null clears it), a note appended with today's date (existing notes are kept), and tags to add or remove. Use only when the user asks for it or confirms — e.g. after they say they went somewhere, how it was and what they ate.",
+    "Write to the user's own records for 1–25 saved places: visit status (want_to_go, booked, visited, favorite; null clears it), the user's overall rating 1–5 (null clears it), a note about the place appended to its notes (existing notes are kept), and tags to add or remove. When the user tells you they went somewhere — a date, how it was, what they had — use log_visit instead: it records the visit and updates status and rating itself. Use update_places only when the user asks for it or confirms.",
   inputSchema: z.object({
     place_ids: z.array(placeId).min(1).max(25),
     visit_status: z.enum(VISIT_STATUSES).nullable().optional(),
@@ -61,7 +61,7 @@ export const updatePlaces = defineTool({
       .min(1)
       .max(500)
       .optional()
-      .describe("Appended to the notes as '[YYYY-MM-DD] note', in the user's own words"),
+      .describe("A note about the place in the user's own words, appended to its notes; not for one visit — that is log_visit"),
     add_tags: z.array(z.string().min(1).max(40)).max(10).optional().describe("Tag names; missing tags are created"),
     remove_tags: z.array(z.string().min(1).max(60)).max(10).optional(),
   }),
@@ -90,7 +90,6 @@ export const updatePlaces = defineTool({
 
     // Resolve tags before writing anything, so a bad tag name changes nothing.
     const removeTags = remove_tags?.length ? resolveNames("tag", remove_tags, await loadNames(ctx, "tag")) : [];
-    const today = new Date().toISOString().slice(0, 10);
     const now = new Date().toISOString();
 
     const updated: Array<Record<string, unknown>> = [];
@@ -107,7 +106,7 @@ export const updatePlaces = defineTool({
         }
       }
       if (rating !== undefined) updates.rating = rating;
-      if (note) updates.notes = `${row.notes?.trim() ? `${row.notes.trim()}\n` : ""}[${today}] ${note.trim()}`;
+      if (note) updates.notes = row.notes?.trim() ? `${row.notes.trim()}\n${note.trim()}` : note.trim();
 
       if (Object.keys(updates).length) {
         updates.updated_at = now;

@@ -69,6 +69,7 @@ export function BulkActionBar({
       queryClient.invalidateQueries({ queryKey: ["lists"] });
       queryClient.invalidateQueries({ queryKey: ["plans"] });
       queryClient.invalidateQueries({ queryKey: ["plan"] });
+      queryClient.invalidateQueries({ queryKey: ["visits"] });
       onComplete();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Action failed");
@@ -78,12 +79,15 @@ export function BulkActionBar({
   }
 
   async function handleDelete() {
-    // Deleting a place removes it from the plans it is a stop of — say so.
+    // Deleting a place removes its plan stops and its visits — say so.
     let planWarning = "";
     try {
-      const checkRes = await bulkAction({ action: "check_plans", place_ids: ids });
+      const checkRes = await bulkAction({ action: "check_delete", place_ids: ids });
       if (checkRes.planNames?.length > 0) {
         planWarning = `\n\n${checkRes.placesInPlans} of these place${checkRes.placesInPlans === 1 ? " is" : "s are"} in plan${checkRes.planNames.length === 1 ? "" : "s"}: ${checkRes.planNames.join(", ")}. They will be removed from those plans too.`;
+      }
+      if (checkRes.visits > 0) {
+        planWarning += `\n\n${checkRes.visits} logged visit${checkRes.visits === 1 ? "" : "s"} to ${checkRes.placesWithVisits === 1 ? "one of these places" : `${checkRes.placesWithVisits} of these places`} will be deleted too.`;
       }
     } catch {}
 

@@ -2,7 +2,7 @@
 title: Routing
 type: overview
 domain: frontend
-version: 1.6.0
+version: 1.6.1
 last_updated: 18.11.2026
 status: stable
 sources:
@@ -61,6 +61,7 @@ All under `/api/*`. Full detail in [[../02-backend/api-routes/_README]].
 |---|---|---|
 | `/api/places/*` | Places (11 endpoints) | [[../02-backend/api-routes/places]] |
 | `/api/plans/*` | Plans (7 endpoints in 4 files) | [[../02-backend/api-routes/plans]] |
+| `/api/visits/*` | Visits (4 endpoints in 2 files) | [[../02-backend/api-routes/visits]] |
 | `/api/lists/[id]/reorder` | Lists (1 endpoint) | [[../02-backend/api-routes/lists]] |
 | `/api/shared/*` | Shared (4 endpoints incl. public GET) | [[../02-backend/api-routes/shared]] |
 | `/api/stats` | Stats | [[../02-backend/api-routes/stats]] |
@@ -109,7 +110,7 @@ See [[../02-backend/auth#middleware-gate]] for the implementation.
 
 | Pattern | Used in | Param type (Next.js 16) |
 |---|---|---|
-| `[id]` | `/places/[id]`, `/lists/[id]`, `/plans/[id]`, `/api/places/[id]`, `/api/plans/[id]`, `/api/lists/[id]/reorder`, `/api/places/[id]/...`, `/api/plans/[id]/...`, `/api/instagram/import/[id]`, `/api/instagram/import/[id]/pick` | `Promise<{ id: string }>` |
+| `[id]` | `/places/[id]`, `/lists/[id]`, `/plans/[id]`, `/api/places/[id]`, `/api/plans/[id]`, `/api/visits/[id]`, `/api/lists/[id]/reorder`, `/api/places/[id]/...`, `/api/plans/[id]/...`, `/api/instagram/import/[id]`, `/api/instagram/import/[id]/pick` | `Promise<{ id: string }>` |
 | `[slug]` | `/shared/[slug]`, `/api/shared/[slug]`, `/api/shared/[slug]/save` | `Promise<{ slug: string }>` |
 | `[dayId]` | `/api/plans/[id]/days/[dayId]/route` | combined: `Promise<{ id: string, dayId: string }>` |
 

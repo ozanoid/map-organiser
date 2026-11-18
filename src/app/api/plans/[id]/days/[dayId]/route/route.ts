@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse, after } from "next/server";
 import { trackUsage } from "@/lib/google/track-usage";
-import { planErrorResponse, planRequestContext, unauthorized } from "@/lib/plans/http";
+import { errorResponse, requestContext, unauthorized } from "@/lib/api/http";
 import { dayRoute, getPlan, RouteUnavailableError } from "@/lib/plans/read";
 import { routeSignature } from "@/lib/plans/route-signature";
 import { PlanNotFoundError } from "@/lib/plans/write";
@@ -24,7 +24,7 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string; dayId: string }> }
 ) {
-  const ctx = await planRequestContext();
+  const ctx = await requestContext();
   if (!ctx) return unauthorized();
   const { id, dayId } = await params;
   const expected = request.nextUrl.searchParams.get("sig");
@@ -44,6 +44,6 @@ export async function GET(
     if (e instanceof RouteUnavailableError) {
       return NextResponse.json({ error: e.message }, { status: 502 });
     }
-    return planErrorResponse(e, "plans.route");
+    return errorResponse(e, "plans.route");
   }
 }

@@ -2,7 +2,7 @@
 title: "Kişisel mekan ve gezme asistanı — yön planı"
 type: plan
 domain: overview
-version: 1.6.4
+version: 1.6.5
 last_updated: 18.11.2026
 status: stable
 related:
@@ -33,7 +33,7 @@ related:
 |---|---|---|
 | — | Public sign-up'ı kapat | Tamam: kod `feat/personal-assistant` dalında; Supabase'de kayıt kapalı (`disable_signup: true`, doğrulandı 17.11.2026) |
 | 0 | Claude'a kapı: MCP server + OAuth | **Tamam (17.11.2026):** main'de, claude.ai'a bağlı. Okuma tool'ları connector üzerinden gerçek token'la doğrulandı; `update_places` henüz gerçek kullanımda denenmedi |
-| 1 | Planlama ve ziyaretler | Tasarım v2 onaylı: [[phase-1-planning]]. Şema uygulandı (18.11.2026); `search_google_maps` main'de. **Dilim 1 (plan modeli dönüşümü) main'de (18.11.2026)** — uygulama artık plan tablolarında çalışıyor; arayüz tarayıcıda uçtan uca denendi. Eski trip tablolarının silinmesi ayrı onay bekliyor. Sırada dilim 2 (ziyaretler) |
+| 1 | Planlama ve ziyaretler | Tasarım v2 onaylı: [[phase-1-planning]]. Şema uygulandı (18.11.2026); `search_google_maps` main'de. **Dilim 1 (plan modeli dönüşümü) main'de (18.11.2026)** — uygulama artık plan tablolarında çalışıyor; arayüz tarayıcıda uçtan uca denendi. Eski trip tablolarının silinmesi ayrı onay bekliyor. Dilim 2 (ziyaretler) kodu dalda hazır (v1.38.0), main'e alınması onay bekliyor. Sırada dilim 3 (plan tool'ları) |
 | 2 | Platform asistanı Claude'a | Sırada |
 | 3 | İletişim (e-posta, Telegram, WhatsApp linki, davet sayfası) | Sırada |
 | 4 | Geri bildirim döngüsü | Sırada |

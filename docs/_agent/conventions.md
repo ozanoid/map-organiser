@@ -2,7 +2,7 @@
 title: Coding Conventions
 type: agent-note
 domain: agent
-version: 1.0.2
+version: 1.0.3
 last_updated: 18.11.2026
 status: stable
 related:
@@ -38,7 +38,7 @@ src/
   components/
     filters/, layout/, map/, places/, settings/, ui/
   lib/
-    dataforseo/, google/, hooks/, map/, plans/, stores/, supabase/, types/
+    api/, db/, dataforseo/, google/, hooks/, map/, plans/, stores/, supabase/, types/, visits/
     geo.ts, utils.ts, providers.tsx
   middleware.ts
 ```

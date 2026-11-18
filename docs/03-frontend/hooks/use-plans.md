@@ -2,7 +2,7 @@
 title: usePlans
 type: hook
 domain: frontend
-version: 1.0.0
+version: 1.0.1
 last_updated: 18.11.2026
 status: stable
 sources:
@@ -68,4 +68,4 @@ A failed route request (the endpoint answers 502 when Mapbox gives no route) is 
 
 ## `usePlanEditor(planId)`
 
-In `src/components/plans/use-plan-editor.ts`, on top of `useChangePlan`: `apply(changes, { onDone?, onFail? })`. A failure is shown the same way everywhere — the server's message as a toast (it says what was wrong). The same file exports `ICON_BUTTON`, the class of the plan page's icon-only buttons (36 px visible, 44 px hit area).
+In `src/components/plans/use-plan-editor.ts`, on top of `useChangePlan`: `apply(changes, { onDone?, onFail? })`. A failure is shown the same way everywhere — the server's message as a toast (it says what was wrong). The same file exports `UNDO_TOAST_MS`. (The icon-only button class moved to `src/components/ui/icon-button.ts`.)

@@ -2,7 +2,7 @@
 title: Repo Structure
 type: overview
 domain: overview
-version: 1.11.0
+version: 1.12.0
 last_updated: 18.11.2026
 status: stable
 sources:
@@ -91,6 +91,7 @@ src/
 │       │                      drain-imports — every minute, the import queue (Takeout + Instagram jobs)
 │       ├── instagram/         import (POST — start from a post URL, work in after()) + import/[id] (GET — dialog progress) — v1.28.0; import/[id]/pick (POST — add the place picked for a skipped venue) — v1.28.1
 │       ├── plans/             list + create; [id] GET / PATCH { set, ops } / DELETE; auto-plan; days/[dayId]/route (v1.37.0, replaced trips/)
+│       ├── visits/            list + log; [id] PATCH / DELETE (v1.38.0)
 │       ├── lists/[id]/reorder
 │       ├── subcategories/     CRUD (per-user; default seed via signup trigger)
 │       ├── shared/            Create + public-read + save-to-account
@@ -105,7 +106,8 @@ src/
 │   ├── map/                   MapView, MapContent, SearchBox, SearchResultPanel
 │   ├── places/                PlaceCard, AddPlaceDialog (with AI Suggestions panel + sub-cat strip), InstagramImportPanel (v1.28.0), BulkActionBar, inline creators, VisitStatusToggle, AiSummaryCard,
 │   │                          + detail-page widgets (v1.17.0): RatingDistributionBar, PopularTimesWidget, PlaceStatusBadges, PlaceActionLinks, AmenitiesGrid, PlaceTopics, ReviewsSection
-│   ├── plans/                 PlansTab, CreatePlanDialog, PlanDayTimeline, StopRow, AddStopDialog, PlanMenu + PlanDatesDialog, AiPlanButton, usePlanEditor (v1.37.0)
+│   ├── plans/                 PlansTab, CreatePlanDialog, PlanDayTimeline, StopRow (done / skipped), AddStopDialog, PlanMenu + PlanDatesDialog, AiPlanButton, usePlanEditor (v1.37.0)
+│   ├── visits/                VisitDialog, DeleteVisitDialog, PlaceVisitSummary + PlaceVisitList, StarRatingInput / RatingStars (v1.38.0)
 │   ├── settings/              ApiKeysManager, CostTracker, AiSettings (master toggle), AiSuggestionsQueue (moderation UI)
 │   ├── sw-register.tsx        Service worker registration (client component)
 │   └── ui/                    shadcn primitives (avatar, badge, button, card, command, dialog, dropdown-menu, input, input-group, popover, select, separator, sheet, skeleton, sonner, tabs, textarea)
@@ -132,6 +134,11 @@ src/
     │                          read.ts (listPlans, getPlan, plansUsingPlaces, dayRoute), write.ts (createPlan, changePlan →
     │                          create_plan / apply_plan_changes; autoPlanStops), dates.ts (derived day dates, planPhase),
     │                          auto-plan.ts (k-means), directions.ts (Mapbox wrapper), cost-defaults.ts, day-colors.ts, http.ts
+    ├── visits/                The visit model's shared module (v1.38.0): schema.ts, read.ts (listVisits, visitCounts),
+    │                          write.ts (logVisit, editVisit, deleteVisit → log_visit / delete_visit)
+    ├── db/                    context.ts (UserContext — who a data call runs for), errors.ts (InputError, NotFoundError,
+    │                          classifyPostgrestError) — shared by plans/, visits/, assistant/
+    ├── api/                   http.ts — requestContext, unauthorized, errorResponse for routes over the data modules
     ├── dataforseo/            DataForSEO client + types + adapters + transform (mergeReviews) + reviews + photo
     ├── google/                Google Places + URL parser + category mapping + Takeout parser + usage tracker + key access;
     │                          place-candidates.ts (multi-candidate Text Search for the Instagram import, v1.28.0)
@@ -204,8 +211,8 @@ Counts (approximate, as of `last_updated`):
 | Area | Files |
 |---|---|
 | App routes (`src/app/**/page.tsx`) | 12 page files |
-| API route handlers (`src/app/api/**/route.ts`) | 41 routes (v1.37.0 replaced the 7 `/api/trips/**` files with 4 under `/api/plans/**` and renamed `/api/ai/trip-plan` to `/api/ai/day-plan`; v1.22.0 added `/api/ai/trip-plan` + `/api/trips/[id]/days/[dayId]`; v1.28.0 added `/api/instagram/import` + `/api/instagram/import/[id]`; v1.28.1 added `/api/instagram/import/[id]/pick`) |
-| Feature components (`src/components/{assistant,filters,layout,map,places,plans,settings}`) | ~35 |
+| API route handlers (`src/app/api/**/route.ts`) | 43 routes (v1.38.0 added `/api/visits` + `/api/visits/[id]`; v1.37.0 replaced the 7 `/api/trips/**` files with 4 under `/api/plans/**` and renamed `/api/ai/trip-plan` to `/api/ai/day-plan`; v1.22.0 added `/api/ai/trip-plan` + `/api/trips/[id]/days/[dayId]`; v1.28.0 added `/api/instagram/import` + `/api/instagram/import/[id]`; v1.28.1 added `/api/instagram/import/[id]/pick`) |
+| Feature components (`src/components/{assistant,filters,layout,map,places,plans,settings,visits}`) | ~40 |
 | shadcn UI (`src/components/ui/`) | 19 primitives |
 | Custom hooks (`src/lib/hooks/`) | 19 files (v1.20.0 added useSavedFilters; later useImportJob, useIsDesktop; v1.28.0 useInstagramImport) |
 | Supabase clients (`src/lib/supabase/`) | 3 (browser, server, middleware) |

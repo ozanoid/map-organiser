@@ -9,10 +9,13 @@ import {
 } from "@/lib/assistant/library";
 import { localDateTime, placeId } from "@/lib/assistant/place-filters";
 import { defineTool } from "@/lib/assistant/tools/types";
+import type { UserContext } from "@/lib/db/context";
 import type { Timetable } from "@/lib/places/open-now";
+import { dayDate, todayIso } from "@/lib/plans/dates";
+import { listVisits } from "@/lib/visits/read";
 
 const DETAIL_SELECT = [
-  "id,name,city,country,address,visit_status,rating,notes,source,created_at,visited_at",
+  "id,name,city,country,address,visit_status,rating,notes,source,created_at",
   "category:categories(name),subcategory:subcategories(name)",
   "g_rating:google_data->rating,g_count:google_data->user_ratings_total,g_price:google_data->price_level",
   "g_status:google_data->>current_status,g_url:google_data->>url,g_website:google_data->>website",
@@ -33,7 +36,6 @@ interface DetailRow {
   notes: string | null;
   source: string | null;
   created_at: string;
-  visited_at: string | null;
   category: { name: string } | null;
   subcategory: { name: string } | null;
   g_rating: number | null;
@@ -98,11 +100,41 @@ function worthSuggesting(s: Similar): s is Similar & { cid: string } {
 
 const INSTAGRAM_POST = /https?:\/\/(?:www\.)?instagram\.com\/(?:p|reel|reels|tv)\/[A-Za-z0-9_-]+\/?/;
 
+/** Plans still ahead (or not scheduled yet) that have a planned stop at
+ *  these places. */
+async function upcomingPlansOf(
+  ctx: UserContext,
+  placeIds: string[]
+): Promise<Map<string, Array<{ plan: string; plan_id: string; date?: string }>>> {
+  const { data, error } = await ctx.supabase
+    .from("plan_stops")
+    .select("place_id,status,plan_days!inner(day_number,plans!inner(id,name,start_date,status,user_id))")
+    .in("place_id", placeIds)
+    .eq("status", "planned")
+    .eq("plan_days.plans.user_id", ctx.userId)
+    .eq("plan_days.plans.status", "planned");
+  if (error) throw new Error(error.message);
+  type Row = {
+    place_id: string;
+    plan_days: { day_number: number; plans: { id: string; name: string; start_date: string | null } };
+  };
+  const today = todayIso();
+  const out = new Map<string, Array<{ plan: string; plan_id: string; date?: string }>>();
+  for (const r of (data ?? []) as unknown as Row[]) {
+    const date = dayDate(r.plan_days.plans.start_date, r.plan_days.day_number);
+    if (date && date < today) continue; // that day has passed
+    const list = out.get(r.place_id) ?? [];
+    list.push({ plan: r.plan_days.plans.name, plan_id: r.plan_days.plans.id, date: date ?? undefined });
+    out.set(r.place_id, list);
+  }
+  return out;
+}
+
 export const getPlaces = defineTool({
   name: "get_places",
   title: "Get place details",
   description:
-    "Full details for 1–5 of the user's saved places by id: the review-derived profile (summary, pros, cons, themes with quotes, what it's good for), weekly opening hours, price, links (Google Maps, website, booking), phone, the user's own status and notes, tags, lists, the Instagram post it came from, and similar places the user has not saved. Pass `at` (local time at the place) to learn whether it is open then and how busy it usually is. Use it to compare places too.",
+    "Full details for 1–5 of the user's saved places by id: the review-derived profile (summary, pros, cons, themes with quotes, what it's good for), weekly opening hours, price, links (Google Maps, website, booking), phone, the user's own status, rating and notes, their last visits (date, rating, what they had), upcoming plans that include the place, tags, lists, the Instagram post it came from, and similar places the user has not saved. Pass `at` (local time at the place) to learn whether it is open then and how busy it usually is. Use it to compare places too.",
   inputSchema: z.object({
     place_ids: z.array(placeId).min(1).max(5),
     at: localDateTime
@@ -121,10 +153,14 @@ export const getPlaces = defineTool({
     const rows = (data ?? []) as unknown as DetailRow[];
     if (rows.length === 0) throw new ToolInputError("None of those ids is a saved place. Use ids from search_places.");
 
-    const [{ data: tagRows }, { data: listRows }] = await Promise.all([
+    const [{ data: tagRows }, { data: listRows }, visits, upcoming] = await Promise.all([
       ctx.supabase.from("place_tags").select("place_id, tags(name)").in("place_id", ids),
       ctx.supabase.from("list_places").select("place_id, lists(name)").in("place_id", ids),
+      listVisits(ctx, { placeIds: ids, limit: 200 }),
+      upcomingPlansOf(ctx, ids),
     ]);
+    const visitsOf = new Map<string, typeof visits>();
+    for (const v of visits) visitsOf.set(v.place_id, [...(visitsOf.get(v.place_id) ?? []), v]);
     const tagsOf = new Map<string, string[]>();
     for (const r of (tagRows ?? []) as unknown as Array<{ place_id: string; tags: { name: string } | null }>) {
       if (r.tags?.name) tagsOf.set(r.place_id, [...(tagsOf.get(r.place_id) ?? []), r.tags.name]);
@@ -185,7 +221,21 @@ export const getPlaces = defineTool({
           rating: r.rating ?? undefined,
           notes: clip(r.notes, 600),
           saved: r.created_at.slice(0, 10),
-          visited: r.visited_at?.slice(0, 10),
+          visits: visitsOf.has(r.id)
+            ? {
+                count: visitsOf.get(r.id)!.length,
+                last: visitsOf
+                  .get(r.id)!
+                  .slice(0, 3)
+                  .map((v) => ({
+                    visit_id: v.id,
+                    date: v.visited_on,
+                    rating: v.rating ?? undefined,
+                    notes: clip(v.notes, 300),
+                  })),
+              }
+            : undefined,
+          upcoming_plans: upcoming.get(r.id),
           source: r.source ?? undefined,
           instagram_post: instagram,
           tags: tagsOf.get(r.id) ?? [],

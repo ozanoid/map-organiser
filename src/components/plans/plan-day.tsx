@@ -25,7 +25,8 @@ import { ROUTING_PROFILES } from "@/lib/plans/schema";
 import type { PlanDay, PlanRoute, PlanStop, RoutingProfile } from "@/lib/types";
 import { AddStopDialog } from "./add-stop-dialog";
 import { StopRow } from "./stop-row";
-import { ICON_BUTTON, usePlanEditor } from "./use-plan-editor";
+import { ICON_BUTTON } from "@/components/ui/icon-button";
+import { usePlanEditor } from "./use-plan-editor";
 
 const PROFILE_ICONS = { walking: Footprints, driving: Car, cycling: Bike } as const;
 

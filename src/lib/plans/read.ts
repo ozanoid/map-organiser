@@ -1,5 +1,5 @@
 import "server-only";
-import type { SupabaseClient } from "@supabase/supabase-js";
+import type { UserContext } from "@/lib/db/context";
 import { parsePostgisPoint } from "@/lib/geo";
 import { dayDate, planEndDate } from "@/lib/plans/dates";
 import { getRoute } from "@/lib/plans/directions";
@@ -11,6 +11,7 @@ import type {
   PlanRoute,
   PlanStatus,
   PlanStop,
+  PlanStopVisit,
   RoutingProfile,
   StopStatus,
   VisitStatus,
@@ -25,10 +26,8 @@ import type {
  * protects the callers that use the service role.
  */
 
-export interface PlanContext {
-  supabase: SupabaseClient;
-  userId: string;
-}
+/** Who the call runs for — see src/lib/db/context.ts. */
+export type PlanContext = UserContext;
 
 // ── Row shapes (what PostgREST returns) ─────────────────────────────
 
@@ -64,6 +63,9 @@ interface StopRow {
   status_at: string | null;
   created_at: string;
   place: PlaceRow | null;
+  /** visits.plan_stop_id is unique, so PostgREST embeds one object (or null);
+   *  an array is accepted too. */
+  visit: PlanStopVisit | PlanStopVisit[] | null;
 }
 
 interface DayRow {
@@ -101,7 +103,7 @@ const PLACE_SELECT = [
   "g_count:google_data->user_ratings_total,g_price:google_data->price_level",
 ].join(",");
 
-const STOP_SELECT = `id,day_id,sort_order,place_id,title,start_time,day_part,notes,cost_estimate,currency,status,status_at,created_at,place:places(${PLACE_SELECT})`;
+const STOP_SELECT = `id,day_id,sort_order,place_id,title,start_time,day_part,notes,cost_estimate,currency,status,status_at,created_at,place:places(${PLACE_SELECT}),visit:visits(id,visited_on,rating,notes)`;
 
 const DAY_SELECT = `id,plan_id,day_number,notes,routing_profile,created_at,stops:plan_stops(${STOP_SELECT})`;
 
@@ -148,6 +150,7 @@ function shapeStop(row: StopRow): PlanStop {
     status_at: row.status_at,
     created_at: row.created_at,
     place: shapePlace(row.place),
+    visit: (Array.isArray(row.visit) ? row.visit[0] : row.visit) ?? null,
   };
 }
 

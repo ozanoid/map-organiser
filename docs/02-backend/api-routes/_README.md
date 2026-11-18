@@ -2,7 +2,7 @@
 title: API Routes
 type: overview
 domain: backend
-version: 1.10.0
+version: 1.11.0
 last_updated: 18.11.2026
 status: stable
 sources:
@@ -25,6 +25,7 @@ All Next.js route handlers grouped by area. Each linked doc is the canonical ref
 |---|---|---|---|
 | Places | `/api/places/*` | Required | [[places]] |
 | Plans | `/api/plans/*` | Required | [[plans]] |
+| Visits | `/api/visits/*` | Required | [[visits]] |
 | Lists | `/api/lists/*` | Required | [[lists]] |
 | Subcategories | `/api/subcategories/*` (Phase 2) | Required | [[subcategories]] |
 | Shared | `/api/shared/*` | **Mixed** — GET `/[slug]` public via service role | [[shared]] |
@@ -42,7 +43,7 @@ All Next.js route handlers grouped by area. Each linked doc is the canonical ref
 
 ## Counts
 
-- 43 route handler files (41 × `src/app/api/**/route.ts` + `src/app/auth/callback/route.ts` + `src/app/.well-known/oauth-protected-resource/[[...path]]/route.ts`; 17.11.2026 added `/api/mcp` and the metadata route) — Phase 6 added `/api/ai/parse-query` + `/api/ai/rank-results`; 15.07.2026 added `/api/cron/refresh-places`; v1.21.0 added `/api/ai/chat` (assistant); v1.22.0 added `/api/ai/trip-plan` + `PATCH /api/trips/[id]/days/[dayId]`; v1.26.0 swapped `import-parse` / `import-batch` / `bulk-enrich-reviews` for `import-jobs`, `import-jobs/[id]` and `cron/drain-imports` (net zero); v1.28.0 added `/api/instagram/import` + `/api/instagram/import/[id]`; v1.28.1 added `/api/instagram/import/[id]/pick`; v1.37.0 replaced the 7 `/api/trips/**` files with 4 under `/api/plans/**` and renamed `/api/ai/trip-plan` to `/api/ai/day-plan`. (NF-05 similar-adds reuse `POST /api/places` via the AddPlaceDialog preview — no dedicated route.)
+- 45 route handler files (43 × `src/app/api/**/route.ts` + `src/app/auth/callback/route.ts` + `src/app/.well-known/oauth-protected-resource/[[...path]]/route.ts`; 17.11.2026 added `/api/mcp` and the metadata route) — Phase 6 added `/api/ai/parse-query` + `/api/ai/rank-results`; 15.07.2026 added `/api/cron/refresh-places`; v1.21.0 added `/api/ai/chat` (assistant); v1.22.0 added `/api/ai/trip-plan` + `PATCH /api/trips/[id]/days/[dayId]`; v1.26.0 swapped `import-parse` / `import-batch` / `bulk-enrich-reviews` for `import-jobs`, `import-jobs/[id]` and `cron/drain-imports` (net zero); v1.28.0 added `/api/instagram/import` + `/api/instagram/import/[id]`; v1.28.1 added `/api/instagram/import/[id]/pick`; v1.37.0 replaced the 7 `/api/trips/**` files with 4 under `/api/plans/**` and renamed `/api/ai/trip-plan` to `/api/ai/day-plan`; v1.38.0 added `/api/visits` + `/api/visits/[id]`. (NF-05 similar-adds reuse `POST /api/places` via the AddPlaceDialog preview — no dedicated route.)
 - ~59 HTTP method exports across them
 
 ## Cross-route conventions
@@ -91,6 +92,8 @@ These are reused across many routes:
 | `getRoute` | `src/lib/plans/directions.ts` | Mapbox Directions wrapper — takes the day's `RoutingProfile`. |
 | `defaultCostEstimate` | `src/lib/plans/cost-defaults.ts` | price_level → per-person USD default for a new stop (`createPlan`, `changePlan`). |
 | `createPlan` / `changePlan` / `getPlan` … | `src/lib/plans/write.ts`, `read.ts` | The plan model's shared module — routes and (from slice 3) assistant tools call the same functions. See [[plans]]. |
+| `logVisit` / `editVisit` / `deleteVisit` / `listVisits` | `src/lib/visits/write.ts`, `read.ts` | The visit model's shared module — routes and the `log_visit` / `get_visits` tools. See [[visits]]. |
+| `requestContext` / `unauthorized` / `errorResponse` | `src/lib/api/http.ts` | The signed-in caller as a `UserContext`, and the data modules' errors (`InputError` → 400, `NotFoundError` → 404, else 500) as responses. |
 | `isOpenOnDate` | `src/lib/places/open-now.ts` | Day-granular open flag from `work_timetable` (v1.22.0; AI Plan candidate projection). |
 | `encryptApiKey` / `decryptApiKey` / `maskApiKey` | encryption helpers | API key crypto. |
 | `nanoid(10)` | `nanoid` package | Slug generation. |

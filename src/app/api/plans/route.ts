@@ -1,18 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { planErrorResponse, planRequestContext, unauthorized } from "@/lib/plans/http";
+import { errorResponse, requestContext, unauthorized } from "@/lib/api/http";
 import { listPlans } from "@/lib/plans/read";
 import { MAX_PLAN_DAYS } from "@/lib/plans/schema";
 import { createPlan, stopsFromList } from "@/lib/plans/write";
 
 // GET /api/plans — the user's plans, without days or stops.
 export async function GET() {
-  const ctx = await planRequestContext();
+  const ctx = await requestContext();
   if (!ctx) return unauthorized();
   try {
     return NextResponse.json(await listPlans(ctx));
   } catch (e) {
-    return planErrorResponse(e, "plans.list");
+    return errorResponse(e, "plans.list");
   }
 }
 
@@ -27,7 +27,7 @@ const BodySchema = z.object({
 });
 
 export async function POST(request: NextRequest) {
-  const ctx = await planRequestContext();
+  const ctx = await requestContext();
   if (!ctx) return unauthorized();
 
   const parsed = BodySchema.safeParse(await request.json().catch(() => ({})));
@@ -50,6 +50,6 @@ export async function POST(request: NextRequest) {
     );
     return NextResponse.json({ id }, { status: 201 });
   } catch (e) {
-    return planErrorResponse(e, "plans.create");
+    return errorResponse(e, "plans.create");
   }
 }

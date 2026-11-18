@@ -1,5 +1,6 @@
 import "server-only";
 import type { PostgrestError } from "@supabase/supabase-js";
+import { classifyPostgrestError, InputError, NotFoundError } from "@/lib/db/errors";
 import { autoPlan } from "@/lib/plans/auto-plan";
 import { defaultCostEstimate } from "@/lib/plans/cost-defaults";
 import { getPlan, routedStops, type PlanContext } from "@/lib/plans/read";
@@ -17,22 +18,18 @@ import type { Plan } from "@/lib/types";
  */
 
 /** The caller's input can't be applied; the message says why. */
-export class PlanInputError extends Error {}
+export class PlanInputError extends InputError {}
 /** The plan doesn't exist or isn't the caller's. */
-export class PlanNotFoundError extends Error {
+export class PlanNotFoundError extends NotFoundError {
   constructor() {
     super("Plan not found");
   }
 }
 
 function fail(error: PostgrestError): never {
-  // Raised by the plan functions themselves.
-  if (error.code === "P0002") throw new PlanNotFoundError();
-  if (error.code === "22023") throw new PlanInputError(error.message);
-  // A value the tables refuse: CHECK, bad date / time / uuid, foreign key.
-  if (["23514", "22007", "22008", "22P02", "23503", "23502"].includes(error.code ?? "")) {
-    throw new PlanInputError(`That change isn't valid: ${error.message}`);
-  }
+  const kind = classifyPostgrestError(error);
+  if (kind.kind === "not_found") throw new PlanNotFoundError();
+  if (kind.kind === "input") throw new PlanInputError(kind.message);
   throw new Error(error.message);
 }
 

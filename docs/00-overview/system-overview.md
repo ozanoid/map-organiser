@@ -2,7 +2,7 @@
 title: System Overview
 type: overview
 domain: overview
-version: 1.4.0
+version: 1.4.1
 last_updated: 18.11.2026
 status: stable
 sources:
@@ -20,6 +20,7 @@ related:
   - "[[glossary]]"
   - "[[../01-domain/places]]"
   - "[[../01-domain/plans]]"
+  - "[[../01-domain/visits]]"
   - "[[../01-domain/sharing]]"
   - "[[../02-backend/auth]]"
 ---
@@ -46,6 +47,7 @@ Typical session:
 4. Tag and categorize, set visit status, drop into lists.
 5. Build a plan (an evening out or a multi-day trip), empty or from a list → auto-plan distributes places across days, draws Mapbox routes.
 6. Share a list or plan → copy slug URL.
+7. After going: log the visit — date, rating, what you had — from the place, the plan or Claude.
 
 ## High-level architecture
 
@@ -83,6 +85,7 @@ Typical session:
 | Auth | `src/middleware.ts`, `src/lib/supabase/middleware.ts`, `src/app/auth/callback/` | Cookie-SSR via `@supabase/ssr`. Google OAuth. |
 | Places | `src/app/api/places/*`, `src/app/(app)/places/`, `src/components/places/` | The core entity. See [[../01-domain/places]]. |
 | Plans | `src/app/api/plans/*`, `src/app/(app)/plans/[id]/`, `src/lib/plans/`, `src/components/plans/` | Plans of 1..N days with ordered stops, auto-plan + Mapbox routes; every write is one Postgres function call. See [[../01-domain/plans]]. |
+| Visits | `src/app/api/visits/*`, `src/lib/visits/`, `src/components/visits/` | What happened: one place on one day, with its rating and notes; keeps the place's status and rating current and ticks off plan stops. See [[../01-domain/visits]]. |
 | Lists | `src/app/api/lists/*`, `src/app/(app)/lists/` | Ordered place groupings. See [[../01-domain/lists]]. |
 | Sharing | `src/app/api/shared/*`, `src/app/shared/[slug]/` | Public read links via service-role bypass. See [[../01-domain/sharing]]. |
 | Filters & search | `src/components/filters/`, `src/lib/hooks/use-filters.ts` | Country/city, category, tag, list, rating, visit status, sort. |

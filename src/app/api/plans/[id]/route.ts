@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { planErrorResponse, planRequestContext, unauthorized } from "@/lib/plans/http";
+import { errorResponse, requestContext, unauthorized } from "@/lib/api/http";
 import { getPlan } from "@/lib/plans/read";
 import { planChangesSchema } from "@/lib/plans/schema";
 import { changePlan, deletePlan, PlanNotFoundError } from "@/lib/plans/write";
@@ -9,7 +9,7 @@ type Params = { params: Promise<{ id: string }> };
 // GET /api/plans/[id] — the plan with its days and stops. Routes are a
 // separate request per day (…/days/[dayId]/route).
 export async function GET(_request: NextRequest, { params }: Params) {
-  const ctx = await planRequestContext();
+  const ctx = await requestContext();
   if (!ctx) return unauthorized();
   const { id } = await params;
   try {
@@ -17,7 +17,7 @@ export async function GET(_request: NextRequest, { params }: Params) {
     if (!plan) throw new PlanNotFoundError();
     return NextResponse.json(plan);
   } catch (e) {
-    return planErrorResponse(e, "plans.get");
+    return errorResponse(e, "plans.get");
   }
 }
 
@@ -26,7 +26,7 @@ export async function GET(_request: NextRequest, { params }: Params) {
 // plan as it is afterwards (`plan: null` if it couldn't be read back — the
 // change is committed all the same, and the client refetches).
 export async function PATCH(request: NextRequest, { params }: Params) {
-  const ctx = await planRequestContext();
+  const ctx = await requestContext();
   if (!ctx) return unauthorized();
   const { id } = await params;
 
@@ -42,7 +42,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
   try {
     result = await changePlan(ctx, id, parsed.data);
   } catch (e) {
-    return planErrorResponse(e, "plans.change");
+    return errorResponse(e, "plans.change");
   }
   // Past this point the change is committed: a failed read must not be
   // reported as a failed change.
@@ -53,13 +53,13 @@ export async function PATCH(request: NextRequest, { params }: Params) {
 // DELETE /api/plans/[id] — removes the plan for good. (Cancelling is a
 // PATCH: { set: { status: "cancelled" } }.)
 export async function DELETE(_request: NextRequest, { params }: Params) {
-  const ctx = await planRequestContext();
+  const ctx = await requestContext();
   if (!ctx) return unauthorized();
   const { id } = await params;
   try {
     await deletePlan(ctx, id);
     return NextResponse.json({ success: true });
   } catch (e) {
-    return planErrorResponse(e, "plans.delete");
+    return errorResponse(e, "plans.delete");
   }
 }

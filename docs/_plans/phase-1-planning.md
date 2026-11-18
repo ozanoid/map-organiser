@@ -2,7 +2,7 @@
 title: "Faz 1 — Planlama ve ziyaretler: tasarım (öneri v2)"
 type: plan
 domain: trips
-version: 2.3.4
+version: 2.4.0
 last_updated: 18.11.2026
 status: stable
 related:
@@ -274,13 +274,21 @@ Altı karar da onaylandı:
 
 Migration SQL'i uygulanmadan önce gösterilir.
 
+## Dilim 2 kararları (Ozan, 18.11.2026)
+
+1. Mekanın puanı en son puanlı ziyaretin puanını izler (ekleme, düzeltme, silmede); mekan sayfasındaki yıldızlar ziyaretsiz puan vermek için kalır.
+2. Aynı mekana aynı gün tek ziyaret: ikinci kayıt mevcut ziyareti günceller (unique index).
+3. Mekan sayfasında: durum düğmelerinin altında tek satırlık özet ve "Log a visit"; tam liste Notes'un üstünde.
+4. "Visited" düğmesi düz bayrak olarak kalır; basınca bildirimde "Log the visit" kısayolu çıkar.
+5. Index'e onay; `delete_visit` de kalıcı fonksiyon iznine dahil.
+
 ## Uygulama durumu
 
 | Dilim | Durum (18.11.2026) |
 |---|---|
 | Şema (dilim 1, 2, 4 ve 5'in tabloları) | **Uygulandı (18.11.2026, Ozan onayı):** `supabase/migrations/20261118005355_plans_tables.sql`, `…005402_visits.sql`, `…005404_list_place_notes.sql`, `…005405_assistant_source.sql`. Doğrulandı: 7 plan / 40 gün / 127 durak aynı id'lerle kopyalandı; türetilen tarihler eskileriyle birebir; erişim kuralları gerçek kullanıcı kimliğiyle sınandı (yabancı mekana durak ve ziyaret engelleniyor). Uygulama kodu yeni tabloları henüz kullanmıyor. Üç veritabanı fonksiyonu için de izin verildi. |
 | 1 Plan modeli dönüşümü | **Kod main'de (18.11.2026, Ozan'ın onayıyla merge edildi; v1.37.0–v1.37.2).** Ortak modül `src/lib/plans/`, route'lar `/api/plans/**`, hook `use-plans.ts`, sayfa `/plans/[id]`, Lists'te "Plans" sekmesi, paylaşım (okuma / kaydetme / public sayfa), AI Plan (`/api/ai/day-plan`) ve mekan silme uyarıları yeni tablolarda; `/api/trips/**`, `/trips/[id]` ve `use-trips.ts` kaldırıldı, `/trips/:id` → `/plans/:id` yönleniyor. **Veritabanı:** `apply_plan_changes` aynı gün revize edildi (`…020401_plan_changes_by_day_id.sql`): gün numarayla olduğu gibi id ile de adreslenir, durak sırası her değişiklikten önce boşluksuz hale getirilir, plan başına 60 gün ve gün başına 200 durak sınırı. **Doğrulanan:** `npm run check:assistant -- plans` canlı veritabanında 44 kontrol (okuma boyutu, oluşturma, değişiklik paketi, ya hep ya hiç, gün id'siyle değişiklik, sıra boşluğunun kapanması, gün sınırı, yabancı mekan / plan reddi, auto-plan, bir rota ve imzası); bağımsız bir code review (veri kaybı ya da yetki bulgusu yok; bulguları bu sürümde kapatıldı); trips ↔ plans satır satır karşılaştırma: fark yok; `tsc`, `eslint`, `next build`; tarayıcıda oturumsuz kısım — `/trips/<id>` yönlenmesi ve gerçek veriyle public paylaşım sayfası (harita, rotalar, saat etiketleri; payload'da bütçe / not / kişisel alan yok). **Tarayıcı turu (18.11.2026, Chrome, test hesabı, canlı veritabanı):** Plans sekmesi, boş ve listeden plan oluşturma, durak ekleme (mekan ve serbest metin), saat / gün bölümü, maliyet, sürükle-bırak, güne taşıma, silme + geri alma, gün ekleme / taşıma / silme, rota modu, tarih, kişi sayısı, yeniden adlandırma, iptal + geri alma, plan silme, Auto Plan, gerçek bir AI Plan üretimi (3,6 sn; tam saat korundu), harita görünümü, paylaşım linki ve paylaşılan planı kaydetme — hepsi çalıştı; 23 düzenlemenin her biri tek `PATCH`, sunucu ve konsol hatası yok; geçici planlar silindi, mevcut planlar değişmedi. Turda bulunan tek kusur (Undo toast'ı 4 sn'de kayboluyordu) 8 sn yapılarak düzeltildi. **Denenmeyen:** gerçek telefon genişliği (masaüstü pencere 500 px'in altına inmiyor; o genişlikte taşma yok), AI Plan'ın want-to-go havuzu seçeneği. **Geçiş tamam (18.11.2026):** main `1763f7c`; production (`map-organiser.vercel.app`) yeni build'i sunuyor (`/trips/<id>` → 308 `/plans/<id>`). Yayından sonra trips ↔ plans satır satır karşılaştırıldı: fark yok (7 / 7 plan, 40 / 40 gün, 127 / 127 durak; trip tablolarına son yazma 16.07.2026). 2 paylaşım linkinin türü `plan` yapıldı; ikisi de production'da açılıyor. **Kalan:** eski üç tablonun silinmesi ve `shared_links` CHECK'inden `trip`'in çıkarılması (*daralt* adımı) — ayrı onayla. Ek: girişsiz açılan `/plans/<id>` girişten sonra plana dönmüyor (middleware dönüş adresi tutmuyor) — Claude plan linki vermeye başlamadan (dilim 3) düzeltilecek. |
-| 2 Ziyaretler | Bekliyor |
+| 2 Ziyaretler | **Kod hazır, `feat/personal-assistant` dalında (v1.38.0, 18.11.2026); main'e alınmadı.** Veritabanı: `visits_one_per_day` (aynı mekan + gün tek ziyaret, Ozan onayı), `visit_functions` (`log_visit`, `delete_visit`, `visit_sync_rating`), `stop_status_follows_visits` (`apply_plan_changes` v3: mekanlı durak yalnız ziyaretle `done` olur / geri döner) — üçü de uygulandı, gövdeler repo dosyalarıyla birebir. Kod: `src/lib/visits/`, `/api/visits/**`, `use-visits.ts`, `src/components/visits/`; mekan sayfasında özet satırı + ziyaret listesi + diyaloglar; plan sayfasında durak menüsünde done / skipped; silme uyarıları ziyaretleri sayıyor. Claude: `log_visit`, `get_visits`; `update_places` notu artık tarihsiz genel not; `get_places` son ziyaretleri ve yaklaşan planları, `get_library_overview` ziyaret sayılarını veriyor. **Doğrulanan:** SQL 21 senaryo (rolled-back, test kullanıcısı kimliğiyle); `check:assistant -- visits` 30, `-- plans` 44 kontrol, tam set geçti; `tsc`, `eslint`; Chrome'da test hesabıyla arayüz (kayıt, aynı gün, gelecek tarih, puan kuralları, silme, 'Log the visit' kısayolu, plan sayfasında done / not done / skipped) — yazılan ziyaretler silindi, iki mekan eski hâline döndü. **Denenmeyen:** telefon genişliği; AI Plan'ın ziyaretli duraklarla davranışı (ziyaretli durak `done` olduğu için aday değil — kodla doğrulandı, canlı denenmedi). |
 | 3 Plan tool'ları | Bekliyor |
 | 4 Listeler | Bekliyor |
 | 5 Arama ve ekleme | `search_google_maps` main'de (18.11.2026). `add_place` sırada. |

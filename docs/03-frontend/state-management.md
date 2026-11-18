@@ -2,7 +2,7 @@
 title: State Management
 type: overview
 domain: frontend
-version: 1.3.0
+version: 1.4.0
 last_updated: 18.11.2026
 status: stable
 sources:
@@ -63,6 +63,7 @@ const [queryClient] = useState(
 | Plans (list) | `["plans"]` | `usePlans()` |
 | Plan (detail) | `["plan", planId]` | `usePlan(id)` |
 | Plan day route | `["plan-route", dayId, signature]` | `usePlanRoutes(plan)` |
+| A place's visits | `["visits", { placeId }]` | `useVisits(placeId)` |
 | Stats | `["stats"]` | `useStats()` (staleTime override 5 min) |
 | Shared link | `["shared-link", resourceType, resourceId]` | `useSharedLink(...)` (disabled by default) |
 | AI suggestions | `["ai-suggestions"]` | `useAiSuggestions()` (Phase 5; pre-aggregated server-side; staleTime 30 s) |
@@ -72,7 +73,8 @@ const [queryClient] = useState(
 
 **Invalidation conventions** (per [[hooks/_README]]):
 
-- Place delete → `["places"]` + `["lists"]` + `["plans"]` + `["plan"]` (lists/plans lose the place).
+- Place delete → `["places"]` + `["lists"]` + `["plans"]` + `["plan"]` + `["visits"]` (lists/plans lose the place, its visits go).
+- Visit write → `["visits"]` + `["plan"]` (a stop may be done or planned again) + `["places"]` (status and rating); the response carries the place's new summary for a screen that holds the place itself.
 - Place mutation → `["places"]`.
 - Category/tag/list mutation → its own key + `["places"]` (places carry joined data).
 - Subcategory mutation → `["subcategories"]` + `["places"]` (places carry joined sub-cat data).

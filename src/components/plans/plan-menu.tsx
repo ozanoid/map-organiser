@@ -18,7 +18,8 @@ import { useDeletePlan } from "@/lib/hooks/use-plans";
 import { useCreateSharedLink } from "@/lib/hooks/use-shared-links";
 import { formatDayDate, planEndDate } from "@/lib/plans/dates";
 import type { Plan } from "@/lib/types";
-import { ICON_BUTTON, UNDO_TOAST_MS, usePlanEditor } from "./use-plan-editor";
+import { ICON_BUTTON } from "@/components/ui/icon-button";
+import { UNDO_TOAST_MS, usePlanEditor } from "./use-plan-editor";
 
 export const PLANS_HOME = "/lists?tab=plans";
 

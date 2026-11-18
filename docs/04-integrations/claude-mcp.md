@@ -2,7 +2,7 @@
 title: "Claude connector (MCP server)"
 type: integration
 domain: integrations
-version: 1.2.1
+version: 1.3.0
 last_updated: 18.11.2026
 status: draft
 sources:
@@ -23,6 +23,9 @@ sources:
   - src/lib/text/fold.ts
   - scripts/assistant-check/run.ts
   - scripts/assistant-check/plans.ts
+  - scripts/assistant-check/visits.ts
+  - src/lib/assistant/tools/log-visit.ts
+  - src/lib/assistant/tools/get-visits.ts
 related:
   - "[[../_plans/personal-assistant]]"
   - "[[../05-flows/claude-connector-flow]]"
@@ -60,15 +63,17 @@ Both new paths are skipped by the session middleware (matcher in `src/middleware
 
 | Tool | Kind | What it returns |
 |---|---|---|
-| `get_library_overview` | read | Countries (spellings merged, e.g. Türkiye + Turkey) with cities, categories with sub-categories, tags and lists — each with counts; visit-status counts (unknown included), closed counts, sources, recently saved, notes on data gaps. |
+| `get_library_overview` | read | Countries (spellings merged, e.g. Türkiye + Turkey) with cities, categories with sub-categories, tags and lists — each with counts; visit-status counts (unknown included), logged visits (total, places, last 30 days, last date), closed counts, sources, recently saved, notes on data gaps. |
 | `search_places` | read | Filters: keyword, city/country, near (saved place, lat/lng or a neighbourhood geocoded by Mapbox) + radius, category, sub-category, tags (all must apply), list, visit status (incl. `unknown`), Google rating and review floor, max price, open at a place-local time or now, source, saved since. Closed places out unless `include_closed`. Sort: rating, popularity, distance, recent. ≤ 25 compact rows + total. |
 | `rank_places` | read, AI call | Same filters, then the AI-search judge (Gemini, `rank-engine`) scores up to 30 profiles against an English `intent`. SKU `ai_rank_results`, budget `rank_backstop`; degrades to rating order with a notice. |
-| `get_places` | read | 1–5 places in full: profile (summary, pros, cons, top themes with a quote, `good_for` features), weekly hours, `at` → open?, closes at, busyness at that hour and the day's busiest hours, links (long Google links cut to their path), user status/rating/notes/tags/lists, the Instagram post in the notes, up to 3 "people also search" places not in the library — only listings with ≥ 4.0 and ≥ 20 reviews (a 1-review, 1★ listing showed up in the first live check). |
+| `get_places` | read | 1–5 places in full: profile (summary, pros, cons, top themes with a quote, `good_for` features), weekly hours, `at` → open?, closes at, busyness at that hour and the day's busiest hours, links (long Google links cut to their path), user status/rating/notes/tags/lists, the last 3 visits (date, rating, notes) and upcoming plans that include the place (v1.38.0; replaced the `visited` date), the Instagram post in the notes, up to 3 "people also search" places not in the library — only listings with ≥ 4.0 and ≥ 20 reviews (a 1-review, 1★ listing showed up in the first live check). |
 | `read_reviews` | read | Stored Google reviews (~50 per place) filtered by words (`about`, any match, folded), min rating; sorted by relevance or date; ≤ 20 quotes cut to 450 chars around the hit. Without `about`, also the review themes. |
 | `search_google_maps` | read, paid | Google Maps search (DataForSEO SERP, live) around a point: by name or by kind. ≤ 20 results with address, category, Google rating and review count, distance, website, `maps_url`, `google_cid`, and `saved_place_id` when the place is already in the library (matched on cid / place id). No price level — the live response leaves it empty. 18.11.2026. |
-| `update_places` | write | 1–25 places: visit status (stamps `visited_at` / `booked_at` like `PATCH /api/places/[id]`), user rating 1–5 or null, a note appended as `[YYYY-MM-DD] …` (existing notes kept), tags to add (created if missing) or remove. Annotated destructive, so clients ask before running it. |
+| `get_visits` | read | The user's logged visits, newest first: date, place (name, area, Maps link), this visit's rating and notes, the plan it fulfilled. Filters: places, date range, area (city / district / country, folded), minimum rating; ≤ 100. Says so when nothing is logged. |
+| `log_visit` | write | "I went": place, date (default today at the place), rating, notes in the user's words → `log_visit` ([[../01-domain/visits]]): one visit per place per day (the same day again updates it, keeping what is left out), marks the place visited, keeps its rating current, ticks off a planned stop that day. `visit_id` corrects a visit (null clears rating / notes). `created_via = assistant`. |
+| `update_places` | write | 1–25 places: visit status without a visit (stamps `visited_at` / `booked_at` like `PATCH /api/places/[id]`), an overall rating 1–5 or null, a note about the place appended to its notes (no date prefix since v1.38.0 — visit notes go to `log_visit`), tags to add (created if missing) or remove. Its description sends "I went…" to `log_visit`. |
 
-Filters take **names**, not ids (`resolveNames`): exact folded match, then a unique partial match ("Rooftops" → "Rooftop"); otherwise a `ToolInputError` listing the closest names, which goes back to the model as an error result.
+Filters take **names**, not ids (`resolveNames`): exact folded match, then a unique partial match ("Rooftops" → "Rooftop"); otherwise a `ToolInputError` listing the closest names, which goes back to the model as an error result. The data modules' own refusals (`InputError` / `NotFoundError` from `src/lib/db/errors.ts` — "a visit can't be in the future", "visit not found") go back to the model the same way.
 
 ### Matching and payload
 
@@ -97,7 +102,7 @@ Filters take **names**, not ids (`resolveNames`): exact folded match, then a uni
 
 ## Testing
 
-`npm run check:assistant` (`scripts/assistant-check/run.ts`) runs every tool against the live database with the service-role key — read checks on the owner's library; the paid calls (geocoding, AI ranking) and one write on the admin test account, the write undone afterwards — plus the plan module's checks (`scripts/assistant-check/plans.ts`; `npm run check:assistant -- plans` runs only those, with no paid call) and unit checks for `safeNextPath` and the redirect allowlist. The OAuth round trip and real-token RLS were covered by the production end-to-end check of 17.11.2026 (read tools only).
+`npm run check:assistant` (`scripts/assistant-check/run.ts`) runs every tool against the live database with the service-role key — read checks on the owner's library; the paid calls (geocoding, AI ranking) and one write on the admin test account, the write undone afterwards — plus the plan and visit modules' checks (`scripts/assistant-check/plans.ts`, `visits.ts` — the visit checks also run `log_visit`, `get_visits`, `get_places`, the overview and `update_places`; `npm run check:assistant -- plans` / `-- visits` run only those, with no paid call) and unit checks for `safeNextPath` and the redirect allowlist. The OAuth round trip and real-token RLS were covered by the production end-to-end check of 17.11.2026 (read tools only).
 
 ## Failure modes
 

@@ -2,13 +2,14 @@
 title: Glossary
 type: overview
 domain: overview
-version: 1.4.0
+version: 1.5.0
 last_updated: 18.11.2026
 status: stable
 related:
   - "[[system-overview]]"
   - "[[../01-domain/places]]"
   - "[[../01-domain/plans]]"
+  - "[[../01-domain/visits]]"
   - "[[../01-domain/lists]]"
   - "[[../01-domain/sharing]]"
   - "[[../01-domain/users-and-profiles]]"
@@ -32,7 +33,8 @@ Single source of truth for every domain term, abbreviation, and acronym used in 
 | **List** | A named, ordered grouping of Places. Many-to-many with Places via `list_places`. See [[../01-domain/lists]]. |
 | **Plan** | An intention for one or more days: 1..N Days, each holding ordered Stops. An evening out and a multi-day trip are both plans; a plan may have no date yet. Called *Trip* until v1.37.0. See [[../01-domain/plans]]. |
 | **Plan Day** | One day of a Plan, addressed by `day_number`; its date is derived from the plan's start date. |
-| **Stop** | One entry of a Plan Day: a saved Place or a line of text, with an order, an optional time (exact or a part of the day), a per-person cost and a status. |
+| **Stop** | One entry of a Plan Day: a saved Place or a line of text, with an order, an optional time (exact or a part of the day), a per-person cost and a status (`planned` / `done` / `skipped`). A stop at a saved place is done when a Visit fulfils it. |
+| **Visit** | One saved Place on one day — what actually happened, with that visit's rating and notes. One per place per day. Logging one marks the place visited and keeps its rating current. See [[../01-domain/visits]]. |
 | **Shared Link** | A public-readable slug URL pointing to a List, a Plan or a single Place. See [[../01-domain/sharing]]. |
 | **Profile** | The per-user row in `public.profiles` (1:1 with `auth.users`). Holds display name, encrypted API keys, feature flags. See [[../01-domain/users-and-profiles]]. |
 | **Visit Status** | One of `want_to_go` / `booked` / `visited` / `favorite`. Drives filtering and marker style. |
