@@ -1,6 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { DataForSEOClient } from "@/lib/dataforseo/client";
+import { DataForSEOClient, isServiceFailure } from "@/lib/dataforseo/client";
 import { fetchBusinessInfoLive } from "@/lib/dataforseo/business-info";
 import { fetchReviews, toLocationCoordinate } from "@/lib/dataforseo/reviews";
 import { parsePostgisPoint } from "@/lib/geo";
@@ -36,6 +36,9 @@ export interface RefreshOutcome {
   bizInfoOk: boolean;
   /** The reviews fetch failed; the stored reviews were kept. */
   reviewsFailed?: boolean;
+  /** DataForSEO itself failed (down, out of balance, rate-limited): nothing
+   *  was written; the next run tries again — the cron stops its sweep. */
+  serviceFailure?: boolean;
 }
 
 /**
@@ -107,21 +110,34 @@ export async function refreshPlaceGoogleData(
     ? `place_id:${place.google_place_id}`
     : `cid:${place.google_place_id}`;
 
-  // A failed lookup isn't "no record": write nothing — not even the
-  // staleness marker, so the cron tries the place again on its next run — and
-  // report it (v1.45.0; before, it read as null and the refresh "succeeded"
-  // on the old data).
+  // A failed lookup isn't "no record" (v1.45.0; before, it read as null and
+  // the refresh "succeeded" on the old data). Nothing of the place is
+  // written, and it's reported:
+  //  - DataForSEO itself failing → not even the staleness marker, so the next
+  //    run tries again (the cron stops its sweep);
+  //  - a failure of this place's own request (an invalid field, say) → the
+  //    marker only, so it waits a cycle like a place Google no longer knows
+  //    and can't hold the head of every daily batch.
   let raw: RawBusinessInfo | null;
   try {
     raw = await fetchBusinessInfoLive(client, { keyword });
   } catch (error) {
     console.error(`[refresh-google-data] lookup failed for ${placeId}:`, error);
+    const serviceFailure = isServiceFailure(error);
+    if (!serviceFailure) {
+      await supabase
+        .from("places")
+        .update({ google_data: { ...existingData, refresh_attempted_at: new Date().toISOString() } })
+        .eq("id", placeId)
+        .eq("user_id", userId);
+    }
     return {
       ok: false,
       status: 502,
       error: "Place lookup failed — try again",
       ...none,
       hadProfile,
+      serviceFailure,
     };
   }
   // Billed whether or not DataForSEO found the place.
@@ -206,9 +222,10 @@ export async function refreshPlaceGoogleData(
     // DataForSEO extended fields (includes enriched_at when biz-info
     // succeeded).
     ...extended,
-    // ALWAYS stamped, success or not — this is the cron's staleness
-    // marker. Without it, a place whose biz-info lookup permanently fails
-    // would sort to the head of every daily batch forever (starvation).
+    // Stamped whenever the lookup ran, found or not — the cron's staleness
+    // marker. Without it a place Google no longer knows would sort to the
+    // head of every daily batch forever (starvation). A failed lookup
+    // returns above.
     refresh_attempted_at: new Date().toISOString(),
   };
 
@@ -237,7 +254,7 @@ export async function refreshPlaceGoogleData(
       newReviews,
       hadProfile,
       bizInfoOk: Boolean(raw),
-    reviewsFailed,
+      reviewsFailed,
     };
   }
 

@@ -2,7 +2,7 @@
 title: AI place_profile backfill (per user)
 type: runbook
 domain: ops
-version: 1.3.1
+version: 1.3.2
 last_updated: 19.11.2026
 status: stable
 related:
@@ -173,6 +173,14 @@ Google has none; a failed fetch stamps nothing since v1.45.0 — gets
 rather than `has_cid_no_reviews`. Without that, "has a CID and no reviews" stays
 true forever and the panel re-offers the place after every import, burning a
 DataForSEO call each time for the same empty answer.
+
+A second, short-lived mark keeps a round from sending the same place twice: each
+round stamps `google_data.reviews_requested_at` before sending, and the next
+rounds skip a place requested in the last 30 minutes
+(`REVIEWS_REQUEST_COOLDOWN_MS`, v1.45.1). The panel fires every 12 s and a
+reviews fetch takes 15–110 s, so a place in flight used to be sent again (a
+billed task each time); and a failed fetch stamps nothing, so without the mark
+a failing place would be sent every round.
 
 The stamp expires after 30 days (`REVIEWS_RECHECK_DAYS` in
 `src/lib/places/reviews-checked.ts`), so a place that later accumulates reviews

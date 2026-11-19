@@ -2,7 +2,7 @@
 title: DataForSEO Business Data
 type: integration
 domain: integrations
-version: 1.8.0
+version: 1.8.1
 last_updated: 19.11.2026
 status: stable
 sources:
@@ -86,7 +86,7 @@ Implementation in `src/lib/dataforseo/`:
 ## SKUs tracked
 
 - `dataforseo_business_info_live` — Business Info Live calls.
-- `dataforseo_reviews` — Reviews calls.
+- `dataforseo_reviews` — Reviews tasks, counted when DataForSEO creates them. $7.50 per 1,000: $0.0075 a task at depth 50 and priority 2, what every caller asks for (measured 19.11.2026; depth 10 is $0.0015). The tracker had $0.75 — the price of 10 reviews at standard priority — so it showed a tenth of the spend until v1.45.1; the report prices from this setting, so past months corrected too.
 - `dataforseo_maps_search` — Google Maps searches: the assistant's `search_google_maps` tool (18.11.2026) and the Instagram import's candidate and area searches (v1.42.0). $2 per 1,000.
 
 Each call → +1 in `api_usage`. `cost_per_1k` is set per DataForSEO's price.
@@ -137,7 +137,7 @@ These map into `places.google_data` (DataForSEO-extended subset) via `transformB
 - **Bad credentials:** 401. Route returns 500 to the client. Verify env vars.
 - **Quota exhausted:** 4xx. Same — verify account balance.
 - **No match:** task status 40102 "No Search Results" — for Business Info, no such business (billed like a hit, $0.0054; measured 18.11.2026); for a Maps search, nothing matched (an empty list, see above); for reviews, none. Parse-link returns 404; the import retries by name around the saved coordinate, then keeps a thin record (name and coordinate); `add_places` saves nothing (`not_found`); the Mapbox-search preview falls back to Mapbox data; the reviews step stamps `reviews_checked_at`.
-- **Failure (v1.45.0):** the wrappers throw, and no caller reads it as "no match": parse-link and the Mapbox-search preview answer 502 "try again"; the import queue retries the item (3 tries at the stage, then the place is kept and the item ends with a reason, or — at the import stage — `failed`); the manual enrich steps answer 502 and stamp nothing; the refresh writes nothing and reports `ok: false`, retried on the next run; `add_places` reports `failed`. Usage is counted only for what DataForSEO billed: a business-info lookup that returned (found or not), a reviews task once created. Measured before the change on 910 places: no damage had happened (0 thin records, 0 wrong "no reviews" stamps).
+- **Failure (v1.45.0):** the wrappers throw a `DataForSEOError` (`client.ts` wraps network failures, timeouts and non-JSON bodies too, as status 0), and its `serviceFailure` says whether DataForSEO itself is failing — no answer, HTTP 401/402/403/429/5xx, DataForSEO 401xx/402xx (access, balance, rate limits; not 40102) or 5xxxx — or only this request is wrong (404xx, 405xx). No caller reads a failure as "no match": parse-link and the Mapbox-search preview answer 502 "try again"; the import queue holds the item on a service failure — the attempt is given back, the claim kept, so it waits out the 10-minute stale window, and the run stops instead of chaining — and retries it on a request failure (3 tries at the stage, then the place is kept and the item ends with a reason, or — at the import stage — `failed`); the profile backfill sends a place's reviews request at most once per 30 minutes (`reviews_requested_at`); the manual enrich steps answer 502 and stamp nothing; the refresh writes nothing and reports `ok: false` — on a service failure the cron stops its sweep and the place is retried next run; on a request failure the place gets only its staleness marker and waits a cycle, so it can't hold the head of every batch; `add_places` reports `failed`. Usage is counted only for what DataForSEO billed: a business-info lookup that returned (found or not), a reviews task once created. Measured before the change on 910 places: no damage had happened (0 thin records, 0 wrong "no reviews" stamps).
 - **Timeout:** the `_Live` endpoints are synchronous and can be slow (~3-4s per call). The 60s Vercel Function default is the hard cap; if we hit it, batch sizes need to shrink.
 
 ## Per-user opt-out

@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { reviewsRecentlyChecked } from "@/lib/places/reviews-checked";
+import {
+  reviewsRecentlyChecked,
+  reviewsRecentlyRequested,
+  stampReviewsRequested,
+} from "@/lib/places/reviews-checked";
 import { AI_SKU_CONFIG } from "@/lib/ai/track-usage";
 
 /**
@@ -121,6 +125,9 @@ export async function POST(request: NextRequest) {
     // Don't spend a reviews call re-asking about a place Google just told us
     // has none — the same rule the eligibility report counts by.
     if (!hasReviews && reviewsRecentlyChecked(gd)) continue;
+    // Nor one whose fetch was just sent: still in flight, or failed a moment
+    // ago (a failure stamps nothing).
+    if (!hasReviews && reviewsRecentlyRequested(gd)) continue;
     eligible.push({
       id: p.id as string,
       needs_reviews: !hasReviews,
@@ -147,6 +154,14 @@ export async function POST(request: NextRequest) {
   const cookieHeader = request.headers.get("cookie") ?? "";
   let queued_reviews = 0;
   let queued_profile = 0;
+
+  // Mark the reviews requests before sending them, so the next round (12 s
+  // later) leaves these places alone — see REVIEWS_REQUEST_COOLDOWN_MS.
+  await Promise.all(
+    eligible
+      .filter((item) => item.needs_reviews)
+      .map((item) => stampReviewsRequested(supabase, item.id))
+  );
 
   for (const item of eligible) {
     const step = item.needs_reviews ? "reviews" : "profile";

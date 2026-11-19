@@ -2,7 +2,7 @@
 title: api_usage
 type: table
 domain: backend
-version: 1.6.2
+version: 1.6.3
 last_updated: 19.11.2026
 status: stable
 sources:
@@ -83,7 +83,7 @@ The composite UNIQUE constraint makes the UPSERT atomic. App code calls this via
     - `text_search_pro`, `place_details_pro`, `reviews_enterprise`, `photos` (Google Places — no code writes them since v1.42.0; kept so past rows still show)
     - `text_search_enterprise` (Google Places, v1.28.0–v1.41.x — the Instagram import's candidate search; Enterprise SKU, $35/1k past 1k free. Replaced by `dataforseo_maps_search` in v1.42.0; kept for past rows)
     - `mapbox_load`, `mapbox_search_session`, `mapbox_directions` (Mapbox — `mapbox_directions` added v1.22.0, $2/1k past 100k free, tracked at both `getRoute` call sites; `mapbox_load` is registered but has no call site)
-    - `dataforseo_business_info_live`, `dataforseo_reviews` (DataForSEO)
+    - `dataforseo_business_info_live`, `dataforseo_reviews` (DataForSEO; reviews $7.50 per 1,000 tasks since v1.45.1 — $0.0075 at depth 50, priority 2, measured; was set to $0.75)
     - `hikerapi_request` (HikerAPI, v1.28.0 — every request the Instagram import makes, $1/1k, no free tier)
     - `mapbox_geocoding` (Mapbox Geocoding v6, 17.11.2026 — one per `near.area` lookup in the assistant's search tools, and since v1.42.0 one per city an Instagram post names; $0.75/1k past 100k free)
     - `dataforseo_maps_search` (DataForSEO SERP API, 18.11.2026 — one per `search_google_maps` call, and since v1.42.0 one per Instagram candidate or area search; $2/1k, no free tier)

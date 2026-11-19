@@ -2,7 +2,7 @@
 title: Import job tables
 type: table
 domain: backend
-version: 1.3.2
+version: 1.3.3
 last_updated: 19.11.2026
 status: stable
 sources:
@@ -134,7 +134,7 @@ One row per place per job. This is the queue.
 | `payload` | `jsonb` | the parsed place: name, address, lat, lng, googleMapsUrl, note. Instagram items add `instagram` (`InstagramItemInfo`: label, sources, rule, evidence labels, skip code, same-name count, `searchName`); their `googleMapsUrl` is `https://maps.google.com/?cid=<cid>` (or `?q=place_id:<id>`) and `note` the post URL. A venue it could not pin also carries `instagram.options` (up to 20 `{ id, name, address, lat, lng, cid }` to pick from) and `instagram.near` (`{ lat, lng }` or `null`); a picked item has `rule 'picked'`, `evidence ['Picked by you']` and no `options`. |
 | `stage` | `text` | active: `import` \| `photo` \| `reviews` \| `profile`. terminal: `done` \| `skipped` \| `failed` |
 | `claimed_at` | `timestamptz` | set when a runner takes the item; stale after 10 min |
-| `attempts` | `int` | failed tries **at the current stage**; incremented on claim, reset to 0 when the stage moves; caps at 3. Retiring: `failed` at `import`; past it the place exists, so `photo` moves on to `reviews` and `reviews` / `profile` end `done`, each with a `reason` (v1.45.0) |
+| `attempts` | `int` | failed tries **at the current stage**; incremented on claim, reset to 0 when the stage moves; caps at 3. Retiring: `failed` at `import`; past it the place exists, so `photo` moves on to `reviews` and `reviews` / `profile` end `done`, each with a `reason` (v1.45.0). A DataForSEO service failure costs no attempt: the drain gives it back and keeps the claim, so the item waits out the stale window (v1.45.1) |
 | `place_id` | `uuid` → `places` | set once the place exists; `on delete set null` |
 | `reason` | `text` | why it was skipped or failed. Instagram adds `Already exists` rows written at read time (with `place_id`) and the codes `chain_branch_unknown`, `no_evidence`, `ambiguous`, `closed` for venues it could not pin (no `place_id`). |
 | `created_at`, `updated_at` | `timestamptz` | `updated_at` is stamped by the claim and by the drain on every stage change (and by a pick). The Instagram status route reads it: an item at `photo` with an `updated_at` older than 10 minutes no longer counts as waiting for its photo. |

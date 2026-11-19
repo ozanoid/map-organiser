@@ -9,7 +9,7 @@
  * falling back to location_code 2840 (US) as a global default.
  */
 
-import type { DataForSEOClient } from "./client";
+import { DataForSEOError, type DataForSEOClient } from "./client";
 import type {
   BusinessInfoResponse,
   RawBusinessInfo,
@@ -45,7 +45,10 @@ export interface BusinessInfoOptions {
  * such business (task status 40102, or no items) — billed either way
  * ($0.0054, measured 18.11.2026), so callers count both. Every failure —
  * network, HTTP status, abort or timeout, any other task status (balance,
- * bad request, internal error) — throws and is not billed.
+ * bad request, internal error) — throws a DataForSEOError
+ * (`serviceFailure` tells an outage from a bad request) and isn't counted.
+ * A lookup cut off by the caller's timeout may still have run and been
+ * billed; that one is uncounted.
  *
  * Until v1.45.0 a failure also returned `null` unless the caller asked
  * otherwise, and callers took it for "not on Google": the import kept a thin
@@ -81,8 +84,9 @@ export async function fetchBusinessInfoLive(
   const task = response.tasks?.[0];
   if (task?.status_code === NO_RESULTS) return null;
   if (!task || task.status_code !== 20000) {
-    throw new Error(
-      `DataForSEO business info: ${task?.status_code ?? "no task"} ${task?.status_message ?? ""}`.trim()
+    throw new DataForSEOError(
+      `DataForSEO business info: ${task?.status_code ?? "no task"} ${task?.status_message ?? ""}`.trim(),
+      task?.status_code ?? 0
     );
   }
 

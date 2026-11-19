@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
-import { DataForSEOClient } from "@/lib/dataforseo/client";
+import { DataForSEOClient, isServiceFailure } from "@/lib/dataforseo/client";
 import { parsePostgisPoint } from "@/lib/geo";
 import { fetchReviews, toLocationCoordinate } from "@/lib/dataforseo/reviews";
 import { transformReviews, mergeReviews } from "@/lib/dataforseo/transform";
@@ -210,9 +210,30 @@ export async function GET(request: NextRequest) {
   };
   const startedAt = Date.now();
   let cursor = 0;
+  /** DataForSEO itself failed this run (down, out of balance, rate-limited). */
+  let serviceDown = false;
+
+  /**
+   * DataForSEO is failing, not this item: give back the attempt its claim
+   * took and keep the claim, so the item sits out the 10-minute stale window
+   * before a run takes it again (v1.45.0). An outage or an empty balance then
+   * holds the queue — one probe per item every 10 minutes, failed calls aren't
+   * billed — instead of burning three attempts in a minute and retiring every
+   * item as `failed`.
+   */
+  async function holdForService(item: JobItem) {
+    await admin
+      .from("import_job_items")
+      .update({
+        attempts: Math.max(0, item.attempts - 1),
+        reason: "Place lookup unavailable — retrying",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", item.id);
+  }
 
   async function worker() {
-    while (cursor < items.length && Date.now() - startedAt < SOFT_DEADLINE_MS) {
+    while (!serviceDown && cursor < items.length && Date.now() - startedAt < SOFT_DEADLINE_MS) {
       const item = items[cursor++];
       try {
         if (item.stage === "import") {
@@ -276,6 +297,7 @@ export async function GET(request: NextRequest) {
           const enriched = item.place_id
             ? await alreadyEnriched(item.place_id)
             : false;
+          if (enriched) counts.done++;
           await advance(item, {
             stage: enriched ? "done" : "reviews",
             reason: result === "unavailable" ? "No photo available" : null,
@@ -286,6 +308,7 @@ export async function GET(request: NextRequest) {
         if (item.stage === "reviews") {
           const ok = await enrichReviews(item);
           if (ok) counts.reviewed++;
+          else counts.done++;
           // No reviews means no profile is possible — the place is finished
           // either way, it just has less on it.
           await advance(item, { stage: ok ? "profile" : "done", reason: ok ? null : "No reviews" });
@@ -307,10 +330,16 @@ export async function GET(request: NextRequest) {
         }
       } catch (e) {
         console.error(`[drain-imports] item ${item.id} (${item.stage}) threw:`, e);
-        // Leave the stage alone and release the claim: attempts already ticked
-        // up, so a persistently throwing item retires itself after 3 tries
-        // rather than blocking the queue forever. A failed DataForSEO call
-        // lands here too (v1.45.0) and is retried like any other error.
+        if (isServiceFailure(e)) {
+          // Stop this run too: every item after it would fail the same way.
+          serviceDown = true;
+          await holdForService(item);
+          continue;
+        }
+        // An error of this item (or a bad request for it): leave the stage
+        // alone and release the claim. Attempts already ticked up, so a
+        // persistently throwing item retires itself after 3 tries rather than
+        // blocking the queue forever.
         const retire = item.attempts >= 3;
         if (!retire) {
           await advance(item, { stage: item.stage });
@@ -319,6 +348,7 @@ export async function GET(request: NextRequest) {
           // unless the item came only to repair the photo of an enriched place;
           // when that can't be read, don't risk paying for enrichment again.
           const enriched = await alreadyEnriched(item.place_id).catch(() => true);
+          if (enriched) counts.done++;
           await advance(item, { stage: enriched ? "done" : "reviews", reason: "Photo kept failing" });
         } else if (item.stage !== "import" && item.place_id) {
           // Past import the place exists: the item is done with less on it.
@@ -339,11 +369,14 @@ export async function GET(request: NextRequest) {
 
   /** Has this place already been through reviews + profile on an earlier pass? */
   async function alreadyEnriched(placeId: string): Promise<boolean> {
-    const { data } = await admin
+    const { data, error } = await admin
       .from("places")
       .select("google_data")
       .eq("id", placeId)
       .single();
+    // A failed read isn't "not enriched" — that answer would pay for reviews
+    // and the LLM profile again. Throw: the worker's catch retries the item.
+    if (error) throw error;
     const gd = (data?.google_data as Record<string, unknown>) ?? {};
     return Boolean(gd.place_profile);
   }
@@ -428,7 +461,8 @@ export async function GET(request: NextRequest) {
   // Guarded on having made progress: chaining when `processed` is 0 would spin
   // against a queue that cannot move. Depth is bounded anyway — the next run
   // re-checks MAX_INFLIGHT and stops when the claim comes back empty.
-  const chained = cursor > 0 && (await hasClaimableWork(admin));
+  // Not after a service failure either: the next run would hit the same wall.
+  const chained = !serviceDown && cursor > 0 && (await hasClaimableWork(admin));
   if (chained) kickSelf(request.nextUrl.origin, secret);
 
   const summary = {
@@ -437,6 +471,7 @@ export async function GET(request: NextRequest) {
     processed: cursor,
     released: untouched.length,
     chained,
+    service_down: serviceDown,
     ...counts,
     elapsed_ms: Date.now() - startedAt,
   };

@@ -29,9 +29,13 @@ export const SKU_CONFIG = {
     costPer1k: 5.4,
     freeMonthly: 0,
   },
+  // Per task, billed when the task is created: $0.0075 at depth 50 and
+  // priority 2 — what every caller asks for (measured 19.11.2026; depth 10
+  // costs $0.0015). Was 0.75 — the price of 10 reviews at standard priority —
+  // so the report showed a tenth of the spend.
   dataforseo_reviews: {
     name: "DataForSEO Reviews",
-    costPer1k: 0.75,
+    costPer1k: 7.5,
     freeMonthly: 0,
   },
   mapbox_search_session: {

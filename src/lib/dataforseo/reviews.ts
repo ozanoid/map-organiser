@@ -7,7 +7,7 @@
  * location_coordinate — see toLocationCoordinate for why a name is not safe.
  */
 
-import type { DataForSEOClient } from "./client";
+import { DataForSEOError, type DataForSEOClient } from "./client";
 import type {
   ReviewsTaskPostResponse,
   ReviewsResponse,
@@ -60,8 +60,9 @@ const MAX_POLLS = 12;
 export interface ReviewsOptions {
   /**
    * Called once DataForSEO has created the task (status 20100): it is billed
-   * from then on ($0.0015 at priority 2, measured 19.11.2026) whatever the
-   * polling brings, so count the usage here.
+   * from then on whatever the polling brings — at priority 2, $0.0015 for
+   * depth 10 and $0.0075 for depth 50 (measured 19.11.2026) — so count the
+   * usage here.
    */
   onBilled?: () => void | Promise<void>;
 }
@@ -71,9 +72,10 @@ export interface ReviewsOptions {
  *
  * Returns the reviews, or `[]` when DataForSEO finished the task and the place
  * has none: status 20000 with `items: null` (measured 19.11.2026), or 40102.
- * Throws on every failure: the task wasn't created, a status other than
- * "handed" / "in queue" / done, or no result after MAX_POLLS (~1.5 min). A
- * failed poll is retried — the task itself may be fine.
+ * Throws a DataForSEOError on every failure: the task wasn't created, a
+ * status other than "handed" / "in queue" / done, or no result after
+ * MAX_POLLS (the waits add up to ~110 s). A failed poll is retried — the task
+ * itself may be fine.
  *
  * Until v1.45.0 every failure came back as `[]`, which callers record as
  * "Google has no reviews" (`reviews_checked_at`, no re-check for 30 days);
@@ -109,8 +111,9 @@ export async function fetchReviews(
 
   const task = postResponse.tasks?.[0];
   if (!task?.id || (task.status_code ?? 0) >= 40000) {
-    throw new Error(
-      `DataForSEO reviews task not created: ${task?.status_code ?? "no task"} ${task?.status_message ?? ""}`.trim()
+    throw new DataForSEOError(
+      `DataForSEO reviews task not created: ${task?.status_code ?? "no task"} ${task?.status_message ?? ""}`.trim(),
+      task?.status_code ?? 0
     );
   }
   try {
@@ -148,9 +151,12 @@ export async function fetchReviews(
       last = String(status);
       continue;
     }
-    throw new Error(
-      `DataForSEO reviews task ${taskId}: ${status ?? "no task"} ${getTask?.status_message ?? ""}`.trim()
+    throw new DataForSEOError(
+      `DataForSEO reviews task ${taskId}: ${status ?? "no task"} ${getTask?.status_message ?? ""}`.trim(),
+      status ?? 0
     );
   }
-  throw new Error(`DataForSEO reviews task ${taskId}: no result after ${MAX_POLLS} polls (last: ${last})`);
+  // DataForSEO didn't finish in time: its queue is slow, not this request
+  // wrong — a service failure (status 0).
+  throw new DataForSEOError(`DataForSEO reviews task ${taskId}: no result after ${MAX_POLLS} polls (last: ${last})`, 0);
 }

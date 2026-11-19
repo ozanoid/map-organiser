@@ -6,6 +6,60 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 19.11.2026 — v1.45.1 — Review fixes: an outage holds the queue; backfill and refresh can't loop
+
+An independent review of v1.44.0–v1.45.0 (read-only, on the diff) found
+that the new "a failure throws" contract needed one more distinction.
+
+- **DataForSEO itself failing vs. one bad request.** `DataForSEOError` now
+  covers every failure — the client wraps network failures, timeouts,
+  aborts and non-JSON bodies as status 0 — and `serviceFailure` tells the
+  two apart: no answer, HTTP 401/402/403/429/5xx, DataForSEO 401xx/402xx
+  (access, balance, rate limits; not 40102) and 5xxxx are the service; the
+  rest (404xx, 405xx…) is the request. The Maps search throws it too.
+- **Import queue:** the review found that a failed item was released at once,
+  the run chained itself, and the claim took the same items again — an
+  outage or an empty balance used all three attempts in about a minute and
+  ended the whole import `failed` (photo / reviews stages ended `done`
+  without enrichment). Now a service failure gives the attempt back, keeps
+  the claim — the item waits out the 10-minute stale window — and stops the
+  run without chaining: the import holds and resumes by itself, one free
+  probe per item every 10 minutes. A request failure keeps the 3-try rule.
+- **Profile backfill:** it had relied on a failure being stamped "no reviews";
+  without that, a failing place would have been fired every 12-second round
+  (each a billed task once created), and a place still in flight was fired
+  again even before. Each round now stamps `reviews_requested_at` before
+  sending, and the next rounds skip a place requested in the last 30 minutes.
+- **Refresh:** a place whose own request keeps failing (not the service) gets
+  the staleness marker and waits a cycle — otherwise it would hold the head
+  of every daily batch. A service failure stamps nothing and stops the
+  sweep (`serviceDown` in the summary); `reviewsFailed` is counted.
+- **Reviews price in the cost tracker: $0.75 → $7.50 per 1,000 tasks.**
+  Measured: a task at depth 50 (what every caller uses) and priority 2
+  costs $0.0075 ($0.0015 at depth 10). The report prices from the setting,
+  so every month's estimate is corrected — reviews were shown at a tenth.
+- `alreadyEnriched` throws on a failed read instead of answering "not
+  enriched" (which would pay for reviews and the LLM profile again);
+  `counts.done` covers every path that ends an item.
+- **Checked:** `tsc`, `eslint` (0 errors), `next build`; the classification
+  for 20 status codes; an aborted request → `DataForSEOError` status 0, a
+  service failure; a task DataForSEO refuses (40501) → a request failure,
+  not billed; the live contract again (no-review place 21 s, 10 reviews, an
+  unknown CID → `null`) — its old "abort throws AbortError" line now fails by
+  design (the client wraps it). **Not run live:** the queue's hold path, the
+  backfill rounds, the refresh's failure branches.
+- **Reported, not changed:** a pre-existing queue edge — a run killed by the
+  300 s limit after the 240 s soft deadline leaves an item on its third
+  claim with `attempts = 3`, neither claimable nor finished, and its job
+  never closes; a manual refresh says "refreshed" when only the reviews
+  fetch failed; a lookup cut off by our own 35 s timeout may still be billed
+  but isn't counted.
+- Docs: [[04-integrations/dataforseo]], [[05-flows/place-import-flow]],
+  [[02-backend/schema/import-jobs]], [[02-backend/schema/api_usage]],
+  [[06-ops/runbooks/periodic-refresh]], [[06-ops/runbooks/profile-backfill]].
+
+---
+
 ## 19.11.2026 — v1.45.0 — A failed DataForSEO call is never "nothing found"
 
 Ozan: "şimdi yap" — the systemic fix of the fault class found in v1.42.2.
@@ -46,7 +100,7 @@ outage or an empty balance during a bulk import.
 - **Checked:** `tsc`, `eslint` (0 errors), `next build`; the new contract
   against the live API (≈ $0.01): a place without reviews → `[]` in 31 s,
   billed once; a place with reviews → 10 reviews; a task DataForSEO refuses
-  (an invalid `location_name`, the Turkey bug of v1.17) → throws, not billed;
+  (an invalid `location_name` — the failure the Turkey note in `reviews.ts` describes) → throws, not billed;
   an unknown CID → `null`; an aborted request → throws. **Not run live:** the
   queue's retry path, the 502s of the signed-in routes, the toast.
 - Docs: [[04-integrations/dataforseo]], [[05-flows/place-import-flow]],
