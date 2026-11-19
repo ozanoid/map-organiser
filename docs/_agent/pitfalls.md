@@ -2,7 +2,7 @@
 title: Pitfalls
 type: agent-note
 domain: agent
-version: 1.5.0
+version: 1.6.0
 last_updated: 19.11.2026
 status: stable
 related:
@@ -22,6 +22,7 @@ Things that will look right based on training data but will break in this codeba
 - **`async` Server Components are the default.** A function exported from `app/.../page.tsx` without `"use client"` is a Server Component. It can `await` directly. Don't add `useEffect` to fetch — fetch in the component body.
 - **`"use client"` is contagious.** Once a component has it, everything it imports runs client-side. Push state to the leaves; keep `page.tsx` server-side when you can.
 - **Route handlers vs middleware.** `route.ts` runs per-request and can be Node or Edge. `middleware.ts` runs before route resolution. Different APIs — don't conflate.
+- **Every build warns that `middleware` is deprecated** (Next 16 renamed it `proxy`). `src/middleware.ts` stays until Ozan decides: it sets no runtime, so it runs on the middleware default, Edge; `proxy` runs only on Node.js, so the codemod (`middleware-to-proxy`) also moves the session check to another runtime on Vercel. Not a code error — don't "fix" it in passing.
 - **No `pages/_document.tsx`.** Custom `<head>` goes through the `metadata` export or `app/layout.tsx`.
 
 ## React 19

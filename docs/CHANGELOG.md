@@ -6,6 +6,51 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 19.11.2026 — v1.43.0 — Security update: Next.js 16.4.6 and dependencies
+
+Ozan asked for a security round after GitHub reported 126 open Dependabot
+alerts on main (6 critical, 45 high). The only direct dependency among them
+was `next` 16.2.10 — 22 alerts, 5 critical (remote code execution in the image
+optimizer, `next/og`, `use cache`, on Windows hosts) and 6 high. Every upgrade
+stays inside its package's major; each release picked is at least ten days
+old.
+
+- `next` and `eslint-config-next` 16.2.10 → 16.4.6. The bundled upgrade guide
+  lists nothing this app uses among the 16.3/16.4 changes (two removed
+  experimental flags we never set). The build's only warning is the old one:
+  `middleware` is deprecated in favour of `proxy` — not changed here, see
+  [[_agent/pitfalls]].
+- `zod` 4.4.3 → 4.6.7 (validating an oversized constrained collection could
+  exhaust memory); `@ai-sdk/google` 3.0.75 → 3.0.141 (its `provider-utils`
+  had a low-severity advisory).
+- The `shadcn` CLI 4.13.1 → 4.23.0, moved to `devDependencies`. 4.13 pulled
+  the old `@modelcontextprotocol/sdk` with express, body-parser, qs,
+  proxy-addr, hono and undici — most of the alerts. None of it ran in the app:
+  the MCP server uses `@modelcontextprotocol/server` 2 through `mcp-handler`,
+  and the app imports only shadcn's stylesheet, which the build bundles.
+- `eslint` 10.15.0 and `npm audit fix` for the rest (nanoid, source-map-js,
+  brace-expansion, postcss and sharp through Next, typescript-eslint,
+  @babel/core). `npm audit`: 36 vulnerable packages (2 critical, 14 high) →
+  4 moderate, all in the shadcn CLI's `ts-morph` → `minimatch` chain (dev
+  only; the only offered fix is a downgrade).
+- The new lint rule `react-hooks/immutability` failed on Settings → AI: the
+  effect called a loader declared below it. The loader now sits inside the
+  effect; it also drops an answer that arrives after unmount. Lint: 0 errors,
+  80 warnings.
+- **Checked:** `tsc`; `eslint`; `next build`; `npm run check:assistant`, every
+  suite on the live database — 223 checks, among them Gemini `rank_places` and
+  an Instagram read on the new AI SDK, DataForSEO searches and lookups
+  (≈ $0.07: DataForSEO $0.058, HikerAPI and Gemini the rest); the production
+  build served locally, signed out: `/`, `/map?add=…` and `/plans/<id>` →
+  `/login?next=…`, `/trips/:id` → 308, `/api/mcp` → 401 with
+  `WWW-Authenticate`, the OAuth resource metadata, `sw.js`, the manifest and
+  `/offline` → 200 — the same answers production gives. **Not checked:**
+  signed-in pages in a browser.
+- Docs: [[00-overview/tech-stack]], [[04-integrations/gemini]],
+  [[03-frontend/components/settings]], [[_agent/pitfalls]].
+
+---
+
 ## 19.11.2026 — v1.42.2 — Link preview: a failed lookup is not "not found"
 
 Ozan asked for it after the v1.42.1 report. Both faults predate the

@@ -2,7 +2,7 @@
 title: Tech Stack
 type: overview
 domain: overview
-version: 1.6.2
+version: 1.7.0
 last_updated: 19.11.2026
 status: stable
 sources:
@@ -29,12 +29,12 @@ Every runtime, library, and tool the repo currently depends on. Pin sources are 
 
 | Lib | Version | Role | Notes |
 |---|---|---|---|
-| `next` | `16.2.10` | App Router framework | App Router only; no Pages. See [[../_agent/pitfalls#next-js-16]]. |
+| `next` | `16.4.6` | App Router framework | App Router only; no Pages. See [[../_agent/pitfalls#next-js-16]]. 16.2.10 until v1.43.0 (security update — Dependabot listed 22 advisories against it, 5 critical). |
 | `react` | `19.2.7` | UI library | Server Components default. |
 | `react-dom` | `19.2.7` | DOM renderer | — |
 | `typescript` | `^6` | Type system | `strict: true`. Path alias `@/*` → `src/*`. |
-| `eslint` | `^10` | Linter | Extends `eslint-config-next` core-web-vitals + typescript. `settings.react.version` pinned in `eslint.config.mjs` (ESLint-10 compat — the bundled `eslint-plugin-react` uses the removed `getFilename()`). Some strict rules `warn`-deferred — see v4 PART 4 #12. |
-| `eslint-config-next` | `16.2.10` | Lint preset | Tracked with Next.js version. Pulls `eslint-plugin-react-hooks@7` (React-Compiler rules). |
+| `eslint` | `^10.15.0` | Linter | Extends `eslint-config-next` core-web-vitals + typescript. `settings.react.version` pinned in `eslint.config.mjs` (ESLint-10 compat — the bundled `eslint-plugin-react` uses the removed `getFilename()`). Some strict rules `warn`-deferred — see v4 PART 4 #12. |
+| `eslint-config-next` | `16.4.6` | Lint preset | Tracked with Next.js version. Pulls `eslint-plugin-react-hooks@7` (React-Compiler rules; 16.4's `react-hooks/immutability` rejects calling a function declared below the effect that calls it). |
 | `tsx` | `^4.23.15` | TypeScript runner (devDependency, v1.28.0) | Runs `npm run eval:instagram` — `scripts/instagram-eval/run.ts` with `--env-file=.env.local` and that folder's `tsconfig.json`, which maps `@/*` to `src/*` and stubs `server-only` so production modules import outside Next. |
 
 ## UI
@@ -47,7 +47,7 @@ Every runtime, library, and tool the repo currently depends on. Pin sources are 
 | `class-variance-authority` | `^0.7.1` | Variant builder | Preferred over inline conditionals for component variants. |
 | `clsx` | `^2.1.1` | Class merging | Used inside `cn()` in `src/lib/utils.ts`. |
 | `tailwind-merge` | `^3.6.0` | Tailwind class dedup | Also inside `cn()`. |
-| `shadcn` | `^4.13.0` | Component CLI | Style `base-nova` (see `components.json`). Components install to `src/components/ui/`. |
+| `shadcn` | `^4.23.0` | Component CLI (devDependency since v1.43.0) | Style `base-nova` (see `components.json`). Components install to `src/components/ui/`. The app imports only its stylesheet (`@import "shadcn/tailwind.css"` in `globals.css`), which the build bundles. 4.13 pulled the old `@modelcontextprotocol/sdk` with express, hono and proxy-addr — most of the open security alerts. |
 | `@base-ui/react` | `^1.6.0` | Headless primitives | Underlying primitives for shadcn `base-nova` style. |
 | `lucide-react` | `^1.23.0` | Icon library | Set in `components.json`. |
 | `cmdk` | `^1.1.1` | Command menu | — |
@@ -62,7 +62,7 @@ Every runtime, library, and tool the repo currently depends on. Pin sources are 
 | `@supabase/ssr` | `^0.12.0` | SSR cookie auth | Powers all three clients (browser/server/middleware) in `src/lib/supabase/`. |
 | `@tanstack/react-query` | `^5.101.2` | Server-state cache | Default `staleTime: 60_000`, `refetchOnWindowFocus: false`. |
 | `zustand` | `^5.0.14` | Client state store | Currently only `src/lib/stores/import-store.ts`. |
-| `zod` | `^4.4.3` | Runtime validation | Used on every mutation API route + every AI structured output. |
+| `zod` | `^4.6.7` | Runtime validation (below 4.6.6, validating an oversized constrained collection could exhaust memory) | Used on every mutation API route + every AI structured output. |
 
 ## AI
 
@@ -70,7 +70,7 @@ Every runtime, library, and tool the repo currently depends on. Pin sources are 
 |---|---|---|---|
 | `ai` | `^6.0.228` | AI SDK v6 — model-agnostic call layer (`generateText` + `Output.object`; `streamText` for the chat assistant, v1.21.0) | Used by Phase 4 `step=profile` enrich branch + `/api/ai/*`. Direct provider wiring (not AI Gateway) — see [[../04-integrations/gemini]] for the explicit choice. |
 | `@ai-sdk/react` | `3.0.230` | `useChat` for the assistant panel (v1.21.0) | ⚠️ version-lockstep with `ai@6` — see [[../04-integrations/gemini#npm-packages]]. |
-| `@ai-sdk/google` | `^3.0.75` | Google provider for AI SDK | `createGoogleGenerativeAI({ apiKey: GOOGLE_GENERATIVE_AI_API_KEY })`. Model: `gemini-3-flash-preview` (since 15.07.2026). |
+| `@ai-sdk/google` | `^3.0.141` | Google provider for AI SDK (3.0.75 until v1.43.0 — its `@ai-sdk/provider-utils` had a low-severity advisory) | `createGoogleGenerativeAI({ apiKey: GOOGLE_GENERATIVE_AI_API_KEY })`. Model: `gemini-3-flash-preview` (since 15.07.2026). |
 
 ## Observability
 
@@ -143,6 +143,7 @@ These are common adjacent picks that this repo deliberately doesn't use:
 ## Lockfile & install
 
 - `package-lock.json` is committed (npm).
+- **Security audit (v1.43.0, 19.11.2026).** `npm audit` went from 36 vulnerable packages (2 critical, 14 high) to 4 moderate, all in the `shadcn` CLI's `ts-morph` → `minimatch` chain (dev only; `npm audit` offers only a downgrade). Upgrades stayed inside each package's major. Re-run `npm audit` after dependency changes; GitHub's Dependabot list counts per advisory, so its numbers are higher.
 - Scripts: `dev`, `build`, `start`, `lint`, and `eval:instagram` (v1.28.0 —
   the Instagram import's regression run; makes paid API calls, writes nothing to
   the DB; see [[../05-flows/instagram-import-flow#measured-quality]]).
