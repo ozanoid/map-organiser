@@ -6,12 +6,36 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 19.11.2026 — v1.42.1 — DataForSEO switch on main
+
+- The move of every place lookup to DataForSEO (v1.42.0) merged to main with
+  Ozan's approval (merge `7bb5a21`; main had not moved since the add_places
+  merge, and the merged tree equals the branch tree). No database change.
+- Production deployment succeeded. Checked there through the connector with
+  the real token: `search_google_maps` near Shoreditch with a nonsense query
+  (Google Maps still matched one business) and the same query at an empty
+  spot in the Pacific, which returned an empty list, not an error — most
+  likely the no-match status the old code threw on (the call's raw status
+  isn't logged). $0.004. Not tried in production: the Instagram import and
+  the Add Place preview (one adds places, the other needs a signed-in
+  session).
+- **Docs fixed on the way:** [[04-integrations/dataforseo]] said a lookup with
+  no match comes back as an empty result set and that the import then skips
+  the place. In fact DataForSEO answers task status 40102 (Business Info
+  bills it like a hit); the import retries by name, then keeps a thin record;
+  only `add_places` saves nothing. Also recorded there: parse-link answers
+  404 for a failed lookup as well as for no match.
+- Docs: [[04-integrations/dataforseo]], [[04-integrations/claude-mcp]],
+  [[_plans/phase-1-planning]], [[_plans/personal-assistant]].
+
+---
+
 ## 19.11.2026 — v1.42.0 — Every place lookup through DataForSEO; Google Places retired
 
 Ozan's decision (18.11.2026): move every Google Text Search to DataForSEO, so a
 bulk import can never cross Google's free tier into $35 per 1,000 — after the
 Instagram eval confirms it. Written on the branch `feat/personal-assistant`;
-not merged yet.
+on main since v1.42.1.
 
 - **Instagram import:** candidates come from Google Maps through DataForSEO's
   Maps search (`src/lib/instagram/places.ts`) instead of Google Places Text
