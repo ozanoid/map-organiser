@@ -6,6 +6,58 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 19.11.2026 — v1.43.1 — Security round, database side: two fixes in code, two migrations prepared
+
+The Supabase security advisor pass Ozan had deferred, run as part of the
+security round. The two migrations are in the repo and **not applied** —
+schema changes are shown to Ozan first.
+
+- **Found:** `increment_api_usage(p_user_id, …)` is SECURITY DEFINER and
+  executable by `anon` — anyone with the public anon key could add usage rows
+  for any user id. The AI budget guard counts those rows, so a user's monthly
+  AI caps could be run out; and the public shared-list API returned the list's
+  full row, the owner's `user_id` with it. Together: anyone who saw a shared
+  list link could switch its owner's AI features off for the month.
+  - Code (this version): the shared list payload is `{ id, name, description,
+    color }` — what the page renders; the import queue's review stage counts
+    usage with the service client (it went through a session-less cookie
+    client, i.e. as `anon`).
+  - Prepared: `20261119004416_rpc_least_privilege.sql` — `anon` loses
+    `EXECUTE`; a signed-in caller counts only their own usage (`42501`
+    otherwise); `service_role` and direct sessions unchanged; the trigger
+    functions `handle_new_user` and `create_default_categories` lose
+    `EXECUTE` for `public`, `anon`, `authenticated`. To be applied after this
+    code is deployed.
+- **Found:** PostGIS's `spatial_ref_sys` (RLS off) is writable by `anon` and
+  `authenticated` — `supabase_admin` granted them INSERT, UPDATE, DELETE,
+  TRUNCATE. With the anon key anyone could alter or delete the SRID
+  definitions and break every geography query. `postgres` can't revoke those
+  grants or enable RLS, but holds TRIGGER. Prepared:
+  `20261119004648_spatial_ref_sys_read_only.sql` — a trigger refuses writes
+  from the two API roles.
+- **Both tried in rolled-back transactions on the live database** (nothing
+  kept, checked afterwards): an insert as `authenticated` still fires a
+  trigger whose function it can't execute; `authenticated` counting its own
+  usage → ok, another user's → 42501; `anon` → 42501; `service_role` and a
+  direct session → ok. `spatial_ref_sys`: as `anon` an UPDATE of srid 4326
+  changed 1 row before the guard; after it, anon INSERT / UPDATE / DELETE and
+  authenticated UPDATE → 42501, anon SELECT and a geography distance → ok.
+- **Accepted, with reasons in [[02-backend/rls-policies]]:** `st_estimatedextent`
+  (PostGIS, owned by `supabase_admin`, `postgres` can't revoke), PostGIS in
+  `public` (not relocatable), `vocabulary_migrations` (RLS on, no policy —
+  service-only). Leaked password protection is a dashboard setting — Ozan's.
+- **Measured for the DataForSEO fault class** (a failed request read as
+  "nothing found", v1.42.2): on 910 places, 0 thin records, 0 "no reviews"
+  stamps on a place Google shows reviews for, 2 places without a photo — no
+  damage so far; the risk is an outage during a bulk import.
+- **Checked:** `tsc`, `eslint` (0 errors); the four list columns the shared
+  payload now selects exist on a shared list. The public shared page itself
+  wasn't opened (it bumps the link's view count).
+- Docs: [[02-backend/rls-policies]], [[02-backend/schema/api_usage]],
+  [[02-backend/api-routes/shared]], [[_agent/pitfalls]].
+
+---
+
 ## 19.11.2026 — v1.43.0 — Security update: Next.js 16.4.6 and dependencies
 
 Ozan asked for a security round after GitHub reported 126 open Dependabot

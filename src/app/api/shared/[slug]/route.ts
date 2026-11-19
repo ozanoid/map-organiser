@@ -143,10 +143,12 @@ async function handlePlaceShare(supabase: any, link: any, ownerName: string) {
 }
 
 async function handleListShare(supabase: any, link: any, ownerName: string) {
-  // Fetch list
+  // Only what SharedListView renders (v1.43.0). The full row went out until
+  // then — the owner's user_id with it, which an unauthenticated visitor
+  // could pass to the then-public increment_api_usage RPC.
   const { data: list } = await supabase
     .from("lists")
-    .select("*")
+    .select("id, name, description, color")
     .eq("id", link.resource_id)
     .eq("user_id", link.user_id)
     .single();
