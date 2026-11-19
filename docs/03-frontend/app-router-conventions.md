@@ -2,8 +2,8 @@
 title: App Router Conventions
 type: overview
 domain: frontend
-version: 1.1.1
-last_updated: 17.11.2026
+version: 1.1.2
+last_updated: 19.11.2026
 status: stable
 sources:
   - src/app/
@@ -121,18 +121,18 @@ Default in App Router is static rendering. A page becomes dynamic if it:
 - Reads `searchParams`.
 - Calls `fetch` with `cache: 'no-store'`.
 
-Most `(app)/*` pages in this repo are dynamic because they read the Supabase session via cookies (in a server component or via middleware).
+Most `(app)/*` pages in this repo are dynamic because they read the Supabase session via cookies (in a server component or via proxy).
 
 No `export const dynamic = "force-dynamic"` or similar is used today.
 
-## Middleware vs route handlers
+## Proxy vs route handlers
 
 | Concept | Lives at | Runs when |
 |---|---|---|
-| Middleware | `src/middleware.ts` | Before route resolution, on every matched path |
+| Proxy | `src/proxy.ts` | Before route resolution, on every matched path |
 | Route handler | `src/app/api/.../route.ts` | After resolution, only for that path |
 
-The middleware here delegates to `updateSession()` from `src/lib/supabase/middleware.ts`. See [[middleware]].
+The proxy here delegates to `updateSession()` from `src/lib/supabase/proxy.ts`. See [[proxy]].
 
 ## Path conventions
 

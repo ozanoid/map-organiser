@@ -2,8 +2,8 @@
 title: Observability Flow (Honeycomb + Vercel/Axiom + Langfuse)
 type: flow
 domain: infra
-version: 3.6.0
-last_updated: 16.10.2026
+version: 3.6.1
+last_updated: 19.11.2026
 status: stable
 sources:
   - src/instrumentation.ts
@@ -163,12 +163,13 @@ is suspended; neither sets a `propagateAttributes` trace name either.
 > Both `instrumentation.ts` and `instrumentation-node.ts` live in `src/`.
 >
 > **Runtime gating:** `instrumentation.ts` is loaded by Next.js for
-> EVERY runtime including Edge (middleware). The OTel log packages
-> (`@opentelemetry/sdk-logs`, `exporter-logs-otlp-http`) are Node-only —
-> importing them in Edge crashes middleware with
-> `MIDDLEWARE_INVOCATION_FAILED`. `instrumentation.ts` therefore only
-> `await import("./instrumentation-node")` when
-> `NEXT_RUNTIME === "nodejs"`. Middleware (Edge) runs un-instrumented.
+> EVERY runtime. The OTel log packages (`@opentelemetry/sdk-logs`,
+> `exporter-logs-otlp-http`) are Node-only — importing them in Edge
+> crashed the then-Edge middleware with `MIDDLEWARE_INVOCATION_FAILED`.
+> `instrumentation.ts` therefore only `await import("./instrumentation-node")`
+> when `NEXT_RUNTIME === "nodejs"`. Since v1.44.0 nothing runs on Edge: the
+> proxy (`src/proxy.ts`, was middleware) is Node and instrumented like the
+> routes — its request and Supabase-auth `fetch` spans reach Honeycomb.
 
 ## Trace propagation — AI search pipeline
 

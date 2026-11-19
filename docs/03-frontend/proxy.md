@@ -1,35 +1,35 @@
 ---
-title: Middleware
+title: Proxy
 type: overview
 domain: frontend
-version: 1.4.0
-last_updated: 18.11.2026
+version: 1.5.0
+last_updated: 19.11.2026
 status: stable
 sources:
-  - src/middleware.ts
-  - src/lib/supabase/middleware.ts
+  - src/proxy.ts
+  - src/lib/supabase/proxy.ts
 related:
   - "[[_README]]"
   - "[[routing]]"
   - "[[../02-backend/auth]]"
-  - "[[../02-backend/supabase-clients#middlewarets-updatesessionrequest---request-middleware]]"
+  - "[[../02-backend/supabase-clients#proxyts-updatesessionrequest---request-proxy]]"
 ---
 
-# Middleware
+# Proxy
 
-The Next.js middleware. Runs before every non-static request. Pure auth gate today — refreshes the Supabase session cookie and decides whether to redirect.
+The Next.js proxy. Runs before every non-static request. Pure auth gate today — refreshes the Supabase session cookie and decides whether to redirect.
 
-This page is the frontend view. For the gate logic, RLS link, and the OAuth handshake, see [[../02-backend/auth]]. For the Supabase client mechanics, see [[../02-backend/supabase-clients#middlewarets-updatesessionrequest---request-middleware]].
+This page is the frontend view. For the gate logic, RLS link, and the OAuth handshake, see [[../02-backend/auth]]. For the Supabase client mechanics, see [[../02-backend/supabase-clients#proxyts-updatesessionrequest---request-proxy]].
 
 ## Wiring
 
-`src/middleware.ts`:
+`src/proxy.ts`:
 
 ```ts
 import { type NextRequest } from "next/server";
-import { updateSession } from "@/lib/supabase/middleware";
+import { updateSession } from "@/lib/supabase/proxy";
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   return await updateSession(request);
 }
 
@@ -42,12 +42,12 @@ export const config = {
 
 Two pieces:
 
-1. **`middleware`** — the request handler. Delegates entirely to `updateSession`.
-2. **`config.matcher`** — the path filter. Negates static assets and common image extensions; everything else gets the middleware.
+1. **`proxy`** — the request handler. Delegates entirely to `updateSession`.
+2. **`config.matcher`** — the path filter. Negates static assets and common image extensions; everything else gets the proxy.
 
 ## What `updateSession` does
 
-`src/lib/supabase/middleware.ts`. See [[../02-backend/auth#middleware-gate]] for the full annotated source. Summary:
+`src/lib/supabase/proxy.ts`. See [[../02-backend/auth#proxy-gate]] for the full annotated source. Summary:
 
 1. `/signup` → redirect to `/login` and stop (sign-ups closed, 17.11.2026). No Supabase client is built for it.
 2. Construct an SSR Supabase client backed by request cookies.
@@ -70,17 +70,17 @@ Hard-coded list in `updateSession`:
 - `/api/cron/*` (cron routes — they authenticate themselves with `CRON_SECRET`)
 - `/oauth/*` (the OAuth consent page — it redirects signed-out visitors to `/login?next=…` itself, so the authorization request survives sign-in)
 
-Not in the middleware at all (matcher exclusions, 17.11.2026): `/api/mcp` — the MCP endpoint authenticates bearer tokens and must answer 401 with a challenge, not a redirect — and `/.well-known/*` metadata documents.
+Not in the proxy at all (matcher exclusions, 17.11.2026): `/api/mcp` — the MCP endpoint authenticates bearer tokens and must answer 401 with a challenge, not a redirect — and `/.well-known/*` metadata documents.
 
 Everything else requires auth.
 
-## Special middleware concerns
+## Special proxy concerns
 
-### Middleware is the only writer of refreshed cookies
+### Proxy is the only writer of refreshed cookies
 
-The browser client, the server client, and the service-role client can **read** cookies. Only the middleware writes refreshed ones. If you ever shortcut the middleware for a path that needs an authenticated context, sessions will silently expire mid-use.
+The browser client, the server client, and the service-role client can **read** cookies. Only the proxy writes refreshed ones. If you ever shortcut the proxy for a path that needs an authenticated context, sessions will silently expire mid-use.
 
-This is why the matcher only excludes static assets — every dynamic path goes through the middleware.
+This is why the matcher only excludes static assets — every dynamic path goes through the proxy.
 
 ### The matcher in plain English
 
@@ -91,15 +91,15 @@ This is why the matcher only excludes static assets — every dynamic path goes 
 - Everything else matches.
 - Next.js needs the matcher as a literal constant (it is analysed at build time), so a new exclusion goes into this string, not into a variable.
 
-### Next.js 16: `middleware` → `proxy`
+### Next.js 16: `proxy` → `proxy`
 
-The dev server warns that the `middleware` file convention is deprecated in favour of `proxy` (seen 17.11.2026). `src/middleware.ts` still runs; renaming it is a separate change — see `node_modules/next/dist/docs/01-app/01-getting-started/16-proxy.md`.
+The dev server warns that the `proxy` file convention is deprecated in favour of `proxy` (seen 17.11.2026). `src/proxy.ts` still runs; renaming it is a separate change — see `node_modules/next/dist/docs/01-app/01-getting-started/16-proxy.md`.
 
 ### Adding a new public route
 
 If a new path needs to be public:
 
-1. Add the prefix check in `src/lib/supabase/middleware.ts#updateSession`:
+1. Add the prefix check in `src/lib/supabase/proxy.ts#updateSession`:
    ```ts
    const isPublicRoute =
      request.nextUrl.pathname === "/" ||
@@ -114,15 +114,17 @@ If a new path needs to be public:
 
 ### Adding a new auth-gated route
 
-Default behavior — no changes needed. The middleware redirects unauthenticated users to `/login?next=…` for any path not in the public list and not an auth route, and sign-in returns them to it.
+Default behavior — no changes needed. The proxy redirects unauthenticated users to `/login?next=…` for any path not in the public list and not an auth route, and sign-in returns them to it.
 
-## Next.js 16 note
+## Next.js 16: middleware → proxy (v1.44.0)
 
-The Vercel knowledge update mentions `proxy.ts` being preferred over `middleware.ts` in Next.js 16. This repo still uses `middleware.ts`. As of `last_updated`, both names work; `middleware.ts` is the older convention and continues to be supported. **No urgency to rename**, but if the Next.js team announces deprecation, this is the migration target. See [[../_agent/pitfalls#next-js-16]] (to be updated).
+Until v1.44.0 this file was `src/middleware.ts` (function `middleware`) and the helper `src/lib/supabase/middleware.ts`. Next 16 deprecated the name — every build warned — and renamed it Proxy. The rename also changed the runtime: middleware ran on Edge by default, Proxy runs only on Node.js. The code didn't change.
 
-## Not in the middleware
+The runtime change is why the functions moved to `fra1` in the same version (`vercel.json` `regions`): on Node the proxy runs where the functions run, and they were in Vercel's default `iad1` while Supabase is in `eu-central-1` — the session check would have crossed the Atlantic on every request (the Edge middleware ran at the visitor's nearest edge). In `fra1` it is a same-region call, as is every database call of the routes. The proxy is now instrumented like the routes ([[../05-flows/observability-flow]]).
 
-For clarity, the middleware does NOT:
+## Not in the proxy
+
+For clarity, the proxy does NOT:
 
 - Handle rewrites or redirects beyond the auth gate.
 - Inspect request bodies (it can't read them efficiently).
@@ -136,7 +138,7 @@ If you need any of those, build a route handler instead.
 
 When something behaves like a session bug:
 
-1. **Check the Network tab.** Look at cookies on the response — does the middleware path return refreshed `sb-...` cookies?
+1. **Check the Network tab.** Look at cookies on the response — does the proxy path return refreshed `sb-...` cookies?
 2. **`console.log` inside `updateSession`.** Cheap, fast, doesn't show up in production unless you commit it.
 3. **`supabase.auth.getUser()` return value.** `null` means no session is being recovered from cookies — verify the matcher is including the path.
-4. **Open `/auth/callback?code=...` directly.** Should exchange the code and redirect to `/map`. If it doesn't, the OAuth side is broken, not the middleware.
+4. **Open `/auth/callback?code=...` directly.** Should exchange the code and redirect to `/map`. If it doesn't, the OAuth side is broken, not the proxy.

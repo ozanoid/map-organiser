@@ -6,6 +6,172 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 19.11.2026 — v1.45.1 — Review fixes: an outage holds the queue; backfill and refresh can't loop
+
+An independent review of v1.44.0–v1.45.0 (read-only, on the diff) found
+that the new "a failure throws" contract needed one more distinction.
+
+- **DataForSEO itself failing vs. one bad request.** `DataForSEOError` now
+  covers every failure — the client wraps network failures, timeouts,
+  aborts and non-JSON bodies as status 0 — and `serviceFailure` tells the
+  two apart: no answer, HTTP 401/402/403/429/5xx, DataForSEO 401xx/402xx
+  (access, balance, rate limits; not 40102) and 5xxxx are the service; the
+  rest (404xx, 405xx…) is the request. The Maps search throws it too.
+- **Import queue:** the review found that a failed item was released at once,
+  the run chained itself, and the claim took the same items again — an
+  outage or an empty balance used all three attempts in about a minute and
+  ended the whole import `failed` (photo / reviews stages ended `done`
+  without enrichment). Now a service failure gives the attempt back, keeps
+  the claim — the item waits out the 10-minute stale window — and stops the
+  run without chaining: the import holds and resumes by itself, one free
+  probe per item every 10 minutes. A request failure keeps the 3-try rule.
+- **Profile backfill:** it had relied on a failure being stamped "no reviews";
+  without that, a failing place would have been fired every 12-second round
+  (each a billed task once created), and a place still in flight was fired
+  again even before. Each round now stamps `reviews_requested_at` before
+  sending, and the next rounds skip a place requested in the last 30 minutes.
+- **Refresh:** a place whose own request keeps failing (not the service) gets
+  the staleness marker and waits a cycle — otherwise it would hold the head
+  of every daily batch. A service failure stamps nothing and stops the
+  sweep (`serviceDown` in the summary); `reviewsFailed` is counted.
+- **Reviews price in the cost tracker: $0.75 → $7.50 per 1,000 tasks.**
+  Measured: a task at depth 50 (what every caller uses) and priority 2
+  costs $0.0075 ($0.0015 at depth 10). The report prices from the setting,
+  so every month's estimate is corrected — reviews were shown at a tenth.
+- `alreadyEnriched` throws on a failed read instead of answering "not
+  enriched" (which would pay for reviews and the LLM profile again);
+  `counts.done` covers every path that ends an item.
+- **Checked:** `tsc`, `eslint` (0 errors), `next build`; the classification
+  for 20 status codes; an aborted request → `DataForSEOError` status 0, a
+  service failure; a task DataForSEO refuses (40501) → a request failure,
+  not billed; the live contract again (no-review place 21 s, 10 reviews, an
+  unknown CID → `null`) — its old "abort throws AbortError" line now fails by
+  design (the client wraps it). **Not run live:** the queue's hold path, the
+  backfill rounds, the refresh's failure branches.
+- **Reported, not changed:** a pre-existing queue edge — a run killed by the
+  300 s limit after the 240 s soft deadline leaves an item on its third
+  claim with `attempts = 3`, neither claimable nor finished, and its job
+  never closes; a manual refresh says "refreshed" when only the reviews
+  fetch failed; a lookup cut off by our own 35 s timeout may still be billed
+  but isn't counted.
+- Docs: [[04-integrations/dataforseo]], [[05-flows/place-import-flow]],
+  [[02-backend/schema/import-jobs]], [[02-backend/schema/api_usage]],
+  [[06-ops/runbooks/periodic-refresh]], [[06-ops/runbooks/profile-backfill]].
+
+---
+
+## 19.11.2026 — v1.45.0 — A failed DataForSEO call is never "nothing found"
+
+Ozan: "şimdi yap" — the systemic fix of the fault class found in v1.42.2.
+Measured first (v1.43.1): no damage so far on 910 places; the risk was an
+outage or an empty balance during a bulk import.
+
+- **The wrappers say what happened.** `fetchBusinessInfoLive` returns `null`
+  only when DataForSEO looked and has no such business; every failure throws
+  (the forgiving mode and its `throwOnError` switch are gone).
+  `fetchReviews` returns `[]` only when the task finished with no reviews and
+  throws on every failure — task not created, an unexpected status, no result
+  after 12 polls. Measured on a place without reviews (19.11.2026): the task
+  answers 40602 "Task In Queue", then 20000 with `items: null`; that wasn't
+  taken for done, so such a place waited out all 12 polls (~95 s) — now
+  ~15–30 s.
+- **Callers** (all of them):
+  - import queue: a failed lookup throws → the item is retried, 3 tries at its
+    stage. At import it then ends `failed` — no more thin records from an
+    outage. Past import the place exists, so the item is no longer `failed`
+    (which made the Instagram and Takeout views report an added place as not
+    added): a failing photo stage moves on to reviews, a failing reviews or
+    profile stage ends `done`, each with a reason. The review stage no longer
+    stamps "no reviews" on a failure.
+  - manual enrich (after Add Place): `step=info` and `step=reviews` answer 502
+    and write nothing on a failure.
+  - Mapbox-search preview: a failed lookup answers 502 "try again" instead of
+    the Mapbox-only data — a place saved from that has no Google id, and
+    nothing ever looked it up again. The search box now shows the error as a
+    toast; a failed retrieve did nothing before.
+  - refresh (manual and cron): a failed lookup writes nothing, not even the
+    staleness marker, and reports `ok: false` — retried on the next run
+    instead of waiting a 30-day cycle; a failed reviews fetch keeps the
+    stored reviews (`reviewsFailed`).
+- **Usage counts what DataForSEO bills:** a business-info lookup that
+  returned, found or not (the Mapbox-search preview counted only a match); a
+  reviews task once created (the import and the manual step counted only
+  when reviews came back) — through a new `onBilled` callback.
+- **Checked:** `tsc`, `eslint` (0 errors), `next build`; the new contract
+  against the live API (≈ $0.01): a place without reviews → `[]` in 31 s,
+  billed once; a place with reviews → 10 reviews; a task DataForSEO refuses
+  (an invalid `location_name` — the failure the Turkey note in `reviews.ts` describes) → throws, not billed;
+  an unknown CID → `null`; an aborted request → throws. **Not run live:** the
+  queue's retry path, the 502s of the signed-in routes, the toast.
+- Docs: [[04-integrations/dataforseo]], [[05-flows/place-import-flow]],
+  [[05-flows/instagram-import-flow]], [[02-backend/schema/import-jobs]],
+  [[02-backend/api-routes/places]], [[02-backend/api-routes/search]],
+  [[05-flows/place-search-flow]], [[05-flows/manual-place-create-flow]],
+  [[03-frontend/hooks/use-place-search]],
+  [[06-ops/runbooks/periodic-refresh]], [[06-ops/runbooks/profile-backfill]].
+
+---
+
+## 19.11.2026 — v1.44.0 — middleware → proxy; functions next to the database (fra1)
+
+Ozan left the call to me ("mantıklısı neyse onu yap").
+
+- **Proxy:** `src/middleware.ts` → `src/proxy.ts` (function `proxy`), the
+  helper `src/lib/supabase/middleware.ts` → `src/lib/supabase/proxy.ts`.
+  Next 16 deprecated the middleware name (every build warned); the code is
+  unchanged. Proxy runs only on Node.js — the middleware ran on Edge, at the
+  visitor's nearest edge.
+- **Region:** `vercel.json` now sets `"regions": ["fra1"]`. The functions
+  ran in Vercel's default `iad1` (`x-vercel-id: lhr1::iad1::…` on
+  `/api/mcp`) while Supabase is in `eu-central-1`; [[06-ops/deployment]]
+  said "matches Supabase", but nothing set it. Every database call of every
+  route crossed the Atlantic, and on Node the proxy's session check would
+  have too — so the two changes go together.
+- The proxy is instrumented now (`register()` runs in its Node runtime):
+  its request and Supabase-auth spans reach Honeycomb.
+- **Checked:** `tsc`, `eslint`, `next build` (no deprecation warning; the
+  route list shows the proxy); the production build served locally, signed
+  out — `/`, `/map?add=…`, `/plans/<id>`, `/api/plans`, `/signup` redirect as
+  before, `/trips/:id` → 308, `/api/mcp` → 401 with `WWW-Authenticate`, the
+  OAuth metadata, `sw.js`, the manifest, `/offline` and `/oauth/consent` →
+  200. **Not checked:** a signed-in session refreshing through the proxy
+  (needs a browser session); the region shows on the preview deployment.
+- Docs: "middleware" → "proxy" in 32 docs (Zustand's own middleware and the
+  history in plans, archive and older CHANGELOG entries left as written;
+  links to the renamed [[03-frontend/proxy]] updated, here too —
+  6 links); [[06-ops/deployment]] (region),
+  [[05-flows/observability-flow]], [[00-overview/tech-stack]],
+  [[_agent/pitfalls]].
+
+---
+
+## 19.11.2026 — v1.43.2 — Security round on main; both migrations applied
+
+- v1.42.2–v1.43.1 merged to main with Ozan's approval (merge `d87d9aa`; main
+  had not moved since the DataForSEO switch merge, and the merged tree equals
+  the branch tree). Production deployment succeeded.
+- **Migrations applied with Ozan's approval:**
+  `spatial_ref_sys_read_only` (version 20261119005346) and, after the
+  production deploy, `rpc_least_privilege` (20261119005449). The files were
+  renamed to the recorded versions.
+- **Checked on the live database after applying:** as `anon`, UPDATE and
+  DELETE on `spatial_ref_sys` → 42501, SELECT → ok; as `authenticated`,
+  UPDATE → 42501, a geography distance → ok (rolled back). Grants:
+  `increment_api_usage` → `authenticated` and `service_role` only, with the
+  own-user check; `handle_new_user`, `create_default_categories` →
+  `postgres` and `service_role`. In production a connector search still
+  counted under the new rule (the signed-in user's `dataforseo_maps_search`
+  went 2 → 3). Re-run security advisor: the anon lint lists only PostGIS's
+  `st_estimatedextent`; `increment_api_usage` remains in the authenticated
+  lint by design; `spatial_ref_sys` stays in the RLS lint (guarded by the
+  trigger instead).
+- The main folder's `node_modules` still hold the old packages — run
+  `npm install` there before using it.
+- Docs: [[02-backend/rls-policies]], [[02-backend/schema/api_usage]],
+  [[_agent/pitfalls]].
+
+---
+
 ## 19.11.2026 — v1.43.1 — Security round, database side: two fixes in code, two migrations prepared
 
 The Supabase security advisor pass Ozan had deferred, run as part of the
@@ -484,7 +650,7 @@ Claude can now read, save and change the user's plans through the connector.
 - **Server instructions:** lay a new plan out and save it once the user
   agrees; do what the user asked with `update_plan`, ask before changes
   Claude suggests itself; give the link after saving; cancel, never delete.
-- **Return path after sign-in** ([[03-frontend/middleware]]): a signed-out
+- **Return path after sign-in** ([[03-frontend/proxy]]): a signed-out
   request for a page now goes to `/login?next=<path and query>` and sign-in
   returns there — a plan link, `/map?add=…`; before, every sign-in landed on
   `/map`. A signed-in visit to `/login?next=…` goes straight on. API paths
@@ -544,7 +710,7 @@ Claude can now read, save and change the user's plans through the connector.
   [[01-domain/visits]], [[05-flows/visit-flow]], [[05-flows/auth-flow]],
   [[05-flows/claude-connector-flow]], [[02-backend/auth]],
   [[02-backend/supabase-clients]], [[02-backend/api-routes/plans]],
-  [[03-frontend/middleware]], [[03-frontend/routing]],
+  [[03-frontend/proxy]], [[03-frontend/routing]],
   [[04-integrations/mapbox]], [[_agent/common-tasks]], [[_agent/pitfalls]],
   [[_plans/phase-1-planning]], [[_plans/personal-assistant]].
 
@@ -942,7 +1108,7 @@ deploy).
   dynamic client registration off.
 - Docs: new [[04-integrations/claude-mcp]], [[05-flows/claude-connector-flow]];
   updated [[02-backend/auth]], [[05-flows/auth-flow]] (`next` question
-  resolved), [[03-frontend/middleware]], [[03-frontend/routing]],
+  resolved), [[03-frontend/proxy]], [[03-frontend/routing]],
   [[06-ops/env-vars]], [[02-backend/schema/api_usage]],
   [[04-integrations/mapbox]], [[02-backend/api-routes/_README]],
   [[04-integrations/_README]], [[05-flows/_README]],
@@ -985,7 +1151,7 @@ deploy).
   `/places` and `/api/places` still redirect to `/login`. A fresh tab on a
   share page and on `/login` logs no console errors, and the service worker
   is registered and active.
-- Docs: [[03-frontend/middleware]] (matcher explained; Next 16's
+- Docs: [[03-frontend/proxy]] (matcher explained; Next 16's
   `middleware` → `proxy` deprecation noted), [[03-frontend/pwa-and-offline]],
   [[03-frontend/routing]], [[02-backend/auth]], [[02-backend/supabase-clients]].
 
@@ -1016,7 +1182,7 @@ site.
   [[05-flows/signup-flow]] (owner-created accounts; the sub-category seeding
   step was missing), [[05-flows/_README]], [[01-domain/users-and-profiles]],
   [[03-frontend/routing]] (`/api/cron/*` was missing here too),
-  [[03-frontend/middleware]], [[03-frontend/layouts]],
+  [[03-frontend/proxy]], [[03-frontend/layouts]],
   [[03-frontend/app-router-conventions]], [[00-overview/system-overview]],
   [[00-overview/repo-structure]], [[_agent/conventions]].
 
@@ -3804,7 +3970,7 @@ The vault is now fully populated end-to-end. Foundation, anchor, backend, fronte
 - [[03-frontend/routing]] — every page + API route table.
 - [[03-frontend/layouts]] — root, `(app)`, `(auth)`, shared layouts.
 - [[03-frontend/state-management]] — React Query / Zustand / URL state / localStorage boundary.
-- [[03-frontend/middleware]] — auth gate detail.
+- [[03-frontend/proxy]] — auth gate detail.
 - [[03-frontend/pwa-and-offline]] — manifest, SW, offline page, share target.
 - [[03-frontend/design-system/_README]] — tokens, shadcn `base-nova`, fonts, dark mode, marker icons, and the **runtime vs `master.md` divergence** flagged.
 - `03-frontend/hooks/` — `_README` + 10 per-hook docs (useCategories, useDebounce, useFilters, useLists, useMapStyle, usePlaces, useSharedLinks, useStats, useTags, useTrips).

@@ -1,5 +1,5 @@
 import "server-only";
-import { dataForSeoClientFromEnv } from "@/lib/dataforseo/client";
+import { DataForSEOError, dataForSeoClientFromEnv } from "@/lib/dataforseo/client";
 import { convertPriceLevel } from "@/lib/dataforseo/price-level-adapter";
 import type {
   FoundPlace,
@@ -124,7 +124,10 @@ export const dataForSeoMapsSearch: PlaceSearchProvider = {
       return { places: [], costUsd: typeof task.cost === "number" ? task.cost : null };
     }
     if (!task || task.status_code !== 20000) {
-      throw new Error(`DataForSEO Maps search failed: ${task?.status_code ?? "no task"} ${task?.status_message ?? ""}`);
+      throw new DataForSEOError(
+        `DataForSEO Maps search failed: ${task?.status_code ?? "no task"} ${task?.status_message ?? ""}`.trim(),
+        task?.status_code ?? 0
+      );
     }
     const items = task.result?.[0]?.items ?? [];
     const places = items

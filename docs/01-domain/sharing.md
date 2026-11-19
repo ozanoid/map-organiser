@@ -2,8 +2,8 @@
 title: Shared Link
 type: entity
 domain: sharing
-version: 1.4.0
-last_updated: 18.11.2026
+version: 1.4.1
+last_updated: 19.11.2026
 status: stable
 sources:
   - src/lib/hooks/use-shared-links.ts
@@ -88,7 +88,7 @@ The public read of the shared-links **row** doesn't grant access to the referenc
                         ▼
    ┌─────────────────────────────────────────────────────────┐
    │  PUBLIC READ                                             │
-   │  • /shared/<slug> — middleware exempt                    │
+   │  • /shared/<slug> — proxy exempt                    │
    │  • GET /api/shared/<slug> uses service-role client       │
    │  • Increments view_count                                 │
    │  • Returns list+places, a whitelisted plan (days, stops) │
@@ -158,7 +158,7 @@ The owner's `user_id` is **not** included in the response.
 | `GET` | `/api/shared/[slug]` | **Public** (uses service-role client) | Resolve slug → list/plan/place payload, increment view count. |
 | `POST` | `/api/shared/[slug]/save` | Authenticated viewer | Copy the shared content into the viewer's account. |
 
-The `/api/shared/*` paths are explicitly exempt in `src/lib/supabase/middleware.ts`:
+The `/api/shared/*` paths are explicitly exempt in `src/lib/supabase/proxy.ts`:
 
 ```
 const isPublicRoute =

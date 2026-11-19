@@ -2,8 +2,8 @@
 title: Signup Flow
 type: flow
 domain: auth
-version: 1.1.0
-last_updated: 17.11.2026
+version: 1.1.1
+last_updated: 19.11.2026
 status: stable
 sources:
   - src/app/auth/callback/route.ts
@@ -52,7 +52,7 @@ Before that date, a user not previously in `auth.users` reached this flow by com
        (~62 rows; see [[../02-backend/schema/subcategories]])
        │
        ▼
-4. Session is set; user is redirected to /map by middleware
+4. Session is set; user is redirected to /map by proxy
    (a dashboard-created account gets its session at its first sign-in)
 ```
 

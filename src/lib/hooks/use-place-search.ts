@@ -99,7 +99,10 @@ export function usePlaceSearch(opts?: {
       const res = await fetch(
         `/api/search/retrieve/${encodeURIComponent(mapboxId)}?${params.toString()}`
       );
-      if (!res.ok) throw new Error("Retrieve failed");
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error || "Couldn't open this place. Please try again.");
+      }
       return (await res.json()) as RetrievedPlaceData;
     },
     onSuccess: () => {

@@ -2,13 +2,13 @@
 title: System Overview
 type: overview
 domain: overview
-version: 1.4.2
+version: 1.4.3
 last_updated: 19.11.2026
 status: stable
 sources:
   - AGENTS.md
-  - src/middleware.ts
-  - src/lib/supabase/middleware.ts
+  - src/proxy.ts
+  - src/lib/supabase/proxy.ts
   - src/lib/providers.tsx
   - src/app/manifest.ts
   - src/app/layout.tsx
@@ -61,7 +61,7 @@ Typical session:
 │   └───────┬───────┴────────┬───────┴──────┬──────┴──────────┬──────────┘   │
 │           │                │              │                  │              │
 │   ┌───────┴────────────────┴──────────────┴──────────────────┴──────────┐   │
-│   │  src/middleware.ts → updateSession (Supabase SSR)                    │   │
+│   │  src/proxy.ts → updateSession (Supabase SSR)                    │   │
 │   │  • redirects unauthenticated users to /login                         │   │
 │   │  • exempts /, /auth/callback, /shared/*, /api/shared/*               │   │
 │   └─────────────────────────────────┬────────────────────────────────────┘   │
@@ -82,7 +82,7 @@ Typical session:
 
 | Subsystem | Lives in | Notes |
 |---|---|---|
-| Auth | `src/middleware.ts`, `src/lib/supabase/middleware.ts`, `src/app/auth/callback/` | Cookie-SSR via `@supabase/ssr`. Google OAuth. |
+| Auth | `src/proxy.ts`, `src/lib/supabase/proxy.ts`, `src/app/auth/callback/` | Cookie-SSR via `@supabase/ssr`. Google OAuth. |
 | Places | `src/app/api/places/*`, `src/app/(app)/places/`, `src/components/places/` | The core entity. See [[../01-domain/places]]. |
 | Plans | `src/app/api/plans/*`, `src/app/(app)/plans/[id]/`, `src/lib/plans/`, `src/components/plans/` | Plans of 1..N days with ordered stops, auto-plan + Mapbox routes; every write is one Postgres function call. See [[../01-domain/plans]]. |
 | Visits | `src/app/api/visits/*`, `src/lib/visits/`, `src/components/visits/` | What happened: one place on one day, with its rating and notes; keeps the place's status and rating current and ticks off plan stops. See [[../01-domain/visits]]. |

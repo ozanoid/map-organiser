@@ -2,19 +2,19 @@
 title: Routing
 type: overview
 domain: frontend
-version: 1.6.3
-last_updated: 18.11.2026
+version: 1.6.4
+last_updated: 19.11.2026
 status: stable
 sources:
   - src/app/
-  - src/middleware.ts
-  - src/lib/supabase/middleware.ts
+  - src/proxy.ts
+  - src/lib/supabase/proxy.ts
   - src/components/map/map-content.tsx
 related:
   - "[[_README]]"
   - "[[app-router-conventions]]"
   - "[[layouts]]"
-  - "[[middleware]]"
+  - "[[proxy]]"
   - "[[../02-backend/api-routes/_README]]"
   - "[[../02-backend/auth]]"
 ---
@@ -39,19 +39,19 @@ Every route in the app — pages, API handlers, and special routes — in one pl
 | `/import` | `src/app/(app)/import/page.tsx` | `(app)/layout.tsx` | Required | Batch import with Zustand progress. |
 | `/settings` | `src/app/(app)/settings/page.tsx` | `(app)/layout.tsx` | Required | Categories / Tags / API / Theme tabs. |
 | `/login` | `src/app/(auth)/login/page.tsx` | `(auth)/layout.tsx` | **Public** (redirect if signed in) | Google OAuth + email/password. |
-| `/signup` | — (page removed 17.11.2026) | — | Redirect | Sign-ups are closed; the middleware sends it to `/login`. |
+| `/signup` | — (page removed 17.11.2026) | — | Redirect | Sign-ups are closed; the proxy sends it to `/login`. |
 | `/shared/[slug]` | `src/app/shared/[slug]/page.tsx` | `shared/layout.tsx` | **Public** | Public read view of a list, plan, or single place. |
 | `/oauth/consent` | `src/app/(auth)/oauth/consent/page.tsx` | `(auth)/layout.tsx` | **Public** — the page itself sends signed-out visitors to `/login?next=…` | OAuth consent for the Claude connector (17.11.2026). See [[../05-flows/claude-connector-flow]]. |
-| `/offline` | `src/app/offline/page.tsx` | root | Public — skips the middleware | PWA offline fallback; the service worker precaches it. |
+| `/offline` | `src/app/offline/page.tsx` | root | Public — skips the proxy | PWA offline fallback; the service worker precaches it. |
 
 ## Special routes
 
 | Path | Source | Purpose |
 |---|---|---|
 | `/auth/callback` | `src/app/auth/callback/route.ts` | OAuth code exchange. Public. See [[../02-backend/api-routes/auth-callback]]. |
-| `/manifest.webmanifest` | `src/app/manifest.ts` | PWA manifest (Next.js native). Skips the middleware, so signed-out visitors get it too. |
-| `/api/mcp` | `src/app/api/mcp/route.ts` | MCP endpoint for Claude (Streamable HTTP, bearer tokens). Skips the middleware. See [[../04-integrations/claude-mcp]]. |
-| `/.well-known/oauth-protected-resource[/api/mcp]` | `src/app/.well-known/oauth-protected-resource/[[...path]]/route.ts` | RFC 9728 metadata naming Supabase as the MCP endpoint's authorization server. Skips the middleware. |
+| `/manifest.webmanifest` | `src/app/manifest.ts` | PWA manifest (Next.js native). Skips the proxy, so signed-out visitors get it too. |
+| `/api/mcp` | `src/app/api/mcp/route.ts` | MCP endpoint for Claude (Streamable HTTP, bearer tokens). Skips the proxy. See [[../04-integrations/claude-mcp]]. |
+| `/.well-known/oauth-protected-resource[/api/mcp]` | `src/app/.well-known/oauth-protected-resource/[[...path]]/route.ts` | RFC 9728 metadata naming Supabase as the MCP endpoint's authorization server. Skips the proxy. |
 
 ## API routes (summary)
 
@@ -69,9 +69,9 @@ All under `/api/*`. Full detail in [[../02-backend/api-routes/_README]].
 | `/api/instagram/*` | Instagram import (3 endpoints — v1.28.0, plus the branch pick in v1.28.1) | [[../02-backend/api-routes/instagram]] |
 | `/api/share-target` | PWA share target — **public POST** | [[../02-backend/api-routes/share-target]] |
 
-## Middleware matcher
+## Proxy matcher
 
-`src/middleware.ts`:
+`src/proxy.ts`:
 
 ```ts
 export const config = {
@@ -81,9 +81,9 @@ export const config = {
 };
 ```
 
-Translation: runs on **every path except** static assets, image files, the service worker / manifest / offline page, the MCP endpoint and `.well-known` documents. So pages, API routes, the manifest, and the auth callback all go through the middleware before reaching their handler.
+Translation: runs on **every path except** static assets, image files, the service worker / manifest / offline page, the MCP endpoint and `.well-known` documents. So pages, API routes, the manifest, and the auth callback all go through the proxy before reaching their handler.
 
-## Auth gating (from middleware)
+## Auth gating (from proxy)
 
 ```
 Public routes (no auth required):
@@ -105,7 +105,7 @@ Everything else:
   sign-in returns to that path.
 ```
 
-See [[../02-backend/auth#middleware-gate]] for the implementation.
+See [[../02-backend/auth#proxy-gate]] for the implementation.
 
 ## Dynamic segments
 

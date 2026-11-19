@@ -2,14 +2,14 @@
 title: Backend Overview
 type: overview
 domain: backend
-version: 1.1.2
-last_updated: 18.11.2026
+version: 1.1.3
+last_updated: 19.11.2026
 status: stable
 sources:
   - src/lib/supabase/client.ts
   - src/lib/supabase/server.ts
-  - src/lib/supabase/middleware.ts
-  - src/middleware.ts
+  - src/lib/supabase/proxy.ts
+  - src/proxy.ts
   - src/app/api/
 related:
   - "[[supabase-clients]]"
@@ -31,7 +31,7 @@ The "backend" in this repo is a thin layer: Next.js API route handlers + Supabas
    Client (browser / Server Component)
         │
         ▼
-   src/middleware.ts   ← runs first; refreshes Supabase session, gates auth
+   src/proxy.ts   ← runs first; refreshes Supabase session, gates auth
         │
         ▼
    Next.js route handler   (src/app/api/.../route.ts)
@@ -54,8 +54,8 @@ The "backend" in this repo is a thin layer: Next.js API route handlers + Supabas
 
 | Surface | Doc |
 |---|---|
-| Supabase clients (browser/server/middleware/service) | [[supabase-clients]] |
-| Auth flow (cookie-SSR, OAuth callback, middleware gates) | [[auth]] |
+| Supabase clients (browser/server/proxy/service) | [[supabase-clients]] |
+| Auth flow (cookie-SSR, OAuth callback, proxy gates) | [[auth]] |
 | Database schema (13 user-facing tables + PostGIS internal) | [[schema/_README]] |
 | RLS policies (cross-table view, advisor findings) | [[rls-policies]] |
 | Edge functions | [[edge-functions]] |

@@ -2,7 +2,7 @@
 title: Coding Conventions
 type: agent-note
 domain: agent
-version: 1.1.1
+version: 1.1.2
 last_updated: 19.11.2026
 status: stable
 related:
@@ -40,7 +40,7 @@ src/
   lib/
     api/, db/, dataforseo/, google/, hooks/, map/, plans/, stores/, supabase/, types/, visits/
     geo.ts, utils.ts, providers.tsx
-  middleware.ts
+  proxy.ts
 ```
 
 Rules:
@@ -73,14 +73,14 @@ There are three Supabase clients. Pick the one that matches your runtime:
 |---|---|
 | `src/lib/supabase/client.ts` | Client Components (`"use client"`) that need a browser client. |
 | `src/lib/supabase/server.ts` | Server Components, Server Actions, Route Handlers. |
-| `src/lib/supabase/middleware.ts` | The Next.js middleware (`src/middleware.ts`). |
+| `src/lib/supabase/proxy.ts` | The Next.js proxy (`src/proxy.ts`). |
 
 Never import the browser client from a Server Component. Never import the server client from a Client Component. The wrong one will silently break auth.
 
 ## Auth & session
 
 - Cookie-based session, managed by `@supabase/ssr`.
-- Middleware refreshes the session on every request.
+- Proxy refreshes the session on every request.
 - In Server Components, get the session via the server client. Don't pass it through props from client to server.
 
 ## API routes

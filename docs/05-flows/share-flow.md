@@ -2,8 +2,8 @@
 title: Share Flow
 type: flow
 domain: sharing
-version: 1.5.0
-last_updated: 18.11.2026
+version: 1.5.1
+last_updated: 19.11.2026
 status: stable
 sources:
   - src/app/api/shared/route.ts
@@ -49,7 +49,7 @@ Owner clicks "Share" on a list or place detail page, or "Copy share link" in a p
        │
        ▼ (some time later)
 4. Viewer (anonymous OR authenticated) opens /shared/<slug>
-       │  • Middleware bypasses auth for /shared/*
+       │  • Proxy bypasses auth for /shared/*
        │  • shared/layout.tsx provides standalone layout
        │
        ▼

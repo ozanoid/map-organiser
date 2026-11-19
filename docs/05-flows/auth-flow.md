@@ -2,12 +2,12 @@
 title: Auth Flow
 type: flow
 domain: auth
-version: 1.4.0
-last_updated: 18.11.2026
+version: 1.4.1
+last_updated: 19.11.2026
 status: stable
 sources:
-  - src/middleware.ts
-  - src/lib/supabase/middleware.ts
+  - src/proxy.ts
+  - src/lib/supabase/proxy.ts
   - src/lib/supabase/server.ts
   - src/lib/supabase/client.ts
   - src/app/auth/callback/route.ts
@@ -15,7 +15,7 @@ sources:
 related:
   - "[[signup-flow]]"
   - "[[../02-backend/auth]]"
-  - "[[../03-frontend/middleware]]"
+  - "[[../03-frontend/proxy]]"
   - "[[../04-integrations/supabase]]"
 ---
 
@@ -25,7 +25,7 @@ How a user transitions from anonymous to authenticated. Covers Google OAuth (pri
 
 ## Trigger
 
-User opens any protected path while unauthenticated — the middleware sends them to `/login?next=<that path>` and sign-in returns them there (v1.39.0) — or clicks "Sign in" deliberately. There is no sign-up path: sign-ups are closed since 17.11.2026 ([[../02-backend/auth#Sign-ups closed]]).
+User opens any protected path while unauthenticated — the proxy sends them to `/login?next=<that path>` and sign-in returns them there (v1.39.0) — or clicks "Sign in" deliberately. There is no sign-up path: sign-ups are closed since 17.11.2026 ([[../02-backend/auth#Sign-ups closed]]).
 
 ## Steps (Google OAuth)
 
@@ -37,7 +37,7 @@ sequenceDiagram
     participant SA as Supabase Auth
     participant G as Google
     participant CB as /auth/callback
-    participant MW as middleware
+    participant MW as proxy
     participant MAP as /map
 
     U->>LP: Open /login
@@ -68,19 +68,19 @@ Same path from step 5 onward. Steps 1–4 replaced by:
 | OAuth redirect | provider choice | Google session (temporary) |
 | Callback | `code` query param | `sb-access-token`, `sb-refresh-token` cookies on the response |
 | New account (added by the owner in the Supabase dashboard since 17.11.2026) | user metadata (`full_name`, `avatar_url`), if any | `auth.users` row → triggers `handle_new_user` → `profiles` row → triggers `create_default_categories` → 12 category rows |
-| Middleware on next request | request cookies | refreshed cookies, redirect decision |
+| Proxy on next request | request cookies | refreshed cookies, redirect decision |
 
-## Public route table (middleware exempt)
+## Public route table (proxy exempt)
 
 - `/`
 - `/auth/callback/*`
 - `/shared/*`
 - `/api/shared/*`
-- `/api/cron/*` (15.07.2026) — cron runs with no cookie; it authenticates itself via `CRON_SECRET`. **Without this exemption the middleware 307-redirects the cron to `/login` and it never runs.**
+- `/api/cron/*` (15.07.2026) — cron runs with no cookie; it authenticates itself via `CRON_SECRET`. **Without this exemption the proxy 307-redirects the cron to `/login` and it never runs.**
 
 Plus `/login` is the "auth route" — accessible while unauthenticated, redirects to its same-site `next` (or `/map`) if authenticated. `/signup` redirects everyone to `/login` (sign-ups closed).
 
-Everything else requires auth. See [[../02-backend/auth#middleware-gate]].
+Everything else requires auth. See [[../02-backend/auth#proxy-gate]].
 
 ## Failure modes
 
@@ -90,7 +90,7 @@ Everything else requires auth. See [[../02-backend/auth#middleware-gate]].
 | Code exchange | Invalid / expired code | Redirect to `/login?error=auth_failed` |
 | Code exchange | Mismatched redirect URI | Same. Fix in Supabase Auth → Providers → Google. |
 | Email confirmation | User hasn't clicked the link | `signInWithPassword` returns "Email not confirmed" |
-| Session refresh | Refresh token revoked | Middleware redirects to `/login` |
+| Session refresh | Refresh token revoked | Proxy redirects to `/login` |
 | Cookie write | Wrong domain config | Cookies don't stick → user keeps getting bounced to `/login` |
 
 ## Logout
@@ -99,8 +99,8 @@ Everything else requires auth. See [[../02-backend/auth#middleware-gate]].
 
 ## Related code
 
-- `src/middleware.ts` — Next.js middleware entry.
-- `src/lib/supabase/middleware.ts` — `updateSession` (refresh + redirect).
+- `src/proxy.ts` — Next.js proxy entry.
+- `src/lib/supabase/proxy.ts` — `updateSession` (refresh + redirect).
 - `src/app/auth/callback/route.ts` — OAuth code exchange.
 - `src/app/(auth)/layout.tsx` — pre-auth layout.
 - `src/app/(auth)/login/page.tsx` — login form (Google button + email/password).

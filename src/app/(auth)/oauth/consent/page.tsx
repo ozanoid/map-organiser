@@ -10,7 +10,7 @@ import { ConsentForm } from "./consent-form";
  * Consent page for Supabase's OAuth 2.1 server (Authorization Path
  * /oauth/consent). An MCP client such as Claude sends the user here with an
  * authorization_id; approving issues the client a token for this user's
- * library. Public in the middleware: the page sends signed-out visitors to
+ * library. Public in the proxy: the page sends signed-out visitors to
  * /login with a `next` that brings them back.
  */
 

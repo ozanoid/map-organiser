@@ -9,7 +9,7 @@
  * falling back to location_code 2840 (US) as a global default.
  */
 
-import type { DataForSEOClient } from "./client";
+import { DataForSEOError, type DataForSEOClient } from "./client";
 import type {
   BusinessInfoResponse,
   RawBusinessInfo,
@@ -36,15 +36,24 @@ export const LIVE_LOOKUP_TIMEOUT_MS = 35_000;
 export interface BusinessInfoOptions {
   /** Abort the request (a caller answering within one request bounds it). */
   signal?: AbortSignal;
-  /**
-   * Throw when the request itself fails — network, HTTP status, abort —
-   * instead of returning null. Null then means only "DataForSEO has no
-   * record". Callers that must not mistake an outage for "not found" (the
-   * assistant's add) set it; the others keep the forgiving default.
-   */
-  throwOnError?: boolean;
 }
 
+/**
+ * One live business-info lookup.
+ *
+ * Returns the business, or `null` when DataForSEO ran the lookup and has no
+ * such business (task status 40102, or no items) — billed either way
+ * ($0.0054, measured 18.11.2026), so callers count both. Every failure —
+ * network, HTTP status, abort or timeout, any other task status (balance,
+ * bad request, internal error) — throws a DataForSEOError
+ * (`serviceFailure` tells an outage from a bad request) and isn't counted.
+ * A lookup cut off by the caller's timeout may still have run and been
+ * billed; that one is uncounted.
+ *
+ * Until v1.45.0 a failure also returned `null` unless the caller asked
+ * otherwise, and callers took it for "not on Google": the import kept a thin
+ * record, the link preview said "not found".
+ */
 export async function fetchBusinessInfoLive(
   client: DataForSEOClient,
   request: BusinessInfoRequest,
@@ -66,36 +75,26 @@ export async function fetchBusinessInfoLive(
     },
   ];
 
-  try {
-    const response = await client.post<BusinessInfoResponse>(
-      "/business_data/google/my_business_info/live",
-      taskBody,
-      { signal: opts.signal }
+  const response = await client.post<BusinessInfoResponse>(
+    "/business_data/google/my_business_info/live",
+    taskBody,
+    { signal: opts.signal }
+  );
+
+  const task = response.tasks?.[0];
+  if (task?.status_code === NO_RESULTS) return null;
+  if (!task || task.status_code !== 20000) {
+    throw new DataForSEOError(
+      `DataForSEO business info: ${task?.status_code ?? "no task"} ${task?.status_message ?? ""}`.trim(),
+      task?.status_code ?? 0
     );
+  }
 
-    const task = response.tasks?.[0];
-    if (!task || task.status_code !== 20000) {
-      console.warn(
-        `[DataForSEO] Business info task failed: ${task?.status_code} - ${task?.status_message}`
-      );
-      // 40102 "No Search Results" is DataForSEO's "no such business"; any
-      // other task status (balance, bad request, internal error) is a failure.
-      if (opts.throwOnError && task?.status_code !== NO_RESULTS) {
-        throw new Error(`DataForSEO business info: ${task?.status_code ?? "no task"} ${task?.status_message ?? ""}`.trim());
-      }
-      return null;
-    }
-
-    const result = task.result?.[0];
-    if (!result?.items?.length) {
-      console.warn("[DataForSEO] Business info: no items returned");
-      return null;
-    }
-
-    return result.items[0];
-  } catch (error) {
-    console.error("[DataForSEO] Business info fetch error:", error);
-    if (opts.throwOnError) throw error;
+  const result = task.result?.[0];
+  if (!result?.items?.length) {
+    console.warn("[DataForSEO] Business info: no items returned");
     return null;
   }
+
+  return result.items[0];
 }

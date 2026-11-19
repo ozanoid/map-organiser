@@ -2,7 +2,7 @@
 title: Places routes
 type: route-group
 domain: backend
-version: 2.5.1
+version: 2.5.2
 last_updated: 19.11.2026
 status: stable
 sources:
@@ -143,8 +143,9 @@ All require auth except `drain-imports`, which is bearer-authed with `CRON_SECRE
 - **DB:** `places` SELECT + UPDATE.
 - **External:** DataForSEO `fetchBusinessInfoLive` / `fetchReviews`; `downloadAndStorePhotoFromUrl`; `trackUsage`.
 - **Response:**
-  - `info`: `{ ok, cid? }`
-  - `reviews`: `{ ok, reviews: number }`
+  - `info`: `{ ok, cid? }`; `{ ok: false }` when Google has no record; `502` when the lookup failed (nothing written; v1.45.0).
+  - `reviews`: `{ ok, reviews: number }` — 0 stamps `reviews_checked_at` (Google has none); `502` when the fetch failed, with no stamp (v1.45.0; before, a failure was stamped "no reviews" for 30 days).
+  - Usage: a business-info lookup is counted when it returned (found or not), a reviews task once created — what DataForSEO bills.
 - **Notes:** `step=info` (~3–4 s, awaited by client). `step=reviews` (~30 s, fire-and-forget). `cid` source: body (Google path) or existing `google_data.cid` (DataForSEO).
 
 ### `POST /api/places/[id]/refresh-google-data`

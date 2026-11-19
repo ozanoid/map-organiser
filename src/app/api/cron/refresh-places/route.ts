@@ -154,6 +154,9 @@ export async function GET(request: NextRequest) {
   let refreshed = 0;
   let failed = 0;
   let bizInfoFailed = 0;
+  let reviewsFailed = 0;
+  /** DataForSEO itself failed: stop the sweep, the rest would fail too. */
+  let serviceDown = false;
   let profiled = 0;
   let profileSkipped = 0;
 
@@ -161,6 +164,7 @@ export async function GET(request: NextRequest) {
   let cursor = 0;
   async function worker() {
     while (
+      !serviceDown &&
       cursor < stalePlaces!.length &&
       Date.now() - startedAt < SOFT_DEADLINE_MS
     ) {
@@ -175,19 +179,22 @@ export async function GET(request: NextRequest) {
         });
         if (!r.ok) {
           failed++;
+          if (r.serviceFailure) serviceDown = true;
           console.warn(
-            `[cron:refresh] ${place.name}: refresh failed — ${r.error}`
+            `[cron:refresh] ${place.name}: refresh failed — ${r.error}${r.serviceFailure ? " (DataForSEO failing — sweep stopped)" : ""}`
           );
           continue;
         }
         refreshed++;
+        if (r.reviewsFailed) reviewsFailed++;
         if (!r.bizInfoOk) {
           // Row updated (marker stamped, reviews possibly merged via the
-          // stored cid) but the biz-info lookup returned nothing — surface
-          // it so dead google_place_ids are visible in the summary.
+          // stored cid) but Google has no record of the place — surface it
+          // so dead google_place_ids are visible in the summary. (A failed
+          // lookup is `!r.ok` above since v1.45.0, retried next run.)
           bizInfoFailed++;
           console.warn(
-            `[cron:refresh] ${place.name}: biz-info returned null (place dead or transient API failure)`
+            `[cron:refresh] ${place.name}: Google has no record (place gone or its id changed)`
           );
         }
 
@@ -240,10 +247,12 @@ export async function GET(request: NextRequest) {
     ok: true,
     scanned: stalePlaces.length,
     processed,
-    deadlineHit: processed < stalePlaces.length,
+    deadlineHit: !serviceDown && processed < stalePlaces.length,
+    serviceDown,
     refreshed,
     failed,
     bizInfoFailed,
+    reviewsFailed,
     profiled,
     profileSkipped,
     reviewSort,

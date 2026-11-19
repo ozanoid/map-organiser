@@ -2,8 +2,8 @@
 title: Place Import Flow
 type: flow
 domain: places
-version: 2.2.1
-last_updated: 18.11.2026
+version: 2.3.1
+last_updated: 19.11.2026
 status: stable
 sources:
   - src/app/api/places/import-jobs/route.ts
@@ -64,7 +64,7 @@ User goes to `/import`, picks a CSV or GeoJSON file (typically from Google Takeo
        │    import ──► photo ──► reviews ──► profile ──► done
        │       │                     │
        │       ├─► skipped (already exists / no coordinates)
-       │       └─► failed  (insert error / 3 failed attempts)
+       │       └─► failed  (insert error / 3 failed attempts at import)
        ▼
 4. UI polls GET /api/places/import-jobs every 3 s  (newest job with kind = 'takeout')
        │  Counts per stage → progress bar, "waiting to be added",
@@ -106,12 +106,13 @@ Verified against the three URL shapes Takeout emits (`?cid=`, `?q=place_id:ChIJ�
 ## Failure modes
 
 - **Parse fails (step 2):** invalid file. UI shows the error, nothing is written.
-- **Per-place DataForSEO failure:** the place is inserted unenriched if coordinates survive, otherwise `skipped` with a reason. Never blocks the queue.
+- **DataForSEO itself failing (v1.45.1)** — down, out of balance, rate-limited (`serviceFailure`): the item is held, not retried at once — its attempt is given back and its claim kept, so it sits out the 10-minute stale window; the run stops and doesn't chain. An outage or an empty balance holds the import (one free probe per item every 10 minutes) and it resumes by itself. Before, three attempts went in a minute and the whole import ended `failed`.
+- **Per-place DataForSEO failure (v1.45.0)** — this request is wrong (an invalid field, say): the lookup throws and the item is retried — up to 3 tries at its stage. At import it then retires as `failed` ("Repeated errors"; re-uploading the file retries only those, the rest are skipped as duplicates). Past import the place exists, so the item isn't `failed`: a photo stage that keeps failing moves on to reviews ("Photo kept failing"), a reviews or profile stage ends `done` with "Reviews kept failing" / "Profile kept failing". Until v1.45.0 a failed lookup read as "no record" and the place was inserted as a thin record for good, a failed reviews fetch was stamped "no reviews" for 30 days, and a stage retired as `failed` made the import views show an added place as not added. Never blocks the queue.
 - **DataForSEO has no record for the CID:** the `cid:` lookup returns nothing and the place would land with a name and a coordinate and nothing else — no address, no rating, no image, therefore no photo, no reviews, no profile, no tags. `importPlace` retries once by name, bounded by the resolved coordinate, and discards a hit further than 200 m away (a coordinate is a bias, not a filter, and chains put two branches inside one radius). Measured at 2 of 286 on one import.
 - **Photo download or upload fails:** its own stage, so it retries like anything else instead of vanishing. `google_data.main_image` keeps the source URL, so the retry is free. Background callers must hand `downloadAndStorePhotoFromUrl` a service-role client — a cookie-scoped one has no `auth.uid()` and the Storage policy rejects the write silently, returning the same `null` a dead image URL would.
 - **Duplicate:** `skipped`, reason `Already exists`, at zero API cost.
 - **Runner dies mid-item:** the item keeps a stale `claimed_at` and returns to the pool after 10 minutes.
-- **Poison item:** `attempts` caps at 3, then the item retires as `failed`.
+- **Poison item:** `attempts` caps at 3 per stage; then the item retires — `failed` at import, otherwise as above (the place is kept).
 - **Overlapping runs:** safe by construction — `FOR UPDATE SKIP LOCKED` hands concurrent runners disjoint items. Measured: 6 simultaneous runners against a 10-item pool returned 10 items, 0 collisions.
 - **Backlog pile-up:** the drain exits early when more than 60 items are already claimed and in flight, which bounds DataForSEO spend.
 - **Preview deployments:** Vercel Cron fires on production only. The drain self-chains while work remains — guarded on having made progress this run — so a preview import still completes on the kick alone.

@@ -1,7 +1,14 @@
 import { type NextRequest } from "next/server";
-import { updateSession } from "@/lib/supabase/middleware";
+import { updateSession } from "@/lib/supabase/proxy";
 
-export async function middleware(request: NextRequest) {
+/**
+ * Next.js Proxy (was `middleware.ts` until v1.44.0 — Next 16 deprecated the
+ * name). Refreshes the Supabase session cookie and sends signed-out page
+ * requests to /login. Runs on Node.js, the only runtime Proxy has; the
+ * functions run in fra1, next to the database (vercel.json), so the
+ * session check is a same-region call.
+ */
+export async function proxy(request: NextRequest) {
   return await updateSession(request);
 }
 

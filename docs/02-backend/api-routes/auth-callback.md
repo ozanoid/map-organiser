@@ -2,8 +2,8 @@
 title: Auth Callback route
 type: route-group
 domain: auth
-version: 1.0.0
-last_updated: 12.05.2026
+version: 1.0.1
+last_updated: 19.11.2026
 status: stable
 sources:
   - src/app/auth/callback/route.ts
@@ -72,7 +72,7 @@ See [[../../01-domain/users-and-profiles#signup-first-use-flow]] for the cascade
 
 ## Public-route status
 
-`/auth/callback/*` is exempt from the auth gate in `src/lib/supabase/middleware.ts`:
+`/auth/callback/*` is exempt from the auth gate in `src/lib/supabase/proxy.ts`:
 
 ```ts
 const isPublicRoute =
@@ -82,7 +82,7 @@ const isPublicRoute =
   request.nextUrl.pathname.startsWith("/api/shared/");
 ```
 
-Without this exemption, the middleware would redirect unauthenticated requests away from `/auth/callback` before the code exchange could happen — bricking the login flow.
+Without this exemption, the proxy would redirect unauthenticated requests away from `/auth/callback` before the code exchange could happen — bricking the login flow.
 
 ## Error handling
 

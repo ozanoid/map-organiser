@@ -2,7 +2,7 @@
 title: RLS Policies
 type: overview
 domain: backend
-version: 1.6.0
+version: 1.6.1
 last_updated: 19.11.2026
 status: stable
 sources:
@@ -146,20 +146,20 @@ From `mcp__supabase__get_advisors(type=security)`, run 19.11.2026 (v1.43.0):
 
 | Lint | Level | Object | Decision |
 |---|---|---|---|
-| `anon_…` / `authenticated_security_definer_function_executable` | WARN | `increment_api_usage(uuid, text, numeric)` | **Real.** Anyone with the public anon key could write usage rows for any user id; the AI budget guard counts those rows, so a user's monthly AI caps could be run out — and the public shared-list payload carried the owner's id until v1.43.0. **Fix prepared, not applied:** `supabase/migrations/20261119004416_rpc_least_privilege.sql` — no `anon`; a signed-in caller counts only their own usage (`p_user_id = auth.uid()`, else `42501`); `service_role` and direct sessions unchanged. |
+| `anon_…` / `authenticated_security_definer_function_executable` | WARN | `increment_api_usage(uuid, text, numeric)` | **Real.** Anyone with the public anon key could write usage rows for any user id; the AI budget guard counts those rows, so a user's monthly AI caps could be run out — and the public shared-list payload carried the owner's id until v1.43.0. **Fixed (applied 19.11.2026, after the code went to production):** `supabase/migrations/20261119005449_rpc_least_privilege.sql` — no `anon`; a signed-in caller counts only their own usage (`p_user_id = auth.uid()`, else `42501`); `service_role` and direct sessions unchanged. |
 | same lints | WARN | `handle_new_user()`, `create_default_categories()` | Trigger functions nothing calls over RPC (a direct call fails without `NEW`). Same migration revokes `EXECUTE` from `public`, `anon`, `authenticated`. EXECUTE is checked when a trigger is created, not when it fires — checked in a rolled-back transaction. |
 | same lints | WARN | `st_estimatedextent(text, text [, text [, bool]])` | PostGIS, owned by `supabase_admin`: the `postgres` role holds no grant option, so it can't revoke. It returns the planner's estimated extent of a geometry column (for `places.location`, a bounding box over everyone's places). Accepted. |
-| `rls_disabled_in_public` | ERROR | `public.spatial_ref_sys` | **Real, worse than the lint says:** its owner `supabase_admin` granted `INSERT`, `UPDATE`, `DELETE`, `TRUNCATE` to `anon` and `authenticated`, so the public anon key can change or delete the SRID definitions every geography query reads (as `anon`, an UPDATE of srid 4326 changed 1 row in a rolled-back transaction). `postgres` can't revoke those grants or enable RLS (not the owner), but holds `TRIGGER`. **Fix prepared, not applied:** `supabase/migrations/20261119004648_spatial_ref_sys_read_only.sql` — a trigger refuses writes from `anon` and `authenticated`; reads, PostGIS, the service role and direct sessions unaffected. The lint stays (RLS is still off). `geometry_columns` / `geography_columns` carry the same grants but are views a write can't change. |
+| `rls_disabled_in_public` | ERROR | `public.spatial_ref_sys` | **Real, worse than the lint says:** its owner `supabase_admin` granted `INSERT`, `UPDATE`, `DELETE`, `TRUNCATE` to `anon` and `authenticated`, so the public anon key can change or delete the SRID definitions every geography query reads (as `anon`, an UPDATE of srid 4326 changed 1 row in a rolled-back transaction). `postgres` can't revoke those grants or enable RLS (not the owner), but holds `TRIGGER`. **Fixed (applied 19.11.2026):** `supabase/migrations/20261119005346_spatial_ref_sys_read_only.sql` — a trigger refuses writes from `anon` and `authenticated`; reads, PostGIS, the service role and direct sessions unaffected (checked on the live database after applying: anon UPDATE / DELETE and authenticated UPDATE → 42501, SELECT and a geography distance → ok). The lint stays (RLS is still off). `geometry_columns` / `geography_columns` carry the same grants but are views a write can't change. |
 | `extension_in_public` | WARN | `postgis` | PostGIS can't be moved with `ALTER EXTENSION … SET SCHEMA`; moving it means dropping and recreating it under `places.location`. Accepted. |
 | `rls_enabled_no_policy` | INFO | `public.vocabulary_migrations` | Service-only table: RLS on, no policy = no access for API roles. Intended. |
 | `auth_leaked_password_protection` | WARN | (Auth config) | A Supabase dashboard setting (Auth → password security) — Ozan's to switch on. Sign-ups are closed, so it guards only the existing accounts' password changes. |
 
-### Applying the two migrations
+### The two migrations (both applied 19.11.2026)
 
-- `spatial_ref_sys_read_only` depends on no code; it can go in any time.
-- `rpc_least_privilege` only after the v1.43.0 code is deployed: until then the import queue's review stage counted usage through a session-less cookie client, i.e. as `anon` (it passes the service client now).
+- `spatial_ref_sys_read_only` depended on no code.
+- `rpc_least_privilege` went in after the v1.43.0 code served production (merge `d87d9aa`); a connector call then still counted its search for the signed-in user. The order mattered: before that code the import queue's review stage counted usage through a session-less cookie client, i.e. as `anon` (it passes the service client now).
 - Every other caller passes a signed-in user's client for that same user, the MCP bearer client (`auth.uid()` = the user), or the service client — listed in [[../_agent/pitfalls]] ("A cookie client outside a cookie request").
-- Ozan approves the SQL before it runs — see [[../_agent/conventions#things-to-ask-before-doing]].
+- Ozan approved both before they ran.
 
 ## Testing RLS
 

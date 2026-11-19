@@ -2,7 +2,7 @@
 title: Instagram Import Flow
 type: flow
 domain: places
-version: 1.3.0
+version: 1.3.1
 last_updated: 19.11.2026
 status: stable
 sources:
@@ -594,7 +594,7 @@ The monthly `instagram` budget (300 posts per user) bounds the first three.
 | C | "No places in this post" | Nothing could be pinned and no skipped venue is listed: the dialog says no account, location tag or address points to one specific place; on `/map`, "Search manually" opens the map search. |
 | C | "Nothing added yet" | Every venue was skipped; the rows below offer **Pick branch** / **Choose** / **Search**. |
 | C | "<name> removed" | The user removed the only place the import added: "Nothing from this post is on your map now. If it was the wrong match, search for the right place."; **Search manually** starts with that name. |
-| D | An item ends `failed` | As in [[place-import-flow]] — DataForSEO / insert errors, 3 failed attempts. |
+| D | An item ends `failed` | As in [[place-import-flow]] — an insert error, or 3 failed attempts at import (a failed DataForSEO lookup is retried, not read as "no record", since v1.45.0). Past import the place exists: a stage that keeps failing ends the item `done` with a reason, so the view shows the place as added. |
 | D | Items stay "Adding…" | The drain never runs: `CRON_SECRET` unset (the kick no-ops; locally there is no cron at all) or no DataForSEO credentials. |
 | E | "Couldn't load this import." | `GET` 404 (not this user's job, or not an Instagram job). The hook keeps polling while the dialog is open. |
 | F | Toast "This place can't be picked for that item." (409) | The item is no longer a skipped venue (it was added, or is `Already exists`), or the place is not one of the options stored for it. |

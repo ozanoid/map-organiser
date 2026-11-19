@@ -66,7 +66,18 @@ export async function GET(
   const client = getDataForSEOClient();
   let enriched: Awaited<ReturnType<typeof enrichWithDataForSEO>> = null;
   if (client) {
-    enriched = await enrichWithDataForSEO(client, user.id, retrieved);
+    try {
+      enriched = await enrichWithDataForSEO(client, user.id, retrieved);
+    } catch (error) {
+      // A failed lookup isn't "no match" (v1.45.0). The Mapbox-only preview
+      // would save the place without a Google id, and nothing looks a place
+      // up again without one — so ask for a retry instead.
+      console.error("[search/retrieve] DataForSEO lookup failed:", error);
+      return NextResponse.json(
+        { error: "Couldn't look this place up right now. Please try again." },
+        { status: 502 }
+      );
+    }
   }
 
   const fetchTimeMs = Date.now() - startTime;
@@ -137,14 +148,16 @@ async function enrichWithDataForSEO(
     : retrieved.name;
   const locationCoord = `${retrieved.lat},${retrieved.lng},1000`;
 
+  // Throws when the lookup fails; null when Google has no match. Billed
+  // either way, so counted before the null check (until v1.45.0 only a match
+  // was counted).
   const raw = await fetchBusinessInfoLive(client, {
     keyword,
     location_coordinate: locationCoord,
   });
+  trackUsage(userId, "dataforseo_business_info_live").catch(() => {});
 
   if (!raw) return null;
-
-  trackUsage(userId, "dataforseo_business_info_live").catch(() => {});
 
   const placeData = transformBusinessInfoToPlaceData(raw);
   const extended = extractExtendedData(raw);

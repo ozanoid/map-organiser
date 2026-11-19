@@ -2,12 +2,12 @@
 title: Auth
 type: overview
 domain: auth
-version: 1.3.0
-last_updated: 18.11.2026
+version: 1.3.1
+last_updated: 19.11.2026
 status: stable
 sources:
-  - src/middleware.ts
-  - src/lib/supabase/middleware.ts
+  - src/proxy.ts
+  - src/lib/supabase/proxy.ts
   - src/lib/supabase/server.ts
   - src/lib/supabase/client.ts
   - src/app/auth/callback/route.ts
@@ -32,7 +32,7 @@ Cookie-based session via `@supabase/ssr`. Provider options: Google OAuth (primar
 | Concern | Mechanism |
 |---|---|
 | Session storage | HTTP-only cookies (Supabase Auth standard) |
-| Session refresh | `src/middleware.ts` on every request |
+| Session refresh | `src/proxy.ts` on every request |
 | OAuth provider | Google (via Supabase Auth) |
 | OAuth callback | `src/app/auth/callback/route.ts` |
 | Email/password | `src/app/(auth)/login/page.tsx` — sign-in only; sign-ups are closed (see [[#Sign-ups closed]]) |
@@ -64,7 +64,7 @@ Cookie-based session via `@supabase/ssr`. Provider options: Google OAuth (primar
 5.  Redirect to /map
         │
         ▼
-6.  Middleware on /map request:
+6.  Proxy on /map request:
         - supabase.auth.getUser() → returns user
         - cookies refreshed
         - response served
@@ -88,14 +88,14 @@ The app has no sign-up call any more — see the next section.
 
 Since 17.11.2026 the app has a single owner (see [[../_plans/personal-assistant]]), so public sign-up is closed:
 
-- The `/signup` page is gone. The middleware sends any `/signup` URL to `/login` before it builds a Supabase client.
+- The `/signup` page is gone. The proxy sends any `/signup` URL to `/login` before it builds a Supabase client.
 - The login page and the public share page no longer link to sign-up.
 - The gate that actually stops new accounts is Supabase Auth's **Allow new users to sign up** setting (dashboard → Authentication → Sign In / Providers), which must stay off. Taking the page down alone would leave `supabase.auth.signUp()` callable by anyone holding the public anon key.
 - New accounts are added by the owner in the Supabase dashboard (Authentication → Users). The [[../05-flows/signup-flow|account-creation cascade]] still runs for them.
 
 ## Return path after sign-in (`next`)
 
-Since 17.11.2026 a page can send a signed-out visitor to `/login?next=<path>` and get them back after sign-in — the OAuth consent page does. Since v1.39.0 (18.11.2026) the middleware does the same for every protected page: a signed-out request for `/plans/<id>` goes to `/login?next=%2Fplans%2F<id>` (the path with its query), and a signed-in visit to `/login?next=…` goes straight there. `next` is followed only through `safeNextPath` (`src/lib/auth/safe-next.ts`): one leading slash, no backslash or control characters, same origin after URL parsing, and the parsed path must not start with `//` either. That last check came with v1.39.0: parsing collapses dot segments, so `/.//evil.com` (or `/%2e//evil.com`, `/a/..//evil.com`) came out as `//evil.com` — a protocol-relative link to another host. Since 17.11.2026 the login page could be sent there after an email sign-in; the middleware's signed-in redirect would have made it one click. Found by the slice-3 review, closed before merge; unit checks cover the three forms.
+Since 17.11.2026 a page can send a signed-out visitor to `/login?next=<path>` and get them back after sign-in — the OAuth consent page does. Since v1.39.0 (18.11.2026) the proxy does the same for every protected page: a signed-out request for `/plans/<id>` goes to `/login?next=%2Fplans%2F<id>` (the path with its query), and a signed-in visit to `/login?next=…` goes straight there. `next` is followed only through `safeNextPath` (`src/lib/auth/safe-next.ts`): one leading slash, no backslash or control characters, same origin after URL parsing, and the parsed path must not start with `//` either. That last check came with v1.39.0: parsing collapses dot segments, so `/.//evil.com` (or `/%2e//evil.com`, `/a/..//evil.com`) came out as `//evil.com` — a protocol-relative link to another host. Since 17.11.2026 the login page could be sent there after an email sign-in; the proxy's signed-in redirect would have made it one click. Found by the slice-3 review, closed before merge; unit checks cover the three forms.
 
 - Email/password: the login page pushes `next` (or `/map`).
 - Google: the login page stores `next` in the short-lived `auth_next` cookie (10 min, SameSite=Lax) so the registered `/auth/callback` redirect URL stays unchanged; the callback reads `?next=` or the cookie, validates it, redirects and clears the cookie.
@@ -107,9 +107,9 @@ Supabase Auth also acts as an OAuth 2.1 authorization server for the MCP endpoin
 
 Dashboard state checked on 17.11.2026: sign-ups off (`/auth/v1/settings` → `disable_signup: true`), OAuth server on, signing key ES256 (JWKS), dynamic client registration off.
 
-## Middleware gate
+## Proxy gate
 
-`src/middleware.ts` runs on every request except static assets:
+`src/proxy.ts` runs on every request except static assets:
 
 ```ts
 export const config = {
@@ -119,7 +119,7 @@ export const config = {
 };
 ```
 
-It delegates to `updateSession()` in `src/lib/supabase/middleware.ts`, which (every redirect after step 4 goes through `redirectKeepingSession`, so the cookies `getUser()` refreshed or cleared reach the browser):
+It delegates to `updateSession()` in `src/lib/supabase/proxy.ts`, which (every redirect after step 4 goes through `redirectKeepingSession`, so the cookies `getUser()` refreshed or cleared reach the browser):
 
 1. `/signup` → redirect to `/login` and stop (sign-ups closed, 17.11.2026).
 2. Reads cookies from `request.cookies`.
@@ -164,7 +164,7 @@ if (user && isAuthRoute) {
 | `/api/shared/*` | The matching API endpoints for the share view. |
 | `/api/cron/*` | Cron runs with no cookie; each route authenticates itself with `CRON_SECRET`. |
 | `/oauth/*` | The OAuth consent page; it sends signed-out visitors to `/login?next=…` itself. |
-| `/api/mcp`, `/.well-known/*` | Not in the middleware at all (matcher): the MCP endpoint checks its own bearer tokens and must answer 401; the metadata documents are public. |
+| `/api/mcp`, `/.well-known/*` | Not in the proxy at all (matcher): the MCP endpoint checks its own bearer tokens and must answer 401; the metadata documents are public. |
 
 Anything else requires an authenticated user.
 
@@ -210,13 +210,13 @@ If the code is missing or invalid, the route falls back to redirecting to `/logi
 
 ## Logout
 
-`AppHeader` dropdown calls `supabase.auth.signOut()`. This clears cookies; middleware on the next request will redirect to `/login`.
+`AppHeader` dropdown calls `supabase.auth.signOut()`. This clears cookies; proxy on the next request will redirect to `/login`.
 
 ## Edge cases
 
-- **Concurrent tab login.** Logging in one tab updates the cookie; other tabs pick it up on their next request via middleware.
-- **Token expiry mid-session.** Middleware refreshes silently. The user only notices a redirect to `/login` if the refresh fails (e.g. revoked session).
-- **`/shared/<slug>` viewed by a logged-in user.** Middleware allows the public path AND a session exists. The page reads the session client-side to show the "Save to my account" CTA. The data fetch (`GET /api/shared/[slug]`) still uses the service-role client — it doesn't change behavior based on the viewer.
+- **Concurrent tab login.** Logging in one tab updates the cookie; other tabs pick it up on their next request via proxy.
+- **Token expiry mid-session.** Proxy refreshes silently. The user only notices a redirect to `/login` if the refresh fails (e.g. revoked session).
+- **`/shared/<slug>` viewed by a logged-in user.** Proxy allows the public path AND a session exists. The page reads the session client-side to show the "Save to my account" CTA. The data fetch (`GET /api/shared/[slug]`) still uses the service-role client — it doesn't change behavior based on the viewer.
 
 ## Known weak spots (from advisor)
 

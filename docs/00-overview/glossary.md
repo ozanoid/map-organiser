@@ -2,8 +2,8 @@
 title: Glossary
 type: overview
 domain: overview
-version: 1.5.0
-last_updated: 18.11.2026
+version: 1.5.1
+last_updated: 19.11.2026
 status: stable
 related:
   - "[[system-overview]]"
@@ -82,7 +82,7 @@ Single source of truth for every domain term, abbreviation, and acronym used in 
 |---|---|
 | **RLS** | Row-Level Security. Postgres policies that gate row visibility per role. Every user-owned table here has `auth.uid() = user_id` policies. |
 | **Service role** | A Supabase API key that bypasses RLS. Used only by `createServiceClient()` in `src/lib/supabase/server.ts`, only where no session can do the job — public share reads, the cron routes, the import-queue writes and the Instagram import's background job; see [[../02-backend/supabase-clients]]. Env: `SUPABASE_SERVICE_ROLE_KEY`. |
-| **SSR auth** | `@supabase/ssr`'s cookie-based session, refreshed by middleware on every request. See [[../02-backend/auth]] when written. |
+| **SSR auth** | `@supabase/ssr`'s cookie-based session, refreshed by proxy on every request. See [[../02-backend/auth]] when written. |
 | **`auth.uid()`** | Postgres function exposed by Supabase Auth that returns the current authenticated user's UUID. Used in every RLS policy. |
 | **SECURITY DEFINER** | Postgres function attribute making it run as the function owner instead of the caller. Custom DEFINER functions in this repo: `handle_new_user`, `create_default_categories`, `increment_api_usage`. |
 | **Encrypted API keys** | User-provided API keys (Google, Mapbox, DataForSEO) are AES-256-GCM encrypted via `ENCRYPTION_SECRET` and stored in `profiles.*_enc` columns. Never logged, never returned to client. |
@@ -96,7 +96,7 @@ Single source of truth for every domain term, abbreviation, and acronym used in 
 | **Server Component** | A React component that runs on the server only (default in `app/`). Can `await` directly. |
 | **Client Component** | A React component marked `"use client"` at the top; runs in the browser. Required for state, effects, browser APIs. |
 | **Route handler** | A `route.ts` file inside `src/app/api/` that exports `GET`/`POST`/etc. functions. |
-| **Middleware** | `src/middleware.ts` — runs per request before any route resolves. This repo uses it to refresh the Supabase session and gate auth. |
+| **Proxy** | `src/proxy.ts` — runs per request before any route resolves. This repo uses it to refresh the Supabase session and gate auth. |
 | **`cn()`** | Class merger in `src/lib/utils.ts`. Combines `clsx` + `tailwind-merge`. |
 | **shadcn** | A component CLI that copies primitive components into `src/components/ui/`. Not a runtime dependency — the code is yours after install. |
 | **`base-nova`** | The shadcn style this repo uses (set in `components.json`). Built on `@base-ui/react` primitives. |

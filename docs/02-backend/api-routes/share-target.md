@@ -2,8 +2,8 @@
 title: Share Target route
 type: route-group
 domain: backend
-version: 1.0.0
-last_updated: 12.05.2026
+version: 1.0.1
+last_updated: 19.11.2026
 status: stable
 sources:
   - src/app/api/share-target/route.ts
@@ -42,7 +42,7 @@ The receiver for the PWA Web Share Target API. Mobile users who hit "Share" on a
 
 ## Why public?
 
-The PWA spec requires the share-target endpoint to accept POST without authentication — at the moment the OS share sheet fires, there's no guarantee the user has a session cookie set in the browser. The route does **nothing sensitive** itself: it parses input, looks for a known URL pattern, and redirects to a page that itself enforces auth (`/map` is gated by the middleware → unauthenticated users get redirected to `/login?next=/map?add=...`).
+The PWA spec requires the share-target endpoint to accept POST without authentication — at the moment the OS share sheet fires, there's no guarantee the user has a session cookie set in the browser. The route does **nothing sensitive** itself: it parses input, looks for a known URL pattern, and redirects to a page that itself enforces auth (`/map` is gated by the proxy → unauthenticated users get redirected to `/login?next=/map?add=...`).
 
 A malicious POSTer could:
 

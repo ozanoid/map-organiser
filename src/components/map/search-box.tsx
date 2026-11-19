@@ -4,6 +4,7 @@ import { useEffect, useImperativeHandle, useRef, useState, type Ref } from "reac
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Search, X, Loader2, MapPin } from "lucide-react";
+import { toast } from "sonner";
 import { usePlaceSearch } from "@/lib/hooks/use-place-search";
 import type { RetrievedPlaceData } from "@/lib/hooks/use-place-search";
 import type { SearchSuggestion } from "@/lib/mapbox/search-box";
@@ -83,8 +84,10 @@ export function SearchBox({ proximity, onSelect, className, ref }: SearchBoxProp
       onSelect(data);
       clear();
       setAimedAt(null);
-    } catch {
-      // Hook surfaces error; just keep input intact
+    } catch (error) {
+      // Keep the input as it was so the user can pick the place again. The
+      // hook's retrieveError was never rendered, so a failure did nothing.
+      toast.error(error instanceof Error ? error.message : "Couldn't open this place. Please try again.");
     }
   }
 

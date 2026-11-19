@@ -2,7 +2,7 @@
 title: Flows
 type: overview
 domain: overview
-version: 1.8.1
+version: 1.8.2
 last_updated: 19.11.2026
 status: stable
 related:
@@ -31,7 +31,7 @@ End-to-end user / data flows that span multiple subsystems. Each doc traces the 
 
 | Flow | Trigger | Touches |
 |---|---|---|
-| [[auth-flow]] | User clicks "Sign in" | middleware, OAuth callback, Supabase Auth |
+| [[auth-flow]] | User clicks "Sign in" | proxy, OAuth callback, Supabase Auth |
 | [[signup-flow]] | A new account is created (owner-only since 17.11.2026) | `auth.users`, `handle_new_user`, `create_default_categories`, 12 categories seeded |
 | [[place-import-flow]] | User uploads a Takeout file | `/api/places/import-jobs` → `/api/cron/drain-imports` queue |
 | [[claude-connector-flow]] | Claude connects to the library (custom connector) | `/api/mcp` 401 → resource metadata → Supabase OAuth 2.1 (DCR, PKCE) → `/oauth/consent` → bearer token → tools |

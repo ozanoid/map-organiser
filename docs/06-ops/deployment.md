@@ -2,8 +2,8 @@
 title: Deployment
 type: overview
 domain: ops
-version: 1.1.2
-last_updated: 18.11.2026
+version: 1.2.0
+last_updated: 19.11.2026
 status: stable
 sources:
   - next.config.ts
@@ -23,7 +23,7 @@ Vercel-hosted. Git-based auto-deploys. No custom CI.
 ## Platform
 
 - **Vercel** (hosting + Functions). Account and project named in the Vercel dashboard.
-- **Region:** matches Supabase (`eu-central-1` recommended for low DB latency).
+- **Region:** `fra1` (Frankfurt), set in `vercel.json` (`regions`) since v1.44.0 — next to the Supabase project (`eu-central-1`). Before that this line already said "matches Supabase", but nothing set it: the functions ran in Vercel's default `iad1` (seen in `x-vercel-id: lhr1::iad1::…`), so every database call crossed the Atlantic. Check after a deploy: a function response's `x-vercel-id` reads `…::fra1::…`.
 - **Build command:** `next build` (from `package.json` scripts).
 - **Output:** Vercel's Next.js build, served as Vercel Functions (Fluid Compute) + static assets.
 
@@ -55,7 +55,7 @@ Build:
 Deploy:
   • Static assets → Vercel edge network
   • Route handlers → Vercel Functions
-  • Middleware → Routing Middleware (Fluid Compute)
+  • Proxy (`src/proxy.ts`, Node.js) → Routing Middleware (Fluid Compute)
     │
     ▼
 Health check (Vercel's built-in)

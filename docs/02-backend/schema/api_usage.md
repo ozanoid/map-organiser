@@ -2,7 +2,7 @@
 title: api_usage
 type: table
 domain: backend
-version: 1.6.1
+version: 1.6.3
 last_updated: 19.11.2026
 status: stable
 sources:
@@ -72,7 +72,7 @@ DO UPDATE SET count = api_usage.count + 1;
 
 The composite UNIQUE constraint makes the UPSERT atomic. App code calls this via `src/lib/google/track-usage.ts#trackUsage` after each billable external call.
 
-**Who may call it.** Today `anon`, `authenticated` and `service_role` hold `EXECUTE`, and any caller may pass any `p_user_id` — with the anon key, anyone could fill a user's rows (and so the AI budget). Prepared, not applied (19.11.2026): `supabase/migrations/20261119004416_rpc_least_privilege.sql` — `anon` loses `EXECUTE`; a signed-in caller may count only `auth.uid()`'s usage (`42501` otherwise); `service_role` and direct sessions unchanged. See [[../rls-policies#advisor-findings]].
+**Who may call it** (since 19.11.2026, `supabase/migrations/20261119005449_rpc_least_privilege.sql`): `authenticated`, for `auth.uid()`'s own usage only (`42501` otherwise), and `service_role`; direct database sessions too. `anon` can't — until then anyone holding the anon key could fill any user's rows, and with them the AI budget. A caller without a session must pass the service client (`trackUsage(userId, sku, admin)`). See [[../rls-policies#advisor-findings]].
 
 ## Notes
 
@@ -83,7 +83,7 @@ The composite UNIQUE constraint makes the UPSERT atomic. App code calls this via
     - `text_search_pro`, `place_details_pro`, `reviews_enterprise`, `photos` (Google Places — no code writes them since v1.42.0; kept so past rows still show)
     - `text_search_enterprise` (Google Places, v1.28.0–v1.41.x — the Instagram import's candidate search; Enterprise SKU, $35/1k past 1k free. Replaced by `dataforseo_maps_search` in v1.42.0; kept for past rows)
     - `mapbox_load`, `mapbox_search_session`, `mapbox_directions` (Mapbox — `mapbox_directions` added v1.22.0, $2/1k past 100k free, tracked at both `getRoute` call sites; `mapbox_load` is registered but has no call site)
-    - `dataforseo_business_info_live`, `dataforseo_reviews` (DataForSEO)
+    - `dataforseo_business_info_live`, `dataforseo_reviews` (DataForSEO; reviews $7.50 per 1,000 tasks since v1.45.1 — $0.0075 at depth 50, priority 2, measured; was set to $0.75)
     - `hikerapi_request` (HikerAPI, v1.28.0 — every request the Instagram import makes, $1/1k, no free tier)
     - `mapbox_geocoding` (Mapbox Geocoding v6, 17.11.2026 — one per `near.area` lookup in the assistant's search tools, and since v1.42.0 one per city an Instagram post names; $0.75/1k past 100k free)
     - `dataforseo_maps_search` (DataForSEO SERP API, 18.11.2026 — one per `search_google_maps` call, and since v1.42.0 one per Instagram candidate or area search; $2/1k, no free tier)

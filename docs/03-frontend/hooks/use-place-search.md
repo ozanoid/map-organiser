@@ -2,8 +2,8 @@
 title: usePlaceSearch
 type: hook
 domain: frontend
-version: 1.1.1
-last_updated: 16.10.2026
+version: 1.1.2
+last_updated: 19.11.2026
 status: stable
 sources:
   - src/lib/hooks/use-place-search.ts
@@ -33,7 +33,7 @@ function usePlaceSearch(opts?: {
   isSearching: boolean;
   retrieve: (mapboxId: string) => Promise<RetrievedPlaceData>;
   isRetrieving: boolean;
-  retrieveError: Error | null;
+  retrieveError: Error | null;          // the server's `error` text (v1.45.0); SearchBox toasts it
   clear: () => void;
 };
 

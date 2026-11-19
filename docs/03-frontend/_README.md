@@ -2,8 +2,8 @@
 title: Frontend Overview
 type: overview
 domain: frontend
-version: 1.0.0
-last_updated: 12.05.2026
+version: 1.0.1
+last_updated: 19.11.2026
 status: stable
 sources:
   - src/app/
@@ -11,13 +11,13 @@ sources:
   - src/lib/hooks/
   - src/lib/stores/
   - src/lib/providers.tsx
-  - src/middleware.ts
+  - src/proxy.ts
 related:
   - "[[app-router-conventions]]"
   - "[[routing]]"
   - "[[layouts]]"
   - "[[state-management]]"
-  - "[[middleware]]"
+  - "[[proxy]]"
   - "[[pwa-and-offline]]"
   - "[[design-system/_README]]"
   - "[[hooks/_README]]"
@@ -46,7 +46,7 @@ The Next.js client. Everything under `src/app/`, `src/components/`, and the clie
 | Every route (page + API) | [[routing]] |
 | Layouts and route groups | [[layouts]] |
 | State management (Zustand + React Query) | [[state-management]] |
-| Middleware (auth gate) | [[middleware]] |
+| Proxy (auth gate) | [[proxy]] |
 | PWA, service worker, offline route | [[pwa-and-offline]] |
 | Design system (tokens, shadcn, fonts, dark mode) | [[design-system/_README]] |
 | Custom React Query hooks | [[hooks/_README]] |

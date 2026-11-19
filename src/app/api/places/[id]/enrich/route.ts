@@ -11,6 +11,7 @@ import {
   mergeReviews,
 } from "@/lib/dataforseo/transform";
 import type { GoogleReview } from "@/lib/types";
+import type { RawBusinessInfo, RawReview } from "@/lib/dataforseo/api-types";
 import { downloadAndStorePhotoFromUrl } from "@/lib/dataforseo/photo";
 import { trackUsage } from "@/lib/google/track-usage";
 import { generatePlaceProfile } from "@/lib/ai/generate-profile";
@@ -85,7 +86,17 @@ export async function POST(
 
     console.log(`[enrich:info] Starting for ${id}, keyword: ${keyword}`);
 
-    const raw = await fetchBusinessInfoLive(client, { keyword, location_name: country });
+    // A failed lookup isn't "no record": nothing is written and the caller
+    // gets a 502; a manual "Refresh Google data" (or the background refresh,
+    // when on) fills the place in later (v1.45.0).
+    let raw: RawBusinessInfo | null;
+    try {
+      raw = await fetchBusinessInfoLive(client, { keyword, location_name: country });
+    } catch (error) {
+      console.error(`[enrich:info] lookup failed for ${id}:`, error);
+      return NextResponse.json({ ok: false, error: "Place lookup failed" }, { status: 502 });
+    }
+    // Billed whether or not DataForSEO found the place.
     trackUsage(user.id, "dataforseo_business_info_live").catch(() => {});
 
     if (raw) {
@@ -128,18 +139,30 @@ export async function POST(
 
     console.log(`[enrich:reviews] Starting for ${id}, cid: ${cid}`);
 
-    const rawReviews = await fetchReviews(client, {
-      cid,
-      depth: 50,
-      location_coordinate: toLocationCoordinate(
-        place.location ? parsePostgisPoint(place.location) : null
-      ),
-      location_name: country,
-    });
+    // A failed fetch answers 502 and stamps nothing: before v1.45.0 it came
+    // back empty and was recorded as "Google has no reviews" for 30 days. The
+    // task is billed once created, reviews or not — counted there.
+    let rawReviews: RawReview[];
+    try {
+      rawReviews = await fetchReviews(
+        client,
+        {
+          cid,
+          depth: 50,
+          location_coordinate: toLocationCoordinate(
+            place.location ? parsePostgisPoint(place.location) : null
+          ),
+          location_name: country,
+        },
+        { onBilled: () => trackUsage(user.id, "dataforseo_reviews") }
+      );
+    } catch (error) {
+      console.error(`[enrich:reviews] fetch failed for ${id}:`, error);
+      return NextResponse.json({ ok: false, error: "Reviews lookup failed" }, { status: 502 });
+    }
 
     if (rawReviews.length > 0) {
       const reviews = transformReviews(rawReviews);
-      trackUsage(user.id, "dataforseo_reviews").catch(() => {});
 
       const { data: cur } = await supabase.from("places").select("google_data").eq("id", id).single();
       const curData = (cur?.google_data as Record<string, unknown>) || {};
