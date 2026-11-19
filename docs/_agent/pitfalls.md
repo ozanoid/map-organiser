@@ -2,8 +2,8 @@
 title: Pitfalls
 type: agent-note
 domain: agent
-version: 1.4.1
-last_updated: 18.11.2026
+version: 1.5.0
+last_updated: 19.11.2026
 status: stable
 related:
   - "[[conventions]]"
@@ -62,6 +62,13 @@ Things that will look right based on training data but will break in this codeba
 - `ENCRYPTION_SECRET` is server-only. Never log it, never expose to the client, never commit to git.
 - Encrypted columns (`google_api_key_enc`, `mapbox_token_enc`) — only decrypt server-side.
 - Never propose `console.log(process.env.ENCRYPTION_SECRET)` even in a debug context.
+
+## Google Maps through DataForSEO
+
+- **The Maps search needs a point, and ranks by it.** A world-scale viewport returns no items; a viewport around the wrong part of a city hides the right place (measured 18.11.2026: "Kaptanın Yeri, Konutkent Çarşısı" was missed from Çankaya's centre, found from Ankara's at 30 km). Search a query without its own coordinate across its city (`src/lib/instagram/places.ts`).
+- **"No results" is task status 40102, not a failure** — for the Maps search and for business info. Treat it as an empty answer; a thrown error took down two eval posts.
+- **An area query answers with the area:** one item, no `category`, sized by `address_info`. Businesses always have a category. Mapbox is fine for a city's centre but not for Istanbul neighbourhoods (it returns same-named streets elsewhere).
+- **Richer results surface near-namesakes.** DataForSEO returned "Walker's Moda" where Google hadn't; a branch hint that only matches a street name plus a fuzzy name ("Walker's" ≈ "Walter's", 0.84) is not evidence (`hintOnly` in `resolve.ts`). Re-run `npm run eval:instagram` after any change to the search or the rules — precision is the contract.
 
 ## Assistant tools (MCP)
 

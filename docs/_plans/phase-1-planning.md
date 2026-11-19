@@ -2,8 +2,8 @@
 title: "Faz 1 — Planlama ve ziyaretler: tasarım (öneri v2)"
 type: plan
 domain: trips
-version: 2.7.2
-last_updated: 18.11.2026
+version: 2.8.0
+last_updated: 19.11.2026
 status: stable
 related:
   - "[[personal-assistant]]"
@@ -200,7 +200,7 @@ Kurallar:
 **Öneri:** arama bir `PlaceSearch` arayüzünün arkasında durur; sağlayıcısı DataForSEO.
 - Zenginleştirme zaten DataForSEO'da; aramanın döndürdüğü `cid`, ekleme hattının kullandığı anahtarın aynısı.
 - Tek sağlayıcı, tek bakiye; Google'ın ücretsiz kotasına bağımlılık yok.
-- Faz 5'teki toplu Instagram importu için de aday: Instagram importu bugün post başına yaklaşık 3 Enterprise arama yapıyor (tek ölçüm). Koleksiyonun boyutu bilinmiyor; örneğin 500 post ≈ 1.500 arama, Google'da ücretsiz kotayı aşan 500 arama ≈ $17.50, DataForSEO'da toplam ≈ $3. Geçiş kararı etiketli 35 postluk eval setiyle ölçülerek verilir — ayrı adım. **Düzeltme (18.11.2026, dilim 5 testleri):** "post başına ≈ 3" tek mekanlı bir posttan ölçülmüştü; çok mekanlı postlarda okuma başına 16–26 arama ölçüldü (mekan başına 2–3) — toplu import tahmini koleksiyondaki mekan sayısıyla yeniden yapılmalı.
+- Faz 5'teki toplu Instagram importu için de aday: Instagram importu bugün post başına yaklaşık 3 Enterprise arama yapıyor (tek ölçüm). Koleksiyonun boyutu bilinmiyor; örneğin 500 post ≈ 1.500 arama, Google'da ücretsiz kotayı aşan 500 arama ≈ $17.50, DataForSEO'da toplam ≈ $3. Geçiş kararı etiketli 35 postluk eval setiyle ölçülerek verilir — ayrı adım. **Düzeltme (18.11.2026, dilim 5 testleri):** "post başına ≈ 3" tek mekanlı bir posttan ölçülmüştü; çok mekanlı postlarda okuma başına 16–26 arama ölçüldü (mekan başına 2–3) — toplu import tahmini koleksiyondaki mekan sayısıyla yeniden yapılmalı. **Geçiş yapıldı (19.11.2026, v1.42.0, Ozan'ın kararı):** Instagram importunun aramaları ve elle eklemenin link önizlemesi DataForSEO'da; Google Places artık hiç çağrılmıyor. 35 postluk eval: Google 0 yanlış / 38 doğru; DataForSEO ilk koşu 1 yanlış (Walker's Moda) ve 2 post "sonuç yok" hatası — ikisi de düzeltildi; son koşu 0 yanlış / 36 doğru (iki eksik Gemini'nin aramadan önceki "öne çıkmıyor" kararı), 107 arama ≈ $0.21, medyan 11 sn. Toplu import maliyeti artık mekan başına ≈ 3 arama × $0.002 + eklenen mekan başına ≈ $0.016; Google'daki gibi bir kota uçurumu yok.
 
 **Claude'un web araması** tamamlayıcıdır: yazı, menü, haber bulur; Google Maps kimliği (`cid`) vermez, bu yüzden ekleme hattını tek başına besleyemez. Bir sayfada Maps linki bulursa `add_place` onu doğrudan alır.
 

@@ -2,8 +2,8 @@
 title: Settings components
 type: component
 domain: frontend
-version: 1.3.0
-last_updated: 15.07.2026
+version: 1.4.0
+last_updated: 19.11.2026
 status: stable
 sources:
   - src/components/settings/api-keys-manager.tsx
@@ -33,19 +33,15 @@ Five components powering the Settings page tabs. All `"use client"`.
 - **Hooks:** `useState`, `useEffect`.
 - **API calls:**
   - `GET /api/user/api-keys` (fetch state).
-  - `PUT /api/user/api-keys` (save / clear / toggle `googlePlacesEnabled`).
+  - `PUT /api/user/api-keys` (save / clear the Mapbox token).
 - **State:**
-  - `data` (fetched key state — masked previews + has-key flags).
+  - `data` (fetched key state — masked preview + has-token flag).
   - `loading` (initial fetch).
-  - `googleKey`, `mapboxKey` (input buffers).
-  - `showGoogle`, `showMapbox` (Eye/EyeOff toggles).
-  - `savingGoogle`, `savingMapbox` (per-section save state).
+  - `mapboxKey` (input buffer), `showMapbox` (Eye/EyeOff), `savingMapbox`.
 - **Renders:**
   - Admin badge if user is admin (system keys in use).
-  - Google API key input + masked placeholder if a key exists.
-  - Mapbox token input + masked placeholder.
-  - `googlePlacesEnabled` toggle.
-  - Help links to Google Cloud Console and Mapbox Account.
+  - Mapbox token input + masked placeholder; help link to Mapbox Account.
+  - No Google key or "Google Places API" toggle since v1.42.0: places are looked up through the server's DataForSEO account.
   - Footer note: AES-256-GCM encryption.
 - **Toast feedback** on save success/failure (sonner).
 - **Used by:** `/settings` page (API tab).

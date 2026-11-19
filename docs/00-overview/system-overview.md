@@ -2,8 +2,8 @@
 title: System Overview
 type: overview
 domain: overview
-version: 1.4.1
-last_updated: 18.11.2026
+version: 1.4.2
+last_updated: 19.11.2026
 status: stable
 sources:
   - AGENTS.md
@@ -93,7 +93,7 @@ Typical session:
 | Stats | `src/app/api/stats/`, `src/app/(app)/stats/` | Recharts dashboard backed by aggregate queries. |
 | Import | `src/app/api/places/import-jobs/`, `src/app/api/cron/drain-imports/`, `src/lib/import/`, `src/app/(app)/import/` | Server-drained queue (`import_jobs` / `import_job_items`); the page only polls. See [[../05-flows/place-import-flow]]. |
 | Claude connector (MCP) | `src/app/api/mcp/`, `src/lib/assistant/`, `src/app/(auth)/oauth/consent/`, `src/app/.well-known/` | Tools over the user's library (and Google Maps search) for claude.ai and Claude Code; Supabase Auth as OAuth 2.1 server (17.11.2026). [[../04-integrations/claude-mcp]] |
-| Instagram import | `src/app/api/instagram/`, `src/lib/instagram/`, `src/lib/hikerapi/`, `src/components/places/instagram-import-panel.tsx` | Post → HikerAPI + one Gemini read + Google Text Search → deterministic pinning → the same import queue (v1.28.0; DB migration applied 16.10.2026). See [[../05-flows/instagram-import-flow]]. |
+| Instagram import | `src/app/api/instagram/`, `src/lib/instagram/`, `src/lib/hikerapi/`, `src/components/places/instagram-import-panel.tsx` | Post → HikerAPI + one Gemini read + Google Maps search through DataForSEO (v1.42.0; was Google Text Search) → deterministic pinning → the same import queue (v1.28.0; DB migration applied 16.10.2026). See [[../05-flows/instagram-import-flow]]. |
 | Settings | `src/app/(app)/settings/`, `src/components/settings/` | Categories, sub-categories (per parent), tags, encrypted API keys, theme, AI master toggle, AI moderation queue. |
 | Theme | `src/lib/providers.tsx`, `src/lib/hooks/use-map-style.ts` | next-themes light/dark/system; map style and marker style preferences. |
 | PWA | `src/app/manifest.ts`, `public/sw.js`, `src/components/sw-register.tsx`, `src/app/offline/` | `share_target` POST to `/api/share-target`, offline fallback. |
@@ -110,7 +110,7 @@ Typical session:
 ## Roadmap fingerprints in code
 
 - **PWA share target** wired and active (mobile-first inbound flow).
-- **DataForSEO** is the default enrichment provider; Google path is gated by `profiles.google_places_enabled`.
+- **DataForSEO** is the provider for every place lookup; the Google Places path was removed in v1.42.0.
 - **`shared/[slug]/save`** endpoint exists — viral loop is implemented (logged-in viewers can copy into their own account).
 
 ## Known sharp edges

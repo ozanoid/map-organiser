@@ -2,8 +2,8 @@
 title: Repo Structure
 type: overview
 domain: overview
-version: 1.13.0
-last_updated: 18.11.2026
+version: 1.13.1
+last_updated: 19.11.2026
 status: stable
 sources:
   - src/
@@ -140,8 +140,8 @@ src/
     │                          classifyPostgrestError) — shared by plans/, visits/, assistant/
     ├── api/                   http.ts — requestContext, unauthorized, errorResponse for routes over the data modules
     ├── dataforseo/            DataForSEO client + types + adapters + transform (mergeReviews) + reviews + photo
-    ├── google/                Google Places + URL parser + category mapping + Takeout parser + usage tracker + key access;
-    │                          place-candidates.ts (multi-candidate Text Search for the Instagram import, v1.28.0)
+    ├── google/                URL parser + category mapping + Takeout parser + usage tracker + key access (the Google
+    │                          Places API modules were removed in v1.42.0 — every lookup goes through DataForSEO)
     ├── hikerapi/              client.ts — HikerAPI (Instagram data) wrapper, server-only (v1.28.0)
     ├── instagram/             The Instagram import (v1.28.0): url.ts + types.ts (client-safe), analyze.ts, read-post.ts (Gemini),
     │                          resolve.ts (deterministic pinning rules), normalize.ts, maps-link.ts, import-job.ts, provenance.ts

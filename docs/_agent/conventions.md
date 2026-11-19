@@ -2,8 +2,8 @@
 title: Coding Conventions
 type: agent-note
 domain: agent
-version: 1.1.0
-last_updated: 18.11.2026
+version: 1.1.1
+last_updated: 19.11.2026
 status: stable
 related:
   - "[[common-tasks]]"
@@ -88,7 +88,7 @@ Never import the browser client from a Server Component. Never import the server
 - Validate every body with **Zod** before doing anything.
 - Always return `Response.json(...)` with an explicit status.
 - For mutations, check auth via the server Supabase client at the top of the handler.
-- Server-only env vars (e.g. `GOOGLE_PLACES_API_KEY`, `ENCRYPTION_SECRET`) — never expose to client. No `NEXT_PUBLIC_` prefix.
+- Server-only env vars (e.g. `DATAFORSEO_PASSWORD`, `ENCRYPTION_SECRET`) — never expose to client. No `NEXT_PUBLIC_` prefix.
 
 ## State management
 

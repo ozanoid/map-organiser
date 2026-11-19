@@ -2,10 +2,11 @@
 title: DataForSEO Business Data
 type: integration
 domain: integrations
-version: 1.6.0
-last_updated: 18.11.2026
+version: 1.7.0
+last_updated: 19.11.2026
 status: stable
 sources:
+  - src/lib/instagram/places.ts
   - src/lib/dataforseo/
   - src/lib/place-search/
 related:
@@ -60,18 +61,21 @@ Implementation in `src/lib/dataforseo/`:
 
 ### Google Maps search (SERP API) — 18.11.2026
 
-`src/lib/place-search/dataforseo-maps.ts` calls a second DataForSEO product, the SERP API: `POST /v3/serp/google/maps/live/advanced` with `keyword`, `location_coordinate` (`lat,lng,<zoom>z` — zoom derived from the wanted radius) and `depth`. It is the provider behind the `PlaceSearch` interface (`src/lib/place-search/`), used by the assistant's `search_google_maps` tool ([[claude-mcp]]).
+`src/lib/place-search/dataforseo-maps.ts` calls a second DataForSEO product, the SERP API: `POST /v3/serp/google/maps/live/advanced` with `keyword`, `location_coordinate` (`lat,lng,<zoom>z` — zoom derived from the wanted radius) and `depth`. It is the provider behind the `PlaceSearch` interface (`src/lib/place-search/`), used by the assistant's `search_google_maps` tool ([[claude-mcp]]) and, since v1.42.0, by the Instagram import's candidate search and area lookups (`src/lib/instagram/places.ts`, replacing Google Text Search).
 
 - Each `maps_search` item carries `title`, `address`, `cid`, `place_id`, coordinates, `rating.value` / `rating.votes_count`, `category`, `phone`, `url`, `work_hours.current_status`. `price_level` came back null in every live result checked.
 - The `cid` equals the one Business Info stores in `google_data.cid` (checked on a saved place), so results can be matched against the library and fed to the import pipeline.
 - $0.002 per search of up to 100 results (the response's `cost` field); latency 2.6–12.4 s in six live calls.
 - `client.ts` gained `dataForSeoClientFromEnv()` and an optional abort signal on `post`.
+- **An area query answers with the area** (v1.42.0, measured): "Moda, Istanbul" → one item titled "Moda", no `category`, `address_info` `{ borough: Caferağa, city: Kadıköy, region: İstanbul }`; "Kadıköy, Istanbul" → `{ city: Kadıköy, region: İstanbul }`. A business always has a category. The Instagram import reads an area this way and sizes it from `address_info` (`areaReach`). Each item's `address_info` is passed on as `FoundPlace.addressParts`.
+- **It needs a point.** A world-scale viewport (`20,0,3z`) returns no items, so a query without coordinates is searched around its city (Mapbox finds the city's centre).
 
 ## Where it's used
 
 | Caller | Purpose |
 |---|---|
-| `/api/places/parse-link` | Fallback when Google is disabled or unavailable. |
+| `/api/places/parse-link` | The Add Place link preview — the only provider since v1.42.0 (the Google path for keyed users was removed). |
+| Instagram import (`analyzeInstagramPost`) | Google Maps search for every venue's candidates and for the post's neighbourhood or district (`dataforseo_maps_search`, v1.42.0 — was Google Text Search). |
 | `/api/cron/drain-imports` (`import` stage) | **Primary path for bulk import** — Takeout files and, since v1.28.0, the places an Instagram post adds (their payload URL is `https://maps.google.com/?cid=…`, so the lookup is an exact `cid:` keyword — or `?q=place_id:…` → `place_id:` when Google returned no CID). Every place goes through DataForSEO — unless the duplicate pre-check matched it first, which costs nothing. |
 | `/api/places/[id]/enrich?step=info` | Re-enrich a single place's business info. |
 | `/api/places/[id]/enrich?step=reviews` | Fetch reviews for a place. |
@@ -82,7 +86,7 @@ Implementation in `src/lib/dataforseo/`:
 
 - `dataforseo_business_info_live` — Business Info Live calls.
 - `dataforseo_reviews` — Reviews calls.
-- `dataforseo_maps_search` — Google Maps searches by the assistant's `search_google_maps` tool ($2 per 1,000; 18.11.2026).
+- `dataforseo_maps_search` — Google Maps searches: the assistant's `search_google_maps` tool (18.11.2026) and the Instagram import's candidate and area searches (v1.42.0). $2 per 1,000.
 
 Each call → +1 in `api_usage`. `cost_per_1k` is set per DataForSEO's price.
 
@@ -136,13 +140,13 @@ These map into `places.google_data` (DataForSEO-extended subset) via `transformB
 
 ## Per-user opt-out
 
-There isn't one. DataForSEO is the system-wide enrichment provider; users can only toggle off Google to **force** DataForSEO, not the other way around.
+There isn't one. DataForSEO is the system-wide provider for every place lookup — the Google Places toggle and keys were removed in v1.42.0.
 
 ## Replacement strategy
 
 If we drop DataForSEO:
 
-- Bulk import would need to use Google Places (per-user keys), which is per-user-cost.
+- Bulk import and the Instagram import would need Google Places again — Text Search is $35 per 1,000 past 1,000 free a month, the reason it was replaced (v1.42.0).
 - Reviews specifically are tricky — Google Place Details returns reviews but is expensive.
 - Alternative providers: HERE, Foursquare/Places, SerpAPI. None are drop-ins; each has its own data shape and pricing.
 

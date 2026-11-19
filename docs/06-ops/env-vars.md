@@ -2,8 +2,8 @@
 title: Env Vars
 type: overview
 domain: ops
-version: 1.7.1
-last_updated: 18.11.2026
+version: 1.8.0
+last_updated: 19.11.2026
 status: stable
 sources:
   - .env.local.example
@@ -45,7 +45,7 @@ Every environment variable the app reads, where it lives, and who depends on it.
 | `SUPABASE_SERVICE_ROLE_KEY` | ❌ server-only | yes | Supabase project → Settings → API | `createServiceClient()` — public share reads, both cron routes, the import-queue writes, the Instagram import's background job and its branch pick ([[../02-backend/supabase-clients]] lists the seven callers). Without it sharing, both imports and the crons break. |
 | `NEXT_PUBLIC_MAPBOX_TOKEN` | ✅ public (URL-restricted) | yes | Mapbox account → tokens | MapView + server-side Directions fallback |
 | `MAPBOX_SERVER_TOKEN` | ❌ server-only | optional (recommended) | Mapbox account → secret token (no URL restriction) | `src/lib/mapbox/search-box.ts` proxy for Search Box `/suggest` and `/retrieve`; `src/lib/mapbox/geocode.ts` for the assistant's neighbourhood search (17.11.2026). Falls back to public token if absent. |
-| `GOOGLE_PLACES_API_KEY` | ❌ server-only | optional (admin fallback) | Google Cloud Console | `getUserApiKeys` returns it to admins (`profiles.is_admin`) instead of a per-user key. The Instagram import's Text Search runs on whatever key `getUserApiKeys` returns, so for an admin it bills this key. `npm run eval:instagram` also requires it. |
+| `GOOGLE_PLACES_API_KEY` | ❌ server-only | **unused since v1.42.0** | Google Cloud Console | Read by no code: the Instagram import and the Add Place preview look places up through DataForSEO. Can be removed from Vercel and `.env.local`. |
 | `ENCRYPTION_SECRET` | ❌ server-only | yes | Generated; documented in [[encryption]] | `encryptApiKey` / `decryptApiKey` for `profiles.*_enc` |
 | `DATAFORSEO_LOGIN` | ❌ server-only | yes | DataForSEO account | Default enrichment provider basic auth |
 | `DATAFORSEO_PASSWORD` | ❌ server-only | yes | DataForSEO account | Same |
@@ -112,7 +112,7 @@ Practical rules:
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | same |
 | `SUPABASE_SERVICE_ROLE_KEY` | `process.env.SUPABASE_SERVICE_ROLE_KEY` in `src/lib/supabase/server.ts#createServiceClient` |
 | `NEXT_PUBLIC_MAPBOX_TOKEN` | `process.env.NEXT_PUBLIC_MAPBOX_TOKEN` in `MapView` and `src/lib/plans/directions.ts` |
-| `GOOGLE_PLACES_API_KEY` | `process.env.GOOGLE_PLACES_API_KEY` in `getUserApiKeys` (admin fallback) |
+| `GOOGLE_PLACES_API_KEY` | — (unused since v1.42.0) |
 | `ENCRYPTION_SECRET` | `process.env.ENCRYPTION_SECRET` in the AES-256-GCM helpers |
 | `DATAFORSEO_LOGIN` / `DATAFORSEO_PASSWORD` | `process.env.DATAFORSEO_*` in `src/lib/dataforseo/client.ts` |
 | `GOOGLE_GENERATIVE_AI_API_KEY` | `process.env.GOOGLE_GENERATIVE_AI_API_KEY` in `src/lib/ai/client.ts#getAiClient` |

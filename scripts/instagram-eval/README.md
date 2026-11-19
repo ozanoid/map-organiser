@@ -33,11 +33,18 @@ It runs `analyzeInstagramPost` (the production code) and writes nothing to the
 database. Exit code 1 means a wrong or spurious place — the contract is
 precision; recall is reported alongside.
 
-## Cost per full run (35 posts)
+Needs `DATAFORSEO_LOGIN` / `DATAFORSEO_PASSWORD`, `HIKERAPI_KEY`,
+`GOOGLE_GENERATIVE_AI_API_KEY` and a Mapbox token in `.env.local`. Each post
+line shows the time it took and the searches it made.
 
-- HikerAPI ≈ 4 requests per post ≈ 145 requests ≈ $0.15 at $1 / 1,000
-- Google Text Search (Enterprise SKU) ≈ 3 per post ≈ 110 — free inside the 1,000 monthly, $35 / 1,000 beyond
+## Cost per full run (35 posts, measured 18.11.2026)
+
+- HikerAPI 140 requests ≈ $0.14 at $1 / 1,000
+- Google Maps search through DataForSEO ≈ 110 searches ≈ $0.22 at $2 / 1,000 (since v1.42.0; before, Google Text Search Enterprise — ≈ 107 searches, free inside the 1,000 monthly, $35 / 1,000 beyond)
+- Mapbox city lookups ≈ 27 — free up to 100,000 a month
 - Gemini 3 Flash ≈ 35 calls ≈ $0.05
+
+About $0.41 a run.
 
 ## Known limits (2026-10-16)
 

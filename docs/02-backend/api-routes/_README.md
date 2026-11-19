@@ -2,8 +2,8 @@
 title: API Routes
 type: overview
 domain: backend
-version: 1.11.1
-last_updated: 18.11.2026
+version: 1.11.2
+last_updated: 19.11.2026
 status: stable
 sources:
   - src/app/api/
@@ -81,9 +81,8 @@ These are reused across many routes:
 | `createClient` (server) | `src/lib/supabase/server.ts` | Cookie-scoped Supabase. |
 | `createServiceClient` | `src/lib/supabase/server.ts` | RLS bypass — only on the paths in convention #6. |
 | `trackUsage` | `src/lib/google/track-usage.ts` | Wraps `increment_api_usage` RPC. |
-| `getUserApiKeys` | `src/lib/google/get-user-api-keys.ts` | Decrypts profile API keys. |
+| `getUserApiKeys` | `src/lib/google/get-user-api-keys.ts` | The user's Mapbox token (the app's for admins); no Google key since v1.42.0. |
 | `parseMapsUrl` | `src/lib/google/parse-maps-url.ts` | Google Maps URL → place data. |
-| `getPlaceDetails` / `searchPlace` | `src/lib/google/places-api.ts` | Google Places API wrappers. |
 | `fetchBusinessInfoLive` / `fetchReviews` | `src/lib/dataforseo/*.ts` | DataForSEO API wrappers. |
 | `transformBusinessInfoToPlaceData` | `src/lib/dataforseo/transform.ts` | DataForSEO → app shape. |
 | `downloadAndStorePhotoFromUrl` | `src/lib/dataforseo/photo.ts` | Photo → Supabase Storage. |
@@ -107,7 +106,7 @@ These are reused across many routes:
 | `findExisting` / `importPlace` | `src/lib/import/process-place.ts` | Duplicate check by place_id / CID without an API call; per-place import used by the drain (`ImportDefaults.source` sets `places.source`). |
 | `kickDrain` | `src/lib/import/kick-drain.ts` | Non-awaited `GET /api/cron/drain-imports` with the `CRON_SECRET` bearer — fired by the Takeout create route and the Instagram job (v1.28.0, moved out of the import-jobs route), and by the Instagram pick route (v1.28.1). |
 | `analyzeInstagramPost` / `runInstagramImportJob` | `src/lib/instagram/analyze.ts`, `import-job.ts` | Instagram post → venues → Google places (writes nothing) / the job that turns that into `import_job_items` (v1.28.0). See [[instagram]]. |
-| `searchPlaceCandidates` | `src/lib/google/place-candidates.ts` | Places API (New) Text Search returning several candidates with phone + website (Enterprise SKU, `text_search_enterprise`). |
+| `googleMapsLookup` | `src/lib/instagram/places.ts` | The Instagram import's place lookup (v1.42.0, replaced Google Text Search): Google Maps search and area lookups through DataForSEO (`dataforseo_maps_search`), city centres from Mapbox. |
 | `generatePlaceProfile` | `src/lib/ai/generate-profile.ts` | Full place_profile generation + auto-apply. Service-client-safe (used by enrich route + cron). |
 | `refreshPlaceGoogleData` | `src/lib/places/refresh-google-data.ts` | Full DataForSEO re-lookup + review merge. Service-client-safe (used by refresh route + cron). |
 | `mergeReviews` / `countNewReviews` | `src/lib/dataforseo/transform.ts` | Two-tier review corpus (relevance backbone + newest pool). |

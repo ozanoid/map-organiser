@@ -2,8 +2,8 @@
 title: Place
 type: entity
 domain: places
-version: 1.9.0
-last_updated: 18.11.2026
+version: 1.9.1
+last_updated: 19.11.2026
 status: stable
 sources:
   - src/lib/types/index.ts
@@ -158,8 +158,7 @@ Schema definition: `src/lib/ai/schemas/place-profile.ts` (Zod). See [[../05-flow
                         ▼
    ┌──────────────────────────────────────────────────────────────┐
    │  Enrichment                                                   │
-   │  • Google path (if profile.google_places_enabled + key)       │
-   │  • DataForSEO path (default)                                  │
+   │  • DataForSEO (every lookup; Google path removed in v1.42.0)  │
    │  • Photo download + Storage upload                            │
    │  • Reviews (background, batched)                              │
    └────────────────────┬─────────────────────────────────────────┘

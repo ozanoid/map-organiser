@@ -2,8 +2,8 @@
 title: AI Enrichment Flow
 type: flow
 domain: places
-version: 1.8.2
-last_updated: 18.11.2026
+version: 1.8.3
+last_updated: 19.11.2026
 status: stable
 sources:
   - src/app/api/places/[id]/enrich/route.ts
@@ -140,7 +140,7 @@ buckets added as those features shipped):
   post, two when the read needed its retry (v1.28.2); checked inside
   the import's background job, so going over it ends the job with
   `budget_exceeded` (shown in the dialog) rather than a 429. The unit also
-  bounds the import's HikerAPI and Google Text Search calls. The profiles of
+  bounds the import's HikerAPI and Google Maps search calls (DataForSEO since v1.42.0; Google Text Search before). The profiles of
   the places it adds are charged to PROFILE as usual. See
   [[instagram-import-flow]].
 

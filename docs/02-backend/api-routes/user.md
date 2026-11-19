@@ -2,8 +2,8 @@
 title: User routes
 type: route-group
 domain: backend
-version: 1.3.0
-last_updated: 15.07.2026
+version: 1.4.0
+last_updated: 19.11.2026
 status: stable
 sources:
   - src/app/api/user/api-keys/route.ts
@@ -31,8 +31,8 @@ Two endpoints under `/api/user/*` — both about the **caller's own** profile.
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/api/user/api-keys` | Read masked API key state + `googlePlacesEnabled` flag. |
-| `PUT` | `/api/user/api-keys` | Update / clear encrypted API keys + flag. |
+| `GET` | `/api/user/api-keys` | Read the masked Mapbox token state. |
+| `PUT` | `/api/user/api-keys` | Update / clear the encrypted Mapbox token. |
 | `GET` | `/api/user/usage` | Monthly API usage rollup + estimated cost. |
 | `GET` | `/api/user/ai-settings` | Read the master AI toggle + background-refresh opt-in + server-side availability flag. |
 | `PUT` | `/api/user/ai-settings` | Flip `profiles.ai_features_enabled` and/or `profiles.cron_refresh_enabled`. |
@@ -58,20 +58,19 @@ All require auth.
 ```ts
 {
   isAdmin: boolean,
-  googleApiKey: string | null,     // masked, e.g. "AIza...QwEr"
   mapboxToken: string | null,      // masked
-  hasGoogleKey: boolean,           // unmasked existence flag
   hasMapboxToken: boolean,
-  googlePlacesEnabled: boolean,
 }
 ```
+
+Google key fields (`googleApiKey`, `hasGoogleKey`, `googlePlacesEnabled`) were removed in v1.42.0 — places are looked up through the server's DataForSEO account; the `profiles` columns stay unused.
 
 - **Notes:** Never returns the raw decrypted key. The mask shows only first and last characters.
 
 ### `PUT /api/user/api-keys`
 
 - **Source:** `src/app/api/user/api-keys/route.ts`
-- **Body:** `{ googleApiKey?: string|null, mapboxToken?: string|null, googlePlacesEnabled?: boolean }`. Sending `null` clears the column; omitting leaves it untouched.
+- **Body:** `{ mapboxToken?: string|null }`. Sending `null` clears the column; omitting leaves it untouched. Google fields are no longer accepted (v1.42.0).
 - **DB:** `profiles` UPDATE.
 - **External:** `encryptApiKey` for each non-null key.
 - **Response:** `{ success: true }`. `400` if no keys/flags were provided, `401`, `500`.

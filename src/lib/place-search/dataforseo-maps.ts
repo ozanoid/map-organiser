@@ -17,6 +17,8 @@ import type {
  */
 
 const ENDPOINT = "/serp/google/maps/live/advanced";
+/** DataForSEO's task status for "nothing found". */
+const NO_RESULTS = 40102;
 
 interface MapsItem {
   type?: string;
@@ -32,6 +34,12 @@ interface MapsItem {
   phone?: string | null;
   url?: string | null;
   work_hours?: { current_status?: string | null } | null;
+  address_info?: {
+    borough?: string | null;
+    city?: string | null;
+    region?: string | null;
+    country_code?: string | null;
+  } | null;
 }
 
 interface MapsResponse {
@@ -76,6 +84,14 @@ function toFoundPlace(it: MapsItem): FoundPlace | null {
     phone: it.phone ?? null,
     website: it.url ?? null,
     closed: closedState(it.work_hours?.current_status),
+    addressParts: it.address_info
+      ? {
+          borough: it.address_info.borough ?? null,
+          city: it.address_info.city ?? null,
+          region: it.address_info.region ?? null,
+          countryCode: it.address_info.country_code ?? null,
+        }
+      : null,
   };
 }
 
@@ -102,6 +118,11 @@ export const dataForSeoMapsSearch: PlaceSearchProvider = {
     );
 
     const task = res.tasks?.[0];
+    // 40102 "No Search Results" is an answer — nothing matched — not a failure
+    // (measured 18.11.2026: two Instagram eval posts failed on it).
+    if (task?.status_code === NO_RESULTS) {
+      return { places: [], costUsd: typeof task.cost === "number" ? task.cost : null };
+    }
     if (!task || task.status_code !== 20000) {
       throw new Error(`DataForSEO Maps search failed: ${task?.status_code ?? "no task"} ${task?.status_message ?? ""}`);
     }

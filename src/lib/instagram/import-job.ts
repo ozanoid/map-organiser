@@ -95,7 +95,6 @@ export async function runInstagramImportJob(args: {
   postUrl: string;
   shortcode: string;
   tagIds: string[];
-  googleApiKey: string;
   origin: string;
   /** Kept on every meta this run writes (see InstagramJobMeta.via). */
   via?: InstagramJobMeta["via"];
@@ -121,12 +120,11 @@ export async function runInstagramImportJob(args: {
       return;
     }
 
-    const billed = { hikerapi_request: 0, text_search_enterprise: 0 };
+    const billed = { hikerapi_request: 0, dataforseo_maps_search: 0, mapbox_geocoding: 0 };
     let aiCalls = 0;
     let analysis;
     try {
       analysis = await analyzeInstagramPost(postUrl, {
-        googleApiKey: args.googleApiKey,
         userId,
         onBilled: (sku) => {
           billed[sku]++;
@@ -139,7 +137,7 @@ export async function runInstagramImportJob(args: {
       // Billed whether or not the read succeeded — a failed or retried Gemini
       // call costs the same as a good one.
       const tracking: Promise<void>[] = [];
-      for (const sku of ["hikerapi_request", "text_search_enterprise"] as const) {
+      for (const sku of ["hikerapi_request", "dataforseo_maps_search", "mapbox_geocoding"] as const) {
         for (let i = 0; i < billed[sku]; i++) tracking.push(trackUsage(userId, sku, admin));
       }
       for (let i = 0; i < aiCalls; i++) tracking.push(trackAiUsage(userId, "ai_instagram_read", admin));

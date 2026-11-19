@@ -2,19 +2,26 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { AI_SKU_CONFIG } from "@/lib/ai/track-usage";
 
+/**
+ * Every paid SKU the app tracks. Google Places SKUs are retired since
+ * v1.42.0 (every place lookup goes through DataForSEO): nothing writes them,
+ * and the cost tracker shows them only in a month that still has usage.
+ */
 export const SKU_CONFIG = {
-  text_search_pro: { name: "Text Search", costPer1k: 17.0, freeMonthly: 5000 },
+  text_search_pro: { name: "Text Search", costPer1k: 17.0, freeMonthly: 5000, retired: true },
   place_details_pro: {
     name: "Place Details",
     costPer1k: 17.0,
     freeMonthly: 5000,
+    retired: true,
   },
   reviews_enterprise: {
     name: "Reviews",
     costPer1k: 20.0,
     freeMonthly: 1000,
+    retired: true,
   },
-  photos: { name: "Photos", costPer1k: 7.0, freeMonthly: 1000 },
+  photos: { name: "Photos", costPer1k: 7.0, freeMonthly: 1000, retired: true },
   mapbox_load: { name: "Mapbox Loads", costPer1k: 5.0, freeMonthly: 50000 },
   // DataForSEO SKUs
   dataforseo_business_info_live: {
@@ -61,6 +68,7 @@ export const SKU_CONFIG = {
     name: "Text Search (Enterprise)",
     costPer1k: 35.0,
     freeMonthly: 1000,
+    retired: true,
   },
   // Instagram import: one per post, reel-usertags and profile read
   // (HikerAPI pay-as-you-go plan, $1 per 1,000 requests).
@@ -127,7 +135,11 @@ export async function getMonthlyUsage(
   // the same api_usage table. Without the merge the cost tracker silently
   // omits every ai_* SKU.
   const DISPLAY_CONFIG = { ...SKU_CONFIG, ...AI_SKU_CONFIG };
-  return Object.entries(DISPLAY_CONFIG).map(([sku, config]) => {
+  // A retired SKU (Google Places, v1.42.0) shows only in a month it was used.
+  const shown = Object.entries(DISPLAY_CONFIG).filter(
+    ([sku, config]) => !("retired" in config && config.retired) || (totals[sku] || 0) > 0
+  );
+  return shown.map(([sku, config]) => {
     const count = totals[sku] || 0;
     const billableCount = Math.max(0, count - config.freeMonthly);
     const estimatedCost = (billableCount / 1000) * config.costPer1k;

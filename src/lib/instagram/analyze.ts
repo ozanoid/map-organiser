@@ -7,7 +7,16 @@ import {
   type IgAccountRef,
   type IgProfile,
 } from "@/lib/hikerapi/client";
-import { searchPlaceCandidates, type CandidateQuery, type PlaceCandidate } from "@/lib/google/place-candidates";
+import {
+  CITY_RADIUS_M,
+  googleMapsLookup,
+  type AreaPoint,
+  type CandidateQuery,
+  type PlaceCandidate,
+  type PlaceLookup,
+  type PlacesSku,
+  type Point,
+} from "@/lib/instagram/places";
 import { findMapsLink, resolveMapsLink, type MapsLink } from "@/lib/instagram/maps-link";
 import { cleanName, deslug, distanceM, fold, isCoord, nameScore } from "@/lib/instagram/normalize";
 import { readPost, type AccountRole, type PostReading } from "@/lib/instagram/read-post";
@@ -29,7 +38,9 @@ import { parseInstagramPostUrl } from "@/lib/instagram/url";
  * 2. Gemini (one call, read-post.ts): which accounts are venues, whether the
  *    post features them, branch/address quotes, plain-text venue names, area.
  *    Every quote is checked against the post text before it is used.
- * 3. Google Text Search + resolve.ts: pick each venue's place on evidence.
+ * 3. Google Maps search (through DataForSEO, places.ts) + resolve.ts: pick
+ *    each venue's place on evidence. Venues are resolved in parallel — a
+ *    search takes seconds.
  *
  * Writes nothing; the import job (import-job.ts) turns the result into rows.
  */
@@ -79,10 +90,11 @@ export class InstagramImportError extends Error {
 }
 
 export interface AnalyzeDeps {
-  googleApiKey: string;
   userId: string;
+  /** Where places come from; Google Maps through DataForSEO unless given. */
+  places?: PlaceLookup;
   /** One call per billed request, for usage tracking. */
-  onBilled?: (sku: "hikerapi_request" | "text_search_enterprise") => void;
+  onBilled?: (sku: "hikerapi_request" | PlacesSku) => void;
   /** One call per Gemini request (a post read can take two — see read-post.ts). */
   onAiCall?: () => void;
 }
@@ -96,6 +108,8 @@ interface Account {
 }
 
 const PROFILE_CONCURRENCY = 5;
+/** Venues resolved at once; each runs its searches in order and stops early. */
+const RESOLVE_CONCURRENCY = 6;
 
 function mentionsIn(caption: string): string[] {
   const out = new Set<string>();
@@ -130,32 +144,18 @@ async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promis
   return out;
 }
 
-const AREA_RADIUS: [string, number][] = [
-  ["neighborhood", 2000],
-  ["sublocality_level_2", 2000],
-  ["sublocality_level_1", 2500],
-  ["sublocality", 2500],
-  ["colloquial_area", 2500],
-  ["route", 1500],
-  ["administrative_area_level_4", 2500],
-  ["administrative_area_level_3", 4000],
-  ["administrative_area_level_2", 7000],
-];
-
 export async function analyzeInstagramPost(url: string, deps: AnalyzeDeps): Promise<PostAnalysis> {
   const ref = parseInstagramPostUrl(url);
   if (!ref) throw new InstagramImportError("invalid_url");
 
-  const billed = (sku: "hikerapi_request" | "text_search_enterprise") => deps.onBilled?.(sku);
-  const search = async (q: CandidateQuery): Promise<PlaceCandidate[]> => {
-    billed("text_search_enterprise");
-    try {
-      return await searchPlaceCandidates(q, deps.googleApiKey);
-    } catch (e) {
-      console.warn(`[instagram] text search "${q.textQuery}" failed, retrying:`, e);
-      billed("text_search_enterprise");
-      return searchPlaceCandidates(q, deps.googleApiKey);
-    }
+  const billed = (sku: "hikerapi_request" | PlacesSku) => deps.onBilled?.(sku);
+  const lookup = deps.places ?? googleMapsLookup(billed);
+  // A city's centre, once per city a post names.
+  const cityPoints = new Map<string, Promise<Point | null>>();
+  const cityAt = (name: string): Promise<Point | null> => {
+    const key = fold(name);
+    if (!cityPoints.has(key)) cityPoints.set(key, lookup.city(name));
+    return cityPoints.get(key)!;
   };
 
   // 1. The post and the accounts it points at.
@@ -236,19 +236,19 @@ export async function analyzeInstagramPost(url: string, deps: AnalyzeDeps): Prom
 
   const city = verified(reading.area.city);
   const areaCache = new Map<string, Area | null>();
-  const areaFor = async (hints: (string | null | undefined)[]): Promise<Area | null> => {
+  // A neighbourhood or district is looked up around the post's city, or
+  // around the venue's own coordinates when the post names no city; with
+  // neither there is nowhere to look.
+  const areaFor = async (hints: (string | null | undefined)[], near: Point | null): Promise<Area | null> => {
+    const at = (city ? await cityAt(city) : null) ?? near;
+    if (!at) return null;
     for (const h of hints) {
       const v = verified(h);
       if (!v) continue;
       if (!areaCache.has(v)) {
-        const q = city && fold(city) !== fold(v) ? `${v}, ${city}` : v;
-        const top = (await search({ textQuery: q }))[0];
-        let area: Area | null = null;
-        if (top && !top.types.includes("establishment") && !top.types.includes("point_of_interest")) {
-          const radius = AREA_RADIUS.find(([t]) => top.types.includes(t))?.[1];
-          if (radius) area = { label: q, lat: top.lat, lng: top.lng, radiusM: radius, fromPost: fromPost(v) };
-        }
-        areaCache.set(v, area);
+        const found: AreaPoint | null = await lookup.area(v, { name: city ?? "", at });
+        const label = city && fold(city) !== fold(v) ? `${v}, ${city}` : v;
+        areaCache.set(v, found ? { label, ...found, fromPost: fromPost(v) } : null);
       }
       const a = areaCache.get(v);
       if (a) return a;
@@ -308,7 +308,10 @@ export async function analyzeInstagramPost(url: string, deps: AnalyzeDeps): Prom
       postAddr: read?.address_in_post && quoted(read.address_in_post, postText, 0.8) ? read.address_in_post : null,
       tag: null,
       maps,
-      area: await areaFor([branchHint, reading.area.neighbourhood, reading.area.district]),
+      area: await areaFor(
+        [branchHint, reading.area.neighbourhood, reading.area.district],
+        p?.latitude != null && p?.longitude != null ? { lat: p.latitude, lng: p.longitude } : null
+      ),
     });
   }
 
@@ -382,14 +385,41 @@ export async function analyzeInstagramPost(url: string, deps: AnalyzeDeps): Prom
       postAddr,
       tag: null,
       maps: null,
-      area: await areaFor([tv.area, reading.area.neighbourhood, reading.area.district]),
+      area: await areaFor([tv.area, reading.area.neighbourhood, reading.area.district], null),
     });
   }
 
-  // 4. Resolve; one decision per Google place.
+  // 4. Resolve — venues in parallel, decisions in the post's order, one per
+  // Google place. A query without a point of its own (a name with the post's
+  // address, "name + city") is searched across the venue's city; without a
+  // city, around the venue (its area, its profile's or the location tag's
+  // coordinates); with none of those it can't be searched. City first: Google
+  // Maps ranks by the viewport, and a venue's area centre can sit 15+ km from
+  // the venue (measured 18.11.2026: "Kaptanın Yeri, Konutkent Çarşısı" was
+  // missed from Çankaya's centre).
+  const anchorFor = async (c: VenueCandidate): Promise<Point | null> => {
+    const where = c.city ?? city;
+    const centre = where ? await cityAt(where) : null;
+    if (centre) return centre;
+    if (c.area) return c.area;
+    if (c.lat != null && c.lng != null) return { lat: c.lat, lng: c.lng };
+    if (c.tag && isCoord(c.tag.lat, c.tag.lng)) return { lat: c.tag.lat!, lng: c.tag.lng! };
+    return null;
+  };
+  const searchFor =
+    (c: VenueCandidate) =>
+    async (q: CandidateQuery): Promise<PlaceCandidate[]> => {
+      if (q.biasLat != null && q.biasLng != null) {
+        return lookup.search({ ...q, biasLat: q.biasLat, biasLng: q.biasLng, radiusM: q.radiusM ?? 1000 });
+      }
+      const at = await anchorFor(c);
+      return at ? lookup.search({ ...q, biasLat: at.lat, biasLng: at.lng, radiusM: CITY_RADIUS_M }) : [];
+    };
+  const resolved = await mapLimit(cands, RESOLVE_CONCURRENCY, (c) => resolveCandidate(c, city, searchFor(c)));
+
   const seen = new Map<string, VenueDecision>();
-  for (const c of cands) {
-    const r = await resolveCandidate(c, city, search);
+  for (const [i, c] of cands.entries()) {
+    const r = resolved[i];
     if (r.place && seen.has(r.place.id)) {
       const first = seen.get(r.place.id)!;
       first.sources = [...new Set([...first.sources, ...c.sources])];

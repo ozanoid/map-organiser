@@ -2,8 +2,8 @@
 title: "Claude connector (MCP server)"
 type: integration
 domain: integrations
-version: 1.6.1
-last_updated: 18.11.2026
+version: 1.6.2
+last_updated: 19.11.2026
 status: draft
 sources:
   - src/app/api/mcp/route.ts
@@ -135,7 +135,7 @@ Filters take **names**, not ids (`resolveNames`): exact folded match, then a uni
 - claude.ai / Claude Code usage runs on the user's Claude plan; the tools spend nothing on the Claude API.
 - `rank_places`: one Gemini call per use (existing AI-search SKU and budget).
 - `search_google_maps`: one DataForSEO Maps search per call — $0.002 (`dataforseo_maps_search`), from the system DataForSEO balance; measured latency 2.6–12.4 s.
-- `add_places`: a new place ≈ $0.016 — one DataForSEO business-info lookup $0.0054 (`dataforseo_business_info_live`, no free tier; a CID Google doesn't know is billed too), then in the queue reviews $0.00075 and the AI profile ≈ $0.0095. A place already saved costs nothing. An Instagram post: HikerAPI $0.001 per request (8–12 per read on 18.11.2026), the Gemini read $0.0015, and Google Text Search Enterprise for its evidence — 19 and 26 searches per read on 18.11.2026, 9.5 on average in October; $35 per 1,000 after 1,000 free a month — plus $0.016 per new place.
+- `add_places`: a new place ≈ $0.016 — one DataForSEO business-info lookup $0.0054 (`dataforseo_business_info_live`, no free tier; a CID Google doesn't know is billed too), then in the queue reviews $0.00075 and the AI profile ≈ $0.0095. A place already saved costs nothing. An Instagram post: HikerAPI $0.001 per request (8–12 per read on 18.11.2026), the Gemini read $0.0015, and Google Maps searches through DataForSEO for its evidence — $0.002 each, no free tier (v1.42.0; before, Google Text Search: $35 per 1,000 past 1,000 free a month, 16–26 searches for a multi-venue post) — plus a Mapbox city lookup (free tier) and $0.016 per new place.
 - `near.area`: one Mapbox Geocoding request (`mapbox_geocoding`, 100k free per month, then $0.75 per 1,000).
 - `get_plans` with `with_routes`: one Mapbox Directions request per day with two or more located stops (`mapbox_directions`, 100k free per month, then $2 per 1,000).
 

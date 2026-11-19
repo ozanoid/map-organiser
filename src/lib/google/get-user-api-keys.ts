@@ -40,49 +40,37 @@ export function decryptApiKey(encryptedStr: string): string {
 }
 
 export interface UserApiKeys {
-  googleApiKey: string;
   mapboxToken: string;
   isAdmin: boolean;
-  googlePlacesEnabled: boolean;
 }
 
 /**
- * `client` is the caller's own client when there is no cookie session — the
- * MCP endpoint authenticates with a bearer token. Without it the cookie
- * client reads no profile and the code below would hand out the server's key.
+ * The user's Mapbox token — their own, or the app's for an admin (and for a
+ * user with no profile row). Places come from the server's DataForSEO
+ * account, so there is no Google key to hand out any more (v1.42.0).
+ *
+ * `client` is the caller's own client when there is no cookie session (a
+ * bearer token); the cookie client would read no profile there.
  */
 export async function getUserApiKeys(userId: string, client?: SupabaseClient): Promise<UserApiKeys> {
   const supabase = client ?? (await createClient());
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("is_admin, google_api_key_enc, mapbox_token_enc, google_places_enabled")
+    .select("is_admin, mapbox_token_enc")
     .eq("id", userId)
     .single();
 
   const isAdmin = profile?.is_admin || false;
 
-  const googlePlacesEnabled = profile?.google_places_enabled ?? true;
-
   // Admin or no profile -> env vars
   if (isAdmin || !profile) {
-    return {
-      googleApiKey: process.env.GOOGLE_PLACES_API_KEY || "",
-      mapboxToken: process.env.NEXT_PUBLIC_MAPBOX_TOKEN || "",
-      isAdmin,
-      googlePlacesEnabled,
-    };
+    return { mapboxToken: process.env.NEXT_PUBLIC_MAPBOX_TOKEN || "", isAdmin };
   }
 
-  // Decrypt user keys, fallback to empty string
-  const googleApiKey = profile.google_api_key_enc
-    ? decryptApiKey(profile.google_api_key_enc)
-    : "";
-  const mapboxToken = profile.mapbox_token_enc
-    ? decryptApiKey(profile.mapbox_token_enc)
-    : "";
-
-  return { googleApiKey, mapboxToken, isAdmin, googlePlacesEnabled };
+  // Decrypt the user's token, fallback to empty string
+  const mapboxToken = profile.mapbox_token_enc ? decryptApiKey(profile.mapbox_token_enc) : "";
+  return { mapboxToken, isAdmin };
 }
 
 // Mask a key for display: "AIzaSyBk...MEuI"

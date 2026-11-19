@@ -4,7 +4,8 @@
  * Runs the production analyzer (src/lib/instagram/analyze.ts) on labelled
  * posts and compares every place it would add with the ground truth in
  * labels.json. Writes nothing to the database; it does make paid calls
- * (HikerAPI, Google Text Search, Gemini) — see README.md for the cost.
+ * (HikerAPI, Google Maps search through DataForSEO, Mapbox geocoding, Gemini)
+ * — see README.md for the cost.
  *
  * Exit code 1 when any post gets a wrong or spurious place: precision is the
  * contract, recall is reported.
@@ -34,9 +35,13 @@ const only = args.find((a) => a.startsWith("--only="))?.split("=")[1];
 const labels = JSON.parse(readFileSync(join(__dirname, "labels.json"), "utf8")) as LabelPost[];
 const posts = labels.filter((p) => (only ? p.code === only : setArg === "all" || p.set === setArg));
 
-const googleApiKey = process.env.GOOGLE_PLACES_API_KEY;
-if (!googleApiKey || !process.env.HIKERAPI_KEY || !process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
-  console.error("Needs GOOGLE_PLACES_API_KEY, HIKERAPI_KEY and GOOGLE_GENERATIVE_AI_API_KEY (.env.local).");
+if (
+  !process.env.DATAFORSEO_LOGIN ||
+  !process.env.DATAFORSEO_PASSWORD ||
+  !process.env.HIKERAPI_KEY ||
+  !process.env.GOOGLE_GENERATIVE_AI_API_KEY
+) {
+  console.error("Needs DATAFORSEO_LOGIN/PASSWORD, HIKERAPI_KEY and GOOGLE_GENERATIVE_AI_API_KEY (.env.local).");
   process.exit(2);
 }
 
@@ -44,18 +49,22 @@ const ids = (v: LabelVenue) => [v.place_id, ...(v.alt_place_ids ?? [])].filter(B
 
 async function main() {
   const totals = { include: 0, correct: 0, optional: 0, wrong: 0, spurious: 0, unverifiable: 0, errors: 0 };
-  const billed = { hikerapi_request: 0, text_search_enterprise: 0 };
+  const billed: Record<string, number> = {};
   let aiCalls = 0;
   const lines: string[] = [];
+  const times: number[] = [];
 
   for (const post of posts) {
     let analysis;
+    const started = Date.now();
+    const searchesBefore = Object.entries(billed)
+      .filter(([sku]) => sku !== "hikerapi_request")
+      .reduce((n, [, c]) => n + c, 0);
     try {
       analysis = await analyzeInstagramPost(post.url, {
-        googleApiKey: googleApiKey!,
         userId: "eval",
         onBilled: (sku) => {
-          billed[sku]++;
+          billed[sku] = (billed[sku] ?? 0) + 1;
         },
         onAiCall: () => {
           aiCalls++;
@@ -66,6 +75,12 @@ async function main() {
       lines.push(`${post.code}  ERROR ${e instanceof Error ? e.message : String(e)}`);
       continue;
     }
+    const ms = Date.now() - started;
+    times.push(ms);
+    const searches =
+      Object.entries(billed)
+        .filter(([sku]) => sku !== "hikerapi_request")
+        .reduce((n, [, c]) => n + c, 0) - searchesBefore;
     const adds = analysis.decisions.filter((d) => d.outcome === "add" && d.place);
     const include = post.venues.filter((v) => v.status === "include");
     totals.include += include.length;
@@ -109,7 +124,9 @@ async function main() {
           : "no candidate";
       notes.push(`miss ${v.key} (${why.trim()})`);
     }
-    lines.push(`${post.code}  ${hit.size}/${include.length}  ${notes.join("; ") || "ok"}`);
+    lines.push(
+      `${post.code}  ${hit.size}/${include.length}  ${(ms / 1000).toFixed(1)}s ${searches} searches  ${notes.join("; ") || "ok"}`
+    );
   }
 
   console.log(lines.join("\n"));
@@ -118,7 +135,12 @@ async function main() {
     `\nposts ${posts.length} (${setArg}${only ? ` only=${only}` : ""}) · errors ${totals.errors}\n` +
       `places to add ${totals.include} · added ${added + totals.optional} = correct ${totals.correct} + optional ${totals.optional} + WRONG ${totals.wrong} + SPURIOUS ${totals.spurious} + UNVERIFIABLE ${totals.unverifiable}\n` +
       `precision ${added ? ((100 * totals.correct) / added).toFixed(1) : "-"}% · recall ${totals.include ? ((100 * totals.correct) / totals.include).toFixed(1) : "-"}%\n` +
-      `billed: HikerAPI ${billed.hikerapi_request} · Google Text Search ${billed.text_search_enterprise} · Gemini ${aiCalls}`
+      `billed: ${Object.entries(billed)
+        .map(([sku, n]) => `${sku} ${n}`)
+        .join(" · ")} · Gemini ${aiCalls}\n` +
+      `time per post: mean ${(times.reduce((a, b) => a + b, 0) / Math.max(1, times.length) / 1000).toFixed(1)}s · ` +
+      `median ${((times.sort((a, b) => a - b)[Math.floor(times.length / 2)] ?? 0) / 1000).toFixed(1)}s · ` +
+      `max ${(Math.max(0, ...times) / 1000).toFixed(1)}s`
   );
   if (totals.wrong + totals.spurious + totals.unverifiable > 0) process.exit(1);
 }

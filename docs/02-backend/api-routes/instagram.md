@@ -2,8 +2,8 @@
 title: Instagram routes
 type: route-group
 domain: backend
-version: 1.2.0
-last_updated: 18.11.2026
+version: 1.3.0
+last_updated: 19.11.2026
 status: stable
 sources:
   - src/app/api/instagram/import/route.ts
@@ -74,15 +74,14 @@ import queue (`/api/cron/drain-imports`). Full sequence:
 - **Gates (in order):**
   1. 400 `Invalid body`.
   2. 400 "That isn't an Instagram post or reel link."
-  3. 503 "Instagram import isn't set up on this server." — `HIKERAPI_KEY` or
-     `GOOGLE_GENERATIVE_AI_API_KEY` (via `isAiAvailable`) missing.
+  3. 503 "Instagram import isn't set up on this server." — `HIKERAPI_KEY`,
+     `GOOGLE_GENERATIVE_AI_API_KEY` (via `isAiAvailable`) or the DataForSEO
+     credentials (`dataForSeoClientFromEnv`, v1.42.0) missing.
   4. 400 "Instagram import reads the post with AI. Turn on AI features in
      Settings." — `profiles.ai_features_enabled` is off.
-  5. 400 "Instagram import needs a Google Places API key. Add one in Settings." —
-     `getUserApiKeys` returned no Google key (the user's own key; admins get
-     `GOOGLE_PLACES_API_KEY`). The `google_places_enabled` toggle scopes Maps-link
-     lookups and is deliberately not consulted here (owner's decision,
-     16.10.2026).
+  (Until v1.42.0 a fifth gate refused users without a Google Places key: the
+  candidate search ran on Google Text Search. It now runs on Google Maps through
+  the server's DataForSEO account, so no key is needed.)
 - **Reuse:** the user's newest `import_jobs` row with `kind = 'instagram'`,
   `file_name` = the canonical URL and `created_at` in the last 10 minutes
   (`REUSE_WINDOW_MS`) is returned as **`200 { jobId, reused: true }`** unless its
@@ -98,7 +97,8 @@ import queue (`/api/cron/drain-imports`). Full sequence:
   job insert fails.
 - **Side effects (after the response):** `after(async () => { await runInstagramImportJob(...); await flushLangfuse(); })`
   on `createServiceClient()` — monthly AI budget check, HikerAPI + Gemini + Google
-  Text Search through `analyzeInstagramPost`, `trackUsage` / `trackAiUsage`,
+  Maps search (DataForSEO; v1.42.0, was Google Text Search) and Mapbox city
+  lookups through `analyzeInstagramPost`, `trackUsage` / `trackAiUsage`,
   `import_job_items` INSERT, tag + note on already-saved places
   (`attachInstagramSource`), `import_jobs` UPDATE (`meta`, `total`, `status`,
   `finished_at`), then `kickDrain` when places were queued. Every write is keyed
