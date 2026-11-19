@@ -2,7 +2,7 @@
 title: api_usage
 type: table
 domain: backend
-version: 1.6.1
+version: 1.6.2
 last_updated: 19.11.2026
 status: stable
 sources:
@@ -72,7 +72,7 @@ DO UPDATE SET count = api_usage.count + 1;
 
 The composite UNIQUE constraint makes the UPSERT atomic. App code calls this via `src/lib/google/track-usage.ts#trackUsage` after each billable external call.
 
-**Who may call it.** Today `anon`, `authenticated` and `service_role` hold `EXECUTE`, and any caller may pass any `p_user_id` — with the anon key, anyone could fill a user's rows (and so the AI budget). Prepared, not applied (19.11.2026): `supabase/migrations/20261119004416_rpc_least_privilege.sql` — `anon` loses `EXECUTE`; a signed-in caller may count only `auth.uid()`'s usage (`42501` otherwise); `service_role` and direct sessions unchanged. See [[../rls-policies#advisor-findings]].
+**Who may call it** (since 19.11.2026, `supabase/migrations/20261119005449_rpc_least_privilege.sql`): `authenticated`, for `auth.uid()`'s own usage only (`42501` otherwise), and `service_role`; direct database sessions too. `anon` can't — until then anyone holding the anon key could fill any user's rows, and with them the AI budget. A caller without a session must pass the service client (`trackUsage(userId, sku, admin)`). See [[../rls-policies#advisor-findings]].
 
 ## Notes
 

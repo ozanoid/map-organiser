@@ -6,6 +6,33 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 19.11.2026 — v1.43.2 — Security round on main; both migrations applied
+
+- v1.42.2–v1.43.1 merged to main with Ozan's approval (merge `d87d9aa`; main
+  had not moved since the DataForSEO switch merge, and the merged tree equals
+  the branch tree). Production deployment succeeded.
+- **Migrations applied with Ozan's approval:**
+  `spatial_ref_sys_read_only` (version 20261119005346) and, after the
+  production deploy, `rpc_least_privilege` (20261119005449). The files were
+  renamed to the recorded versions.
+- **Checked on the live database after applying:** as `anon`, UPDATE and
+  DELETE on `spatial_ref_sys` → 42501, SELECT → ok; as `authenticated`,
+  UPDATE → 42501, a geography distance → ok (rolled back). Grants:
+  `increment_api_usage` → `authenticated` and `service_role` only, with the
+  own-user check; `handle_new_user`, `create_default_categories` →
+  `postgres` and `service_role`. In production a connector search still
+  counted under the new rule (the signed-in user's `dataforseo_maps_search`
+  went 2 → 3). Re-run security advisor: the anon lint lists only PostGIS's
+  `st_estimatedextent`; `increment_api_usage` remains in the authenticated
+  lint by design; `spatial_ref_sys` stays in the RLS lint (guarded by the
+  trigger instead).
+- The main folder's `node_modules` still hold the old packages — run
+  `npm install` there before using it.
+- Docs: [[02-backend/rls-policies]], [[02-backend/schema/api_usage]],
+  [[_agent/pitfalls]].
+
+---
+
 ## 19.11.2026 — v1.43.1 — Security round, database side: two fixes in code, two migrations prepared
 
 The Supabase security advisor pass Ozan had deferred, run as part of the
