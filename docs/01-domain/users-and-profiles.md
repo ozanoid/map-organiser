@@ -2,8 +2,8 @@
 title: User & Profile
 type: entity
 domain: users
-version: 1.4.2
-last_updated: 18.11.2026
+version: 1.5.0
+last_updated: 19.11.2026
 status: stable
 sources:
   - src/lib/supabase/client.ts
@@ -44,12 +44,12 @@ Auth credentials, password hashes, and OAuth identities all live in `auth.*` (ma
 | `id` | uuid | yes | **PK + FK** → `auth.users.id`. Matches the auth user 1:1. |
 | `full_name` | text | no | Pulled from `raw_user_meta_data.full_name`/`name` on signup. |
 | `avatar_url` | text | no | Pulled from `raw_user_meta_data.avatar_url`. |
-| `is_admin` | boolean | yes | Default `false`. Read by `getUserApiKeys` (`src/lib/google/get-user-api-keys.ts`): an admin — or a user with no profile row — gets the server's env keys (`GOOGLE_PLACES_API_KEY`, `NEXT_PUBLIC_MAPBOX_TOKEN`) instead of their own encrypted ones. Without a cookie session (the MCP endpoint) the caller passes its own client (`getUserApiKeys(userId, client)`, v1.41.0); the cookie client would read no profile and hand out the env keys. `GET /api/user/api-keys` also returns it, and Settings → API shows "Admin account — using system API keys". |
-| `google_api_key_enc` | text | no | AES-256-GCM-encrypted Google Places API key. Never returned to client. |
+| `is_admin` | boolean | yes | Default `false`. Read by `getUserApiKeys` (`src/lib/google/get-user-api-keys.ts`): an admin — or a user with no profile row — gets the server's Mapbox token (`NEXT_PUBLIC_MAPBOX_TOKEN`) instead of their own encrypted one. Since v1.42.0 there is no Google key to hand out — places are looked up through the server's DataForSEO account. Without a cookie session the caller passes its own client (`getUserApiKeys(userId, client)`, v1.41.0). `GET /api/user/api-keys` also returns it, and Settings → API shows "Admin account — using system API keys". |
+| `google_api_key_enc` | text | no | AES-256-GCM-encrypted Google Places API key. Never returned to client. Unused since v1.42.0. |
 | `mapbox_token_enc` | text | no | Encrypted personal Mapbox token (if user opts to use their own). |
 | `dataforseo_login_enc` | text | no | Encrypted DataForSEO username. |
 | `dataforseo_password_enc` | text | no | Encrypted DataForSEO password. |
-| `google_places_enabled` | boolean | no | Default `true`. Toggle to use Google enrichment (if key present) vs DataForSEO-only. |
+| `google_places_enabled` | boolean | no | Default `true`. Was the toggle for the Google lookup path; unused since v1.42.0 (DataForSEO only). |
 | `ai_features_enabled` | boolean | yes | Default `true` (Phase 1). Master kill switch for every AI feature. When `false`: lite_profile not built in `parse-link`, `step=profile` skipped from background chain, Settings AI tab hides moderation queue, every `/api/ai/*` and `/api/user/ai-*` route short-circuits. Surfaced as the toggle in Settings → AI. |
 | `cron_refresh_enabled` | boolean | no | Default `false` (15.07.2026). Opt-in for the entire periodic-refresh sweep. When `false` the user's places are never scanned by the cron; when `true`, daily Google-data refresh + (if `ai_features_enabled`) AI summary regen past >15 new reviews. Surfaced as "Background data refresh" in Settings → AI. See [[../06-ops/runbooks/periodic-refresh]]. |
 | `created_at` | timestamptz | no | `default now()`. |
@@ -70,7 +70,7 @@ The repo gets the current user via `supabase.auth.getUser()` (server-side) or vi
 
 - **1:1 with auth.** Every `auth.users` row triggers a `profiles` row via the `on_auth_user_created` trigger. The reverse is enforced by the FK + `id` being the same UUID.
 - **Encrypted columns are write-only via API.** `*_enc` columns are never returned to the client. The API key manager flow is "set / clear / show last 4" — never "fetch back the raw value".
-- **`google_places_enabled` is a soft toggle.** Even when `true`, enrichment still falls back to DataForSEO if no Google API key is configured for the user. The Instagram import (v1.28.0) ignores the toggle: its candidate search always runs on the Google key `getUserApiKeys` returns, and the import refuses to start (400) when there is none.
+- **No Google key or toggle since v1.42.0.** The Add Place link preview and the Instagram import look places up through DataForSEO on the server's account; Settings no longer shows a Google key or the "Google Places API" toggle, and the two `profiles` columns are left unused.
 - **Default categories are seeded once.** The `on_profile_created_default_categories` trigger fires on profile INSERT and creates 12 default rows. Re-running it would duplicate them, so it relies on never firing twice (no reset path exists today).
 
 ## Signup → first-use flow

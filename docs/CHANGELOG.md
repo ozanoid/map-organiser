@@ -6,9 +6,86 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 19.11.2026 — v1.42.0 — Every place lookup through DataForSEO; Google Places retired
+
+Ozan's decision (18.11.2026): move every Google Text Search to DataForSEO, so a
+bulk import can never cross Google's free tier into $35 per 1,000 — after the
+Instagram eval confirms it. Written on the branch `feat/personal-assistant`;
+not merged yet.
+
+- **Instagram import:** candidates come from Google Maps through DataForSEO's
+  Maps search (`src/lib/instagram/places.ts`) instead of Google Places Text
+  Search; the post's city from Mapbox (city-level lookups only); its
+  neighbourhood or district from Google Maps itself — an area query answers
+  with the area (no category), sized by `address_info` (district 7 km,
+  neighbourhood 2 km). A query without a point is searched across the city
+  (30 km). Venues are resolved six at a time (a search takes 3–12 s). The
+  import no longer needs a Google key; usage is `dataforseo_maps_search` and
+  `mapbox_geocoding`.
+- **Eval (35 posts, 34 readable):** Google Text Search 0 wrong, 38 of 42,
+  107 searches, median 5.5 s; DataForSEO first run **1 wrong** (Walker's Moda
+  for Walter's Coffee) and 2 posts failed on "no results"; after the fixes
+  below **0 wrong**, 36 of 42 (both missing places are the model's "not
+  featured", decided before any search), 107 searches ($0.21) + 41 Mapbox
+  lookups, median 11.2 s, max 42 s.
+- **Fixes the eval forced:** DataForSEO's "no results" (40102) is an empty
+  answer, not an error — also for `search_google_maps`; a branch hint found
+  only in a place's address no longer accepts a place whose name merely
+  resembles the venue's (`hintOnly`, name ≥ 0.85); queries without their own
+  point search the city, not the area centre ("Kaptanın Yeri, Konutkent" was
+  17 km off Çankaya's centre).
+- **Add Place link preview:** DataForSEO only — the Google Places path for
+  keyed users (no calls since July) is gone. `src/lib/google/places-api.ts` and
+  `place-candidates.ts` deleted. Settings → API shows only the Mapbox token;
+  `/api/user/api-keys` no longer takes Google fields; `getUserApiKeys` returns
+  the Mapbox token. The `profiles` Google columns and `GOOGLE_PLACES_API_KEY`
+  are unused (left in place — dropping them is a separate step). The cost
+  tracker shows retired Google SKUs only in a month with usage.
+- **Checked:** the eval runs above; `npm run check:assistant -- add-places`
+  (its Instagram read now on DataForSEO) and the list, plan-tool, plan and
+  visit suites; `tsc`, `eslint` (0 errors), `next build`; in Chrome, Settings →
+  API (no Google fields, tracker rows) and the Add Place preview of a Maps link
+  ("via DataForSEO · 2.3 s"). Nothing was saved on the test account.
+- **Cost of the work:** ≈ $1.7 — the Google baseline run ≈ $0.19 (HikerAPI,
+  Gemini; Google inside its free tier), three full DataForSEO runs ≈ $0.41 each,
+  single-post debug runs ≈ $0.3, a few area probes; the estimate was $1–1.5 for
+  two runs — the fixes needed a third full run and the debugging.
+- Docs: [[04-integrations/google-places]], [[04-integrations/dataforseo]],
+  [[04-integrations/_README]], [[04-integrations/claude-mcp]],
+  [[05-flows/instagram-import-flow]], [[05-flows/manual-place-create-flow]],
+  [[05-flows/ai-enrichment-flow]], [[05-flows/_README]],
+  [[02-backend/api-routes/instagram]], [[02-backend/api-routes/places]],
+  [[02-backend/api-routes/user]], [[02-backend/api-routes/_README]],
+  [[02-backend/schema/api_usage]], [[02-backend/schema/profiles]],
+  [[03-frontend/components/settings]], [[01-domain/places]],
+  [[01-domain/users-and-profiles]], [[06-ops/env-vars]],
+  [[06-ops/encryption]], [[00-overview/tech-stack]],
+  [[00-overview/system-overview]], [[00-overview/repo-structure]],
+  [[_agent/pitfalls]], [[_agent/conventions]], [[_plans/phase-1-planning]].
+
+---
+
+## 18.11.2026 — v1.41.1 — add_places on main
+
+- Phase 1, slice 5 merged to main with Ozan's approval (merge `9245eee`;
+  main had not moved since the lists merge, and the merged tree equals the
+  branch tree). Its database change was applied before the merge.
+- Production deployment succeeded. `add_places` isn't in this Claude Code
+  session's tool list (it keeps the list it started with); it appears in new
+  claude.ai conversations.
+- **The Takeout check the slice left open, done** (Ozan asked me to run it):
+  the app's `/import` page on the test account, a one-row CSV of a place the
+  account already has → the job went `preparing` → `running` → `done` in
+  1.4 s, the place skipped as "Already exists", no lookup paid; the job was
+  deleted afterwards.
+- Docs: [[_plans/phase-1-planning]], [[_plans/personal-assistant]],
+  [[04-integrations/claude-mcp]].
+
+---
+
 ## 18.11.2026 — v1.41.0 — Claude saves places: add_places (Phase 1, slice 5)
 
-Written on the branch `feat/personal-assistant`; not merged yet. Ozan's
+Written on the branch `feat/personal-assistant`; on main since v1.41.1. Ozan's
 decisions are in [[_plans/phase-1-planning]] ("Dilim 5 kararları") — he
 approved every proposal.
 

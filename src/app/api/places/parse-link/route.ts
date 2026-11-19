@@ -1,15 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { parseMapsUrl } from "@/lib/google/parse-maps-url";
-import { getUserApiKeys } from "@/lib/google/get-user-api-keys";
-import { getPlaceDetails, searchPlace } from "@/lib/google/places-api";
-import { DataForSEOClient } from "@/lib/dataforseo/client";
+import { dataForSeoClientFromEnv } from "@/lib/dataforseo/client";
 import { fetchBusinessInfoLive } from "@/lib/dataforseo/business-info";
 import type { BusinessInfoRequest } from "@/lib/dataforseo/business-info";
 import {
   transformBusinessInfoToPlaceData,
   extractExtendedData,
 } from "@/lib/dataforseo/transform";
+import { extractCidFromUrl } from "@/lib/import/process-place";
 import { reverseGeocode } from "@/lib/mapbox/search-box";
 import { trackUsage } from "@/lib/google/track-usage";
 // buildLiteProfileForResponse is shared with /api/search/retrieve so the
@@ -17,27 +16,11 @@ import { trackUsage } from "@/lib/google/track-usage";
 import { buildLiteProfileForResponse } from "@/lib/ai/extract/lite-profile";
 
 /**
- * Extract CID from a resolved Google Maps URL's FTid.
- * Used only for DataForSEO path.
+ * POST /api/places/parse-link { url } — a pasted Google Maps link → the
+ * place's details for the Add Place preview, through DataForSEO's business
+ * info (one lookup, $0.0054). Google's own Places API was a second path for
+ * users with a key; it was removed with the move to DataForSEO (v1.42.0).
  */
-function extractCidFromUrl(url: string): string | null {
-  const cidParam = url.match(/[?&]cid=(\d+)/);
-  if (cidParam) return cidParam[1];
-
-  const ftidMatch = url.match(/!1s0x[a-f0-9]+:(0x[a-f0-9]+)/) ||
-    url.match(/ftid=0x[a-f0-9]+:(0x[a-f0-9]+)/);
-  if (ftidMatch) {
-    try { return BigInt(ftidMatch[1]).toString(); } catch {}
-  }
-  return null;
-}
-
-function getDataForSEOClient(): DataForSEOClient | null {
-  const login = process.env.DATAFORSEO_LOGIN;
-  const password = process.env.DATAFORSEO_PASSWORD;
-  if (!login || !password) return null;
-  return new DataForSEOClient({ login, password });
-}
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
@@ -59,63 +42,11 @@ export async function POST(request: NextRequest) {
   try {
     const startTime = Date.now();
     const parsed = await parseMapsUrl(url);
-    const { googleApiKey, googlePlacesEnabled } = await getUserApiKeys(user.id);
-
     console.log("[parse-link] Parsed URL:", JSON.stringify(parsed));
-    console.log("[parse-link] Google key:", !!googleApiKey, "| enabled:", googlePlacesEnabled);
 
-    // ─── Google key exists AND enabled: use Google for fast preview ───
-    if (googleApiKey && googlePlacesEnabled) {
-      let placeData = null;
-
-      switch (parsed.type) {
-        case "place_id":
-          if (parsed.placeId)
-            placeData = await getPlaceDetails(parsed.placeId, googleApiKey, user.id);
-          break;
-        case "cid":
-          if (parsed.lat && parsed.lng)
-            placeData = await searchPlace(`${parsed.lat},${parsed.lng}`, googleApiKey, user.id, parsed.lat, parsed.lng);
-          break;
-        case "search":
-          if (parsed.query)
-            placeData = await searchPlace(parsed.query, googleApiKey, user.id, parsed.lat, parsed.lng);
-          break;
-        case "coordinates":
-          if (parsed.lat && parsed.lng)
-            placeData = await searchPlace(`${parsed.lat},${parsed.lng}`, googleApiKey, user.id, parsed.lat, parsed.lng);
-          break;
-      }
-
-      if (placeData) {
-        const fetchTimeMs = Date.now() - startTime;
-        console.log(`[parse-link] Success: "${placeData.name}" in ${fetchTimeMs}ms via Google`);
-        const lite_profile = await buildLiteProfileForResponse(
-          supabase,
-          user.id,
-          placeData,
-          null
-        );
-        return NextResponse.json({
-          ...placeData,
-          photoRef: null, // DataForSEO handles photos in background enrichment
-          _provider: "google",
-          _fetchTimeMs: fetchTimeMs,
-          lite_profile,
-        });
-      }
-
-      // Google failed — fall through to DataForSEO
-      console.log("[parse-link] Google returned no results, trying DataForSEO...");
-    }
-
-    // ─── No Google key (or Google failed): use DataForSEO ───
-    const dfClient = getDataForSEOClient();
+    const dfClient = dataForSeoClientFromEnv();
     if (!dfClient) {
-      return NextResponse.json(
-        { error: "No API credentials configured. Add a Google Places API key in Settings." },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Place lookup isn't set up on this server." }, { status: 503 });
     }
 
     const cidFromUrl = extractCidFromUrl(url);
@@ -168,7 +99,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    trackUsage(user.id, "dataforseo_business_info_live").catch(() => {});
+    trackUsage(user.id, "dataforseo_business_info_live", supabase).catch(() => {});
 
     const placeData = transformBusinessInfoToPlaceData(raw);
     const extended = extractExtendedData(raw);

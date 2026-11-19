@@ -2,8 +2,8 @@
 title: Tech Stack
 type: overview
 domain: overview
-version: 1.6.1
-last_updated: 18.11.2026
+version: 1.6.2
+last_updated: 19.11.2026
 status: stable
 sources:
   - package.json
@@ -114,7 +114,7 @@ See [[../05-flows/observability-flow]] for the full architecture.
 
 - **Supabase** project `hukppmaevcapvbrvxtph` — eu-central-1, Pro plan, PostGIS enabled. Schema is dashboard/MCP-managed; no local `supabase/migrations/` folder. See [[../02-backend/_README]] when written.
 - **Mapbox** — GL JS map + Directions API. Free tier: 100K directions requests/month.
-- **Google Places API** — server-only via `GOOGLE_PLACES_API_KEY`. Per-user opt-in via `profiles.google_places_enabled` — except the Instagram import's candidate search (Text Search, Enterprise SKU), which always runs on the user's key (v1.28.0).
+- **Google Places API** — not called since v1.42.0: link previews, imports and the Instagram import's search all go through DataForSEO (Google Maps data, no free-tier cliff). See [[../04-integrations/google-places]].
 - **DataForSEO Business Data API** — default enrichment provider. HTTP basic auth via `DATAFORSEO_LOGIN`/`DATAFORSEO_PASSWORD`.
 - **HikerAPI** — hosted Instagram data API for the Instagram import (v1.28.0). System-level key `HIKERAPI_KEY` (server-only); SKU `hikerapi_request`. See [[../04-integrations/hikerapi]].
 - **Google Gemini** (via Generative Language API) — Phase 4+ AI feature provider. Model: `gemini-3-flash-preview` (since 15.07.2026). Key: `GOOGLE_GENERATIVE_AI_API_KEY` (server-only). Cost-tracked via `api_usage` table under SKUs `ai_*`. See [[../04-integrations/gemini]].

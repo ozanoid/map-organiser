@@ -2,8 +2,8 @@
 title: "Claude connector (MCP server)"
 type: integration
 domain: integrations
-version: 1.6.0
-last_updated: 18.11.2026
+version: 1.6.2
+last_updated: 19.11.2026
 status: draft
 sources:
   - src/app/api/mcp/route.ts
@@ -58,7 +58,7 @@ related:
 
 **Status (17.11.2026):** on main and connected. Ozan added the connector in claude.ai; Claude registered itself through dynamic client registration and Ozan approved on `/oauth/consent`. The connector's tools were then called through the real OAuth token from a Claude Code session on the same account: `get_library_overview` returned the owner's 291 places (so the owner gate and RLS work), plus `search_places` with `open_at`, `get_places` with `at`, `read_reviews` and `rank_places`. `update_places` has not been run through the connector yet.
 
-**Adding places (v1.41.0, 18.11.2026 — branch, not merged):** `add_places`, run against the live database by `npm run check:assistant -- add-places` (paid, test account); not yet called through the connector.
+**Adding places (v1.41.0, on main since 18.11.2026):** `add_places`, run against the live database by `npm run check:assistant -- add-places` (paid, test account). Production serves it; not yet called through the connector — it appears in new claude.ai conversations.
 
 **Lists (v1.40.0, on main since 18.11.2026):** `get_lists`, `save_list`, and `get_places` showing each list's note for the place; run against the live database by `npm run check:assistant -- lists`. After the deploy a connector call with the real token (`get_places`) ran the new code in production; `get_lists` and `save_list` appear in new claude.ai conversations — a Claude Code session keeps the tool list it started with.
 
@@ -135,7 +135,7 @@ Filters take **names**, not ids (`resolveNames`): exact folded match, then a uni
 - claude.ai / Claude Code usage runs on the user's Claude plan; the tools spend nothing on the Claude API.
 - `rank_places`: one Gemini call per use (existing AI-search SKU and budget).
 - `search_google_maps`: one DataForSEO Maps search per call — $0.002 (`dataforseo_maps_search`), from the system DataForSEO balance; measured latency 2.6–12.4 s.
-- `add_places`: a new place ≈ $0.016 — one DataForSEO business-info lookup $0.0054 (`dataforseo_business_info_live`, no free tier; a CID Google doesn't know is billed too), then in the queue reviews $0.00075 and the AI profile ≈ $0.0095. A place already saved costs nothing. An Instagram post: HikerAPI $0.001 per request (8–12 per read on 18.11.2026), the Gemini read $0.0015, and Google Text Search Enterprise for its evidence — 19 and 26 searches per read on 18.11.2026, 9.5 on average in October; $35 per 1,000 after 1,000 free a month — plus $0.016 per new place.
+- `add_places`: a new place ≈ $0.016 — one DataForSEO business-info lookup $0.0054 (`dataforseo_business_info_live`, no free tier; a CID Google doesn't know is billed too), then in the queue reviews $0.00075 and the AI profile ≈ $0.0095. A place already saved costs nothing. An Instagram post: HikerAPI $0.001 per request (8–12 per read on 18.11.2026), the Gemini read $0.0015, and Google Maps searches through DataForSEO for its evidence — $0.002 each, no free tier (v1.42.0; before, Google Text Search: $35 per 1,000 past 1,000 free a month, 16–26 searches for a multi-venue post) — plus a Mapbox city lookup (free tier) and $0.016 per new place.
 - `near.area`: one Mapbox Geocoding request (`mapbox_geocoding`, 100k free per month, then $0.75 per 1,000).
 - `get_plans` with `with_routes`: one Mapbox Directions request per day with two or more located stops (`mapbox_directions`, 100k free per month, then $2 per 1,000).
 

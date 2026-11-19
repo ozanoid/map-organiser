@@ -2,8 +2,8 @@
 title: profiles
 type: table
 domain: backend
-version: 1.2.0
-last_updated: 15.07.2026
+version: 1.2.1
+last_updated: 19.11.2026
 status: stable
 sources:
   - Supabase project hukppmaevcapvbrvxtph (live)
@@ -30,11 +30,11 @@ Per-user profile and settings. 1:1 with `auth.users` (the `id` is both PK and FK
 | `full_name` | text | yes | — | Populated by `handle_new_user()` from `raw_user_meta_data.full_name` / `name`. |
 | `avatar_url` | text | yes | — | Populated by `handle_new_user()` from `raw_user_meta_data.avatar_url`. |
 | `is_admin` | boolean | no | `false` | Reserved. Not currently checked anywhere. |
-| `google_api_key_enc` | text | yes | — | AES-256-GCM encrypted Google Places API key. Server-only. |
+| `google_api_key_enc` | text | yes | — | AES-256-GCM encrypted Google Places API key. Server-only. **Unused since v1.42.0** — no code reads or writes it (place lookups moved to DataForSEO); left in place, dropping it is a separate, approved step. |
 | `mapbox_token_enc` | text | yes | — | Encrypted personal Mapbox token. |
 | `dataforseo_login_enc` | text | yes | — | Encrypted DataForSEO username. |
 | `dataforseo_password_enc` | text | yes | — | Encrypted DataForSEO password. |
-| `google_places_enabled` | boolean | yes | `true` | Per-user toggle for Google enrichment path. |
+| `google_places_enabled` | boolean | yes | `true` | Per-user toggle for the Google enrichment path. **Unused since v1.42.0** (the path is gone); left in place. |
 | `ai_features_enabled` | boolean | no | `true` | **Phase 1.** Master kill-switch for every AI feature. Set `false` to: skip `lite_profile` in `parse-link`, skip `step=profile` chain, hide moderation UI, short-circuit `/api/ai/*` + `/api/user/ai-*` routes. Surfaced as the Settings → AI toggle. See [[../../05-flows/full-profile-flow]]. |
 | `cron_refresh_enabled` | boolean | no | `false` | **15.07.2026.** Opt-in for the ENTIRE periodic refresh sweep. Default off — the user's places are never scanned by the cron. When on: daily Google-data refresh + AI summary regeneration past >15 new reviews (if `ai_features_enabled`). Surfaced as the "Background data refresh" toggle in Settings → AI. See [[../../06-ops/runbooks/periodic-refresh]]. |
 | `created_at` | timestamptz | yes | `now()` | — |

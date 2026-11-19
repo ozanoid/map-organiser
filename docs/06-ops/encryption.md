@@ -2,8 +2,8 @@
 title: Encryption
 type: overview
 domain: ops
-version: 1.0.0
-last_updated: 12.05.2026
+version: 1.0.1
+last_updated: 19.11.2026
 status: stable
 sources:
   - src/lib/google/get-user-api-keys.ts (and the encryption helpers it imports)
@@ -24,7 +24,7 @@ How API keys provided by users are kept secret at rest.
 
 Four columns on `public.profiles`, all `text` storing AES-256-GCM ciphertext:
 
-- `google_api_key_enc` — user's personal Google Places API key
+- `google_api_key_enc` — user's personal Google Places API key (unused since v1.42.0; no code reads or writes it)
 - `mapbox_token_enc` — user's personal Mapbox token (optional override of the public app token)
 - `dataforseo_login_enc` — encrypted DataForSEO username
 - `dataforseo_password_enc` — encrypted DataForSEO password

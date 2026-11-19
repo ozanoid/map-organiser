@@ -2,8 +2,8 @@
 title: Instagram Import Flow
 type: flow
 domain: places
-version: 1.2.0
-last_updated: 18.11.2026
+version: 1.3.0
+last_updated: 19.11.2026
 status: stable
 sources:
   - src/components/map/map-content.tsx
@@ -25,7 +25,9 @@ sources:
   - src/lib/instagram/maps-link.ts
   - src/lib/instagram/provenance.ts
   - src/lib/hikerapi/client.ts
-  - src/lib/google/place-candidates.ts
+  - src/lib/instagram/places.ts
+  - src/lib/place-search/dataforseo-maps.ts
+  - src/lib/mapbox/geocode.ts
   - src/lib/import/kick-drain.ts
   - src/lib/import/process-place.ts
   - src/app/api/cron/drain-imports/route.ts
@@ -117,7 +119,7 @@ sequenceDiagram
   participant D as Add Place dialog (InstagramImportPanel)
   participant R as POST /api/instagram/import
   participant J as after() job (runInstagramImportJob)
-  participant X as HikerAPI / Gemini / Google Text Search
+  participant X as HikerAPI / Gemini / Google Maps (DataForSEO)
   participant Q as drain-imports (queue)
   participant P as POST /api/instagram/import/[id]/pick
   D->>R: { url }
@@ -161,10 +163,10 @@ v1.41.0), shared with Claude's `add_places` tool, which passes `via:
 route keeps the session and body checks and maps a refusal to its status.
 
 3. Gates, in order: session (401) → body `{ url }` (Zod, 400) → it is an
-   Instagram post link (400) → `HIKERAPI_KEY` and `GOOGLE_GENERATIVE_AI_API_KEY`
-   set (503) → the user has a Google Places key via `getUserApiKeys` — their own
-   key, or `GOOGLE_PLACES_API_KEY` for admins (400 "Instagram import needs a
-   Google Places API key. Add one in Settings.").
+   Instagram post link (400) → `HIKERAPI_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`
+   and the DataForSEO credentials set (503) → AI features on (400). No Google
+   key since v1.42.0 — the places are searched on Google Maps through the
+   server's DataForSEO account.
 4. **Reuse.** The user's newest `kind = 'instagram'` job for the same canonical
    URL, created in the last 10 minutes and whose stored phase is not `failed`,
    is returned as `200 { jobId, reused: true }`. The iOS Shortcut can fire twice.
@@ -184,10 +186,12 @@ route keeps the session and body checks and maps a refusal to its status.
 8. `checkAiBudget("instagram")` — 300 posts per user per calendar month (UTC).
    Over it, the job fails with `budget_exceeded` before any paid call.
 9. `analyzeInstagramPost` (`src/lib/instagram/analyze.ts`), detailed in
-   [[#how-a-venue-is-pinned]]: HikerAPI → one Gemini read → Google Text Search →
-   deterministic rules. It writes nothing.
-10. Usage: each HikerAPI request → `hikerapi_request`, each Text Search →
-    `text_search_enterprise`, each Gemini call → `ai_instagram_read` (all in a
+   [[#how-a-venue-is-pinned]]: HikerAPI → one Gemini read → Google Maps search
+   through DataForSEO → deterministic rules. It writes nothing.
+10. Usage: each HikerAPI request → `hikerapi_request`, each Google Maps search →
+    `dataforseo_maps_search`, each city lookup → `mapbox_geocoding` (before
+    v1.42.0: each Text Search → `text_search_enterprise`), each Gemini call →
+    `ai_instagram_read` (all in a
     `finally`, so a failed analysis is still counted; a read that needed its
     retry counts two — v1.28.2).
 11. One `import_job_items` row per decision (service-role insert):
@@ -396,27 +400,50 @@ Nothing the model returns is trusted unless the post says it
 - Each verified plain-text venue: merged into a matching candidate
   (name ≥ 0.7), lending it the post's address and area; otherwise its own
   candidate if the model marked it featured (`not_featured` if not).
-- **Area:** the verified hints (branch hint → neighbourhood → district) are
-  geocoded with one Text Search each, in that order, until one comes back as an
-  area: the top hit must not be an establishment and must carry an area type —
-  radius 2 km (neighbourhood), 2–2.5 km (sublocality, colloquial area), 1.5 km
-  (route), 2.5–7 km (admin levels 4–2).
+- **City and area** (v1.42.0). The post's city (Gemini's, verified) is placed
+  once with Mapbox — city-level lookups only (place, locality, district,
+  region). The verified hints (branch hint → neighbourhood → district) are then
+  looked up on Google Maps through DataForSEO around that city, in that order,
+  until one comes back as an area: the top result has **no category** (a
+  business always has one) and the hint's name (≥ 0.6). Its `address_info`
+  sizes it (`areaReach`): its own city line inside a region (Kadıköy: city
+  "Kadıköy", region "İstanbul") → a district, 7 km; anything inside a city or
+  district (Moda: borough "Caferağa", city "Kadıköy"; Shoreditch: city
+  "London") → a neighbourhood, 2 km; the city or region itself → not an area.
+  Without a city, around the venue's profile coordinates; with neither, no
+  area. Not Mapbox for the areas: measured 18.11.2026 it maps "Moda",
+  "Karaköy" and "Nişantaşı, Istanbul" to same-named streets in other districts
+  and Istanbul districts to the same type as the city. Before v1.42.0 one Google
+  Text Search per hint, sized by Google's place types (2 km neighbourhood,
+  2–2.5 km sublocality, 1.5 km route, 2.5–7 km admin levels 4–2).
 - **The venue's own Maps link** in its profile website or bio (`maps.app.goo.gl`,
   `goo.gl/maps`, `g.page`, `google.*/maps`, `maps.google.*`) is followed once
   (plain fetch, redirects) to read its CID, place id, name and coordinates
   (`src/lib/instagram/maps-link.ts`).
 
-### 5. Search Google
+### 5. Search Google Maps (through DataForSEO)
 
-`searchPlaceCandidates` (`src/lib/google/place-candidates.ts`) — Places API (New)
-Text Search with an **Enterprise** field mask (`websiteUri` and the phone fields
-are the evidence), 5 results per query (20 for the city-wide one), a location-bias
-circle whenever a coordinate is known. `resolveCandidate` tries the candidate's
-queries in order — Maps-link name near its pin, the post's address, name near the
-profile / tag / area coordinates, name + profile address, name + branch hint, the
-city-wide query, alternative names — and stops as soon as a place is decided,
-except that a `unique_in_area` decision waits until every remaining query,
-the city-wide one included, has run.
+`googleMapsLookup().search` (`src/lib/instagram/places.ts`, v1.42.0) — DataForSEO's
+Google Maps search (`/serp/google/maps/live/advanced`, the app's place-search
+provider): the same listings with the evidence the rules use (phone, website,
+address, location, place id, CID, rating count, closed). 5 results per query (20
+for the city-wide one). DataForSEO needs a point: a query with a coordinate
+(Maps-link pin, profile, tag, area) is searched there at its radius; one without
+(the post's address, "name + city", alternative names) across the venue's city —
+its centre, 30 km — or, without a city, around the venue. "No results"
+(task status 40102) is an empty answer; a failed search is retried once.
+
+`resolveCandidate` tries the candidate's queries in order — Maps-link name near
+its pin, the post's address, name near the profile / tag / area coordinates, name
++ profile address, name + branch hint, the city-wide query, alternative names —
+and stops as soon as a place is decided, except that a `unique_in_area` decision
+waits until every remaining query, the city-wide one included, has run. A search
+takes 3–12 s (Google's took under a second), so venues are resolved six at a time
+(`RESOLVE_CONCURRENCY`), decisions kept in the post's order.
+
+Until v1.42.0: Google Places API (New) Text Search with an Enterprise field mask
+(`src/lib/google/place-candidates.ts`, removed) — $35 per 1,000 past 1,000 free a
+month.
 
 ### 6. Decide — `src/lib/instagram/resolve.ts`
 
@@ -504,6 +531,28 @@ or spurious place. Measured 16.10.2026 with 3 independent Gemini samples:
 - Per post: ≈ 4 HikerAPI requests (the owner profile is the extra one),
   ≈ 3 Google Text Searches, 1 Gemini call.
 
+**Switch to Google Maps through DataForSEO (v1.42.0, 18.11.2026)** — the same
+35 posts, one of them deleted since (34 read, 42 venues to add):
+
+| Run | Wrong | Correct | Searches | Time per post (median / max) |
+|---|---|---|---|---|
+| Google Text Search (the code as it was) | 0 | 38 | 107 | 5.5 s / 201 s (HikerAPI) |
+| DataForSEO, first | **1** + 2 posts failed | 29 | 111 | 11.8 s / 36 s |
+| DataForSEO, final | **0** | 36 | 107 (+ 41 Mapbox) | 11.2 s / 42 s |
+
+- The first run found two faults, both fixed before switching: "no results"
+  (task status 40102) was thrown as an error and failed two posts; and
+  @walterscoffee with branch hint "Moda" took **Walker's Moda** — "Walker's" ≈
+  "Walter's" (name 0.84) and "Moda" in its street name. The hint alone is no
+  longer enough for a name below 0.85 (`hintOnly`). DataForSEO's richer
+  results surfaced the near-namesake Google hadn't.
+- A miss traced to the search: "Kaptanın Yeri, Konutkent Çarşısı" was searched
+  around Çankaya's centre, 17 km from the venue, and Google Maps ranks by the
+  viewport. Queries without their own point now go across the city (30 km).
+- The two places the final run has fewer than Google's are both the model
+  marking a list venue "not featured" (Pera Palace, a café inside a cultural
+  complex) — decided before any search, as in the variance noted below.
+
 Remaining misses, by reason (the runner prints them):
 
 - chain branches that only the photos identify (`chain_branch_unknown`) — 3 in
@@ -520,7 +569,9 @@ Remaining misses, by reason (the runner prints them):
 | Call | Count | SKU | Price |
 |---|---|---|---|
 | HikerAPI | ≈ 4 when written; 8 and 12 in two reads on 18.11.2026 | `hikerapi_request` | $1 / 1,000 |
-| Google Text Search (Enterprise) | ≈ 3 when written; 19 and 26 in two reads on 18.11.2026, 9.5 a read on average in October | `text_search_enterprise` | $35 / 1,000 after 1,000 free a month — on the user's Google key |
+| Google Maps search (DataForSEO, v1.42.0) | about 3 per venue; 1–6 for a one-venue post, 16–27 for a 6–10-venue post (eval, 18.11.2026) | `dataforseo_maps_search` | $2 / 1,000, no free tier |
+| Mapbox city lookup (v1.42.0) | 1 per city the post names | `mapbox_geocoding` | free up to 100,000 a month, then $0.75 / 1,000 |
+| *Before v1.42.0:* Google Text Search (Enterprise) | 19 and 26 in two reads on 18.11.2026, 9.5 a read on average in October | `text_search_enterprise` | $35 / 1,000 after 1,000 free a month |
 | Gemini read | 1 | `ai_instagram_read` | $1.5 / 1,000 (≈ 1.2k in / 0.3k out tokens) |
 | DataForSEO + profile, per place added | as for any import | see [[place-import-flow]] | |
 
@@ -538,7 +589,7 @@ The monthly `instagram` budget (300 posts per user) bounds the first three.
 | B | 500 with the database error text | The tag or the job insert failed. |
 | C | "You've used this month's Instagram imports." | `budget_exceeded`; no Try again. |
 | C | "Couldn't open this post. It may be private or deleted." | `post_unavailable` (HikerAPI 404). |
-| C | "Something went wrong while reading this post." | `service_error`: HikerAPI still failing after its retries, a Google Text Search failing twice, the Gemini read failing twice (an answer with no usable object gets one more call — v1.28.2), or the item insert failing. Try again starts a new job. |
+| C | "Something went wrong while reading this post." | `service_error`: HikerAPI still failing after its retries, a Google Maps search (DataForSEO) failing twice, the Gemini read failing twice (an answer with no usable object gets one more call — v1.28.2), or the item insert failing. Try again starts a new job. |
 | C | "This took too long and stopped." | `stalled`: still `reading` after 3 min — the `after()` run died (e.g. hit `maxDuration`). Try again starts a new job (the reuse check skips stalled jobs). |
 | C | "No places in this post" | Nothing could be pinned and no skipped venue is listed: the dialog says no account, location tag or address points to one specific place; on `/map`, "Search manually" opens the map search. |
 | C | "Nothing added yet" | Every venue was skipped; the rows below offer **Pick branch** / **Choose** / **Search**. |
@@ -590,7 +641,7 @@ The monthly `instagram` budget (300 posts per user) bounds the first three.
 - `src/lib/instagram/maps-link.ts` — find and follow a venue's own Maps link.
 - `src/lib/instagram/provenance.ts` — `ensureInstagramTag`, `attachInstagramSource`.
 - `src/lib/hikerapi/client.ts` — see [[../04-integrations/hikerapi]].
-- `src/lib/google/place-candidates.ts` — Text Search (Enterprise field mask).
+- `src/lib/instagram/places.ts` — the place lookup: Google Maps search and area lookups through DataForSEO, city centres from Mapbox (v1.42.0; replaced `src/lib/google/place-candidates.ts`).
 - `src/lib/import/kick-drain.ts` — shared with the Takeout import.
 - `src/app/api/cron/drain-imports/route.ts`, `src/lib/import/process-place.ts` — the queue.
 - `src/lib/hooks/use-instagram-import.ts` — start, poll, pick.
@@ -601,13 +652,14 @@ The monthly `instagram` budget (300 posts per user) bounds the first three.
 
 ## Decisions
 
-- **Google Places for the candidate search, whatever the toggle says** (owner,
-  16.10.2026). The import uses Google Text Search even when the user's
-  `google_places_enabled` toggle ("Use Google for fast place lookup when adding
-  links") is off: the toggle keeps scoping Maps-link lookups, and the evidence
-  rules were built and measured on Google results. Another path (e.g. a
-  DataForSEO candidate search) is to be considered only if cost or the toggle's
-  meaning calls for it.
+- **Google Maps through DataForSEO for the candidate search** (Ozan,
+  18.11.2026; replaces the 16.10.2026 decision to use Google Places Text
+  Search whatever the toggle said). Text Search bills $35 per 1,000 past 1,000
+  free a month and a multi-venue post runs 16–26 searches, so a bulk import
+  would cross the tier at once; DataForSEO is $0.002 a search with no tier.
+  Switched only after the 35-post eval held precision at 100 % (see
+  [[#measured-quality]]). The Google key, its toggle and the import's Google
+  gate went with it.
 - **Entry points** (owner, 16.10.2026): the iOS Shortcut and pasting a link.
   `/api/share-target` keeps forwarding only Google Maps links.
 - **Pick branch lists Google's candidates in the dialog; the map search is the

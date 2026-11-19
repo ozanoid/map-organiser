@@ -1,4 +1,4 @@
-import type { CandidateQuery, PlaceCandidate } from "@/lib/google/place-candidates";
+import type { CandidateQuery, PlaceCandidate } from "@/lib/instagram/places";
 import type { MapsLink } from "@/lib/instagram/maps-link";
 import type { AccountRole } from "@/lib/instagram/read-post";
 import {
@@ -13,7 +13,7 @@ import {
 } from "@/lib/instagram/normalize";
 
 /**
- * Pick the Google place for one venue candidate — deterministically.
+ * Pick the Google Maps place for one venue candidate — deterministically.
  *
  * A place is added only on evidence that ties it to the venue the post
  * points at: the same phone or website, the venue's own Maps link, its
@@ -23,7 +23,10 @@ import {
  * the map costs more than a missing one.
  *
  * Measured on 35 labelled posts (2026-10-16): 0 wrong places across three
- * independent LLM samples; see scripts/instagram-eval.
+ * independent LLM samples; again on 18.11.2026 with the places from Google
+ * Maps through DataForSEO instead of Google Text Search: 0 wrong, 36 of 42
+ * (Google that day: 38; both misses are the model's "not featured", decided
+ * before any search). See scripts/instagram-eval.
  */
 
 export interface Area {
@@ -123,7 +126,7 @@ function evidenceFor(c: VenueCandidate, g: PlaceCandidate): Evidence {
     distTagM: c.tag && isCoord(c.tag.lat, c.tag.lng) ? distanceM(c.tag.lat!, c.tag.lng!, g.lat, g.lng) : null,
     inArea: areaM !== null && c.area !== null && areaM <= c.area.radiusM,
     name: Math.max(0, ...c.names.map((n) => nameScore(n, g.name))),
-    closed: g.status === "CLOSED_PERMANENTLY",
+    closed: g.closed,
   };
 }
 
@@ -133,6 +136,22 @@ const locEv = (e: Evidence) =>
   pinEv(e) || (e.distM !== null && e.distM <= 100) || (e.distTagM !== null && e.distTagM <= 120);
 /** Identifies the business — but every branch of a chain shares it. */
 const idEv = (e: Evidence) => e.phone || e.web || e.handle || e.maps;
+/**
+ * The only thing tying the place to the spot is the branch hint appearing in
+ * its address — a neighbourhood name many businesses share, often as a street
+ * name. Not enough on its own for a place whose name only resembles the
+ * venue's. Measured 18.11.2026: @walterscoffee with hint "Moda" took
+ * "Walker's Moda" (Moda Cd.; "Walker's" ≈ "Walter's", name 0.84).
+ */
+const hintOnly = (e: Evidence) =>
+  e.hint &&
+  !e.maps &&
+  !e.addr &&
+  !e.postAddr &&
+  !((e.distM ?? Infinity) <= 100) &&
+  !((e.distTagM ?? Infinity) <= 120) &&
+  !idEv(e);
+const HINT_ONLY_NAME = 0.85;
 
 type Scored = { g: PlaceCandidate; ev: Evidence };
 
@@ -157,7 +176,8 @@ function accepts(c: VenueCandidate, s: Scored, scored: Scored[]): Rule | null {
     !!c.area?.fromPost && e.name >= 0.9 && e.inArea && distinctive(c) && twinsOf(s, scored).length === 0;
   if (c.kind === "account") {
     const multi = c.role === "venue_brand_multi";
-    if (e.name >= 0.5 && (multi ? locEv(e) : idEv(e) || locEv(e))) return "evidence";
+    const strongEnough = !hintOnly(e) || e.name >= HINT_ONLY_NAME;
+    if (e.name >= 0.5 && (multi ? locEv(e) : idEv(e) || locEv(e)) && strongEnough) return "evidence";
     if (e.name >= 0.85 && ((e.distM ?? Infinity) <= 300 || (e.distTagM ?? Infinity) <= 300)) return "near";
     // A brand known to run several locations never gets the "only one in town" shortcut.
     if (!multi && uniqueInArea) return "unique_in_area";
@@ -237,10 +257,7 @@ function optionsFor(c: VenueCandidate, pool: PlaceCandidate[], foundByName: Set<
   const center = c.area ?? (c.lat != null && c.lng != null ? { lat: c.lat, lng: c.lng } : null);
   const places = pool
     .filter(
-      (g) =>
-        !!g.cid &&
-        g.status !== "CLOSED_PERMANENTLY" &&
-        (g.types.includes("establishment") || g.types.includes("point_of_interest"))
+      (g) => !!g.cid && !g.closed && g.isPlace
     )
     .map((g) => ({ g, ev: evidenceFor(c, g) }));
   const named = places.filter(({ ev }) => ev.name >= 0.6 || idEv(ev));

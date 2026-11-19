@@ -2,8 +2,8 @@
 title: Places routes
 type: route-group
 domain: backend
-version: 2.4.2
-last_updated: 18.11.2026
+version: 2.5.0
+last_updated: 19.11.2026
 status: stable
 sources:
   - src/lib/places/query-places.ts
@@ -214,9 +214,9 @@ All require auth except `drain-imports`, which is bearer-authed with `CRON_SECRE
 
 - **Source:** `src/app/api/places/parse-link/route.ts`
 - **Body:** `{ url: string }`.
-- **DB:** `profiles` SELECT (via `getUserApiKeys`).
-- **External:** `parseMapsUrl`; Google Places (`getPlaceDetails` / `searchPlace`) when enabled + keyed; DataForSEO `fetchBusinessInfoLive` fallback; Mapbox `reverseGeocode` (for short-query padding); transforms; `trackUsage`.
-- **Response:** Place data + `_provider: "google"|"dataforseo"`, `_fetchTimeMs`, optional `_extended` (DataForSEO), optional `lite_profile: PlaceProfile | null` (Phase 3+). `200` / `400` (invalid URL, no credentials, no results) / `404`.
+- **DB:** none for the lookup (the lite profile reads the user's taxonomy).
+- **External:** `parseMapsUrl`; DataForSEO `fetchBusinessInfoLive` — the only provider since v1.42.0 (the Google Places path for keyed users was removed); Mapbox `reverseGeocode` (for short-query padding); transforms; `trackUsage`.
+- **Response:** Place data + `_provider: "dataforseo"`, `_fetchTimeMs`, optional `_extended`, optional `lite_profile: PlaceProfile | null` (Phase 3+). `200` / `400` (invalid URL, unparseable) / `404` (no details) / `503` (no DataForSEO credentials on the server).
 - **lite_profile (Phase 3):** Inline rule-based profile (no LLM call). Built by `buildLiteProfileForResponse` after the main fetch, gated by `profiles.ai_features_enabled`. Carries `category_signals` (primary + sub-category slug + confidence), `features` (cuisine/dietary/seating/distinctive/price_range — atmosphere/occasions/music/crowd left empty for Phase 4), `suggested_tags.matched_existing` (no new_proposals in lite path), and `suggested_lists` (city/country/category/cuisine fuzzy match). Fail-soft: any error logs and returns `lite_profile: null` rather than failing the parse. See [[../../05-flows/lite-profile-flow]].
 - **DataForSEO keyword branching** (in order of preference):
   - `cidFromUrl` (raw URL has `?cid=` or FTid) → `keyword: cid:<decimal>`.

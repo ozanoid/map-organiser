@@ -6,6 +6,10 @@ import {
   decryptApiKey,
 } from "@/lib/google/get-user-api-keys";
 
+// The user's own Mapbox token (masked on the way out, encrypted at rest).
+// Google keys are no longer taken: places come from the server's DataForSEO
+// account since v1.42.0; the old profile columns are left in place.
+
 // GET - return masked keys
 export async function GET() {
   const supabase = await createClient();
@@ -17,24 +21,18 @@ export async function GET() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("is_admin, google_api_key_enc, mapbox_token_enc, google_places_enabled")
+    .select("is_admin, mapbox_token_enc")
     .eq("id", user.id)
     .single();
 
-  const googleKey = profile?.google_api_key_enc
-    ? decryptApiKey(profile.google_api_key_enc)
-    : "";
   const mapboxToken = profile?.mapbox_token_enc
     ? decryptApiKey(profile.mapbox_token_enc)
     : "";
 
   return NextResponse.json({
     isAdmin: profile?.is_admin || false,
-    googleApiKey: maskApiKey(googleKey),
     mapboxToken: maskApiKey(mapboxToken),
-    hasGoogleKey: !!googleKey,
     hasMapboxToken: !!mapboxToken,
-    googlePlacesEnabled: profile?.google_places_enabled ?? true,
   });
 }
 
@@ -50,18 +48,10 @@ export async function PUT(request: NextRequest) {
   const body = await request.json();
   const updates: Record<string, string | null> = {};
 
-  if (body.googleApiKey !== undefined) {
-    updates.google_api_key_enc = body.googleApiKey
-      ? encryptApiKey(body.googleApiKey)
-      : null;
-  }
   if (body.mapboxToken !== undefined) {
     updates.mapbox_token_enc = body.mapboxToken
       ? encryptApiKey(body.mapboxToken)
       : null;
-  }
-  if (body.googlePlacesEnabled !== undefined) {
-    updates.google_places_enabled = body.googlePlacesEnabled;
   }
 
   if (Object.keys(updates).length === 0) {

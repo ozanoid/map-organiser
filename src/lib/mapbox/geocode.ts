@@ -1,10 +1,17 @@
 import "server-only";
 
 /**
- * Mapbox Geocoding v6 forward lookup for an area the user names
- * ("Shoreditch, London"). Used by the assistant's search tools to turn a
- * neighbourhood into a point. Billed per request (SKU mapbox_geocoding);
- * the caller tracks usage.
+ * Mapbox Geocoding v6 forward lookups. Billed per request (SKU
+ * mapbox_geocoding, 100k free a month); the caller tracks usage.
+ *
+ * - geocodeArea: an area the user names ("Shoreditch, London") → a point,
+ *   for the assistant's search tools.
+ * - geocodeCity: a city's centre, for the Instagram import's searches. Cities
+ *   only (place, locality, district, region): measured 18.11.2026, Mapbox
+ *   answers city names well but maps several Istanbul neighbourhoods to
+ *   same-named streets elsewhere ("Moda, Istanbul" → a Moda Sokak in
+ *   Pendik), so neighbourhoods are looked up on Google Maps instead
+ *   (src/lib/instagram/places.ts).
  */
 
 const GEOCODE_URL = "https://api.mapbox.com/search/geocode/v6/forward";
@@ -21,7 +28,7 @@ export interface GeocodedArea {
   lng: number;
 }
 
-export async function geocodeArea(query: string): Promise<GeocodedArea | null> {
+async function forward(query: string, types: string): Promise<GeocodedArea | null> {
   const token = getToken();
   if (!token) return null;
   const params = new URLSearchParams({
@@ -29,7 +36,7 @@ export async function geocodeArea(query: string): Promise<GeocodedArea | null> {
     access_token: token,
     limit: "1",
     language: "en",
-    types: "neighborhood,locality,district,place,postcode,street,address",
+    types,
   });
   try {
     const res = await fetch(`${GEOCODE_URL}?${params.toString()}`);
@@ -51,4 +58,12 @@ export async function geocodeArea(query: string): Promise<GeocodedArea | null> {
     console.warn("[mapbox/geocode] request failed", e);
     return null;
   }
+}
+
+export function geocodeArea(query: string): Promise<GeocodedArea | null> {
+  return forward(query, "neighborhood,locality,district,place,postcode,street,address");
+}
+
+export function geocodeCity(name: string): Promise<GeocodedArea | null> {
+  return forward(name, "place,locality,district,region");
 }

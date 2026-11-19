@@ -2,8 +2,8 @@
 title: Manual Place Create Flow
 type: flow
 domain: places
-version: 1.2.2
-last_updated: 18.11.2026
+version: 1.3.0
+last_updated: 19.11.2026
 status: stable
 sources:
   - src/components/places/add-place-dialog.tsx
@@ -59,9 +59,8 @@ User opens the Add Place dialog from:
        │      - !3d!4d (POI actual coords) preferred over @lat,lng (viewport)
        │      - Falls back to {query, lat, lng} for /maps/place/Name/@…/ URLs
        │      - Short links resolved server-side; resolvedUrl exposed downstream
-       │  • If profiles.google_places_enabled AND google_api_key exists:
-       │      Google path: getPlaceDetails / searchPlace → ParsedPlaceData
-       │  • Else: DataForSEO path:
+       │  • DataForSEO (the only path since v1.42.0 — Google's Places API
+       │    path for users with a key was removed):
        │      - place_id → keyword: place_id:ChIJ…
        │      - cid (from FTid or ?cid=) → keyword: cid:<decimal>  (exact match)
        │      - search → reverseGeocode(coords) to pad keyword with full_address,
@@ -93,7 +92,7 @@ User opens the Add Place dialog from:
        │
        ▼
 6. POST /api/places/[id]/enrich?step=info  (awaited)
-       │  • DataForSEO fetchBusinessInfoLive (or Google if applicable)
+       │  • DataForSEO fetchBusinessInfoLive
        │  • Merges extended fields into google_data
        │  • Downloads main photo to Storage
        │  • UPDATE places — google_data fields filled in, photo_storage_url set
@@ -118,14 +117,15 @@ User opens the Add Place dialog from:
 | 6 | Place ID | `places.google_data` updated with extended fields |
 | 7 | Place ID | `places.google_data.reviews` populated |
 
-## Provider preference (step 3)
+## Provider (step 3)
 
-| Condition | Path |
-|---|---|
-| `profiles.google_places_enabled = true` AND `profiles.google_api_key_enc` set | **Google Places** |
-| Otherwise | **DataForSEO** |
-
-The preview UI shows which provider was used and the fetch time (`_provider`, `_fetchTimeMs`).
+**DataForSEO** business info, always (v1.42.0). Until then a user with
+`profiles.google_places_enabled` and a Google key went to Google's Places API
+first; that path, the key and the toggle were removed with the move of all
+place lookups to DataForSEO (no Google free-tier cliff — see
+[[../04-integrations/google-places]]). Measured: the Google path had no calls
+since July 2026. The preview still reports `_provider` (now always
+`dataforseo`) and `_fetchTimeMs`.
 
 ## Failure modes
 
@@ -145,7 +145,6 @@ The preview UI shows which provider was used and the fetch time (`_provider`, `_
 - `src/app/api/places/route.ts`
 - `src/app/api/places/[id]/enrich/route.ts`
 - `src/lib/google/parse-maps-url.ts`
-- `src/lib/google/places-api.ts`
 - `src/lib/dataforseo/business-info.ts`
 - `src/lib/dataforseo/transform.ts`
 - `src/lib/dataforseo/photo.ts`

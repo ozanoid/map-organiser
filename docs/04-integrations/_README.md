@@ -2,8 +2,8 @@
 title: Integrations
 type: overview
 domain: integrations
-version: 1.4.1
-last_updated: 18.11.2026
+version: 1.5.0
+last_updated: 19.11.2026
 status: stable
 related:
   - "[[supabase]]"
@@ -29,8 +29,8 @@ Third-party services and runtime libraries that materially shape how this app wo
 |---|---|---|
 | **Supabase** | Postgres + Auth + Storage (+ Vault, MCP, migrations) | [[supabase]] |
 | **Mapbox** | Map rendering (GL JS) + Directions API for plan routes | [[mapbox]] |
-| **Google Places API** | Authoritative place data when the user provides a key | [[google-places]] |
-| **DataForSEO Business Data** | Default enrichment provider (no per-user key) | [[dataforseo]] |
+| **Google Places API** | Not called since v1.42.0 — every place lookup goes through DataForSEO | [[google-places]] |
+| **DataForSEO** (Business Data + Google Maps SERP) | Every place lookup: link previews, imports, enrichment, the Instagram import's search, Claude's Google Maps search (no per-user key) | [[dataforseo]] |
 | **Google Gemini** (Generative Language API) | AI feature provider — `gemini-3-flash-preview`. Phase 4 full place_profile, Phase 6 NL search (both shipped); since v1.28.0 also the one read per Instagram post | [[gemini]] |
 | **Claude (MCP connector)** | The user's library as an MCP server for claude.ai and Claude Code; Supabase Auth is the OAuth 2.1 server (17.11.2026) | [[claude-mcp]] |
 | **HikerAPI** | Instagram data — the post, its tagged/mentioned accounts and their profiles, for the Instagram import (v1.28.0). System-level key `HIKERAPI_KEY` | [[hikerapi]] |
@@ -48,14 +48,7 @@ Everything else (Tailwind, shadcn, lucide, sonner, …) is documented in [[../00
 
 ## Provider preference (place enrichment)
 
-When parsing a Google Maps URL or importing places, the app picks an enrichment provider in this order:
-
-1. **Google Places** — if the user has a personal `google_api_key` AND `profiles.google_places_enabled = true`.
-2. **DataForSEO** — fallback. Server-side credentials, available to every user.
-
-The user can disable Google explicitly in Settings → API (`googlePlacesEnabled = false`) even with a key, forcing DataForSEO.
-
-The Instagram import (v1.28.0) is different on the matching side: it always finds candidates with Google Text Search on the user's key — the toggle is not consulted, and without a key it does not start — and then enriches the places it adds through DataForSEO in the import queue, like any import. See [[../05-flows/instagram-import-flow]].
+Every place lookup goes through **DataForSEO** on the server's credentials (v1.42.0): parsing a Google Maps link, imports, enrichment, the Instagram import's candidate search (its Google Maps search, with Mapbox for the post's city), Claude's `search_google_maps` and `add_places`. Until v1.42.0 a user with a Google key and `profiles.google_places_enabled` went to Google Places first, and the Instagram import always used Google Text Search on the user's key — replaced because Text Search bills $35 per 1,000 past 1,000 free a month. See [[google-places]] and [[../05-flows/instagram-import-flow]].
 
 ## Cost-tracked SKUs
 
@@ -66,8 +59,8 @@ Every external API call that costs money goes through one of two trackers, both 
 
 SKUs — the keys of `SKU_CONFIG` and `AI_SKU_CONFIG`; the canonical list with prices is [[../02-backend/schema/api_usage]]:
 
-- Google Places: `text_search_pro`, `place_details_pro`, `reviews_enterprise`, `photos`, and `text_search_enterprise` (v1.28.0 — the Instagram import's candidate search, on the user's own key).
-- DataForSEO: `dataforseo_business_info_live`, `dataforseo_reviews`.
+- Google Places: `text_search_pro`, `place_details_pro`, `reviews_enterprise`, `photos`, `text_search_enterprise` — none written since v1.42.0; kept so past rows still show.
+- DataForSEO: `dataforseo_business_info_live`, `dataforseo_reviews`, `dataforseo_maps_search` (Claude's Google Maps search; since v1.42.0 also the Instagram import's).
 - Mapbox: `mapbox_search_session`, `mapbox_directions` (v1.22.0); `mapbox_load` is registered but nothing tracks map loads.
 - HikerAPI: `hikerapi_request` (v1.28.0).
 - AI: `ai_place_profile`, `ai_parse_query`, `ai_rank_results`, `ai_compare`, `ai_chat`, `ai_trip_plan`, `ai_instagram_read` (v1.28.0), plus the unused `ai_embedding` placeholder.

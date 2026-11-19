@@ -33,6 +33,14 @@ export interface FoundPlace {
   phone: string | null;
   website: string | null;
   closed: "permanently" | "temporarily" | null;
+  /** The address as Google splits it. An area's own result (a neighbourhood,
+   *  a district) has no category; these parts tell how big it is. */
+  addressParts: {
+    borough: string | null;
+    city: string | null;
+    region: string | null;
+    countryCode: string | null;
+  } | null;
 }
 
 export interface PlaceSearchResult {

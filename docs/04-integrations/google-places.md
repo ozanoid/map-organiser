@@ -2,17 +2,15 @@
 title: Google Places API
 type: integration
 domain: integrations
-version: 1.2.1
-last_updated: 16.10.2026
-status: stable
+version: 2.0.0
+last_updated: 19.11.2026
+status: deprecated
 sources:
-  - src/lib/google/places-api.ts
   - src/lib/google/parse-maps-url.ts
   - src/lib/google/category-mapping.ts
   - src/lib/google/takeout-parser.ts
   - src/lib/google/track-usage.ts
   - src/lib/google/get-user-api-keys.ts
-  - src/lib/google/place-candidates.ts
   - src/lib/instagram/analyze.ts
 related:
   - "[[../01-domain/places]]"
@@ -24,20 +22,31 @@ related:
 
 # Google Places API
 
-The original enrichment provider. Used **only when**:
+> **Not called since v1.42.0 (18.11.2026).** Every place lookup goes through
+> [[dataforseo|DataForSEO]] on the server's account: the Add Place link
+> preview (`/api/places/parse-link`, business info) and the Instagram
+> import's candidate search (Google Maps search, `src/lib/instagram/places.ts`).
+> `src/lib/google/places-api.ts` and `src/lib/google/place-candidates.ts` were
+> deleted, Settings no longer takes a Google key, and `GOOGLE_PLACES_API_KEY`
+> is read by nothing.
+>
+> **Why.** Text Search bills $35 per 1,000 past 1,000 free a month (Enterprise
+> fields), and an Instagram post with several venues runs 16–26 searches
+> (measured 18.11.2026) — a bulk import would cross the free tier and bill in
+> dollars at once. DataForSEO's Google Maps search costs $0.002 a search with no
+> tier to cross. The switch was checked on the 35-post Instagram eval (see
+> [[../05-flows/instagram-import-flow]]).
+>
+> **Still Google:** what the app reads from Google Maps through DataForSEO
+> (the same listings, place ids and CIDs), `parse-maps-url.ts` (reads links,
+> no API), `category-mapping.ts`, `takeout-parser.ts`, `track-usage.ts` (the
+> old Google SKUs stay so past usage rows still show in the cost tracker).
+>
+> The rest of this page describes the integration as it was.
 
-1. The user has provided a personal API key (stored as `profiles.google_api_key_enc`), AND
-2. `profiles.google_places_enabled = true`.
+## Before v1.42.0
 
-Otherwise the app falls back to [[dataforseo|DataForSEO]].
-
-**Exception — the Instagram import (v1.28.0).** Its candidate search always uses
-Google Text Search on the key `getUserApiKeys` returns (the user's own, or
-`GOOGLE_PLACES_API_KEY` for an admin). `google_places_enabled` is not consulted —
-the owner's decision (16.10.2026): the toggle keeps scoping Maps-link lookups,
-and the import's evidence rules were measured on Google results. Without a key
-the import refuses to start (400). See
-[[../05-flows/instagram-import-flow]].
+The original enrichment provider. Used **only when** the user had provided a personal API key (`profiles.google_api_key_enc`) and `profiles.google_places_enabled = true`; otherwise the app fell back to DataForSEO. The Instagram import (v1.28.0–v1.41.x) always used Google Text Search on the key `getUserApiKeys` returned.
 
 ## Account & access
 

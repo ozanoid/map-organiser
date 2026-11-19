@@ -2,8 +2,8 @@
 title: api_usage
 type: table
 domain: backend
-version: 1.5.0
-last_updated: 18.11.2026
+version: 1.6.0
+last_updated: 19.11.2026
 status: stable
 sources:
   - Supabase project hukppmaevcapvbrvxtph (live)
@@ -78,16 +78,16 @@ The composite UNIQUE constraint makes the UPSERT atomic. App code calls this via
 - **Day granularity is deliberate.** Reporting is monthly; row-per-day keeps query plans simple and storage small.
 - **SKU naming convention.** Two registries write this table:
   - `src/lib/google/track-usage.ts#SKU_CONFIG`:
-    - `text_search_pro`, `place_details_pro`, `reviews_enterprise`, `photos` (Google Places)
-    - `text_search_enterprise` (Google Places, v1.28.0 — the Instagram import's candidate search; its field mask asks for website + phone, which puts Text Search on the Enterprise SKU: $35/1k past 1k free. Billed to the user's own Google key)
+    - `text_search_pro`, `place_details_pro`, `reviews_enterprise`, `photos` (Google Places — no code writes them since v1.42.0; kept so past rows still show)
+    - `text_search_enterprise` (Google Places, v1.28.0–v1.41.x — the Instagram import's candidate search; Enterprise SKU, $35/1k past 1k free. Replaced by `dataforseo_maps_search` in v1.42.0; kept for past rows)
     - `mapbox_load`, `mapbox_search_session`, `mapbox_directions` (Mapbox — `mapbox_directions` added v1.22.0, $2/1k past 100k free, tracked at both `getRoute` call sites; `mapbox_load` is registered but has no call site)
     - `dataforseo_business_info_live`, `dataforseo_reviews` (DataForSEO)
     - `hikerapi_request` (HikerAPI, v1.28.0 — every request the Instagram import makes, $1/1k, no free tier)
-    - `mapbox_geocoding` (Mapbox Geocoding v6, 17.11.2026 — one per `near.area` lookup in the assistant's search tools, $0.75/1k past 100k free)
-    - `dataforseo_maps_search` (DataForSEO SERP API, 18.11.2026 — one per `search_google_maps` call, $2/1k, no free tier)
+    - `mapbox_geocoding` (Mapbox Geocoding v6, 17.11.2026 — one per `near.area` lookup in the assistant's search tools, and since v1.42.0 one per city an Instagram post names; $0.75/1k past 100k free)
+    - `dataforseo_maps_search` (DataForSEO SERP API, 18.11.2026 — one per `search_google_maps` call, and since v1.42.0 one per Instagram candidate or area search; $2/1k, no free tier)
   - `src/lib/ai/track-usage.ts#AI_SKU_CONFIG` (via `trackAiUsage`, same RPC):
     - `ai_parse_query`, `ai_rank_results`, `ai_place_profile`, `ai_embedding` (placeholder), `ai_compare` (v1.19.0), `ai_chat` (v1.21.0), `ai_trip_plan` (v1.22.0, $12/1k), `ai_instagram_read` (v1.28.0, $1.5/1k — one per Gemini call reading an Instagram post, so a retried read counts twice (v1.28.2); also the unit of the `instagram` budget, 300/month)
-  - The Instagram import writes its `hikerapi_request` and `text_search_enterprise` rows in a `finally`, so a failed import's calls are still counted; since v1.28.2 the same `finally` writes one `ai_instagram_read` per Gemini call, retries and failed reads included.
+  - The Instagram import writes its `hikerapi_request`, `dataforseo_maps_search` and `mapbox_geocoding` rows (before v1.42.0: `text_search_enterprise`) in a `finally`, so a failed import's calls are still counted; since v1.28.2 the same `finally` writes one `ai_instagram_read` per Gemini call, retries and failed reads included.
   - The cost tracker UI merges both registries (`getMonthlyUsage` spreads `{...SKU_CONFIG, ...AI_SKU_CONFIG}`).
 - **Cost computed in UI, not stored.** The `cost_per_1k` column lets the UI multiply by `count / 1000` for monthly spend; no aggregate is precomputed.
 - Consumed by: `GET /api/user/usage` (monthly aggregate), `CostTracker` UI component, every external API helper in `src/lib/google/` and `src/lib/dataforseo/`, and `checkAiBudget` (`src/lib/ai/track-usage.ts`) — the monthly AI budget gates read these same per-day counters.
