@@ -6,6 +6,25 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 19.11.2026 — v1.45.2 — Proxy, fra1 and the DataForSEO failure handling on main
+
+- v1.44.0–v1.45.1 merged to main with Ozan's approval (merge `8d25288`; main
+  had not moved since the security merge, and the merged tree equals the
+  branch tree). Production deployment succeeded.
+- **Checked in production:** a function response now carries
+  `x-vercel-id: lhr1::fra1::…` (`/api/mcp` → 401; it read `lhr1::iad1::…`
+  before) — the functions run next to the database. Signed out, the proxy
+  answers as before: `/map?add=…` and `/plans/<id>` → `/login?next=…`,
+  `/signup` and `/api/plans` → `/login`, `/trips/:id` → 308. A connector call
+  with the real token (`get_library_overview`, free) works. Responses the
+  proxy answers itself carry only the edge id (`lhr1::…`), so the header
+  doesn't show where the proxy ran.
+- Measured for the queue edge reported in v1.45.1: 20 import jobs, all `done`,
+  460 items, none stuck at `attempts = 3` — it hasn't happened yet.
+- Docs: this entry.
+
+---
+
 ## 19.11.2026 — v1.45.1 — Review fixes: an outage holds the queue; backfill and refresh can't loop
 
 An independent review of v1.44.0–v1.45.0 (read-only, on the diff) found
