@@ -2,8 +2,8 @@
 title: Shared routes
 type: route-group
 domain: backend
-version: 1.5.1
-last_updated: 18.11.2026
+version: 1.5.2
+last_updated: 19.11.2026
 status: stable
 sources:
   - src/app/api/shared/route.ts
@@ -71,7 +71,7 @@ The `/api/shared/*` prefix is explicitly exempt from the auth-required middlewar
   - **Place path (v1.20.0):** single `places` SELECT joined with `categories(name, color)`.
 - **External:** `withRoutes(plan)` → Mapbox Directions, one per day with ≥ 2 located stops (plan path only), with the day's `routing_profile`, tracked as `mapbox_directions` against the link owner.
 - **Response shape:**
-  - `{ type: "list", slug, ownerName, list, places }` (places ordered by `list_places.sort_order`, each with `list_note`).
+  - `{ type: "list", slug, ownerName, list, places }` (places ordered by `list_places.sort_order`, each with `list_note`). `list` is `{ id, name, description, color }` — what SharedListView renders (v1.43.0; before, the full row went out, the owner's `user_id` with it).
   - `{ type: "plan", slug, ownerName, plan }` — a **whitelist** (`handlePlanShare`): `plan { id, name, start_date, end_date, status, day_count, stop_count, days }`; day `{ id, day_number, date, routing_profile, route, stops }`; stop `{ id, title, start_time, day_part, place }`; place `{ id, name, address, city, country, rating, location, category {name, color}, google_data {url} }`. **Not sent:** cost estimates, currency, party size, notes (plan, day, stop), stop status, the place's visit status and the rest of its Google data. Checked on 18.11.2026 against a real 19-stop plan: 48 KB (mostly route geometry), none of those keys in the payload.
   - `{ type: "place", slug, ownerName, place }` — place is a **whitelist**: `id, name, address, city, country, notes, category {name, color}, location {lat, lng}`, and `google_data` limited to `photo_storage_url, rating, user_ratings_total, opening_hours, website, url`. Owner-personal fields (user_id, rating, visit_status, booked_at/visited_at, source, timestamps) and heavy/private google_data (reviews, place_profile, work_timetable, attributes, topics) never leave the server.
 - **Status:** `200`; `400` on unknown resource_type; `404` if link not found or `is_active = false`.

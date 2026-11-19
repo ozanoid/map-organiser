@@ -2,7 +2,7 @@
 title: Manual Place Create Flow
 type: flow
 domain: places
-version: 1.3.0
+version: 1.3.1
 last_updated: 19.11.2026
 status: stable
 sources:
@@ -131,8 +131,8 @@ since July 2026. The preview still reports `_provider` (now always
 
 - **Instagram link that is not a post (step 2):** caught in the dialog — an inline hint asks for a post or reel, and `parse-link` is not called.
 - **Invalid URL (step 3):** `400` with the parse error. Dialog shows toast.
-- **Place not found (step 3):** `404`. Dialog shows toast.
-- **Both providers down (step 3):** `500`. Dialog shows generic error.
+- **Place not found (step 3):** `404` — DataForSEO looked and has no such place. Dialog shows the toast; the link stays in the field.
+- **Lookup failed (step 3):** `502` — DataForSEO down or out of balance, or no answer in 35 s (v1.42.2; before, this read as `404` "not found"). The toast says to try again; the link stays in the field, so the button retries. Any other error in the route: `500`, generic toast.
 - **Save fails (step 5):** Dialog stays open with the user's choices preserved. Network glitch — retry usually works.
 - **Duplicate (step 5):** `409`. The user already has this `google_place_id`. UI surfaces "this place is already in your collection". Since v1.41.0 the database holds it too (`places_user_google_place_id_key`): a concurrent save of the same place gets the same 409 instead of a second row.
 - **Enrich info fails (step 6):** Place is still saved; user just doesn't get extended data immediately. Manual "Refresh Google data" from detail page can re-run.

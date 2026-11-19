@@ -26,6 +26,13 @@ export interface BusinessInfoRequest {
 /** DataForSEO's task status for "nothing found". */
 const NO_RESULTS = 40102;
 
+/**
+ * How long a caller answering within one request waits for a live lookup.
+ * DataForSEO took 10–12 s in testing (18.11.2026); past this bound "try again"
+ * serves the user better than a request that hangs.
+ */
+export const LIVE_LOOKUP_TIMEOUT_MS = 35_000;
+
 export interface BusinessInfoOptions {
   /** Abort the request (a caller answering within one request bounds it). */
   signal?: AbortSignal;

@@ -2,7 +2,7 @@
 title: Settings components
 type: component
 domain: frontend
-version: 1.4.0
+version: 1.4.1
 last_updated: 19.11.2026
 status: stable
 sources:
@@ -64,7 +64,7 @@ Five components powering the Settings page tabs. All `"use client"`.
 
 - **File:** `src/components/settings/ai-settings.tsx` (Phase 1, extended in Phase 5)
 - **Props:** none.
-- **Hooks:** `useState`, `useEffect`. Optimistic-update + rollback-on-error pattern.
+- **Hooks:** `useState`, `useEffect` — loads once on mount; the loader sits inside the effect (React's immutability lint rule rejects a call to a function declared below it, v1.43.0) and drops a late answer after unmount. Optimistic-update + rollback-on-error pattern.
 - **API calls:** `GET` and `PUT` `/api/user/ai-settings`.
 - **State:** `{ enabled: boolean, available: boolean, cronRefreshEnabled: boolean } | null` + `loading` + `saving`.
 - **Renders:** Master toggle (rounded switch, accessible `role="switch"`/`aria-checked`). Always below it (independent of the AI master — the data half isn't AI): the **"Background data refresh" toggle** (15.07.2026 — opt-in for the whole periodic sweep, default off; see [[../../06-ops/runbooks/periodic-refresh]]). Then, when **enabled + available**: `BackfillProfilesPanel` and `AiSuggestionsQueue`. When **not available** (server-side env missing): amber banner mentioning `GOOGLE_GENERATIVE_AI_API_KEY`.

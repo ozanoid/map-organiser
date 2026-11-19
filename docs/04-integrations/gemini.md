@@ -2,8 +2,8 @@
 title: Google Gemini (LLM)
 type: integration
 domain: integrations
-version: 1.10.2
-last_updated: 18.11.2026
+version: 1.10.3
+last_updated: 19.11.2026
 status: stable
 sources:
   - src/lib/ai/client.ts
@@ -43,7 +43,7 @@ The LLM provider behind the AI features added across PRs #30–#35 (Phases 1–5
 |---|---|---|
 | `ai` | `^6.0.228` | AI SDK v6 — provider-agnostic call layer. Structured JSON calls use `generateText` + `Output.object`. **v1.21.0 amendment:** the chat assistant (`/api/ai/chat`) uses `streamText` + tools — the one deliberate exception to the old "never streamText" rule; progressive output IS the product there. Everything else stays on generateText. |
 | `@ai-sdk/react` | `3.0.230` | `useChat` for the assistant panel (v1.21.0). ⚠️ VERSION LOCKSTEP: the 3.x line pairs with ai@6 via an EXACT pin (3.0.230 → ai@6.0.228). Plain `npm i @ai-sdk/react` installs 4.x which drags in ai@7 as a nested duplicate and splits UIMessage type identity — always bump the two together. |
-| `@ai-sdk/google` | `^3.0.75` | Google provider plugin. Exports `createGoogleGenerativeAI`. |
+| `@ai-sdk/google` | `^3.0.141` | Google provider plugin. Exports `createGoogleGenerativeAI`. (3.0.75 until v1.43.0; same major — `rank_places` and the Instagram read were run on it.) |
 
 > **Check `node_modules` before blaming the code (16.10.2026).** A local install had drifted to `ai@7.0.31` / `@ai-sdk/google@4.0.18` while `package-lock.json` pins `6.0.228` / `3.0.75`; `npm install` re-synced it. The 7 `experimental_telemetry.metadata` type errors seen locally — attributed in v1.25.0 to an "AI SDK v7 bump" on `main` — came from that drift, not from the code: `package.json` has never left the 6.x line. See [[../00-overview/tech-stack#lockfile--install]].
 

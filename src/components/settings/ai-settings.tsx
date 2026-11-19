@@ -26,23 +26,28 @@ export function AiSettings() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
+  // Load once on mount. The loader lives inside the effect: declared below
+  // it, React's immutability lint rule (eslint-config-next 16.4) rejects the
+  // call. `active` drops the answer of a load the component no longer waits
+  // for (unmount, Strict Mode's second run).
   useEffect(() => {
-    void fetchSettings();
+    let active = true;
+    (async () => {
+      try {
+        const res = await fetch("/api/user/ai-settings");
+        if (!res.ok) throw new Error("Failed to load AI settings");
+        const data = (await res.json()) as AiSettingsState;
+        if (active) setState(data);
+      } catch (e) {
+        if (active) toast.error(e instanceof Error ? e.message : "Failed to load AI settings");
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+    return () => {
+      active = false;
+    };
   }, []);
-
-  async function fetchSettings() {
-    setLoading(true);
-    try {
-      const res = await fetch("/api/user/ai-settings");
-      if (!res.ok) throw new Error("Failed to load AI settings");
-      const data = (await res.json()) as AiSettingsState;
-      setState(data);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to load AI settings");
-    } finally {
-      setLoading(false);
-    }
-  }
 
   async function handleToggle(next: boolean) {
     if (!state) return;

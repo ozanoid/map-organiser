@@ -53,8 +53,9 @@ export function useParseLink() {
         body: JSON.stringify({ url }),
       });
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Failed to parse link");
+        // A gateway timeout answers HTML, not JSON — keep the generic message.
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error || "Failed to parse link");
       }
       return res.json();
     },

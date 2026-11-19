@@ -2,8 +2,8 @@
 title: "Kişisel mekan ve gezme asistanı — yön planı"
 type: plan
 domain: overview
-version: 1.7.1
-last_updated: 18.11.2026
+version: 1.7.2
+last_updated: 19.11.2026
 status: stable
 related:
   - "[[../00-overview/system-overview]]"
@@ -33,7 +33,7 @@ related:
 |---|---|---|
 | — | Public sign-up'ı kapat | Tamam: kod `feat/personal-assistant` dalında; Supabase'de kayıt kapalı (`disable_signup: true`, doğrulandı 17.11.2026) |
 | 0 | Claude'a kapı: MCP server + OAuth | **Tamam (17.11.2026):** main'de, claude.ai'a bağlı. Okuma tool'ları connector üzerinden gerçek token'la doğrulandı; `update_places` henüz gerçek kullanımda denenmedi |
-| 1 | Planlama ve ziyaretler | Tasarım v2 onaylı: [[phase-1-planning]]. Şema uygulandı (18.11.2026); `search_google_maps` main'de. **Dilim 1 (plan modeli dönüşümü) main'de (18.11.2026)** — uygulama artık plan tablolarında çalışıyor; arayüz tarayıcıda uçtan uca denendi. Eski trip tablolarının silinmesi ayrı onay bekliyor. Dilim 2 (ziyaretler) main'de (18.11.2026). Dilim 3 (plan tool'ları: `get_plans`, `create_plan`, `update_plan`; ayrıca `delete_visit`) main'de (18.11.2026). Dilim 4 (listeler: tek yazma yolu, öğe notu, `get_lists` / `save_list`) main'de (18.11.2026). Dilim 5 (`add_places`: Google kimliği, Maps linki ya da Instagram postuyla ekleme; mekan başına tek satır kuralı veritabanında) main'de (18.11.2026). Faz 1'in beş dilimi tamam |
+| 1 | Planlama ve ziyaretler | Tasarım v2 onaylı: [[phase-1-planning]]. Şema uygulandı (18.11.2026); `search_google_maps` main'de. **Dilim 1 (plan modeli dönüşümü) main'de (18.11.2026)** — uygulama artık plan tablolarında çalışıyor; arayüz tarayıcıda uçtan uca denendi. Eski trip tablolarının silinmesi ayrı onay bekliyor. Dilim 2 (ziyaretler) main'de (18.11.2026). Dilim 3 (plan tool'ları: `get_plans`, `create_plan`, `update_plan`; ayrıca `delete_visit`) main'de (18.11.2026). Dilim 4 (listeler: tek yazma yolu, öğe notu, `get_lists` / `save_list`) main'de (18.11.2026). Dilim 5 (`add_places`: Google kimliği, Maps linki ya da Instagram postuyla ekleme; mekan başına tek satır kuralı veritabanında) main'de (18.11.2026). Faz 1'in beş dilimi tamam. Ardından mekan aramaları tamamen DataForSEO'ya geçti — Google Places artık çağrılmıyor (main'de, 19.11.2026; v1.42.0) |
 | 2 | Platform asistanı Claude'a | Sırada |
 | 3 | İletişim (e-posta, Telegram, WhatsApp linki, davet sayfası) | Sırada |
 | 4 | Geri bildirim döngüsü | Sırada |

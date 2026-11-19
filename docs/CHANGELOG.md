@@ -6,12 +6,164 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 19.11.2026 — v1.43.1 — Security round, database side: two fixes in code, two migrations prepared
+
+The Supabase security advisor pass Ozan had deferred, run as part of the
+security round. The two migrations are in the repo and **not applied** —
+schema changes are shown to Ozan first.
+
+- **Found:** `increment_api_usage(p_user_id, …)` is SECURITY DEFINER and
+  executable by `anon` — anyone with the public anon key could add usage rows
+  for any user id. The AI budget guard counts those rows, so a user's monthly
+  AI caps could be run out; and the public shared-list API returned the list's
+  full row, the owner's `user_id` with it. Together: anyone who saw a shared
+  list link could switch its owner's AI features off for the month.
+  - Code (this version): the shared list payload is `{ id, name, description,
+    color }` — what the page renders; the import queue's review stage counts
+    usage with the service client (it went through a session-less cookie
+    client, i.e. as `anon`).
+  - Prepared: `20261119004416_rpc_least_privilege.sql` — `anon` loses
+    `EXECUTE`; a signed-in caller counts only their own usage (`42501`
+    otherwise); `service_role` and direct sessions unchanged; the trigger
+    functions `handle_new_user` and `create_default_categories` lose
+    `EXECUTE` for `public`, `anon`, `authenticated`. To be applied after this
+    code is deployed.
+- **Found:** PostGIS's `spatial_ref_sys` (RLS off) is writable by `anon` and
+  `authenticated` — `supabase_admin` granted them INSERT, UPDATE, DELETE,
+  TRUNCATE. With the anon key anyone could alter or delete the SRID
+  definitions and break every geography query. `postgres` can't revoke those
+  grants or enable RLS, but holds TRIGGER. Prepared:
+  `20261119004648_spatial_ref_sys_read_only.sql` — a trigger refuses writes
+  from the two API roles.
+- **Both tried in rolled-back transactions on the live database** (nothing
+  kept, checked afterwards): an insert as `authenticated` still fires a
+  trigger whose function it can't execute; `authenticated` counting its own
+  usage → ok, another user's → 42501; `anon` → 42501; `service_role` and a
+  direct session → ok. `spatial_ref_sys`: as `anon` an UPDATE of srid 4326
+  changed 1 row before the guard; after it, anon INSERT / UPDATE / DELETE and
+  authenticated UPDATE → 42501, anon SELECT and a geography distance → ok.
+- **Accepted, with reasons in [[02-backend/rls-policies]]:** `st_estimatedextent`
+  (PostGIS, owned by `supabase_admin`, `postgres` can't revoke), PostGIS in
+  `public` (not relocatable), `vocabulary_migrations` (RLS on, no policy —
+  service-only). Leaked password protection is a dashboard setting — Ozan's.
+- **Measured for the DataForSEO fault class** (a failed request read as
+  "nothing found", v1.42.2): on 910 places, 0 thin records, 0 "no reviews"
+  stamps on a place Google shows reviews for, 2 places without a photo — no
+  damage so far; the risk is an outage during a bulk import.
+- **Checked:** `tsc`, `eslint` (0 errors); the four list columns the shared
+  payload now selects exist on a shared list. The public shared page itself
+  wasn't opened (it bumps the link's view count).
+- Docs: [[02-backend/rls-policies]], [[02-backend/schema/api_usage]],
+  [[02-backend/api-routes/shared]], [[_agent/pitfalls]].
+
+---
+
+## 19.11.2026 — v1.43.0 — Security update: Next.js 16.4.6 and dependencies
+
+Ozan asked for a security round after GitHub reported 126 open Dependabot
+alerts on main (6 critical, 45 high). The only direct dependency among them
+was `next` 16.2.10 — 22 alerts, 5 critical (remote code execution in the image
+optimizer, `next/og`, `use cache`, on Windows hosts) and 6 high. Every upgrade
+stays inside its package's major; each release picked is at least ten days
+old.
+
+- `next` and `eslint-config-next` 16.2.10 → 16.4.6. The bundled upgrade guide
+  lists nothing this app uses among the 16.3/16.4 changes (two removed
+  experimental flags we never set). The build's only warning is the old one:
+  `middleware` is deprecated in favour of `proxy` — not changed here, see
+  [[_agent/pitfalls]].
+- `zod` 4.4.3 → 4.6.7 (validating an oversized constrained collection could
+  exhaust memory); `@ai-sdk/google` 3.0.75 → 3.0.141 (its `provider-utils`
+  had a low-severity advisory).
+- The `shadcn` CLI 4.13.1 → 4.23.0, moved to `devDependencies`. 4.13 pulled
+  the old `@modelcontextprotocol/sdk` with express, body-parser, qs,
+  proxy-addr, hono and undici — most of the alerts. None of it ran in the app:
+  the MCP server uses `@modelcontextprotocol/server` 2 through `mcp-handler`,
+  and the app imports only shadcn's stylesheet, which the build bundles.
+- `eslint` 10.15.0 and `npm audit fix` for the rest (nanoid, source-map-js,
+  brace-expansion, postcss and sharp through Next, typescript-eslint,
+  @babel/core). `npm audit`: 36 vulnerable packages (2 critical, 14 high) →
+  4 moderate, all in the shadcn CLI's `ts-morph` → `minimatch` chain (dev
+  only; the only offered fix is a downgrade).
+- The new lint rule `react-hooks/immutability` failed on Settings → AI: the
+  effect called a loader declared below it. The loader now sits inside the
+  effect; it also drops an answer that arrives after unmount. Lint: 0 errors,
+  80 warnings.
+- **Checked:** `tsc`; `eslint`; `next build`; `npm run check:assistant`, every
+  suite on the live database — 223 checks, among them Gemini `rank_places` and
+  an Instagram read on the new AI SDK, DataForSEO searches and lookups
+  (≈ $0.07: DataForSEO $0.058, HikerAPI and Gemini the rest); the production
+  build served locally, signed out: `/`, `/map?add=…` and `/plans/<id>` →
+  `/login?next=…`, `/trips/:id` → 308, `/api/mcp` → 401 with
+  `WWW-Authenticate`, the OAuth resource metadata, `sw.js`, the manifest and
+  `/offline` → 200 — the same answers production gives. **Not checked:**
+  signed-in pages in a browser.
+- Docs: [[00-overview/tech-stack]], [[04-integrations/gemini]],
+  [[03-frontend/components/settings]], [[_agent/pitfalls]].
+
+---
+
+## 19.11.2026 — v1.42.2 — Link preview: a failed lookup is not "not found"
+
+Ozan asked for it after the v1.42.1 report. Both faults predate the
+DataForSEO switch.
+
+- `/api/places/parse-link` answered `404` "Could not find place details for
+  this link." when DataForSEO itself failed (down, out of balance) — the same
+  answer as a place Google doesn't know. It now looks up with `throwOnError`
+  and a 35 s bound: no such place → `404`; a failed lookup → `502` "Couldn't
+  look this place up right now. Please try again." The link stays in the
+  field, so the button retries.
+- A lookup that found nothing is billed ($0.0054, measured 18.11.2026) but
+  was not counted in `api_usage` (only a found place was). Every lookup
+  DataForSEO ran is counted now; a failed one isn't (not billed).
+- The body is validated with zod (a body that isn't JSON was an unhandled
+  error); `useParseLink` keeps its generic message when an error response
+  isn't JSON (a gateway timeout).
+- `LIVE_LOOKUP_TIMEOUT_MS` (35 s) now lives in `business-info.ts`, shared by
+  parse-link and `add_places` (was a constant in `src/lib/places/add.ts`).
+- **Checked:** `tsc`, `eslint`; locally, an aborted request: the default mode
+  returns `null` (the old "not found"), `throwOnError` throws. Not checked:
+  the signed-in dialog in a browser.
+- **Same fault class elsewhere, not changed here** (reported to Ozan): the
+  DataForSEO wrappers turn a failed request into "nothing found" (`null`,
+  `[]`) by default, and other callers act on it — the import, the reviews
+  step, the photo stage, the Mapbox-search preview, the refresh.
+- Docs: [[02-backend/api-routes/places]], [[05-flows/manual-place-create-flow]],
+  [[03-frontend/hooks/use-places]], [[04-integrations/dataforseo]].
+
+---
+
+## 19.11.2026 — v1.42.1 — DataForSEO switch on main
+
+- The move of every place lookup to DataForSEO (v1.42.0) merged to main with
+  Ozan's approval (merge `7bb5a21`; main had not moved since the add_places
+  merge, and the merged tree equals the branch tree). No database change.
+- Production deployment succeeded. Checked there through the connector with
+  the real token: `search_google_maps` near Shoreditch with a nonsense query
+  (Google Maps still matched one business) and the same query at an empty
+  spot in the Pacific, which returned an empty list, not an error — most
+  likely the no-match status the old code threw on (the call's raw status
+  isn't logged). $0.004. Not tried in production: the Instagram import and
+  the Add Place preview (one adds places, the other needs a signed-in
+  session).
+- **Docs fixed on the way:** [[04-integrations/dataforseo]] said a lookup with
+  no match comes back as an empty result set and that the import then skips
+  the place. In fact DataForSEO answers task status 40102 (Business Info
+  bills it like a hit); the import retries by name, then keeps a thin record;
+  only `add_places` saves nothing. Also recorded there: parse-link answers
+  404 for a failed lookup as well as for no match.
+- Docs: [[04-integrations/dataforseo]], [[04-integrations/claude-mcp]],
+  [[_plans/phase-1-planning]], [[_plans/personal-assistant]].
+
+---
+
 ## 19.11.2026 — v1.42.0 — Every place lookup through DataForSEO; Google Places retired
 
 Ozan's decision (18.11.2026): move every Google Text Search to DataForSEO, so a
 bulk import can never cross Google's free tier into $35 per 1,000 — after the
 Instagram eval confirms it. Written on the branch `feat/personal-assistant`;
-not merged yet.
+on main since v1.42.1.
 
 - **Instagram import:** candidates come from Google Maps through DataForSEO's
   Maps search (`src/lib/instagram/places.ts`) instead of Google Places Text

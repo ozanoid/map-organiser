@@ -359,7 +359,10 @@ export async function GET(request: NextRequest) {
       return false;
     }
 
-    await trackUsage(item.user_id, "dataforseo_reviews");
+    // The service client: a cron request has no session, so the default
+    // cookie client counted as `anon` — which loses EXECUTE on
+    // increment_api_usage (migration rpc_least_privilege).
+    await trackUsage(item.user_id, "dataforseo_reviews", admin);
     await admin
       .from("places")
       .update({

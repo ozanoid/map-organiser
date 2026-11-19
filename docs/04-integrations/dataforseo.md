@@ -2,7 +2,7 @@
 title: DataForSEO Business Data
 type: integration
 domain: integrations
-version: 1.7.0
+version: 1.7.2
 last_updated: 19.11.2026
 status: stable
 sources:
@@ -51,7 +51,7 @@ Implementation in `src/lib/dataforseo/`:
 |---|---|
 | `client.ts` | Low-level HTTP client; auth header construction. |
 | `api-types.ts` | Type definitions for DataForSEO responses. |
-| `business-info.ts` | `fetchBusinessInfoLive(query)` — the main endpoint. Returns full business profile. |
+| `business-info.ts` | `fetchBusinessInfoLive(query, { signal, throwOnError })` — the main endpoint. Returns the full business profile, or `null`. By default `null` covers both "no such business" and a failed request; with `throwOnError` a failure throws, so `null` means only "no such business". `LIVE_LOOKUP_TIMEOUT_MS` (35 s) bounds a lookup made inside a request (`add_places`, parse-link). |
 | `reviews.ts` | `fetchReviews({cid, depth, sort_by})` — reviews endpoint. Default sort `relevant` (initial/import — establishes the relevance backbone); refreshes pass `newest` to discover new reviews. |
 | `transform.ts` | `transformBusinessInfoToPlaceData(response)` → `ParsedPlaceData`. |
 | `category-adapter.ts` | DataForSEO category string → one of our 12 default categories. |
@@ -69,6 +69,7 @@ Implementation in `src/lib/dataforseo/`:
 - `client.ts` gained `dataForSeoClientFromEnv()` and an optional abort signal on `post`.
 - **An area query answers with the area** (v1.42.0, measured): "Moda, Istanbul" → one item titled "Moda", no `category`, `address_info` `{ borough: Caferağa, city: Kadıköy, region: İstanbul }`; "Kadıköy, Istanbul" → `{ city: Kadıköy, region: İstanbul }`. A business always has a category. The Instagram import reads an area this way and sizes it from `address_info` (`areaReach`). Each item's `address_info` is passed on as `FoundPlace.addressParts`.
 - **It needs a point.** A world-scale viewport (`20,0,3z`) returns no items, so a query without coordinates is searched around its city (Mapbox finds the city's centre).
+- **No match is an answer, not an error** (v1.42.0): DataForSEO marks it with task status 40102 "No Search Results", and `search` returns an empty list — it threw before, and two Instagram eval posts failed on it. In production on 19.11.2026 the connector's `search_google_maps` gave an empty list for a nonsense query at an empty spot.
 
 ## Where it's used
 
@@ -135,7 +136,7 @@ These map into `places.google_data` (DataForSEO-extended subset) via `transformB
 
 - **Bad credentials:** 401. Route returns 500 to the client. Verify env vars.
 - **Quota exhausted:** 4xx. Same — verify account balance.
-- **Place not found:** the result set is empty. Parse-link returns 404; bulk import marks the place as `skipped`.
+- **No match:** task status 40102 "No Search Results" — for Business Info, no such business (billed like a hit, $0.0054; measured 18.11.2026); for a Maps search, nothing matched (an empty list, see above). Parse-link returns 404, and 502 for a failed lookup (`throwOnError`, v1.42.2 — before, a failure was a 404 too). The import retries by name around the saved coordinate, then keeps a thin record (name and coordinate); the assistant's `add_places` saves nothing (`not_found`) and tells a failed lookup apart (`failed`).
 - **Timeout:** the `_Live` endpoints are synchronous and can be slow (~3-4s per call). The 60s Vercel Function default is the hard cap; if we hit it, batch sizes need to shrink.
 
 ## Per-user opt-out
