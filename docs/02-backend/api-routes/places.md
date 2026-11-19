@@ -2,7 +2,7 @@
 title: Places routes
 type: route-group
 domain: backend
-version: 2.5.2
+version: 2.5.3
 last_updated: 19.11.2026
 status: stable
 sources:
@@ -201,7 +201,7 @@ All require auth except `drain-imports`, which is bearer-authed with `CRON_SECRE
 - **External:** DataForSEO business-info + reviews, Gemini via `generatePlaceProfile`.
 - **Response:** `{ ok, claimed, processed, released, chained, imported, photographed, skipped, failed, reviewed, profiled, done, elapsed_ms }`.
 - **Job kinds (v1.28.0):** per-job defaults (visit status, lists, tags, `kind`) are read with `select("*")` — naming `kind` would make a deploy that lands before the column exists lose a Takeout job's defaults to a select error; a missing `kind` counts as `takeout`. Items of an `instagram` job are inserted with `source: "instagram"` (`ImportDefaults.source`). When such an item turns out to be a place the user already has (`skipped / Already exists` with a `place_id`), the drain runs `attachInstagramSource` on that place: the job's tag(s) are upserted and the post URL is appended to its notes if not already there. `finalizeJobs` selects `*` for the same reason; when it closes an `instagram` job it also writes `meta.phase = 'done'` (v1.28.1), so the stored phase follows the job.
-- **Notes:** `maxDuration` 300, soft deadline 240 s, 2 workers, 24 items per claim. Overlapping runs are safe (`FOR UPDATE SKIP LOCKED`); exits early above 60 in-flight items to bound spend. See [[../../05-flows/place-import-flow]].
+- **Notes:** `maxDuration` 800 (v1.46.0; was 300 — a reviews item started at the deadline could cross it), soft deadline 240 s, 2 workers, 24 items per claim. Each run first retires items stuck at `attempts = 3` behind a stale claim (`retired_stuck` in the summary). Overlapping runs are safe (`FOR UPDATE SKIP LOCKED`); exits early above 60 in-flight items to bound spend. See [[../../05-flows/place-import-flow]].
 
 ### `POST /api/places/migrate-photos`
 

@@ -2,7 +2,7 @@
 title: Import job tables
 type: table
 domain: backend
-version: 1.3.3
+version: 1.3.4
 last_updated: 19.11.2026
 status: stable
 sources:
@@ -194,6 +194,13 @@ Three properties matter:
   total visits — without the reset a healthy item spent its entire budget just
   walking `import → reviews → profile`, and one transient failure anywhere left
   it stranded: never claimable, never terminal, and the job never closing.
+- **A run that dies on an item's third claim** (killed by the platform, a
+  crash, a deploy) can't release it, so the item would keep `attempts = 3`
+  behind a stale claim — the same stranding. Every drain run first retires
+  such items (`retireStuck`, v1.46.0) by the rule a third failure follows.
+  The stale window must stay longer than any run's hold on a claim: the soft
+  deadline (240 s) plus one item (~110 s) is ~6 min, under 10 minutes, while
+  `maxDuration` is 800 s.
 
 `search_path` is pinned and `EXECUTE` is revoked from `public`, `anon` and
 `authenticated` — the function writes rows RLS would otherwise hide, so only the

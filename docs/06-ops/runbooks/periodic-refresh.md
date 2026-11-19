@@ -2,7 +2,7 @@
 title: Periodic place refresh (cron)
 type: runbook
 domain: ops
-version: 1.1.3
+version: 1.1.4
 last_updated: 19.11.2026
 status: stable
 sources:
@@ -62,7 +62,7 @@ no profile regeneration. Each run:
 
 Throughput: **up to** 14 places/day. Workers stop picking new places at
 the 240 s soft deadline (`SOFT_DEADLINE_MS`) so the summary always gets
-emitted before `maxDuration = 300` kills the run — slow review-polling
+emitted well before `maxDuration` (800 s since v1.46.0; 300 s before, which a place started at the deadline could cross) — slow review-polling
 days simply process fewer (unprocessed places stay unstamped → head of
 the next run). A ~500-place library cycles in roughly 5-8 weeks.
 `CONCURRENCY = 2` workers, 500 ms politeness delay.
@@ -104,7 +104,7 @@ Honeycomb: query `cron.refresh_places` events for the run history.
 | `bizInfoFailed` > 0 | Google has no record of the place — dead or changed `google_place_id` (no longer a transient failure; those are `failed`) | Row still updated + marker stamped → retried next **cycle** (30 d), not daily. Recurring for the same place → the place is likely gone; consider removing it. |
 | `reviewsFailed` > 0 | The reviews fetch failed for that many places; business info refreshed, stored reviews kept | Nothing to do; the next refresh fetches them. (A manual refresh still says "refreshed" in that case.) |
 | Profile generation fails mid-run (cap, LLM error) | `profileSkipped` with a `[cron:refresh]` warn | Known limitation: the place waits for the next cycle (or the user's manual refresh — the staleness badge points them there). |
-| `deadlineHit: true` | Slow review polling — soft deadline stopped the batch early | Normal; leftovers lead the next run. Persistent → lower `BATCH_SIZE` or raise `maxDuration` (plan permitting). |
+| `deadlineHit: true` | Slow review polling — soft deadline stopped the batch early | Normal; leftovers lead the next run. Persistent → lower `BATCH_SIZE`, or raise `SOFT_DEADLINE_MS` (it has room since `maxDuration` is 800 s; keep ~2 min under it). |
 
 ## Tuning
 
