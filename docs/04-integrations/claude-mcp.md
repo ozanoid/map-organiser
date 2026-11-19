@@ -2,7 +2,7 @@
 title: "Claude connector (MCP server)"
 type: integration
 domain: integrations
-version: 1.6.3
+version: 1.6.4
 last_updated: 19.11.2026
 status: draft
 sources:
@@ -74,7 +74,7 @@ related:
 | Consent page | `/oauth/consent` (Supabase "Authorization Path") | The user approves or denies. See [[../05-flows/claude-connector-flow]]. |
 | Tools | `src/lib/assistant/tools/` | Transport-free definitions: name, description, zod input, annotations, `run(ctx, input)`. |
 
-Both new paths are skipped by the session middleware (matcher in `src/middleware.ts`): `/api/mcp` must answer 401, not redirect, and `.well-known` documents are public. `/oauth/` is a public route that does its own sign-in redirect.
+Both new paths are skipped by the session proxy (matcher in `src/proxy.ts`): `/api/mcp` must answer 401, not redirect, and `.well-known` documents are public. `/oauth/` is a public route that does its own sign-in redirect.
 
 ## Who may connect
 
@@ -107,7 +107,7 @@ Filters take **names**, not ids (`resolveNames`): exact folded match, then a uni
 
 ### Plans: links and saving
 
-- **Links.** Plan results carry `url` = `<appUrl>/plans/<id>`. `appUrl` is part of the tool context (`AssistantContext`); the MCP server sets it from the address the client reached it at (`getPublicOrigin` from `mcp-handler`, the same rule as the OAuth resource metadata — parsed once in `verifyAssistantToken`, http(s) only, else the request's own origin), so a link opens the deployment the connector talks to — production, a preview or localhost. Signed out, the link goes through `/login?next=…` and back to the plan (session middleware, v1.39.0).
+- **Links.** Plan results carry `url` = `<appUrl>/plans/<id>`. `appUrl` is part of the tool context (`AssistantContext`); the MCP server sets it from the address the client reached it at (`getPublicOrigin` from `mcp-handler`, the same rule as the OAuth resource metadata — parsed once in `verifyAssistantToken`, http(s) only, else the request's own origin), so a link opens the deployment the connector talks to — production, a preview or localhost. Signed out, the link goes through `/login?next=…` and back to the plan (session proxy, v1.39.0).
 - **Strict inputs.** Every tool refuses keys it doesn't know (`defineTool` makes the top-level object strict; the JSON Schema says `additionalProperties: false`), and the plan schemas are strict all the way down. A misnamed field — `date` for `visited_on`, `time` for `start_time` — is an error the model sees, not a value silently dropped. A stop is a place or a text, not both.
 - **Saving.** The server instructions ask Claude to lay a new plan out and save it once the user agrees; `update_plan` does what the user asked, and changes Claude suggests itself need the user's OK first. After a save Claude gives the link. Plans are cancelled, never deleted, through the assistant.
 - **After a write** the tools read the plan back; if that read fails the result still says the plan was saved (with its link), so a retry doesn't save it twice. An unexpected error in a write tool tells Claude the change may have been saved and to check (`get_plans`, `get_visits`, `get_places`) before trying again; read tools still say "try again".

@@ -2,8 +2,8 @@
 title: Plans routes
 type: route-group
 domain: backend
-version: 1.1.1
-last_updated: 18.11.2026
+version: 1.1.2
+last_updated: 19.11.2026
 status: stable
 sources:
   - src/app/api/plans/route.ts
@@ -28,7 +28,7 @@ related:
 
 Five handlers in four files. They are thin: auth, zod, one call into `src/lib/plans/` ([[../../01-domain/plans#One write path]]), and `errorResponse` (`src/lib/api/http.ts`, shared with the visit routes) to turn the module's errors into a status.
 
-All require a signed-in user (401 otherwise; the middleware redirects signed-out requests to `/login` before they get here).
+All require a signed-in user (401 otherwise; the proxy redirects signed-out requests to `/login` before they get here).
 
 | Method | Path | Body | Returns |
 |---|---|---|---|

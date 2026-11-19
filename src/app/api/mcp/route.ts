@@ -7,8 +7,8 @@ import { verifyAssistantToken } from "@/lib/assistant/verify-token";
  * The Map Organiser MCP endpoint (Streamable HTTP, stateless). Every request
  * needs a Supabase access token; without one the client gets a 401 whose
  * WWW-Authenticate header points at the protected resource metadata, and
- * from there at Supabase's OAuth server. The session middleware skips this
- * path (src/middleware.ts matcher).
+ * from there at Supabase's OAuth server. The session proxy skips this path
+ * (src/proxy.ts matcher).
  */
 const handler = withMcpAuth(assistantMcpHandler, verifyAssistantToken, {
   required: true,

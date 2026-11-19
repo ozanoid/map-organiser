@@ -2,7 +2,7 @@
  * A `next` return path is followed only when it stays on this site: a
  * single leading slash, no backslashes or control characters, and still
  * same-origin after URL parsing. Anything else ("//evil.com", "@evil.com",
- * "https://…") is dropped, so login, the middleware and the OAuth callback
+ * "https://…") is dropped, so login, the proxy and the OAuth callback
  * can't be used as open redirects.
  *
  * The check runs on the parsed path too: parsing removes dot segments, so

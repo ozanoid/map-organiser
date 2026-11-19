@@ -2,8 +2,8 @@
 title: Monitoring
 type: overview
 domain: ops
-version: 1.1.0
-last_updated: 15.07.2026
+version: 1.1.1
+last_updated: 19.11.2026
 status: stable
 related:
   - "[[_README]]"
@@ -48,7 +48,7 @@ The closest thing we have is the **`api_usage` table**, which counts external AP
 | Symptom | First place to look |
 |---|---|
 | Pages 500 | Vercel logs → look for the route name + stack trace |
-| Auth not sticking | Supabase logs → Auth → check session refresh events; Vercel logs → middleware |
+| Auth not sticking | Supabase logs → Auth → check session refresh events; Vercel logs → proxy |
 | Slow `GET /api/places` | Supabase logs → Postgres → check the query plan; verify `idx_places_*` indexes are hit |
 | Mapbox not loading | Browser console (CORS / token errors); Mapbox dashboard for quota |
 | Place enrichment failing | Vercel logs → `/api/places/parse-link` or `/api/places/[id]/enrich`; DataForSEO dashboard for credentials |

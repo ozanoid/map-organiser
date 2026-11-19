@@ -2,14 +2,14 @@
 title: Env Vars
 type: overview
 domain: ops
-version: 1.8.0
+version: 1.8.1
 last_updated: 19.11.2026
 status: stable
 sources:
   - .env.local.example
   - src/lib/supabase/client.ts
   - src/lib/supabase/server.ts
-  - src/lib/supabase/middleware.ts
+  - src/lib/supabase/proxy.ts
   - src/lib/ai/client.ts
   - src/lib/google/get-user-api-keys.ts
   - src/lib/dataforseo/client.ts

@@ -2,7 +2,7 @@
 title: Shared routes
 type: route-group
 domain: backend
-version: 1.5.2
+version: 1.5.3
 last_updated: 19.11.2026
 status: stable
 sources:
@@ -36,7 +36,7 @@ Three route handlers for the public-sharing surface. **This is the only group wi
 | `GET` | `/api/shared/[slug]` | **PUBLIC** (service role) | Resolve slug → payload. Increment view count. |
 | `POST` | `/api/shared/[slug]/save` | required (viewer) | Copy the shared resource into the viewer's account. |
 
-The `/api/shared/*` prefix is explicitly exempt from the auth-required middleware gate (`src/lib/supabase/middleware.ts`).
+The `/api/shared/*` prefix is explicitly exempt from the auth-required proxy gate (`src/lib/supabase/proxy.ts`).
 
 ---
 

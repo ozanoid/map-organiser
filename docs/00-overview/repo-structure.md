@@ -2,7 +2,7 @@
 title: Repo Structure
 type: overview
 domain: overview
-version: 1.13.1
+version: 1.13.2
 last_updated: 19.11.2026
 status: stable
 sources:
@@ -59,7 +59,7 @@ What every top-level directory contains, why it exists, and where to dig further
 
 ```
 src/
-├── middleware.ts              Next.js middleware — calls updateSession from supabase/middleware.ts
+├── proxy.ts              Next.js proxy — calls updateSession from supabase/proxy.ts
 ├── app/                       App Router routes
 │   ├── layout.tsx             Root layout (HTML, providers, fonts)
 │   ├── page.tsx               Root index page
@@ -150,7 +150,7 @@ src/
     ├── hooks/                 React Query hooks (19 files): useAiSearch, useAiSuggestions, useBackfillProfiles, useCategories, useDebounce, useFilters, useImportJob, useInstagramImport, useIsDesktop, useLists, useMapStyle, usePlaceSearch, usePlaces, useSavedFilters, useSharedLinks, useStats, useSubcategories, useTags, usePlans
     ├── stores/                Zustand stores (currently just import-store.ts)
     ├── map/                   category-icons.ts (canvas marker rendering)
-    ├── supabase/              client.ts (browser), server.ts (+ createServiceClient), middleware.ts (updateSession)
+    ├── supabase/              client.ts (browser), server.ts (+ createServiceClient), proxy.ts (updateSession)
     ├── telemetry/             logger.ts (dual-write log.*), trace-context.ts (W3C traceparent mint),
     │                          langfuse.ts (LangfuseSpanProcessor singleton + flushLangfuse) — see [[../05-flows/observability-flow]]
     ├── types/                 index.ts — domain types (Place, Plan, Category, Subcategory, Tag, …)
@@ -215,5 +215,5 @@ Counts (approximate, as of `last_updated`):
 | Feature components (`src/components/{assistant,filters,layout,map,places,plans,settings,visits}`) | ~40 |
 | shadcn UI (`src/components/ui/`) | 19 primitives |
 | Custom hooks (`src/lib/hooks/`) | 19 files (v1.20.0 added useSavedFilters; later useImportJob, useIsDesktop; v1.28.0 useInstagramImport) |
-| Supabase clients (`src/lib/supabase/`) | 3 (browser, server, middleware) |
+| Supabase clients (`src/lib/supabase/`) | 3 (browser, server, proxy) |
 | Vault docs (`docs/**/*.md`, excl. `_archive`) | tracked in [[../CHANGELOG]] |

@@ -2,8 +2,8 @@
 title: Ops Overview
 type: overview
 domain: ops
-version: 1.0.0
-last_updated: 12.05.2026
+version: 1.0.1
+last_updated: 19.11.2026
 status: stable
 related:
   - "[[deployment]]"
@@ -34,7 +34,7 @@ How this app runs in production and how to operate it. The infrastructure is min
 │                       Vercel                              │
 │  • Next.js 16 App Router build                            │
 │  • Routes deployed as Vercel Functions (Fluid Compute)    │
-│  • Middleware runs on every dynamic path                  │
+│  • Proxy runs on every dynamic path                  │
 │  • Static assets served from the edge                     │
 └────────────────────────┬─────────────────────────────────┘
                          │

@@ -2,7 +2,7 @@
 title: Tech Stack
 type: overview
 domain: overview
-version: 1.7.0
+version: 1.7.1
 last_updated: 19.11.2026
 status: stable
 sources:
@@ -59,7 +59,7 @@ Every runtime, library, and tool the repo currently depends on. Pin sources are 
 | Lib | Version | Role | Notes |
 |---|---|---|---|
 | `@supabase/supabase-js` | `^2.103.0` | Postgres + Auth + Storage client | Used by `createServiceClient` in `src/lib/supabase/server.ts`. |
-| `@supabase/ssr` | `^0.12.0` | SSR cookie auth | Powers all three clients (browser/server/middleware) in `src/lib/supabase/`. |
+| `@supabase/ssr` | `^0.12.0` | SSR cookie auth | Powers all three clients (browser/server/proxy) in `src/lib/supabase/`. |
 | `@tanstack/react-query` | `^5.101.2` | Server-state cache | Default `staleTime: 60_000`, `refetchOnWindowFocus: false`. |
 | `zustand` | `^5.0.14` | Client state store | Currently only `src/lib/stores/import-store.ts`. |
 | `zod` | `^4.6.7` | Runtime validation (below 4.6.6, validating an oversized constrained collection could exhaust memory) | Used on every mutation API route + every AI structured output. |
@@ -124,8 +124,8 @@ See [[../04-integrations/_README]] (when written) for per-service deep-dives.
 
 ## Runtime targets
 
-- **Node.js** — Vercel default (Node 24 LTS at time of last archived doc; will follow Vercel's current default). All API routes are Node-compatible (no edge-specific code observed beyond middleware).
-- **Middleware** — runs as Vercel Function (Fluid Compute). See `src/middleware.ts` matcher.
+- **Node.js** — Vercel default (Node 24 LTS at time of last archived doc; will follow Vercel's current default). Everything runs on Node — the proxy too since v1.44.0 (it was Edge middleware).
+- **Proxy** — `src/proxy.ts` (was `src/middleware.ts` until v1.44.0), Node.js, a Vercel Function (Fluid Compute). Functions run in `fra1` (`vercel.json`), the region of the Supabase project (`eu-central-1`).
 - **Browser baseline** — modern browsers via Next.js + React 19. No explicit browserslist override; Tailwind v4 + Next.js defaults apply.
 
 ## Things NOT in the stack (despite being adjacent)

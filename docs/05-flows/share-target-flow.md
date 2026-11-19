@@ -2,8 +2,8 @@
 title: Share Target Flow
 type: flow
 domain: places
-version: 1.1.1
-last_updated: 16.10.2026
+version: 1.1.2
+last_updated: 19.11.2026
 status: stable
 sources:
   - src/app/manifest.ts
@@ -53,7 +53,7 @@ User is on mobile, viewing a Google Maps place, taps the OS share button, picks 
 2. Browser follows the redirect to /map?add=...
        │
        ▼
-3. Middleware runs on /map
+3. Proxy runs on /map
        │  • If not authenticated → redirect to /login (the `?add=` param is dropped
        │    unless preserved via ?next= — see open questions)
        │  • If authenticated → continue
@@ -112,7 +112,7 @@ The PWA spec requires the share target to accept POST without authentication —
 ## Failure modes
 
 - **No Google Maps URL in the share content.** Redirect to plain `/map`. User has no idea why the share didn't work. Worth a toast on `/map` when redirected without `?add=` to explain. This includes an **Instagram link shared through the PWA share sheet** — the route's regex does not match it, so it never reaches the Instagram import.
-- **Unauthenticated share.** Middleware redirects to `/login`. The `?add=` param is lost unless the middleware preserves it via `?next=/map?add=...`. **Verify this in code** — it's listed as an open question in [[../02-backend/api-routes/share-target#open-questions]].
+- **Unauthenticated share.** Proxy redirects to `/login`. The `?add=` param is lost unless the proxy preserves it via `?next=/map?add=...`. **Verify this in code** — it's listed as an open question in [[../02-backend/api-routes/share-target#open-questions]].
 - **Invalid Google Maps URL.** Caught at step 6 (parse-link) with a 400.
 
 ## Related code
@@ -125,6 +125,6 @@ The PWA spec requires the share target to accept POST without authentication —
 
 ## Open questions
 
-- **`next` survival.** When middleware bounces an unauthenticated user to `/login`, does the `?add=` make it back to `/map` after OAuth? Tests welcome.
+- **`next` survival.** When proxy bounces an unauthenticated user to `/login`, does the `?add=` make it back to `/map` after OAuth? Tests welcome.
 - **Non-Google share sources.** Today the regex only matches Google domains. If we want to accept Bing Maps or Apple Maps URLs, expand the regex (and the parser). Instagram needs only the regex: the dialog already recognises Instagram links in `initialUrl`, so forwarding `instagram.com/(p|reel|reels|tv)/…` to `/map?add=` would route PWA shares into the Instagram import.
 - **UX on bad shares.** A user shares something we can't parse → they land on `/map` with no feedback. Add a toast or a "couldn't recognize that share" page.

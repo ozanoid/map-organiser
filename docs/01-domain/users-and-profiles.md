@@ -2,14 +2,14 @@
 title: User & Profile
 type: entity
 domain: users
-version: 1.5.0
+version: 1.5.1
 last_updated: 19.11.2026
 status: stable
 sources:
   - src/lib/supabase/client.ts
   - src/lib/supabase/server.ts
-  - src/lib/supabase/middleware.ts
-  - src/middleware.ts
+  - src/lib/supabase/proxy.ts
+  - src/proxy.ts
   - src/app/auth/callback/route.ts
   - src/app/(auth)/login/page.tsx
   - src/app/api/user/api-keys/route.ts
@@ -103,7 +103,7 @@ The repo gets the current user via `supabase.auth.getUser()` (server-side) or vi
      │
      ▼
   5. Cookie-SSR session is established
-     User is redirected to /map by middleware
+     User is redirected to /map by proxy
 ```
 
 Both trigger functions are `SECURITY DEFINER` so they can write across schemas (`auth.users` → `public.profiles`).
@@ -115,12 +115,12 @@ Both trigger functions are `SECURITY DEFINER` so they can write across schemas (
 See [[../02-backend/auth]] (when written) for the deeper version. Summary:
 
 1. **Browser** uses `createBrowserClient` (`src/lib/supabase/client.ts`) — reads session from cookies.
-2. **Middleware** (`src/middleware.ts` → `src/lib/supabase/middleware.ts#updateSession`) runs on every request: refreshes session cookies, redirects unauthenticated users to `/login`, redirects logged-in users away from `/login`, and sends `/signup` (closed) to `/login`.
+2. **Proxy** (`src/proxy.ts` → `src/lib/supabase/proxy.ts#updateSession`) runs on every request: refreshes session cookies, redirects unauthenticated users to `/login`, redirects logged-in users away from `/login`, and sends `/signup` (closed) to `/login`.
 3. **Server Components & API routes** use `createClient` (`src/lib/supabase/server.ts`) — reads cookies via `next/headers`.
 4. **Service-role client** (`createServiceClient`) bypasses RLS. It is used only where no session can do the job — public shared-link reads, the cron routes, the import-queue writes and the Instagram import's background job; see [[../02-backend/supabase-clients]].
 5. **OAuth callback** at `src/app/auth/callback/route.ts` — exchanges the OAuth code for a session.
 
-Public routes (middleware exempt): `/`, `/auth/callback/*`, `/shared/*`, `/api/shared/*`. Everything else requires auth.
+Public routes (proxy exempt): `/`, `/auth/callback/*`, `/shared/*`, `/api/shared/*`. Everything else requires auth.
 
 ## API key management
 

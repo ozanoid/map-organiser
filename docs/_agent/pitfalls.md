@@ -2,7 +2,7 @@
 title: Pitfalls
 type: agent-note
 domain: agent
-version: 1.6.0
+version: 1.6.1
 last_updated: 19.11.2026
 status: stable
 related:
@@ -21,8 +21,8 @@ Things that will look right based on training data but will break in this codeba
 - **Don't trust your training data for Next.js APIs.** v16 has breaking changes. When unsure, read `node_modules/next/dist/docs/` directly — it ships with the install.
 - **`async` Server Components are the default.** A function exported from `app/.../page.tsx` without `"use client"` is a Server Component. It can `await` directly. Don't add `useEffect` to fetch — fetch in the component body.
 - **`"use client"` is contagious.** Once a component has it, everything it imports runs client-side. Push state to the leaves; keep `page.tsx` server-side when you can.
-- **Route handlers vs middleware.** `route.ts` runs per-request and can be Node or Edge. `middleware.ts` runs before route resolution. Different APIs — don't conflate.
-- **Every build warns that `middleware` is deprecated** (Next 16 renamed it `proxy`). `src/middleware.ts` stays until Ozan decides: it sets no runtime, so it runs on the middleware default, Edge; `proxy` runs only on Node.js, so the codemod (`middleware-to-proxy`) also moves the session check to another runtime on Vercel. Not a code error — don't "fix" it in passing.
+- **Route handlers vs proxy.** `route.ts` runs per-request and can be Node or Edge. `proxy.ts` runs before route resolution. Different APIs — don't conflate.
+- **`src/proxy.ts` is the Next 16 name for middleware** (renamed in v1.44.0; the old name only warned). Proxy runs on Node.js only — the old middleware ran on Edge. The functions, the proxy among them, run in `fra1`, next to the database (`vercel.json` `regions`); before v1.44.0 they ran in Vercel's default `iad1`, so every database call crossed the Atlantic. Keep `regions` matched to the Supabase region.
 - **No `pages/_document.tsx`.** Custom `<head>` goes through the `metadata` export or `app/layout.tsx`.
 
 ## React 19
@@ -33,8 +33,8 @@ Things that will look right based on training data but will break in this codeba
 ## Supabase (`@supabase/ssr`)
 
 - **Three clients, three contexts.** See [[conventions#supabase-clients]]. Using the wrong one silently breaks auth — there's no error, just an unauthenticated user.
-- **Cookies are written by middleware.** If you change auth flow, ensure `src/middleware.ts` still runs and still calls `updateSession`.
-- **A redirect from the middleware must carry the session cookies.** `getUser()` may have just refreshed the session onto `supabaseResponse`; a bare `NextResponse.redirect` drops those cookies and leaves the browser with a spent refresh token. Use `redirectKeepingSession` in `src/lib/supabase/middleware.ts` (v1.39.0).
+- **Cookies are written by the proxy.** If you change auth flow, ensure `src/proxy.ts` still runs and still calls `updateSession`.
+- **A redirect from the proxy must carry the session cookies.** `getUser()` may have just refreshed the session onto `supabaseResponse`; a bare `NextResponse.redirect` drops those cookies and leaves the browser with a spent refresh token. Use `redirectKeepingSession` in `src/lib/supabase/proxy.ts` (v1.39.0).
 - **A cookie client outside a cookie request reads nothing — silently.** The MCP endpoint authenticates with a bearer token and the cron drain with a secret; there `createClient()` from `@/lib/supabase/server` is anonymous. `getUserApiKeys(userId)` then found no profile and fell back to the server's Google key (until v1.41.0), and `trackUsage(userId, sku)` only worked because `increment_api_usage` is executable by anon. Pass the caller's client: `getUserApiKeys(userId, ctx.supabase)`, `trackUsage(userId, sku, client)`. The last such call, the drain's review stage, passes `admin` since v1.43.0; since `rpc_least_privilege` (applied 19.11.2026) `anon` can't execute the function, and a missed call loses its count silently (`trackUsage` swallows errors).
 - **`update … where id in (select … order by … limit …) returning *` does not return rows in the subquery's order.** `claim_import_items` selects by stage priority but hands rows back in update order; the drain sorts them again (v1.41.0 — before, a new place's import waited 87 s behind reviews from the same claim).
 - **A queue job born `running` before its items exist can be closed under them.** The drain's `finalizeJobs` marks every running job without active items `done`, and the claim only takes items of running jobs. Create the job `preparing` (or Instagram's `reading`), write the items, then set `running` (v1.41.0: Takeout and assistant jobs).

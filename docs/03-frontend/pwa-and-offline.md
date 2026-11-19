@@ -2,11 +2,11 @@
 title: PWA & Offline
 type: overview
 domain: frontend
-version: 1.1.0
-last_updated: 17.11.2026
+version: 1.1.1
+last_updated: 19.11.2026
 status: stable
 sources:
-  - src/middleware.ts
+  - src/proxy.ts
   - src/app/manifest.ts
   - src/app/offline/page.tsx
   - src/components/sw-register.tsx
@@ -75,7 +75,7 @@ Behavior (verify by reading `public/sw.js`):
 - Caches assets for offline use.
 - Falls back to `/offline` when network requests for navigations fail.
 
-**Signed-out visitors.** `/sw.js`, `/manifest.webmanifest` and `/offline` are excluded from the session middleware (the matcher in `src/middleware.ts`), so the public share pages and the login page register the service worker too. Until 17.11.2026 the middleware redirected all three to `/login` for a signed-out visitor and registration failed with "The script resource is behind a redirect".
+**Signed-out visitors.** `/sw.js`, `/manifest.webmanifest` and `/offline` are excluded from the session proxy (the matcher in `src/proxy.ts`), so the public share pages and the login page register the service worker too. Until 17.11.2026 the proxy redirected all three to `/login` for a signed-out visitor and registration failed with "The script resource is behind a redirect".
 
 **Why a hand-rolled SW.** Next.js doesn't generate a service worker on its own. We could pull in `next-pwa` or `serwist` for richer caching strategies, but the current setup keeps the surface tiny.
 
@@ -103,7 +103,7 @@ When the user picks "Map Organiser" from the OS share sheet (typically on a Goog
 
 The map page reads `?add=...` client-side and opens the Add Place dialog with the URL pre-populated. The full place-creation flow then runs through `/api/places/parse-link` and `/api/places`.
 
-The route is **PUBLIC** — no auth check — because the OS share sheet doesn't carry a session. The user might land on `/map?add=...` unauthenticated; the middleware will then redirect to `/login`. Whether `next` survives the OAuth callback is worth verifying — see [[../02-backend/api-routes/share-target#open-questions]].
+The route is **PUBLIC** — no auth check — because the OS share sheet doesn't carry a session. The user might land on `/map?add=...` unauthenticated; the proxy will then redirect to `/login`. Whether `next` survives the OAuth callback is worth verifying — see [[../02-backend/api-routes/share-target#open-questions]].
 
 Full route detail: [[../02-backend/api-routes/share-target]].
 

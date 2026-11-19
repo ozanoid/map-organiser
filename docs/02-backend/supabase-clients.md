@@ -2,13 +2,13 @@
 title: Supabase Clients
 type: overview
 domain: backend
-version: 1.2.0
-last_updated: 18.11.2026
+version: 1.2.1
+last_updated: 19.11.2026
 status: stable
 sources:
   - src/lib/supabase/client.ts
   - src/lib/supabase/server.ts
-  - src/lib/supabase/middleware.ts
+  - src/lib/supabase/proxy.ts
 related:
   - "[[auth]]"
   - "[[rls-policies]]"
@@ -27,7 +27,7 @@ This repo has **three Supabase clients** plus a **service-role helper**, all in 
 | `client.ts` | `createClient()` | Browser (Client Components) | `SupabaseClient` (browser) | Respected (anon role until session) |
 | `server.ts` | `createClient()` | Server (Server Components, Route Handlers, Server Actions) | `SupabaseClient` (cookies via `next/headers`) | Respected (authenticated role via cookie session) |
 | `server.ts` | `createServiceClient()` | Server only, restricted | `SupabaseClient` (service-role key) | **BYPASSED** |
-| `middleware.ts` | `updateSession(request)` | Next.js middleware | `NextResponse` | Respected; refreshes session cookies |
+| `proxy.ts` | `updateSession(request)` | Next.js proxy | `NextResponse` | Respected; refreshes session cookies |
 
 ## When to use which
 
@@ -67,7 +67,7 @@ Use in:
 - Server Components that read user data.
 - Server Actions.
 
-The cookies come from `next/headers`. The `setAll` callback tries to write cookies and silently ignores the error in Server Component context (where cookies can't be set). The middleware is responsible for actually writing refreshed cookies — see [[#why-middleware-matters]].
+The cookies come from `next/headers`. The `setAll` callback tries to write cookies and silently ignores the error in Server Component context (where cookies can't be set). The proxy is responsible for actually writing refreshed cookies — see [[#why-proxy-matters]].
 
 ### `server.ts#createServiceClient()` — bypass RLS
 
@@ -100,15 +100,15 @@ there to catch a mistake.
 - Never log queries made through this client to user-visible places.
 - Env: `SUPABASE_SERVICE_ROLE_KEY` (server only — **note this is missing from `.env.local.example`**).
 
-### `middleware.ts#updateSession(request)` — request middleware
+### `proxy.ts#updateSession(request)` — request proxy
 
-Used only from `src/middleware.ts`:
+Used only from `src/proxy.ts`:
 
 ```ts
 import { type NextRequest } from "next/server";
-import { updateSession } from "@/lib/supabase/middleware";
+import { updateSession } from "@/lib/supabase/proxy";
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   return await updateSession(request);
 }
 
@@ -123,24 +123,24 @@ Behavior:
 2. Calls `supabase.auth.getUser()` to refresh tokens if expired.
 3. Writes refreshed cookies back to the response.
 4. Redirects unauthenticated users to `/login?next=<path>` (with public-route exceptions; API paths get no `next`).
-5. Redirects logged-in users away from `/login` to its same-site `next`, or `/map`. (`/signup` never gets this far: sign-ups are closed and the middleware sends it to `/login` first.)
+5. Redirects logged-in users away from `/login` to its same-site `next`, or `/map`. (`/signup` never gets this far: sign-ups are closed and the proxy sends it to `/login` first.)
 
 Public routes (no auth required): `/`, `/auth/callback/*`, `/shared/*`, `/api/shared/*`.
 
 See [[auth]] for the full flow.
 
-## Why middleware matters
+## Why proxy matters
 
-The browser and server clients on their own can read auth state from cookies, but **only the middleware writes refreshed cookies** back to the response — its redirects too (`redirectKeepingSession` copies them, v1.39.0). Without it, expired sessions never refresh — users get unauthenticated mid-session.
+The browser and server clients on their own can read auth state from cookies, but **only the proxy writes refreshed cookies** back to the response — its redirects too (`redirectKeepingSession` copies them, v1.39.0). Without it, expired sessions never refresh — users get unauthenticated mid-session.
 
-If you change the middleware matcher or shortcut it for a path, **make sure the path doesn't need an authenticated Supabase context** — or it'll start failing silently after the token expires.
+If you change the proxy matcher or shortcut it for a path, **make sure the path doesn't need an authenticated Supabase context** — or it'll start failing silently after the token expires.
 
 ## Visual: which client where
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ src/middleware.ts                                            │
-│   └─ updateSession() → middleware.ts#createServerClient      │
+│ src/proxy.ts                                            │
+│   └─ updateSession() → proxy.ts#createServerClient      │
 │                          (cookies from NextRequest)           │
 └──────────────────────────┬──────────────────────────────────┘
                            │ cookies refreshed

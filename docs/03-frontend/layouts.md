@@ -2,8 +2,8 @@
 title: Layouts
 type: overview
 domain: frontend
-version: 1.0.2
-last_updated: 18.11.2026
+version: 1.0.3
+last_updated: 19.11.2026
 status: stable
 sources:
   - src/app/layout.tsx
@@ -70,7 +70,7 @@ Children get:
 Behavior:
 
 - Server Component (no `"use client"` at the top).
-- Doesn't authenticate — middleware already gated the request.
+- Doesn't authenticate — proxy already gated the request.
 
 Children: all `(app)/*` routes.
 

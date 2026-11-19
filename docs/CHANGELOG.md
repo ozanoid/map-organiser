@@ -6,6 +6,39 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 19.11.2026 — v1.44.0 — middleware → proxy; functions next to the database (fra1)
+
+Ozan left the call to me ("mantıklısı neyse onu yap").
+
+- **Proxy:** `src/middleware.ts` → `src/proxy.ts` (function `proxy`), the
+  helper `src/lib/supabase/middleware.ts` → `src/lib/supabase/proxy.ts`.
+  Next 16 deprecated the middleware name (every build warned); the code is
+  unchanged. Proxy runs only on Node.js — the middleware ran on Edge, at the
+  visitor's nearest edge.
+- **Region:** `vercel.json` now sets `"regions": ["fra1"]`. The functions
+  ran in Vercel's default `iad1` (`x-vercel-id: lhr1::iad1::…` on
+  `/api/mcp`) while Supabase is in `eu-central-1`; [[06-ops/deployment]]
+  said "matches Supabase", but nothing set it. Every database call of every
+  route crossed the Atlantic, and on Node the proxy's session check would
+  have too — so the two changes go together.
+- The proxy is instrumented now (`register()` runs in its Node runtime):
+  its request and Supabase-auth spans reach Honeycomb.
+- **Checked:** `tsc`, `eslint`, `next build` (no deprecation warning; the
+  route list shows the proxy); the production build served locally, signed
+  out — `/`, `/map?add=…`, `/plans/<id>`, `/api/plans`, `/signup` redirect as
+  before, `/trips/:id` → 308, `/api/mcp` → 401 with `WWW-Authenticate`, the
+  OAuth metadata, `sw.js`, the manifest, `/offline` and `/oauth/consent` →
+  200. **Not checked:** a signed-in session refreshing through the proxy
+  (needs a browser session); the region shows on the preview deployment.
+- Docs: "middleware" → "proxy" in 32 docs (Zustand's own middleware and the
+  history in plans, archive and older CHANGELOG entries left as written;
+  links to the renamed [[03-frontend/proxy]] updated, here too —
+  6 links); [[06-ops/deployment]] (region),
+  [[05-flows/observability-flow]], [[00-overview/tech-stack]],
+  [[_agent/pitfalls]].
+
+---
+
 ## 19.11.2026 — v1.43.2 — Security round on main; both migrations applied
 
 - v1.42.2–v1.43.1 merged to main with Ozan's approval (merge `d87d9aa`; main
@@ -511,7 +544,7 @@ Claude can now read, save and change the user's plans through the connector.
 - **Server instructions:** lay a new plan out and save it once the user
   agrees; do what the user asked with `update_plan`, ask before changes
   Claude suggests itself; give the link after saving; cancel, never delete.
-- **Return path after sign-in** ([[03-frontend/middleware]]): a signed-out
+- **Return path after sign-in** ([[03-frontend/proxy]]): a signed-out
   request for a page now goes to `/login?next=<path and query>` and sign-in
   returns there — a plan link, `/map?add=…`; before, every sign-in landed on
   `/map`. A signed-in visit to `/login?next=…` goes straight on. API paths
@@ -571,7 +604,7 @@ Claude can now read, save and change the user's plans through the connector.
   [[01-domain/visits]], [[05-flows/visit-flow]], [[05-flows/auth-flow]],
   [[05-flows/claude-connector-flow]], [[02-backend/auth]],
   [[02-backend/supabase-clients]], [[02-backend/api-routes/plans]],
-  [[03-frontend/middleware]], [[03-frontend/routing]],
+  [[03-frontend/proxy]], [[03-frontend/routing]],
   [[04-integrations/mapbox]], [[_agent/common-tasks]], [[_agent/pitfalls]],
   [[_plans/phase-1-planning]], [[_plans/personal-assistant]].
 
@@ -969,7 +1002,7 @@ deploy).
   dynamic client registration off.
 - Docs: new [[04-integrations/claude-mcp]], [[05-flows/claude-connector-flow]];
   updated [[02-backend/auth]], [[05-flows/auth-flow]] (`next` question
-  resolved), [[03-frontend/middleware]], [[03-frontend/routing]],
+  resolved), [[03-frontend/proxy]], [[03-frontend/routing]],
   [[06-ops/env-vars]], [[02-backend/schema/api_usage]],
   [[04-integrations/mapbox]], [[02-backend/api-routes/_README]],
   [[04-integrations/_README]], [[05-flows/_README]],
@@ -1012,7 +1045,7 @@ deploy).
   `/places` and `/api/places` still redirect to `/login`. A fresh tab on a
   share page and on `/login` logs no console errors, and the service worker
   is registered and active.
-- Docs: [[03-frontend/middleware]] (matcher explained; Next 16's
+- Docs: [[03-frontend/proxy]] (matcher explained; Next 16's
   `middleware` → `proxy` deprecation noted), [[03-frontend/pwa-and-offline]],
   [[03-frontend/routing]], [[02-backend/auth]], [[02-backend/supabase-clients]].
 
@@ -1043,7 +1076,7 @@ site.
   [[05-flows/signup-flow]] (owner-created accounts; the sub-category seeding
   step was missing), [[05-flows/_README]], [[01-domain/users-and-profiles]],
   [[03-frontend/routing]] (`/api/cron/*` was missing here too),
-  [[03-frontend/middleware]], [[03-frontend/layouts]],
+  [[03-frontend/proxy]], [[03-frontend/layouts]],
   [[03-frontend/app-router-conventions]], [[00-overview/system-overview]],
   [[00-overview/repo-structure]], [[_agent/conventions]].
 
@@ -3831,7 +3864,7 @@ The vault is now fully populated end-to-end. Foundation, anchor, backend, fronte
 - [[03-frontend/routing]] — every page + API route table.
 - [[03-frontend/layouts]] — root, `(app)`, `(auth)`, shared layouts.
 - [[03-frontend/state-management]] — React Query / Zustand / URL state / localStorage boundary.
-- [[03-frontend/middleware]] — auth gate detail.
+- [[03-frontend/proxy]] — auth gate detail.
 - [[03-frontend/pwa-and-offline]] — manifest, SW, offline page, share target.
 - [[03-frontend/design-system/_README]] — tokens, shadcn `base-nova`, fonts, dark mode, marker icons, and the **runtime vs `master.md` divergence** flagged.
 - `03-frontend/hooks/` — `_README` + 10 per-hook docs (useCategories, useDebounce, useFilters, useLists, useMapStyle, usePlaces, useSharedLinks, useStats, useTags, useTrips).
