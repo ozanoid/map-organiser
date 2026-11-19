@@ -42,7 +42,10 @@ import { flushLangfuse } from "@/lib/telemetry/langfuse";
  * full library (~500 places) cycles in roughly 5-8 weeks at one daily
  * run.
  */
-export const maxDuration = 300;
+// Headroom, not more work (v1.46.0; was 300): the soft deadline still stops
+// new places at 240 s, but one started just before it can poll reviews for
+// ~110 s more and the run used to be killed mid-place.
+export const maxDuration = 800;
 
 const STALE_DAYS = 30;
 const BATCH_SIZE = 14;
