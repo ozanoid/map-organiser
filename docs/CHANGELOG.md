@@ -6,6 +6,37 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 19.11.2026 — v1.42.2 — Link preview: a failed lookup is not "not found"
+
+Ozan asked for it after the v1.42.1 report. Both faults predate the
+DataForSEO switch.
+
+- `/api/places/parse-link` answered `404` "Could not find place details for
+  this link." when DataForSEO itself failed (down, out of balance) — the same
+  answer as a place Google doesn't know. It now looks up with `throwOnError`
+  and a 35 s bound: no such place → `404`; a failed lookup → `502` "Couldn't
+  look this place up right now. Please try again." The link stays in the
+  field, so the button retries.
+- A lookup that found nothing is billed ($0.0054, measured 18.11.2026) but
+  was not counted in `api_usage` (only a found place was). Every lookup
+  DataForSEO ran is counted now; a failed one isn't (not billed).
+- The body is validated with zod (a body that isn't JSON was an unhandled
+  error); `useParseLink` keeps its generic message when an error response
+  isn't JSON (a gateway timeout).
+- `LIVE_LOOKUP_TIMEOUT_MS` (35 s) now lives in `business-info.ts`, shared by
+  parse-link and `add_places` (was a constant in `src/lib/places/add.ts`).
+- **Checked:** `tsc`, `eslint`; locally, an aborted request: the default mode
+  returns `null` (the old "not found"), `throwOnError` throws. Not checked:
+  the signed-in dialog in a browser.
+- **Same fault class elsewhere, not changed here** (reported to Ozan): the
+  DataForSEO wrappers turn a failed request into "nothing found" (`null`,
+  `[]`) by default, and other callers act on it — the import, the reviews
+  step, the photo stage, the Mapbox-search preview, the refresh.
+- Docs: [[02-backend/api-routes/places]], [[05-flows/manual-place-create-flow]],
+  [[03-frontend/hooks/use-places]], [[04-integrations/dataforseo]].
+
+---
+
 ## 19.11.2026 — v1.42.1 — DataForSEO switch on main
 
 - The move of every place lookup to DataForSEO (v1.42.0) merged to main with

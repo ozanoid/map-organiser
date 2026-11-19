@@ -2,7 +2,7 @@
 title: DataForSEO Business Data
 type: integration
 domain: integrations
-version: 1.7.1
+version: 1.7.2
 last_updated: 19.11.2026
 status: stable
 sources:
@@ -51,7 +51,7 @@ Implementation in `src/lib/dataforseo/`:
 |---|---|
 | `client.ts` | Low-level HTTP client; auth header construction. |
 | `api-types.ts` | Type definitions for DataForSEO responses. |
-| `business-info.ts` | `fetchBusinessInfoLive(query)` — the main endpoint. Returns full business profile. |
+| `business-info.ts` | `fetchBusinessInfoLive(query, { signal, throwOnError })` — the main endpoint. Returns the full business profile, or `null`. By default `null` covers both "no such business" and a failed request; with `throwOnError` a failure throws, so `null` means only "no such business". `LIVE_LOOKUP_TIMEOUT_MS` (35 s) bounds a lookup made inside a request (`add_places`, parse-link). |
 | `reviews.ts` | `fetchReviews({cid, depth, sort_by})` — reviews endpoint. Default sort `relevant` (initial/import — establishes the relevance backbone); refreshes pass `newest` to discover new reviews. |
 | `transform.ts` | `transformBusinessInfoToPlaceData(response)` → `ParsedPlaceData`. |
 | `category-adapter.ts` | DataForSEO category string → one of our 12 default categories. |
@@ -136,7 +136,7 @@ These map into `places.google_data` (DataForSEO-extended subset) via `transformB
 
 - **Bad credentials:** 401. Route returns 500 to the client. Verify env vars.
 - **Quota exhausted:** 4xx. Same — verify account balance.
-- **No match:** task status 40102 "No Search Results" — for Business Info, no such business (billed like a hit, $0.0054; measured 18.11.2026); for a Maps search, nothing matched (an empty list, see above). Parse-link returns 404 — and so does any other failed lookup, since `fetchBusinessInfoLive` returns `null` for both. The import retries by name around the saved coordinate, then keeps a thin record (name and coordinate); the assistant's `add_places` saves nothing (`not_found`) and tells a failed lookup apart (`failed`).
+- **No match:** task status 40102 "No Search Results" — for Business Info, no such business (billed like a hit, $0.0054; measured 18.11.2026); for a Maps search, nothing matched (an empty list, see above). Parse-link returns 404, and 502 for a failed lookup (`throwOnError`, v1.42.2 — before, a failure was a 404 too). The import retries by name around the saved coordinate, then keeps a thin record (name and coordinate); the assistant's `add_places` saves nothing (`not_found`) and tells a failed lookup apart (`failed`).
 - **Timeout:** the `_Live` endpoints are synchronous and can be slow (~3-4s per call). The 60s Vercel Function default is the hard cap; if we hit it, batch sizes need to shrink.
 
 ## Per-user opt-out

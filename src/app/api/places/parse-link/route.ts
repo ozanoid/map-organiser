@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { parseMapsUrl } from "@/lib/google/parse-maps-url";
 import { dataForSeoClientFromEnv } from "@/lib/dataforseo/client";
-import { fetchBusinessInfoLive } from "@/lib/dataforseo/business-info";
+import { fetchBusinessInfoLive, LIVE_LOOKUP_TIMEOUT_MS } from "@/lib/dataforseo/business-info";
 import type { BusinessInfoRequest } from "@/lib/dataforseo/business-info";
+import type { RawBusinessInfo } from "@/lib/dataforseo/api-types";
 import {
   transformBusinessInfoToPlaceData,
   extractExtendedData,
@@ -20,7 +22,14 @@ import { buildLiteProfileForResponse } from "@/lib/ai/extract/lite-profile";
  * place's details for the Add Place preview, through DataForSEO's business
  * info (one lookup, $0.0054). Google's own Places API was a second path for
  * users with a key; it was removed with the move to DataForSEO (v1.42.0).
+ *
+ * 404 — DataForSEO looked and has no such place (billed, so counted);
+ * 502 — the lookup itself failed: DataForSEO down or out of balance, or no
+ * answer within LIVE_LOOKUP_TIMEOUT_MS (not billed, not counted). Both used
+ * to answer 404 "not found".
  */
+
+const Body = z.object({ url: z.string().trim().min(1) });
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
@@ -32,12 +41,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const body = await request.json();
-  const { url } = body;
-
-  if (!url || typeof url !== "string") {
+  const body = Body.safeParse(await request.json().catch(() => null));
+  if (!body.success) {
     return NextResponse.json({ error: "URL is required" }, { status: 400 });
   }
+  const { url } = body.data;
 
   try {
     const startTime = Date.now();
@@ -91,15 +99,28 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const raw = await fetchBusinessInfoLive(dfClient, req);
+    let raw: RawBusinessInfo | null;
+    try {
+      raw = await fetchBusinessInfoLive(dfClient, req, {
+        throwOnError: true,
+        signal: AbortSignal.timeout(LIVE_LOOKUP_TIMEOUT_MS),
+      });
+    } catch (error) {
+      console.error("[parse-link] Lookup failed:", error);
+      return NextResponse.json(
+        { error: "Couldn't look this place up right now. Please try again." },
+        { status: 502 }
+      );
+    }
+    // DataForSEO bills a lookup it ran whether or not it found the place.
+    await trackUsage(user.id, "dataforseo_business_info_live", supabase).catch(() => {});
+
     if (!raw) {
       return NextResponse.json(
         { error: "Could not find place details for this link." },
         { status: 404 }
       );
     }
-
-    trackUsage(user.id, "dataforseo_business_info_live", supabase).catch(() => {});
 
     const placeData = transformBusinessInfoToPlaceData(raw);
     const extended = extractExtendedData(raw);

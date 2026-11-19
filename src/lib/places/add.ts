@@ -2,6 +2,7 @@ import "server-only";
 import type { UserContext } from "@/lib/db/context";
 import { createServiceClient } from "@/lib/supabase/server";
 import { dataForSeoClientFromEnv } from "@/lib/dataforseo/client";
+import { LIVE_LOOKUP_TIMEOUT_MS } from "@/lib/dataforseo/business-info";
 import { kickDrain } from "@/lib/import/kick-drain";
 import {
   NOT_ON_GOOGLE_MAPS,
@@ -59,9 +60,6 @@ export interface GoogleAddOutcome {
 /** The server has no DataForSEO account. */
 export class PlaceLookupUnavailableError extends Error {}
 
-/** One lookup's bound. DataForSEO's live business info took 10–12 s in testing
- *  (18.11.2026); the tool answers within one call. */
-const LOOKUP_TIMEOUT_MS = 35_000;
 /** Following a short link (one redirect). */
 const LINK_TIMEOUT_MS = 10_000;
 
@@ -163,7 +161,7 @@ async function addOne(
         visitStatus,
         source: "assistant",
         requireLookup: true,
-        signal: AbortSignal.timeout(LOOKUP_TIMEOUT_MS),
+        signal: AbortSignal.timeout(LIVE_LOOKUP_TIMEOUT_MS),
       },
       categories
     );

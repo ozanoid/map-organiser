@@ -2,7 +2,7 @@
 title: Places routes
 type: route-group
 domain: backend
-version: 2.5.0
+version: 2.5.1
 last_updated: 19.11.2026
 status: stable
 sources:
@@ -213,10 +213,10 @@ All require auth except `drain-imports`, which is bearer-authed with `CRON_SECRE
 ### `POST /api/places/parse-link`
 
 - **Source:** `src/app/api/places/parse-link/route.ts`
-- **Body:** `{ url: string }`.
-- **DB:** none for the lookup (the lite profile reads the user's taxonomy).
-- **External:** `parseMapsUrl`; DataForSEO `fetchBusinessInfoLive` — the only provider since v1.42.0 (the Google Places path for keyed users was removed); Mapbox `reverseGeocode` (for short-query padding); transforms; `trackUsage`.
-- **Response:** Place data + `_provider: "dataforseo"`, `_fetchTimeMs`, optional `_extended`, optional `lite_profile: PlaceProfile | null` (Phase 3+). `200` / `400` (invalid URL, unparseable) / `404` (no details) / `503` (no DataForSEO credentials on the server).
+- **Body:** `{ url: string }` (zod; a missing URL or a body that isn't JSON → `400`).
+- **DB:** none for the lookup (the lite profile reads the user's taxonomy); one `api_usage` row per lookup DataForSEO ran.
+- **External:** `parseMapsUrl`; DataForSEO `fetchBusinessInfoLive` with `throwOnError` and a `LIVE_LOOKUP_TIMEOUT_MS` (35 s) bound — the only provider since v1.42.0 (the Google Places path for keyed users was removed); Mapbox `reverseGeocode` (for short-query padding); transforms; `trackUsage` for every lookup DataForSEO ran, found or not (it bills both; before v1.42.2 only a found place was counted).
+- **Response:** Place data + `_provider: "dataforseo"`, `_fetchTimeMs`, optional `_extended`, optional `lite_profile: PlaceProfile | null` (Phase 3+). `200` / `400` (missing URL, unparseable link) / `404` (DataForSEO looked and has no such place) / `502` (the lookup failed — DataForSEO down or out of balance, or no answer in 35 s; v1.42.2, before it answered `404` "not found" as well) / `503` (no DataForSEO credentials on the server) / `500` (any other error; a short link that can't be followed ends as `400`, unparseable).
 - **lite_profile (Phase 3):** Inline rule-based profile (no LLM call). Built by `buildLiteProfileForResponse` after the main fetch, gated by `profiles.ai_features_enabled`. Carries `category_signals` (primary + sub-category slug + confidence), `features` (cuisine/dietary/seating/distinctive/price_range — atmosphere/occasions/music/crowd left empty for Phase 4), `suggested_tags.matched_existing` (no new_proposals in lite path), and `suggested_lists` (city/country/category/cuisine fuzzy match). Fail-soft: any error logs and returns `lite_profile: null` rather than failing the parse. See [[../../05-flows/lite-profile-flow]].
 - **DataForSEO keyword branching** (in order of preference):
   - `cidFromUrl` (raw URL has `?cid=` or FTid) → `keyword: cid:<decimal>`.
@@ -224,7 +224,7 @@ All require auth except `drain-imports`, which is bearer-authed with `CRON_SECRE
   - `parsed.type === "place_id"` → `keyword: place_id:ChIJ...`.
   - `parsed.type === "search"` with coords → **reverse-geocodes via Mapbox** to fetch `full_address`, appends to keyword (`"<query>, <full_address>"`), widens coord bias to 2 km. Without the address suffix Google's text-search loses bare names (`"Beam"`) against global namesakes.
   - Bare `lat/lng` → `keyword: "lat,lng"` + 200 m bias (weakest fallback).
-- **Notes:** Dual-path resolution. `photoRef` deferred to a later enrichment step.
+- **Notes:** One lookup (DataForSEO). `photoRef` deferred to a later enrichment step.
 
 ## Cross-route concerns
 
