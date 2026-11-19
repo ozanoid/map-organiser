@@ -2,8 +2,8 @@
 title: AI place_profile backfill (per user)
 type: runbook
 domain: ops
-version: 1.3.0
-last_updated: 06.08.2026
+version: 1.3.1
+last_updated: 19.11.2026
 status: stable
 related:
   - "[[_README]]"
@@ -167,8 +167,9 @@ Re-run the backfill afterward to regenerate.
 
 ## Places that will never become eligible
 
-A place whose reviews fetch comes back empty gets `google_data.reviews_checked_at`
-stamped, and the eligibility report counts it under `no_reviews_available`
+A place whose reviews fetch comes back empty — DataForSEO finished the task and
+Google has none; a failed fetch stamps nothing since v1.45.0 — gets
+`google_data.reviews_checked_at` stamped, and the eligibility report counts it under `no_reviews_available`
 rather than `has_cid_no_reviews`. Without that, "has a CID and no reviews" stays
 true forever and the panel re-offers the place after every import, burning a
 DataForSEO call each time for the same empty answer.

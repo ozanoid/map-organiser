@@ -102,7 +102,6 @@ export async function POST(request: NextRequest) {
     let raw: RawBusinessInfo | null;
     try {
       raw = await fetchBusinessInfoLive(dfClient, req, {
-        throwOnError: true,
         signal: AbortSignal.timeout(LIVE_LOOKUP_TIMEOUT_MS),
       });
     } catch (error) {

@@ -2,8 +2,8 @@
 title: Place Search Flow
 type: flow
 domain: places
-version: 1.2.0
-last_updated: 16.10.2026
+version: 1.2.1
+last_updated: 19.11.2026
 status: stable
 sources:
   - src/components/map/search-box.tsx
@@ -138,8 +138,9 @@ There is **no Google Places path** in this flow even when the user has a persona
 ## Failure modes
 
 - **Mapbox suggest fails:** dropdown shows "No places found." (empty array fallback). User can clear and try again.
-- **Mapbox retrieve fails:** `404` returned, panel stays closed, hook's `retrieveError` surfaces. Today the SearchBox swallows it silently — could be a toast.
-- **DataForSEO fails or returns empty:** `_provider: "mapbox"`, minimal data. Save still works; user gets a place with no rating / photo / opening hours. Manual "Refresh Google data" from place detail page can backfill later.
+- **Mapbox retrieve fails:** `404`, panel stays closed, the SearchBox shows the server's message as a toast and keeps the input (v1.45.0; before, nothing happened).
+- **DataForSEO has no match:** `_provider: "mapbox"`, minimal data. Save still works; the place has no rating / photo / opening hours — and no Google id, so "Refresh Google data" can't fill it in later.
+- **DataForSEO lookup fails:** `502`, toast "Couldn't look this place up right now. Please try again.", input kept (v1.45.0; before, it got the Mapbox-only answer).
 - **Save fails — 409 duplicate:** the user already saved this place (matched by `google_place_id`). Toast shows the server error.
 - **Save fails — network:** toast, panel stays open with user's selections intact.
 

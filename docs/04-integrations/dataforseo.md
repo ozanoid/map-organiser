@@ -2,7 +2,7 @@
 title: DataForSEO Business Data
 type: integration
 domain: integrations
-version: 1.7.2
+version: 1.8.0
 last_updated: 19.11.2026
 status: stable
 sources:
@@ -51,8 +51,8 @@ Implementation in `src/lib/dataforseo/`:
 |---|---|
 | `client.ts` | Low-level HTTP client; auth header construction. |
 | `api-types.ts` | Type definitions for DataForSEO responses. |
-| `business-info.ts` | `fetchBusinessInfoLive(query, { signal, throwOnError })` — the main endpoint. Returns the full business profile, or `null`. By default `null` covers both "no such business" and a failed request; with `throwOnError` a failure throws, so `null` means only "no such business". `LIVE_LOOKUP_TIMEOUT_MS` (35 s) bounds a lookup made inside a request (`add_places`, parse-link). |
-| `reviews.ts` | `fetchReviews({cid, depth, sort_by})` — reviews endpoint. Default sort `relevant` (initial/import — establishes the relevance backbone); refreshes pass `newest` to discover new reviews. |
+| `business-info.ts` | `fetchBusinessInfoLive(query, { signal })` — the main endpoint. Returns the business, or `null` when DataForSEO looked and has no such business (40102, or no items) — billed either way. Every failure throws (network, HTTP status, abort, any other task status) and isn't billed (v1.45.0; before, a failure also returned `null` unless the caller passed `throwOnError`). `LIVE_LOOKUP_TIMEOUT_MS` (35 s) bounds a lookup made inside a request (`add_places`, parse-link). |
+| `reviews.ts` | `fetchReviews({cid, depth, sort_by}, { onBilled })` — reviews endpoint (task_post, then polling task_get). Default sort `relevant` (initial/import — establishes the relevance backbone); refreshes pass `newest` to discover new reviews. Returns `[]` only when the task finished with none — 20000 with `items: null` (measured 19.11.2026), or 40102; throws when the task isn't created, on any other status, or after 12 polls without a result. `onBilled` fires once the task is created (status 20100, $0.0015 at priority 2 — billed from then on). Until v1.45.0 every failure returned `[]`, and a place without reviews answered only after all 12 polls (~95 s) because `items: null` wasn't taken for done — now ~15–30 s. |
 | `transform.ts` | `transformBusinessInfoToPlaceData(response)` → `ParsedPlaceData`. |
 | `category-adapter.ts` | DataForSEO category string → one of our 12 default categories. |
 | `opening-hours-adapter.ts` | DataForSEO `work_time` → `weekday_text[]` + `open_now`. |
@@ -136,7 +136,8 @@ These map into `places.google_data` (DataForSEO-extended subset) via `transformB
 
 - **Bad credentials:** 401. Route returns 500 to the client. Verify env vars.
 - **Quota exhausted:** 4xx. Same — verify account balance.
-- **No match:** task status 40102 "No Search Results" — for Business Info, no such business (billed like a hit, $0.0054; measured 18.11.2026); for a Maps search, nothing matched (an empty list, see above). Parse-link returns 404, and 502 for a failed lookup (`throwOnError`, v1.42.2 — before, a failure was a 404 too). The import retries by name around the saved coordinate, then keeps a thin record (name and coordinate); the assistant's `add_places` saves nothing (`not_found`) and tells a failed lookup apart (`failed`).
+- **No match:** task status 40102 "No Search Results" — for Business Info, no such business (billed like a hit, $0.0054; measured 18.11.2026); for a Maps search, nothing matched (an empty list, see above); for reviews, none. Parse-link returns 404; the import retries by name around the saved coordinate, then keeps a thin record (name and coordinate); `add_places` saves nothing (`not_found`); the Mapbox-search preview falls back to Mapbox data; the reviews step stamps `reviews_checked_at`.
+- **Failure (v1.45.0):** the wrappers throw, and no caller reads it as "no match": parse-link and the Mapbox-search preview answer 502 "try again"; the import queue retries the item (3 tries at the stage, then the place is kept and the item ends with a reason, or — at the import stage — `failed`); the manual enrich steps answer 502 and stamp nothing; the refresh writes nothing and reports `ok: false`, retried on the next run; `add_places` reports `failed`. Usage is counted only for what DataForSEO billed: a business-info lookup that returned (found or not), a reviews task once created. Measured before the change on 910 places: no damage had happened (0 thin records, 0 wrong "no reviews" stamps).
 - **Timeout:** the `_Live` endpoints are synchronous and can be slow (~3-4s per call). The 60s Vercel Function default is the hard cap; if we hit it, batch sizes need to shrink.
 
 ## Per-user opt-out

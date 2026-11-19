@@ -309,13 +309,30 @@ export async function GET(request: NextRequest) {
         console.error(`[drain-imports] item ${item.id} (${item.stage}) threw:`, e);
         // Leave the stage alone and release the claim: attempts already ticked
         // up, so a persistently throwing item retires itself after 3 tries
-        // rather than blocking the queue forever.
+        // rather than blocking the queue forever. A failed DataForSEO call
+        // lands here too (v1.45.0) and is retried like any other error.
         const retire = item.attempts >= 3;
-        await advance(item, {
-          stage: retire ? "failed" : item.stage,
-          reason: retire ? "Repeated errors" : null,
-        });
-        if (retire) counts.failed++;
+        if (!retire) {
+          await advance(item, { stage: item.stage });
+        } else if (item.stage === "photo" && item.place_id) {
+          // A missing photo never blocks the place (see the photo stage) —
+          // unless the item came only to repair the photo of an enriched place;
+          // when that can't be read, don't risk paying for enrichment again.
+          const enriched = await alreadyEnriched(item.place_id).catch(() => true);
+          await advance(item, { stage: enriched ? "done" : "reviews", reason: "Photo kept failing" });
+        } else if (item.stage !== "import" && item.place_id) {
+          // Past import the place exists: the item is done with less on it.
+          // Retiring it as `failed` made the import views report an added
+          // place as not added.
+          counts.done++;
+          await advance(item, {
+            stage: "done",
+            reason: item.stage === "reviews" ? "Reviews kept failing" : "Profile kept failing",
+          });
+        } else {
+          counts.failed++;
+          await advance(item, { stage: "failed", reason: "Repeated errors" });
+        }
       }
     }
   }
@@ -346,23 +363,28 @@ export async function GET(request: NextRequest) {
     // Already asked recently and got nothing — don't pay for the same answer.
     if (reviewsRecentlyChecked(gd)) return false;
 
-    const reviews = await fetchReviews(client!, {
-      cid,
-      depth: 50,
-      location_coordinate: toLocationCoordinate(
-        place.location ? parsePostgisPoint(place.location as string) : null
-      ),
-      location_name: (place.country as string | null) || "United Kingdom",
-    });
-    if (!reviews || reviews.length === 0) {
+    // A failed fetch throws: the worker's catch retries the item instead of
+    // stamping "Google has no reviews" on it (v1.45.0). The task is billed
+    // once DataForSEO creates it, reviews or not — counted there, with the
+    // service client (a cron request has no session; as `anon` the count
+    // would be refused since rpc_least_privilege).
+    const reviews = await fetchReviews(
+      client!,
+      {
+        cid,
+        depth: 50,
+        location_coordinate: toLocationCoordinate(
+          place.location ? parsePostgisPoint(place.location as string) : null
+        ),
+        location_name: (place.country as string | null) || "United Kingdom",
+      },
+      { onBilled: () => trackUsage(item.user_id, "dataforseo_reviews", admin) }
+    );
+    if (reviews.length === 0) {
       await stampReviewsChecked(admin, item.place_id);
       return false;
     }
 
-    // The service client: a cron request has no session, so the default
-    // cookie client counted as `anon` — which loses EXECUTE on
-    // increment_api_usage (migration rpc_least_privilege).
-    await trackUsage(item.user_id, "dataforseo_reviews", admin);
     await admin
       .from("places")
       .update({

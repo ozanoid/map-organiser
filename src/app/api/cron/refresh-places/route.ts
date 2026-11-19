@@ -183,11 +183,12 @@ export async function GET(request: NextRequest) {
         refreshed++;
         if (!r.bizInfoOk) {
           // Row updated (marker stamped, reviews possibly merged via the
-          // stored cid) but the biz-info lookup returned nothing — surface
-          // it so dead google_place_ids are visible in the summary.
+          // stored cid) but Google has no record of the place — surface it
+          // so dead google_place_ids are visible in the summary. (A failed
+          // lookup is `!r.ok` above since v1.45.0, retried next run.)
           bizInfoFailed++;
           console.warn(
-            `[cron:refresh] ${place.name}: biz-info returned null (place dead or transient API failure)`
+            `[cron:refresh] ${place.name}: Google has no record (place gone or its id changed)`
           );
         }
 

@@ -2,8 +2,8 @@
 title: Periodic place refresh (cron)
 type: runbook
 domain: ops
-version: 1.1.1
-last_updated: 15.07.2026
+version: 1.1.2
+last_updated: 19.11.2026
 status: stable
 sources:
   - src/app/api/cron/refresh-places/route.ts
@@ -37,9 +37,11 @@ no profile regeneration. Each run:
 1. Selects the **stalest places** among opted-in owners:
    `google_data->>refresh_attempted_at` missing or older than `STALE_DAYS`
    (30), `google_place_id` present. Oldest first, up to `BATCH_SIZE` (14)
-   per run. The marker is stamped on **every attempt** (success or not) —
-   a place whose DataForSEO lookup permanently fails is retried next
-   cycle, not daily, so it can't starve the batch.
+   per run. The marker is stamped on every **completed** attempt — found
+   or not — so a place Google no longer knows is retried next cycle, not
+   daily, and can't starve the batch. A **failed** lookup (DataForSEO down,
+   out of balance) stamps nothing and is retried on the next run (v1.45.0;
+   before, it was stamped like a miss and waited a whole cycle).
 2. Per place — `refreshPlaceGoogleData` (service client, `skipPhoto`):
    DataForSEO biz-info + extended data (stamps a fresh `enriched_at`) +
    reviews with `sort_by: "newest"`, **merged** into the stored corpus
@@ -96,8 +98,9 @@ Honeycomb: query `cron.refresh_places` events for the run history.
 |---|---|---|
 | 500 `CRON_SECRET not configured` | Env var missing | Add it in Vercel, redeploy |
 | 401 | Header mismatch (manual call without the secret) | Use the exact secret |
-| `failed` > 0 in summary | Row-level errors (place fetch/update) | `refresh_attempted_at` unstamped for those → retried next run (`[cron:refresh]` warnings in logs) |
-| `bizInfoFailed` > 0 | DataForSEO biz-info returned nothing — dead/unresolvable `google_place_id` or transient API failure | Row still updated + marker stamped → retried next **cycle** (30 d), not daily. Recurring for the same place → the place is likely gone; consider removing it. |
+| `failed` > 0 in summary | Row-level errors (place fetch/update) or a failed DataForSEO lookup (v1.45.0: "Place lookup failed") | `refresh_attempted_at` unstamped for those → retried next run (`[cron:refresh]` warnings in logs). Many at once → DataForSEO down or out of balance. |
+| `bizInfoFailed` > 0 | Google has no record of the place — dead or changed `google_place_id` (no longer a transient failure; those are `failed`) | Row still updated + marker stamped → retried next **cycle** (30 d), not daily. Recurring for the same place → the place is likely gone; consider removing it. |
+| `reviewsFailed` on a place | The reviews fetch failed; business info refreshed, stored reviews kept | Nothing to do; the next refresh fetches them. |
 | Profile generation fails mid-run (cap, LLM error) | `profileSkipped` with a `[cron:refresh]` warn | Known limitation: the place waits for the next cycle (or the user's manual refresh — the staleness badge points them there). |
 | `deadlineHit: true` | Slow review polling — soft deadline stopped the batch early | Normal; leftovers lead the next run. Persistent → lower `BATCH_SIZE` or raise `maxDuration` (plan permitting). |
 

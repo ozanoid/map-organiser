@@ -6,6 +6,58 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 19.11.2026 — v1.45.0 — A failed DataForSEO call is never "nothing found"
+
+Ozan: "şimdi yap" — the systemic fix of the fault class found in v1.42.2.
+Measured first (v1.43.1): no damage so far on 910 places; the risk was an
+outage or an empty balance during a bulk import.
+
+- **The wrappers say what happened.** `fetchBusinessInfoLive` returns `null`
+  only when DataForSEO looked and has no such business; every failure throws
+  (the forgiving mode and its `throwOnError` switch are gone).
+  `fetchReviews` returns `[]` only when the task finished with no reviews and
+  throws on every failure — task not created, an unexpected status, no result
+  after 12 polls. Measured on a place without reviews (19.11.2026): the task
+  answers 40602 "Task In Queue", then 20000 with `items: null`; that wasn't
+  taken for done, so such a place waited out all 12 polls (~95 s) — now
+  ~15–30 s.
+- **Callers** (all of them):
+  - import queue: a failed lookup throws → the item is retried, 3 tries at its
+    stage. At import it then ends `failed` — no more thin records from an
+    outage. Past import the place exists, so the item is no longer `failed`
+    (which made the Instagram and Takeout views report an added place as not
+    added): a failing photo stage moves on to reviews, a failing reviews or
+    profile stage ends `done`, each with a reason. The review stage no longer
+    stamps "no reviews" on a failure.
+  - manual enrich (after Add Place): `step=info` and `step=reviews` answer 502
+    and write nothing on a failure.
+  - Mapbox-search preview: a failed lookup answers 502 "try again" instead of
+    the Mapbox-only data — a place saved from that has no Google id, and
+    nothing ever looked it up again. The search box now shows the error as a
+    toast; a failed retrieve did nothing before.
+  - refresh (manual and cron): a failed lookup writes nothing, not even the
+    staleness marker, and reports `ok: false` — retried on the next run
+    instead of waiting a 30-day cycle; a failed reviews fetch keeps the
+    stored reviews (`reviewsFailed`).
+- **Usage counts what DataForSEO bills:** a business-info lookup that
+  returned, found or not (the Mapbox-search preview counted only a match); a
+  reviews task once created (the import and the manual step counted only
+  when reviews came back) — through a new `onBilled` callback.
+- **Checked:** `tsc`, `eslint` (0 errors), `next build`; the new contract
+  against the live API (≈ $0.01): a place without reviews → `[]` in 31 s,
+  billed once; a place with reviews → 10 reviews; a task DataForSEO refuses
+  (an invalid `location_name`, the Turkey bug of v1.17) → throws, not billed;
+  an unknown CID → `null`; an aborted request → throws. **Not run live:** the
+  queue's retry path, the 502s of the signed-in routes, the toast.
+- Docs: [[04-integrations/dataforseo]], [[05-flows/place-import-flow]],
+  [[05-flows/instagram-import-flow]], [[02-backend/schema/import-jobs]],
+  [[02-backend/api-routes/places]], [[02-backend/api-routes/search]],
+  [[05-flows/place-search-flow]], [[05-flows/manual-place-create-flow]],
+  [[03-frontend/hooks/use-place-search]],
+  [[06-ops/runbooks/periodic-refresh]], [[06-ops/runbooks/profile-backfill]].
+
+---
+
 ## 19.11.2026 — v1.44.0 — middleware → proxy; functions next to the database (fra1)
 
 Ozan left the call to me ("mantıklısı neyse onu yap").

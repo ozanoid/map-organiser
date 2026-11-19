@@ -14,6 +14,7 @@ import {
 } from "@/lib/dataforseo/transform";
 import { trackUsage } from "@/lib/google/track-usage";
 import type { GoogleReview } from "@/lib/types";
+import type { RawBusinessInfo } from "@/lib/dataforseo/api-types";
 
 export interface RefreshOutcome {
   ok: boolean;
@@ -28,10 +29,13 @@ export interface RefreshOutcome {
   newReviews: number;
   /** Whether a place_profile existed before this refresh. */
   hadProfile: boolean;
-  /** False when the DataForSEO biz-info lookup returned nothing — the row
-   *  is still updated (reviews may have merged via the stored cid) and
-   *  `refresh_attempted_at` is stamped, but extended data didn't refresh. */
+  /** False when DataForSEO looked and has no record of the place (gone, or
+   *  its id changed) — the row is still updated (reviews may have merged via
+   *  the stored cid) and `refresh_attempted_at` is stamped, but extended data
+   *  didn't refresh. A failed lookup is `ok: false` instead (v1.45.0). */
   bizInfoOk: boolean;
+  /** The reviews fetch failed; the stored reviews were kept. */
+  reviewsFailed?: boolean;
 }
 
 /**
@@ -103,7 +107,24 @@ export async function refreshPlaceGoogleData(
     ? `place_id:${place.google_place_id}`
     : `cid:${place.google_place_id}`;
 
-  const raw = await fetchBusinessInfoLive(client, { keyword });
+  // A failed lookup isn't "no record": write nothing — not even the
+  // staleness marker, so the cron tries the place again on its next run — and
+  // report it (v1.45.0; before, it read as null and the refresh "succeeded"
+  // on the old data).
+  let raw: RawBusinessInfo | null;
+  try {
+    raw = await fetchBusinessInfoLive(client, { keyword });
+  } catch (error) {
+    console.error(`[refresh-google-data] lookup failed for ${placeId}:`, error);
+    return {
+      ok: false,
+      status: 502,
+      error: "Place lookup failed — try again",
+      ...none,
+      hadProfile,
+    };
+  }
+  // Billed whether or not DataForSEO found the place.
   trackUsage(userId, "dataforseo_business_info_live", supabase).catch(
     () => {}
   );
@@ -117,27 +138,37 @@ export async function refreshPlaceGoogleData(
     (existingData.reviews as GoogleReview[] | undefined) ?? [];
   let mergedReviews = existingReviews;
   let newReviews = 0;
+  let reviewsFailed = false;
   if (cid) {
-    const rawReviews = await fetchReviews(client, {
-      cid,
-      depth: 50,
-      sort_by: opts.reviewSort ?? "newest",
-      location_coordinate: toLocationCoordinate(
-        place.location ? parsePostgisPoint(place.location) : null
-      ),
-      location_name: (place.country as string) || "United States",
-    });
-    // The task is billed whether or not reviews come back — track always.
-    trackUsage(userId, "dataforseo_reviews", supabase).catch(() => {});
-    const fetched = transformReviews(rawReviews);
-    if (fetched.length > 0) {
-      // Key-diff BEFORE merging — a length delta reads 0 at the cap.
-      newReviews = countNewReviews(existingReviews, fetched);
-      // Merge, don't replace — mode mirrors the fetch sort ("newest"
-      // feeds the pool; "relevant" would re-establish the backbone).
-      mergedReviews = mergeReviews(existingReviews, fetched, {
-        incomingOrder: opts.reviewSort ?? "newest",
-      });
+    try {
+      const rawReviews = await fetchReviews(
+        client,
+        {
+          cid,
+          depth: 50,
+          sort_by: opts.reviewSort ?? "newest",
+          location_coordinate: toLocationCoordinate(
+            place.location ? parsePostgisPoint(place.location) : null
+          ),
+          location_name: (place.country as string) || "United States",
+        },
+        // The task is billed once created, reviews or not.
+        { onBilled: () => trackUsage(userId, "dataforseo_reviews", supabase) }
+      );
+      const fetched = transformReviews(rawReviews);
+      if (fetched.length > 0) {
+        // Key-diff BEFORE merging — a length delta reads 0 at the cap.
+        newReviews = countNewReviews(existingReviews, fetched);
+        // Merge, don't replace — mode mirrors the fetch sort ("newest"
+        // feeds the pool; "relevant" would re-establish the backbone).
+        mergedReviews = mergeReviews(existingReviews, fetched, {
+          incomingOrder: opts.reviewSort ?? "newest",
+        });
+      }
+    } catch (error) {
+      // The business info above is fresh; keep the stored reviews.
+      reviewsFailed = true;
+      console.error(`[refresh-google-data] reviews failed for ${placeId}:`, error);
     }
   }
 
@@ -206,6 +237,7 @@ export async function refreshPlaceGoogleData(
       newReviews,
       hadProfile,
       bizInfoOk: Boolean(raw),
+    reviewsFailed,
     };
   }
 
@@ -216,5 +248,6 @@ export async function refreshPlaceGoogleData(
     newReviews,
     hadProfile,
     bizInfoOk: Boolean(raw),
+    reviewsFailed,
   };
 }

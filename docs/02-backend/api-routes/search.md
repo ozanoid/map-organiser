@@ -2,8 +2,8 @@
 title: Search routes
 type: route-group
 domain: backend
-version: 1.2.0
-last_updated: 16.10.2026
+version: 1.2.1
+last_updated: 19.11.2026
 status: stable
 sources:
   - src/app/api/search/suggest/route.ts
@@ -61,7 +61,7 @@ Both routes require an authenticated user. The Mapbox session is owned by the **
 - **External pipeline:**
   1. `src/lib/mapbox/search-box.ts#retrieve` → name + coords + address + POI categories.
   2. **`trackUsage(user.id, "mapbox_search_session")`** — one billable session per suggest→retrieve pair.
-  3. If DataForSEO env credentials are configured: `fetchBusinessInfoLive({ keyword: "<name>, <full_address>", location_coordinate: "lat,lng,1000" })` for enrichment. The address suffix disambiguates name collisions; the 1000m radius absorbs the typical Mapbox↔Google coordinate drift. On match: `trackUsage(user.id, "dataforseo_business_info_live")`.
+  3. If DataForSEO env credentials are configured: `fetchBusinessInfoLive({ keyword: "<name>, <full_address>", location_coordinate: "lat,lng,1000" })` for enrichment. The address suffix disambiguates name collisions; the 1000m radius absorbs the typical Mapbox↔Google coordinate drift. Counted with `trackUsage(user.id, "dataforseo_business_info_live")` whenever the lookup returned, match or not (billed either way; until v1.45.0 only a match was counted). A failed lookup answers `502` (below).
 - **Response shape (DataForSEO match):**
 
   ```ts
@@ -92,7 +92,7 @@ Both routes require an authenticated user. The Mapbox session is owned by the **
   }
   ```
 
-- **Status:** `200`; `400` (missing `session_token`); `401`; `404` (Mapbox returned no feature for the id).
+- **Status:** `200`; `400` (missing `session_token`); `401`; `404` (Mapbox returned no feature for the id); `502` "Couldn't look this place up right now. Please try again." when the DataForSEO lookup failed (v1.45.0). Before, a failure got the Mapbox-only answer — and a place saved from it has no Google id, so nothing ever looks it up again.
 - **Notes:**
   - Response mirrors `/api/places/parse-link` so the same UI form can save it.
   - **Dedup advantage** of DataForSEO path: returns `place_id` or `cid` → `POST /api/places` will reject duplicates via `idx_places_google_id`.

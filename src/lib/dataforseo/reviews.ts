@@ -51,85 +51,106 @@ export function toLocationCoordinate(
   return `${lat.toFixed(7)},${lng.toFixed(7)},${COORDINATE_RADIUS_M}`;
 }
 
+/** Task statuses while a queued task is still running: "Task Handed", "Task In Queue". */
+const IN_PROGRESS = new Set([40601, 40602]);
+/** "No Search Results". */
+const NO_RESULTS = 40102;
+const MAX_POLLS = 12;
+
+export interface ReviewsOptions {
+  /**
+   * Called once DataForSEO has created the task (status 20100): it is billed
+   * from then on ($0.0015 at priority 2, measured 19.11.2026) whatever the
+   * polling brings, so count the usage here.
+   */
+  onBilled?: () => void | Promise<void>;
+}
+
+/**
+ * Post a reviews task and poll for its result.
+ *
+ * Returns the reviews, or `[]` when DataForSEO finished the task and the place
+ * has none: status 20000 with `items: null` (measured 19.11.2026), or 40102.
+ * Throws on every failure: the task wasn't created, a status other than
+ * "handed" / "in queue" / done, or no result after MAX_POLLS (~1.5 min). A
+ * failed poll is retried — the task itself may be fine.
+ *
+ * Until v1.45.0 every failure came back as `[]`, which callers record as
+ * "Google has no reviews" (`reviews_checked_at`, no re-check for 30 days);
+ * and a place without reviews answered only after the whole polling budget,
+ * because `items: null` wasn't taken for done.
+ */
 export async function fetchReviews(
   client: DataForSEOClient,
-  request: ReviewsRequest
+  request: ReviewsRequest,
+  opts: ReviewsOptions = {}
 ): Promise<RawReview[]> {
   const depth = request.depth ?? 10;
 
-  try {
-    // Step 1: POST task
-    const postResponse = await client.post<ReviewsTaskPostResponse>(
-      "/business_data/google/reviews/task_post",
-      [
-        {
-          cid: request.cid,
-          language_code: request.language_code || "en",
-          ...(request.location_coordinate
-            ? { location_coordinate: request.location_coordinate }
-            : request.location_code
-              ? { location_code: request.location_code }
-              : request.location_name
-                ? { location_name: request.location_name }
-                : { location_name: "United Kingdom" }),
-          depth,
-          sort_by: request.sort_by || "relevant",
-          priority: 2,
-        },
-      ]
+  const postResponse = await client.post<ReviewsTaskPostResponse>(
+    "/business_data/google/reviews/task_post",
+    [
+      {
+        cid: request.cid,
+        language_code: request.language_code || "en",
+        ...(request.location_coordinate
+          ? { location_coordinate: request.location_coordinate }
+          : request.location_code
+            ? { location_code: request.location_code }
+            : request.location_name
+              ? { location_name: request.location_name }
+              : { location_name: "United Kingdom" }),
+        depth,
+        sort_by: request.sort_by || "relevant",
+        priority: 2,
+      },
+    ]
+  );
+
+  const task = postResponse.tasks?.[0];
+  if (!task?.id || (task.status_code ?? 0) >= 40000) {
+    throw new Error(
+      `DataForSEO reviews task not created: ${task?.status_code ?? "no task"} ${task?.status_message ?? ""}`.trim()
     );
-
-    const task = postResponse.tasks?.[0];
-
-    // Check if task creation itself failed
-    if (!task?.id || (task.status_code && task.status_code >= 40000)) {
-      console.warn(
-        `[DataForSEO] Reviews task creation failed: ${task?.status_code} - ${task?.status_message}`
-      );
-      return [];
-    }
-
-    const taskId = task.id;
-    console.log(`[DataForSEO] Reviews task posted: ${taskId}, polling...`);
-
-    // Step 2: Poll for results
-    const maxAttempts = 12;
-    let delay = 5000;
-
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      await new Promise((r) => setTimeout(r, delay));
-
-      try {
-        const getResponse = await client.get<ReviewsResponse>(
-          `/business_data/google/reviews/task_get/${taskId}`
-        );
-
-        const getTask = getResponse.tasks?.[0];
-
-        if (getTask?.status_code === 20000 && getTask.result?.[0]?.items) {
-          console.log(
-            `[DataForSEO] Reviews ready after ${attempt + 1} attempts, got ${getTask.result[0].items.length} reviews`
-          );
-          return getTask.result[0].items;
-        }
-
-        // Log progress
-        console.log(
-          `[DataForSEO] Reviews poll ${attempt + 1}/${maxAttempts}: status=${getTask?.status_code}`
-        );
-      } catch {
-        console.log(
-          `[DataForSEO] Reviews poll ${attempt + 1} error, retrying...`
-        );
-      }
-
-      delay = Math.min(delay * 1.3, 10000);
-    }
-
-    console.warn("[DataForSEO] Reviews polling timed out");
-    return [];
-  } catch (error) {
-    console.error("[DataForSEO] Reviews fetch error:", error);
-    return [];
   }
+  try {
+    await opts.onBilled?.();
+  } catch (error) {
+    console.error("[DataForSEO] Reviews usage tracking failed:", error);
+  }
+
+  const taskId = task.id;
+  let delay = 5000;
+  let last = "no answer";
+  for (let attempt = 0; attempt < MAX_POLLS; attempt++) {
+    await new Promise((r) => setTimeout(r, delay));
+    delay = Math.min(delay * 1.3, 10000);
+
+    let getTask;
+    try {
+      const getResponse = await client.get<ReviewsResponse>(
+        `/business_data/google/reviews/task_get/${taskId}`
+      );
+      getTask = getResponse.tasks?.[0];
+    } catch (error) {
+      last = error instanceof Error ? error.message : String(error);
+      continue;
+    }
+
+    const status = getTask?.status_code;
+    if (status === 20000) {
+      const items = getTask?.result?.[0]?.items ?? [];
+      console.log(`[DataForSEO] Reviews ready after ${attempt + 1} polls: ${items.length}`);
+      return items;
+    }
+    if (status === NO_RESULTS) return [];
+    if (status !== undefined && IN_PROGRESS.has(status)) {
+      last = String(status);
+      continue;
+    }
+    throw new Error(
+      `DataForSEO reviews task ${taskId}: ${status ?? "no task"} ${getTask?.status_message ?? ""}`.trim()
+    );
+  }
+  throw new Error(`DataForSEO reviews task ${taskId}: no result after ${MAX_POLLS} polls (last: ${last})`);
 }

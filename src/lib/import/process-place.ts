@@ -36,11 +36,14 @@ export interface ImportDefaults {
   /** `places.source` for the new row; Takeout imports leave it as "import". */
   source?: "import" | "instagram" | "assistant";
   /**
-   * Add only a place Google Maps has a record of, and never mistake a failed
-   * lookup for "no record": no record → skipped NOT_ON_GOOGLE_MAPS (no thin
-   * row built from the URL's coordinates), a failed lookup throws. The
-   * assistant's add sets it. Takeout and Instagram keep the forgiving
-   * default: there a saved coordinate is worth a thin row.
+   * Add only a place Google Maps has a record of: no record → skipped
+   * NOT_ON_GOOGLE_MAPS, no thin row built from the URL's coordinates. The
+   * assistant's add sets it. Takeout and Instagram keep the default: when
+   * Google has no record, a saved coordinate is worth a thin row.
+   *
+   * A failed lookup throws in every mode (v1.45.0; before, outside this mode
+   * it read as "no record" and kept a thin row for good) — the queue retries
+   * the item.
    */
   requireLookup?: boolean;
   /** Bounds the business-info lookup — the assistant answers within one call. */
@@ -280,7 +283,7 @@ export async function importPlace(
   let photoRef: string | null = null;
   let googleData: Record<string, unknown> = {};
 
-  const lookup = { signal: defaults.signal, throwOnError: defaults.requireLookup };
+  const lookup = { signal: defaults.signal };
   let raw = await fetchBusinessInfoLive(
     client,
     { keyword: identity.keyword, location_coordinate: identity.locationCoordinate },
