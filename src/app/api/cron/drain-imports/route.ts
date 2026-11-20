@@ -32,7 +32,18 @@ import type { Category, GoogleReview } from "@/lib/types";
  * Auth: `Authorization: Bearer ${CRON_SECRET}`, matching the refresh sweep.
  * Both the minute cron and the kick fired at job creation use it.
  */
-export const maxDuration = 300;
+/**
+ * Headroom, not more work (v1.46.0; was 300): the soft deadline below still
+ * stops new items at 240 s, but a reviews item started just before it polls
+ * DataForSEO for up to ~110 s more — past 300 s the platform killed the run
+ * mid-item, and its claims were never released (see retireStuck). 800 s is
+ * Vercel's ceiling with Fluid compute on Pro.
+ *
+ * Keep a run's longest hold on a claim (soft deadline + one item, ~6 min)
+ * under the 10-minute stale window of claim_import_items, or another run
+ * would take the same item while this one still works it.
+ */
+export const maxDuration = 800;
 
 /** Items pulled per run. Roughly what CONCURRENCY workers clear inside the
  *  soft deadline at the import stage (~17 s/place), so a run rarely returns
@@ -58,6 +69,9 @@ const DELAY_MS = 500;
  * from stacking into an unbounded number of paid lookups.
  */
 const MAX_INFLIGHT = 60;
+/** claim_import_items hands out a claimed item again after this long (its SQL
+ *  says `interval '10 minutes'`). */
+const STALE_CLAIM_MS = 10 * 60 * 1000;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -106,13 +120,27 @@ export async function GET(request: NextRequest) {
 
   const admin = createServiceClient();
 
+  const counts = {
+    imported: 0,
+    photographed: 0,
+    skipped: 0,
+    failed: 0,
+    reviewed: 0,
+    profiled: 0,
+    done: 0,
+  };
+
+  // Before anything else, so a queue whose only items are stuck still closes
+  // its job (finalizeJobs below).
+  const retiredStuck = await retireStuck();
+
   const { count: inflight } = await admin
     .from("import_job_items")
     .select("id", { count: "exact", head: true })
     .in("stage", ACTIVE_STAGES)
     .gt("claimed_at", new Date(Date.now() - 5 * 60 * 1000).toISOString());
   if ((inflight ?? 0) >= MAX_INFLIGHT) {
-    return NextResponse.json({ ok: true, claimed: 0, message: "runners already saturated" });
+    return NextResponse.json({ ok: true, claimed: 0, retired_stuck: retiredStuck, message: "runners already saturated" });
   }
 
   const { data: claimed, error: claimErr } = await admin.rpc("claim_import_items", {
@@ -131,7 +159,7 @@ export async function GET(request: NextRequest) {
   const items = ((claimed ?? []) as JobItem[]).sort((a, b) => stageRank(a.stage) - stageRank(b.stage));
   if (items.length === 0) {
     await finalizeJobs(admin);
-    return NextResponse.json({ ok: true, claimed: 0, message: "nothing queued" });
+    return NextResponse.json({ ok: true, claimed: 0, retired_stuck: retiredStuck, message: "nothing queued" });
   }
 
   // Per-owner category cache — resolveCategoryId needs the user's own set, and
@@ -199,15 +227,6 @@ export async function GET(request: NextRequest) {
       .eq("id", item.id);
   }
 
-  const counts = {
-    imported: 0,
-    photographed: 0,
-    skipped: 0,
-    failed: 0,
-    reviewed: 0,
-    profiled: 0,
-    done: 0,
-  };
   const startedAt = Date.now();
   let cursor = 0;
   /** DataForSEO itself failed this run (down, out of balance, rate-limited). */
@@ -340,31 +359,74 @@ export async function GET(request: NextRequest) {
         // alone and release the claim. Attempts already ticked up, so a
         // persistently throwing item retires itself after 3 tries rather than
         // blocking the queue forever.
-        const retire = item.attempts >= 3;
-        if (!retire) {
-          await advance(item, { stage: item.stage });
-        } else if (item.stage === "photo" && item.place_id) {
-          // A missing photo never blocks the place (see the photo stage) —
-          // unless the item came only to repair the photo of an enriched place;
-          // when that can't be read, don't risk paying for enrichment again.
-          const enriched = await alreadyEnriched(item.place_id).catch(() => true);
-          if (enriched) counts.done++;
-          await advance(item, { stage: enriched ? "done" : "reviews", reason: "Photo kept failing" });
-        } else if (item.stage !== "import" && item.place_id) {
-          // Past import the place exists: the item is done with less on it.
-          // Retiring it as `failed` made the import views report an added
-          // place as not added.
-          counts.done++;
-          await advance(item, {
-            stage: "done",
-            reason: item.stage === "reviews" ? "Reviews kept failing" : "Profile kept failing",
-          });
-        } else {
-          counts.failed++;
-          await advance(item, { stage: "failed", reason: "Repeated errors" });
-        }
+        if (item.attempts >= 3) await retire(item, "errors");
+        else await advance(item, { stage: item.stage });
       }
     }
+  }
+
+  /**
+   * End an item that has used its three attempts at a stage — after a third
+   * failure, or found stuck (retireStuck). Past import the place exists, so the
+   * item doesn't end `failed` (that made the import views report an added
+   * place as not added): a photo stage moves on to reviews — a missing photo
+   * never blocks the place — unless the item came only to repair the photo of
+   * an enriched place (when that can't be read, don't risk paying for
+   * enrichment again); reviews and profile end `done`. At import there is no
+   * place yet: `failed`.
+   */
+  async function retire(item: JobItem, cause: "errors" | "interrupted") {
+    const kept = cause === "errors" ? "kept failing" : "kept being interrupted";
+    if (item.stage === "photo" && item.place_id) {
+      const enriched = await alreadyEnriched(item.place_id).catch(() => true);
+      if (enriched) counts.done++;
+      await advance(item, { stage: enriched ? "done" : "reviews", reason: `Photo ${kept}` });
+    } else if (item.stage !== "import" && item.place_id) {
+      counts.done++;
+      await advance(item, {
+        stage: "done",
+        reason: `${item.stage === "reviews" ? "Reviews" : "Profile"} ${kept}`,
+      });
+    } else {
+      counts.failed++;
+      await advance(item, {
+        stage: "failed",
+        reason: cause === "errors" ? "Repeated errors" : "Interrupted repeatedly",
+      });
+    }
+  }
+
+  /**
+   * Retire items a run never finished (v1.46.0). A run killed mid-item — the
+   * old 300 s limit, a crash, a deploy — releases nothing, so an item on its
+   * third claim keeps `attempts = 3`: claim_import_items skips it (attempts < 3)
+   * and nothing else touches it, so it would sit in an active stage for good,
+   * and finalizeJobs would never close its job. Once its claim is stale it is
+   * retired the way a third failure would be. Measured before this existed:
+   * none of 460 items had been stuck.
+   */
+  async function retireStuck(): Promise<number> {
+    const cutoff = new Date(Date.now() - STALE_CLAIM_MS).toISOString();
+    const { data, error } = await admin
+      .from("import_job_items")
+      .select("*")
+      .in("stage", ACTIVE_STAGES)
+      .gte("attempts", 3)
+      .or(`claimed_at.is.null,claimed_at.lt.${cutoff}`)
+      .limit(50);
+    if (error) {
+      console.error("[drain-imports] stuck-item sweep failed:", error);
+      return 0;
+    }
+    const stuck = (data ?? []) as JobItem[];
+    for (const item of stuck) {
+      try {
+        await retire(item, "interrupted");
+      } catch (e) {
+        console.error(`[drain-imports] retiring stuck item ${item.id} failed:`, e);
+      }
+    }
+    return stuck.length;
   }
 
   /** Has this place already been through reviews + profile on an earlier pass? */
@@ -472,6 +534,7 @@ export async function GET(request: NextRequest) {
     released: untouched.length,
     chained,
     service_down: serviceDown,
+    retired_stuck: retiredStuck,
     ...counts,
     elapsed_ms: Date.now() - startedAt,
   };

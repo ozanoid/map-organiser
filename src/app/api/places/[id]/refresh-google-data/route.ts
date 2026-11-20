@@ -8,6 +8,11 @@ import { refreshPlaceGoogleData } from "@/lib/places/refresh-google-data";
  * Manual "Refresh Google data": full DataForSEO re-lookup + newest-sorted
  * review merge. Core logic lives in src/lib/places/refresh-google-data.ts
  * (shared with the refresh cron); this route is the cookie-authed shell.
+ *
+ * Answers the updated place. `502` when the DataForSEO lookup failed (nothing
+ * written). When only the reviews fetch failed, the place carries
+ * `_reviews_failed: true` (v1.46.1) — the business info is fresh, the stored
+ * reviews stayed — so the page can say so instead of a plain "refreshed".
  */
 export async function POST(
   request: NextRequest,
@@ -59,5 +64,9 @@ export async function POST(
     }
   }
 
-  return NextResponse.json(result.updated);
+  return NextResponse.json(
+    result.reviewsFailed
+      ? { ...(result.updated as Record<string, unknown>), _reviews_failed: true }
+      : result.updated
+  );
 }

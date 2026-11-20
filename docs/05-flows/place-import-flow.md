@@ -2,7 +2,7 @@
 title: Place Import Flow
 type: flow
 domain: places
-version: 2.3.1
+version: 2.3.2
 last_updated: 19.11.2026
 status: stable
 sources:
@@ -57,7 +57,7 @@ User goes to `/import`, picks a CSV or GeoJSON file (typically from Google Takeo
        │  Every minute by Vercel Cron, the kick above, and its own
        │  self-chain while claimable work remains.
        │  claim_import_items(24) → FOR UPDATE SKIP LOCKED
-       │  2 workers, 240 s soft deadline, 300 s maxDuration
+       │  2 workers, 240 s soft deadline, 800 s maxDuration (v1.46.0; was 300)
        │
        │  Each visit advances ONE item ONE stage:
        │
@@ -111,7 +111,7 @@ Verified against the three URL shapes Takeout emits (`?cid=`, `?q=place_id:ChIJ�
 - **DataForSEO has no record for the CID:** the `cid:` lookup returns nothing and the place would land with a name and a coordinate and nothing else — no address, no rating, no image, therefore no photo, no reviews, no profile, no tags. `importPlace` retries once by name, bounded by the resolved coordinate, and discards a hit further than 200 m away (a coordinate is a bias, not a filter, and chains put two branches inside one radius). Measured at 2 of 286 on one import.
 - **Photo download or upload fails:** its own stage, so it retries like anything else instead of vanishing. `google_data.main_image` keeps the source URL, so the retry is free. Background callers must hand `downloadAndStorePhotoFromUrl` a service-role client — a cookie-scoped one has no `auth.uid()` and the Storage policy rejects the write silently, returning the same `null` a dead image URL would.
 - **Duplicate:** `skipped`, reason `Already exists`, at zero API cost.
-- **Runner dies mid-item:** the item keeps a stale `claimed_at` and returns to the pool after 10 minutes.
+- **Runner dies mid-item:** the item keeps a stale `claimed_at` and returns to the pool after 10 minutes. On its third claim it can't return (the claim takes `attempts < 3`), so each run first retires such items the way a third failure would — `failed` / "Interrupted repeatedly" at import, past it the place is kept ("Photo / Reviews / Profile kept being interrupted") — and the job can close (v1.46.0). Before, the item sat in its stage for good and the job never closed; none of 460 items had hit it. The usual cause, a run crossing the old 300 s limit, is gone with `maxDuration = 800`.
 - **Poison item:** `attempts` caps at 3 per stage; then the item retires — `failed` at import, otherwise as above (the place is kept).
 - **Overlapping runs:** safe by construction — `FOR UPDATE SKIP LOCKED` hands concurrent runners disjoint items. Measured: 6 simultaneous runners against a 10-item pool returned 10 items, 0 collisions.
 - **Backlog pile-up:** the drain exits early when more than 60 items are already claimed and in flight, which bounds DataForSEO spend.

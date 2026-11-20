@@ -6,6 +6,79 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 20.11.2026 — v1.46.1 — A manual refresh says when the reviews didn't come
+
+The last open item of the review of v1.44.0–v1.45.0. Ozan: "küçük açığı
+kapatmak için de ne gerekiyorsa yapalım".
+
+- "Refresh Google data" on a place said "Google data refreshed" whenever the
+  route answered 200 — also when the business info refreshed but the reviews
+  fetch failed (the stored reviews stay). The route now marks that answer
+  (`_reviews_failed: true` on the place, like parse-link's `_provider`), and
+  the place page shows a warning: refreshed, but the reviews couldn't be
+  fetched — try again in a few minutes. A failed lookup was already a `502`
+  with its message.
+- **Checked:** `tsc`, `eslint` (no new warnings), `next build`. Not tried in
+  a signed-in browser — the warning needs a reviews fetch that fails.
+- Docs: [[02-backend/api-routes/places]], [[03-frontend/hooks/use-places]],
+  [[06-ops/runbooks/periodic-refresh]].
+
+---
+
+## 19.11.2026 — v1.46.0 — Stuck queue items retire themselves; crons get 800 s
+
+Ozan: "2 evet kapat", and raise the 300 s limit if it makes sense.
+
+- **The edge (reported in v1.45.1):** a drain run killed mid-item released
+  nothing, so an item on its third claim kept `attempts = 3` behind a stale
+  claim — never claimable (the claim takes `attempts < 3`), never finished,
+  and `finalizeJobs` never closed its job. Measured first: none of 460 items
+  had hit it.
+- **Fix, two layers.** Every drain run first retires such items
+  (`retireStuck`) by the rule a third failure follows (`retire`, now shared):
+  `failed` / "Interrupted repeatedly" at import; past it the place is kept —
+  photo moves on to reviews unless the place is enriched, reviews and
+  profile end `done` — "… kept being interrupted". And the usual cause is
+  gone: `maxDuration` 300 → 800 for the drain and the refresh sweep. The soft
+  deadlines stay at 240 s, so this is headroom, not more work per run: a
+  reviews item started at the deadline polls up to ~110 s more, which
+  crossed 300 s. A run holds a claim for at most ~6 min, under the
+  10-minute stale window — the invariant is written down in
+  [[02-backend/schema/import-jobs]].
+- **Checked:** `tsc`, `eslint`, `next build`; the sweep end to end on the
+  test account with the branch build served locally (the queue was empty
+  for every user): a running job with three stuck items (reviews and import
+  behind a stale claim, photo with none) and one freshly claimed — the three
+  retired with their reasons, the fresh one untouched and the job left open;
+  once its claim was stale it was retired too and the job closed itself.
+  The test job and items were deleted (totals back to 20 jobs, 460 items).
+  The preview deployment with `maxDuration = 800` succeeded — the project's
+  plan takes it.
+- Docs: [[06-ops/deployment]], [[06-ops/runbooks/periodic-refresh]],
+  [[05-flows/place-import-flow]], [[02-backend/api-routes/places]],
+  [[02-backend/schema/import-jobs]].
+
+---
+
+## 19.11.2026 — v1.45.2 — Proxy, fra1 and the DataForSEO failure handling on main
+
+- v1.44.0–v1.45.1 merged to main with Ozan's approval (merge `8d25288`; main
+  had not moved since the security merge, and the merged tree equals the
+  branch tree). Production deployment succeeded.
+- **Checked in production:** a function response now carries
+  `x-vercel-id: lhr1::fra1::…` (`/api/mcp` → 401; it read `lhr1::iad1::…`
+  before) — the functions run next to the database. Signed out, the proxy
+  answers as before: `/map?add=…` and `/plans/<id>` → `/login?next=…`,
+  `/signup` and `/api/plans` → `/login`, `/trips/:id` → 308. A connector call
+  with the real token (`get_library_overview`, free) works. Responses the
+  proxy answers itself carry only the edge id (`lhr1::…`), so the header
+  doesn't show where the proxy ran.
+- Measured for the queue edge reported in v1.45.1: 20 import jobs, all `done`,
+  460 items, none stuck at `attempts = 3` — it hasn't happened yet.
+- Docs: this entry.
+
+---
+
 ## 19.11.2026 — v1.45.1 — Review fixes: an outage holds the queue; backfill and refresh can't loop
 
 An independent review of v1.44.0–v1.45.0 (read-only, on the diff) found
