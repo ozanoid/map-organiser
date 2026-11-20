@@ -6,6 +6,21 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 20.11.2026 — v1.46.2 — Stuck-item sweep, 800 s and the refresh warning on main
+
+- v1.45.2–v1.46.1 merged to main with Ozan's approval (merge `3a6ac0b`; main
+  had not moved since the previous merge, and the merged tree equals the
+  branch tree). Production deployment succeeded.
+- **Checked in production:** `/api/mcp` → 401 from `fra1`; a signed-out
+  `/plans/<id>` → `/login?next=…`; `/api/cron/drain-imports` without the
+  secret → 401; the queue untouched (20 jobs, 460 items, none active). The
+  sweep runs with every minute's drain; its count (`retired_stuck`) is in
+  the drain's response and log, which need the cron secret or the Vercel
+  logs to see.
+- Docs: this entry.
+
+---
+
 ## 20.11.2026 — v1.46.1 — A manual refresh says when the reviews didn't come
 
 The last open item of the review of v1.44.0–v1.45.0. Ozan: "küçük açığı
