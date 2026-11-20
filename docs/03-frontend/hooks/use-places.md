@@ -2,8 +2,8 @@
 title: usePlaces
 type: hook
 domain: frontend
-version: 1.2.2
-last_updated: 19.11.2026
+version: 1.2.3
+last_updated: 20.11.2026
 status: stable
 sources:
   - src/lib/hooks/use-places.ts
@@ -38,7 +38,7 @@ function useRefreshGoogleData(): UseMutationResult<Place, Error, string>
 | `useParseLink` | `POST /api/places/parse-link` with `{ url }`. On an error the route's `error` text becomes the thrown message ("Failed to parse link" when the body isn't JSON, e.g. a gateway timeout). | — (write happens later via `useCreatePlace`) |
 | `useCreatePlace` | `POST /api/places` with the full create input. | `["places"]` |
 | `useUpdateVisitStatus` | `PATCH /api/places/[id]` with `{ visit_status }`. | `["places"]` |
-| `useRefreshGoogleData` | `POST /api/places/[id]/refresh-google-data`. | `["places"]` |
+| `useRefreshGoogleData` | `POST /api/places/[id]/refresh-google-data`. The place comes back with `_reviews_failed: true` when only the reviews fetch failed (v1.46.1). Not used by a component today — the place page calls the route itself. | `["places"]` |
 
 ## Query key shape
 

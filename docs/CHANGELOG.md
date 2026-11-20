@@ -6,6 +6,25 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 20.11.2026 — v1.46.1 — A manual refresh says when the reviews didn't come
+
+The last open item of the review of v1.44.0–v1.45.0. Ozan: "küçük açığı
+kapatmak için de ne gerekiyorsa yapalım".
+
+- "Refresh Google data" on a place said "Google data refreshed" whenever the
+  route answered 200 — also when the business info refreshed but the reviews
+  fetch failed (the stored reviews stay). The route now marks that answer
+  (`_reviews_failed: true` on the place, like parse-link's `_provider`), and
+  the place page shows a warning: refreshed, but the reviews couldn't be
+  fetched — try again in a few minutes. A failed lookup was already a `502`
+  with its message.
+- **Checked:** `tsc`, `eslint` (no new warnings), `next build`. Not tried in
+  a signed-in browser — the warning needs a reviews fetch that fails.
+- Docs: [[02-backend/api-routes/places]], [[03-frontend/hooks/use-places]],
+  [[06-ops/runbooks/periodic-refresh]].
+
+---
+
 ## 19.11.2026 — v1.46.0 — Stuck queue items retire themselves; crons get 800 s
 
 Ozan: "2 evet kapat", and raise the 300 s limit if it makes sense.

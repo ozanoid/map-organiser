@@ -281,7 +281,12 @@ export function PlaceDetailView({
         method: "POST",
       });
       if (res.ok) {
-        toast.success("Google data refreshed");
+        const data = await res.json().catch(() => null);
+        if (data?._reviews_failed) {
+          toast.warning("Google data refreshed, but its reviews couldn't be fetched. Try again in a few minutes.");
+        } else {
+          toast.success("Google data refreshed");
+        }
         fetchPlace();
       } else {
         const data = await res.json();

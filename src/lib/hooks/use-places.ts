@@ -138,7 +138,8 @@ export function useRefreshGoogleData() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (placeId: string): Promise<Place> => {
+    // `_reviews_failed`: the business info refreshed, the reviews fetch didn't.
+    mutationFn: async (placeId: string): Promise<Place & { _reviews_failed?: boolean }> => {
       const res = await fetch(`/api/places/${placeId}/refresh-google-data`, {
         method: "POST",
       });

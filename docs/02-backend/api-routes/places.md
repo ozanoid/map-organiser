@@ -2,8 +2,8 @@
 title: Places routes
 type: route-group
 domain: backend
-version: 2.5.3
-last_updated: 19.11.2026
+version: 2.5.4
+last_updated: 20.11.2026
 status: stable
 sources:
   - src/lib/places/query-places.ts
@@ -154,7 +154,8 @@ All require auth except `drain-imports`, which is bearer-authed with `CRON_SECRE
 - **Auth:** required.
 - **DB:** `places` SELECT + UPDATE.
 - **External:** DataForSEO business-info + reviews in one call, photo download, `trackUsage`.
-- **Response:** Updated `Place`. `400` if missing `google_place_id`.
+- **Response:** Updated `Place`; with `_reviews_failed: true` when only the reviews fetch failed — business info refreshed, stored reviews kept (v1.46.1). `400` if missing `google_place_id`; `502` when the DataForSEO lookup failed, nothing written (v1.45.0).
+- **UI:** the place page says "Google data refreshed", or with `_reviews_failed` a warning that the reviews couldn't be fetched (before v1.46.1 it said "refreshed" either way).
 - **Notes:** All-in-one refresh replacing `info` + `reviews`. Strips legacy `photos` / `editorial_summary` fields.
 
 ### `POST /api/places/bulk`
