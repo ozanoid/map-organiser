@@ -2,7 +2,7 @@
 title: "Faz 2 — Platform asistanı Claude'a: tasarım"
 type: plan
 domain: ai
-version: 1.1.0
+version: 1.2.0
 last_updated: 23.11.2026
 status: stable
 related:
@@ -108,6 +108,27 @@ SQL: `supabase/migrations/20261123123953_assistant_conversations.sql` — uygula
 - Ölçülen: doğru araç seçimi, cevabın kalitesi ve dili, tur başına süre ve dolar.
 - Sonuçlar Ozan'a öneriyle sunulur; seçilen model ve effort bu dokümana yazılır.
 
+## Eval sonuçları (23.11.2026)
+
+`npm run eval:assistant` (`scripts/assistant-eval/`): 12 gerçek istek (7 Türkçe, 5 İngilizce), Ozan'ın kütüphanesi (`ozan@maporganiser.com`), uygulamanın kullanacağı döngüyle (`src/lib/agent/run-turn.ts`). Yazan araçlar hiç çalışmadı: model onay kartında durdu, öneri kaydedildi; bir vakada kart reddedildi.
+
+| Ayar | Doğru araç + doğru yazma önerisi | Vaka başı | Ortalama tur süresi | Okunan cevaplardan |
+|---|---|---|---|---|
+| Opus 5.5, effort medium | 12/12 | $0.096 | 19.9 sn | En derin: açılış saati ve yoğunluk kontrolü, plana rezervasyon linki ve kişi başı tutar. Ara adımlarda İngilizce kısa notlar cevaba sızıyor ("Need to find place id.") — talimat düzeltmesinden sonra da sürdü. |
+| Sonnet 5.5, effort high | 12/12 | $0.048 | 15.8 sn | Opus'a yakın derinlik (saat kontrolü, 5 mekanın yorumları, planda yedek bar). Talimat düzeltmesinden sonraki iki koşuda not sızıntısı yok. |
+| Sonnet 5.5, effort medium | 11/12 | $0.029 | 13.4 sn | Daha yüzeysel: planda saat kontrolü yok, "Doğrudan çağırayım" gibi süreç cümleleri sızıyor. |
+| Opus 5.5, effort low | 9/12 | $0.058 | 13.5 sn | En zayıf: yorum okumadan "yorumcular övüyor" diyor, plan notları tek kelime, "Need place id. Search." gibi notlar. |
+
+- **Harcama:** eval toplam **$5.03** (209 Claude çağrısı, 16 web araması; `assistant_spend`, `purpose = 'eval'`) — onaylanan $3–7 içinde. Ayrıca `rank_places` (Gemini) ve `search_google_maps` kendi küçük ücretli çağrılarını yaptı (`api_usage`).
+- **Ortak sabit ön ek ~27.000 token** (sistem talimatı ~1.380, 16 aracın tanımı ~19.800 — `update_plan` tek başına ~5.500 —, web araması ~5.900; ücretsiz `count_tokens` ile ölçüldü). Sohbetin ilk çağrısında önbelleğe yazılır (Opus 5.5'te $0.135, Sonnet 5.5'te $0.067), sonraki çağrılarda yirmide bir fiyatla okunur. 5 dakika boşta kalınca yeniden yazılır.
+- **Süre:** çoğu bekleme araçlarda: `rank_places` (Gemini) 15–40 sn, web araması 15–27 sn; model adımı 1–15 sn. İlk metin genellikle bütün araçlardan sonra geliyor (ortalama 9–21 sn), bu yüzden panelin araç ilerlemesini göstermesi gerekiyor.
+- **Bulunan ve düzeltilen (talimat ve bağlam):**
+  - Yazma önerisinden önce ne kaydedileceğini anlatma: tek değişikliklerde artık bir cümle var ("Dünkü ziyareti kaydediyorum: Bolland & Crust, 22 Kasım, 4 puan…"). Plan ve listelerde iki model de metinsiz karta gidiyor → **onay kartı, önerilen planı / listeyi okunur biçimde kendisi göstermeli** (uygulama içi kapının işi).
+  - Tarih hesabının cevaba yazılması ("Saturday is 2026-11-28.", "Dün = 2026-11-22."): bağlam satırı artık dünü ve önümüzdeki 6 günü tarihleriyle veriyor; sızıntı kayboldu.
+  - Hitap: aynı sohbette "sen" ve "siz" karışıyordu; talimat Türkçede "sen" diyor (Ozan değiştirebilir).
+- **Karar 5'ten sapma (ölçüldü):** `max_uses: 3` istek başına sınır, ama `web_search_20260209`'da aramayı modelin yazdığı kod yaptığında bir çağrıda 4 arama faturalandı. Sınır pratikte ~3–4; arama başı $0.01.
+- **Öneri:** **Sonnet 5.5, effort high.** Araç seçimi ve derinlik Opus 5.5 medium'a yakın, yarı fiyat, tur başına ~4 sn daha hızlı, son koşularda not sızıntısı yok. Opus 5.5 medium daha zengin ama iki kat pahalı ve ara notları cevaba sızıyor. Karar Ozan'ın; seçilen model buraya ve `DEFAULT_AGENT_MODEL`'e (`src/lib/agent/models.ts`) yazılır.
+
 ## Geçiş yolu
 
 1. **Şema** (3 tablo) — SQL gösterilir, onayla uygulanır. Çalışan kodu etkilemez; tablolar yeni.
@@ -151,5 +172,5 @@ SQL: `supabase/migrations/20261123123953_assistant_conversations.sql` — uygula
 | Adım | Durum (23.11.2026) |
 |---|---|
 | Şema | Uygulandı (Ozan'ın onayıyla, 23.11.2026; sürüm 20261123123953). Uygulandıktan sonra doğrulandı: üç tabloda RLS açık, altı policy, bir tetikleyici |
-| Çekirdek ve eval | `@anthropic-ai/sdk` 1.8.0 kuruldu; çekirdek yazılıyor |
+| Çekirdek ve eval | Yazıldı, `feat/personal-assistant` dalında (main'de değil); hiçbir route henüz çağırmıyor. Eval koşuldu ($5.03), sonuçlar yukarıda. Model kararı Ozan'da |
 | Uygulama içi kapı | — |

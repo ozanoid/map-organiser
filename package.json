@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "eval:instagram": "tsx --env-file=.env.local --tsconfig scripts/instagram-eval/tsconfig.json scripts/instagram-eval/run.ts",
-    "check:assistant": "tsx --env-file=.env.local --tsconfig scripts/assistant-check/tsconfig.json scripts/assistant-check/run.ts"
+    "check:assistant": "tsx --env-file=.env.local --tsconfig scripts/assistant-check/tsconfig.json scripts/assistant-check/run.ts",
+    "eval:assistant": "tsx --env-file=.env.local --tsconfig scripts/assistant-eval/tsconfig.json scripts/assistant-eval/run.ts"
   },
   "dependencies": {
     "@ai-sdk/google": "^3.0.141",

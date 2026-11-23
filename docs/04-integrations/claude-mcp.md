@@ -2,8 +2,8 @@
 title: "Claude connector (MCP server)"
 type: integration
 domain: integrations
-version: 1.6.4
-last_updated: 19.11.2026
+version: 1.7.0
+last_updated: 23.11.2026
 status: draft
 sources:
   - src/app/api/mcp/route.ts
@@ -12,6 +12,8 @@ sources:
   - src/app/(auth)/oauth/consent/actions.ts
   - src/app/(auth)/oauth/consent/consent-form.tsx
   - src/lib/assistant/mcp.ts
+  - src/lib/assistant/instructions.ts
+  - src/lib/assistant/run-tool.ts
   - src/lib/assistant/verify-token.ts
   - src/lib/assistant/oauth.ts
   - src/lib/assistant/owner.ts
@@ -73,6 +75,8 @@ related:
 | Authorization server | Supabase Auth OAuth 2.1 server | Discovery, client registration, authorize, token. Issuer `https://<ref>.supabase.co/auth/v1`. |
 | Consent page | `/oauth/consent` (Supabase "Authorization Path") | The user approves or denies. See [[../05-flows/claude-connector-flow]]. |
 | Tools | `src/lib/assistant/tools/` | Transport-free definitions: name, description, zod input, annotations, `run(ctx, input)`. |
+| Instructions | `src/lib/assistant/instructions.ts` | `ASSISTANT_INSTRUCTIONS` — how to use the tools; sent as the MCP server's instructions. The platform's Claude agent ([[claude-agent]]) starts its system prompt with the same text (moved out of `mcp.ts` on 23.11.2026, unchanged). |
+| Running a tool | `src/lib/assistant/run-tool.ts` | `runAssistantTool` — runs a tool for the user and turns its errors into what the model reads; shared with the agent. `parseToolInput` checks an input against the tool's schema with the MCP SDK's wording (the agent's inputs aren't pre-validated by an SDK). |
 
 Both new paths are skipped by the session proxy (matcher in `src/proxy.ts`): `/api/mcp` must answer 401, not redirect, and `.well-known` documents are public. `/oauth/` is a public route that does its own sign-in redirect.
 

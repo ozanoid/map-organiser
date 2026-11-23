@@ -6,6 +6,47 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 23.11.2026 — v1.47.0 — The Claude agent core and its eval
+
+- New: `src/lib/agent/` — the platform's own Claude agent, one core for
+  every door ([[04-integrations/claude-agent]]). `runTurn` runs one user turn:
+  the message (or the answer to an approval card) in, Claude's reply out,
+  tool rounds in between. Conversations are append-only — model, system
+  prompt and tools fixed at the start, messages stored as the exact API JSON
+  — because Claude 5.5's thinking is bound to the conversation before it.
+  A tool that saves something stops the turn until the user approves it;
+  reads made with it wait. Every model call goes to `assistant_spend`; the
+  $100 monthly cap is checked before a turn. Prompt caching (an explicit
+  breakpoint after the fixed prefix plus automatic caching), server-side
+  refusal fallback (`fallbacks: "default"`), web search
+  (`web_search_20260209`, `max_uses` 3), Langfuse traces. Official
+  `@anthropic-ai/sdk` 1.8.0, streamed, manual loop. No route uses it yet.
+- Shared with the MCP server, behaviour unchanged: the instructions moved
+  verbatim to `src/lib/assistant/instructions.ts`; running a tool and turning
+  its errors into what the model reads moved to
+  `src/lib/assistant/run-tool.ts` (the log line `assistant.tool` gains
+  `door`).
+- New: `npm run eval:assistant` ([[../scripts/assistant-eval/README]]) — 12 of
+  Ozan's requests on his library through the same loop; writes stop at the
+  approval card, never run. Ran on Opus 5.5 (medium, low) and Sonnet 5.5
+  (high, medium): **$5.03** in all, within the approved $3–7. Results and the
+  recommendation (Sonnet 5.5, effort high) in
+  [[_plans/phase-2-assistant#Eval sonuçları (23.11.2026)]]; the model choice
+  is Ozan's.
+- Measured: the fixed prompt is ~27,000 tokens (tools ~19,800 — `update_plan`
+  alone ~5,500 —, web search ~5,900, system ~1,380); cached after the first
+  call of a conversation.
+- Found by the eval and fixed in the app's prompt and context: date
+  arithmetic written into replies (the context line now carries yesterday
+  and the next six days), mixed "sen" / "siz", writes proposed with no word
+  on what they save (now one sentence for single changes; plans and lists
+  still go to the card silently — the approval card must show them).
+- Docs: [[04-integrations/claude-agent]] (new), [[04-integrations/claude-mcp]],
+  [[04-integrations/_README]], [[_plans/phase-2-assistant]],
+  [[_plans/personal-assistant]].
+
+---
+
 ## 23.11.2026 — v1.46.4 — Phase 2 schema applied
 
 - Ozan approved the SQL; `assistant_conversations` applied to the live
