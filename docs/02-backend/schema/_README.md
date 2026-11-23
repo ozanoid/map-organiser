@@ -49,6 +49,7 @@ All user-facing tables in the `public` schema of the Supabase project `hukppmaev
 | `import_job_items` | [[import-jobs]] | 0 | The import queue — one row per place, carrying its own stage |
 | `assistant_conversations` | [[assistant-conversations]] | 0 | The platform Claude agent's conversations (23.11.2026): model, system prompt and tools fixed at the start |
 | `assistant_messages` | [[assistant-conversations]] | 0 | A conversation's turns, append-only, stored exactly as sent / received |
+| `assistant_tool_runs` | [[assistant-conversations]] | 0 | One row per tool call: the decision before it runs, then the result — never run twice, never lost |
 | `assistant_spend` | [[assistant-conversations]] | 0 | One row per Claude API call: tokens, web searches, dollars; the monthly cap is its sum |
 
 > `public.spatial_ref_sys` exists but it's a PostGIS internal table (8500 rows of SRID reference data). Not documented separately.
@@ -126,7 +127,7 @@ The schema has been built up through 28 migrations on Supabase. Use Supabase MCP
 | 27 | 20260415202047 | create_shared_links_table |
 | 28 | 20260415230552 | add_cascade_delete_trip_day_places_place_id |
 
-**Since 18.11.2026** the SQL of each migration is kept in `supabase/migrations/` (file name = the version Supabase recorded + the name). The list above stops at #28; the live project has 65 — use `list_migrations`. Migrations of 18.11.2026: `20261118005355_plans_tables`, `20261118005402_visits`, `20261118005404_list_place_notes`, `20261118005405_assistant_source`, `20261118010309_plan_functions`. Of 23.11.2026: `20261123123953_assistant_conversations`.
+**Since 18.11.2026** the SQL of each migration is kept in `supabase/migrations/` (file name = the version Supabase recorded + the name). The list above stops at #28; the live project has 65 — use `list_migrations`. Migrations of 18.11.2026: `20261118005355_plans_tables`, `20261118005402_visits`, `20261118005404_list_place_notes`, `20261118005405_assistant_source`, `20261118010309_plan_functions`. Of 23.11.2026: `20261123123953_assistant_conversations`, `20261123143607_assistant_turns_and_tool_runs`.
 
 Adding a new migration: write the file, show it to Ozan, apply it with Supabase MCP `apply_migration`, then update the affected per-table doc.
 

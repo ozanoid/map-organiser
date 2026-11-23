@@ -6,6 +6,28 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 23.11.2026 — v1.47.3 — Second agent migration applied
+
+- Ozan approved; `assistant_turns_and_tool_runs` applied to the live
+  database (version 20261123143607; the file renamed from the prepared
+  `20261123140000_…`). Users no longer insert conversations or messages —
+  only the server writes; `assistant_conversations.turn_lease_until` (one
+  turn at a time); `assistant_tool_runs` (each tool call's decision before
+  it runs, then its result).
+- Checked after applying, in a rolled-back transaction: owner inserts and
+  updates refused, the service role writes, the lease taken once and
+  refused while held, a second claim of a call refused, another user sees
+  nothing. 5 policies on the four tables, RLS on for all.
+- New: `npm run check:agent:db` (`scripts/agent-check/db.ts`) — the store's
+  and the ledger's queries against the live database without writing:
+  10 checks passed; the tables still hold no conversation, message or run.
+- Docs: [[02-backend/schema/assistant-conversations]] (now four tables),
+  [[02-backend/schema/_README]], [[02-backend/rls-policies]],
+  [[04-integrations/claude-agent]], [[_plans/phase-2-assistant]],
+  [[_plans/personal-assistant]].
+
+---
+
 ## 23.11.2026 — v1.47.2 — Model chosen: Sonnet 5.5, effort high
 
 - Ozan chose the eval's recommendation: new agent conversations start on

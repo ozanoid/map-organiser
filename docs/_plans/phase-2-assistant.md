@@ -2,7 +2,7 @@
 title: "Faz 2 — Platform asistanı Claude'a: tasarım"
 type: plan
 domain: ai
-version: 1.4.0
+version: 1.5.0
 last_updated: 23.11.2026
 status: stable
 related:
@@ -148,12 +148,12 @@ Küçük bulgular da düzeltildi:
 - Panelin olay işleyicisi hata atarsa tur durmuyor ve yeniden faturalanmıyor.
 - Yedek modele geçilen bir istekte reddeden deneme doğru modelin fiyatından sayılıyor.
 
-**Şema değişikliği hazır, uygulanmadı:** `supabase/migrations/20261123140000_assistant_turns_and_tool_runs.sql`. İçeriği:
+**Şema değişikliği uygulandı (Ozan'ın onayıyla, 23.11.2026; sürüm 20261123143607):** `supabase/migrations/20261123143607_assistant_turns_and_tool_runs.sql`. İçeriği:
 - kullanıcının iki INSERT policy'si kaldırılıyor;
 - `assistant_conversations.turn_lease_until` sütunu ekleniyor;
 - `assistant_tool_runs` tablosu açılıyor (sahibi okur, yazan yalnız sunucu).
 
-Canlı veritabanında geri alınan bir işlem içinde denendi, hepsi beklendiği gibi; hiçbir şey kalıcı olmadı. Ozan onaylamadan uygulanmaz.
+Uygulamadan önce ve sonra canlı veritabanında geri alınan bir işlem içinde denendi, hepsi beklendiği gibi. Sunucunun bu tablolara yazan kodu da canlı veritabanında, hiçbir şey yazmadan sınandı (`npm run check:agent:db`, 10 kontrol): her sorgu geçerli, hiçbir satır yazılmadı.
 
 Ücretsiz kontrol: `npm run check:agent` — sahte bir Claude istemcisiyle döngünün her yolu, 70 kontrol, hepsi geçiyor.
 
@@ -200,5 +200,5 @@ Canlı veritabanında geri alınan bir işlem içinde denendi, hepsi beklendiği
 | Adım | Durum (23.11.2026) |
 |---|---|
 | Şema | Uygulandı (Ozan'ın onayıyla, 23.11.2026; sürüm 20261123123953). Uygulandıktan sonra doğrulandı: üç tabloda RLS açık, altı policy, bir tetikleyici |
-| Çekirdek ve eval | Yazıldı, `feat/personal-assistant` dalında (main'de değil); hiçbir route henüz çağırmıyor. Eval koşuldu ($5.03), sonuçlar yukarıda. İnceleme bulguları düzeltildi; ikinci şema adımı hazır, onay bekliyor. Model: Sonnet 5.5, effort high (Ozan, 23.11.2026) |
+| Çekirdek ve eval | Yazıldı, `feat/personal-assistant` dalında (main'de değil); hiçbir route henüz çağırmıyor. Eval koşuldu ($5.03), sonuçlar yukarıda. İnceleme bulguları düzeltildi; ikinci şema adımı uygulandı (sürüm 20261123143607). Model: Sonnet 5.5, effort high (Ozan, 23.11.2026) |
 | Uygulama içi kapı | — |

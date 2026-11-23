@@ -1,14 +1,14 @@
 ---
-title: assistant_conversations, assistant_messages, assistant_spend
+title: assistant_conversations, assistant_messages, assistant_spend, assistant_tool_runs
 type: table
 domain: backend
-version: 1.1.0
+version: 2.0.0
 last_updated: 23.11.2026
 status: draft
 sources:
   - Supabase project hukppmaevcapvbrvxtph (live)
   - supabase/migrations/20261123123953_assistant_conversations.sql
-  - supabase/migrations/20261123140000_assistant_turns_and_tool_runs.sql
+  - supabase/migrations/20261123143607_assistant_turns_and_tool_runs.sql
 related:
   - "[[_README]]"
   - "[[api_usage]]"
@@ -16,9 +16,9 @@ related:
   - "[[../../_plans/phase-2-assistant]]"
 ---
 
-# `assistant_conversations`, `assistant_messages`, `assistant_spend`
+# `assistant_conversations`, `assistant_messages`, `assistant_spend`, `assistant_tool_runs`
 
-The platform's own Claude agent keeps its conversations here ([[../../_plans/phase-2-assistant]]). Created on 23.11.2026 (`assistant_conversations`, version 20261123123953). No code reads or writes them yet; the agent core and the in-app door come next.
+The platform's own Claude agent keeps its conversations here ([[../../_plans/phase-2-assistant]]). Created on 23.11.2026 in two migrations: `assistant_conversations` (version 20261123123953) and `assistant_turns_and_tool_runs` (version 20261123143607 — server-only writes, the turn lease, tool runs). Only the agent core writes them, with the service role (`supabaseConversationStore`, `src/lib/agent/store.ts`); no route uses the core yet.
 
 ## Why the history lives on the server and never changes
 
@@ -36,6 +36,7 @@ Claude's 5.5 models always think, and each thinking block is bound to the exact 
 | `tools` | text | no | — | The tools array as first sent, as JSON text. |
 | `created_at` | timestamptz | no | `now()` | — |
 | `updated_at` | timestamptz | no | `now()` | Bumped by the trigger below when a message is appended. |
+| `turn_lease_until` | timestamptz | yes | — | The turn lease: while it is in the future, a turn of this conversation is running and another one is refused. Set by the server before a turn, cleared after; a crashed turn's lease runs out (15 minutes, longer than a route can run). |
 
 Index: `assistant_conversations_latest_idx (user_id, door, updated_at desc)` — "the user's latest conversation in this door".
 
@@ -70,18 +71,35 @@ One row per Claude API call. The dollar amount is computed with the price at the
 
 Index: `assistant_spend_created_idx (created_at)` — the month's total.
 
+## `assistant_tool_runs`
+
+One row per tool call the model makes — the decision, written **before** the call runs, then the result. A second request answering the same call can't record it again (primary key) and stops; a result that never reached the conversation is read from here instead of running the tool twice; a row left `running` was interrupted (the model is told the outcome is unknown).
+
+| Column | Type | Nullable | Default | Notes |
+|---|---|---|---|---|
+| `conversation_id` | uuid | no | — | FK → `assistant_conversations.id`, ON DELETE CASCADE. |
+| `tool_use_id` | text | no | — | The API's id of the call (`toolu_…`). PK with `conversation_id`. |
+| `name` | text | no | — | The tool. |
+| `decision` | text | no | — | CHECK `auto` (a read, no card) \| `approved` \| `declined` (on the card) \| `not_run` (the user wrote instead, the step limit, a cut-off call) \| `invalid` (the input failed the tool's schema). |
+| `status` | text | no | `'running'` | CHECK `running` \| `done`. |
+| `result` | text | yes | — | What the model read back. |
+| `is_error` | boolean | yes | — | — |
+| `created_at` | timestamptz | no | `now()` | When it was claimed. |
+| `finished_at` | timestamptz | yes | — | — |
+
+CHECK `assistant_tool_runs_done_has_result`: `done` ⇔ `result`, `is_error` and `finished_at` are set.
+
 ## RLS policies
 
 | Table | Policy | CMD | Role | Predicate |
 |---|---|---|---|---|
 | `assistant_conversations` | Users read own assistant conversations | SELECT | authenticated | `auth.uid() = user_id` |
-| `assistant_conversations` | Users start own assistant conversations | INSERT | authenticated | (with check) `auth.uid() = user_id` |
 | `assistant_conversations` | Users delete own assistant conversations | DELETE | authenticated | `auth.uid() = user_id` |
 | `assistant_messages` | Users read own assistant messages | SELECT | authenticated | the conversation is the user's |
-| `assistant_messages` | Users append own assistant messages | INSERT | authenticated | (with check) the conversation is the user's |
 | `assistant_spend` | Users read own assistant spend | SELECT | authenticated | `auth.uid() = user_id` |
+| `assistant_tool_runs` | Users read own assistant tool runs | SELECT | authenticated | the conversation is the user's |
 
-No UPDATE policy anywhere: a conversation's model, prompt and tools can't change, nor can a message. Messages can't be deleted one by one — only with their conversation. Spend rows are written by the server (service role) only.
+Users read their own rows and can delete a conversation (its messages and tool runs go with it); nothing else. **Only the server writes** — conversations, messages, tool runs, the lease and spend, with the service role; until 20261123143607 a user could insert a conversation (any system prompt and tools) or a message, and the server would have run it on the platform's key and budget. No UPDATE policy anywhere: a conversation's model, prompt and tools can't change, nor can a message.
 
 ## Trigger
 
@@ -91,13 +109,6 @@ No UPDATE policy anywhere: a conversation's model, prompt and tools can't change
 
 Before applying, in a rolled-back transaction on the live database as the signed-in owner, another user and the service role: the owner starts a conversation and appends; starting one for another user, a `door` other than `app`, editing a conversation or a message, deleting a message, a user writing spend → refused or 0 rows; a duplicate `seq` → refused; another user sees and appends nothing; the service role writes spend and the owner reads it; deleting a conversation removes its messages and keeps its spend rows with `conversation_id` null; a message bumps `updated_at`. After applying (23.11.2026): RLS on for all three, six policies, one trigger, the function's `EXECUTE` limited to `postgres` and `service_role`.
 
-## Next migration — prepared, not applied
+## Checked — the second migration
 
-`supabase/migrations/20261123140000_assistant_turns_and_tool_runs.sql` (23.11.2026, waiting for Ozan's approval; the file is renamed to the recorded version when applied):
-
-- drops the two user INSERT policies — only the server (service role) writes conversations and messages. Today a signed-in user could insert a conversation with any system prompt and tools, or an assistant message, and the server would run it on the platform's key and budget;
-- `assistant_conversations.turn_lease_until timestamptz` — one turn at a time per conversation;
-- `assistant_tool_runs (conversation_id, tool_use_id, name, decision, status, result, is_error, created_at, finished_at)`, PK `(conversation_id, tool_use_id)`, ON DELETE CASCADE; `decision` CHECK `auto | approved | declined | not_run | invalid`, `status` CHECK `running | done`, and `done` ⇔ result, `is_error` and `finished_at` are set. RLS: the owner reads; only the server writes.
-
-Checked in a rolled-back transaction on the live database (23.11.2026): the owner can't start a conversation, append a message, write or change a tool run, or set the lease; the service role writes all of it; the lease is taken once, refused while held and taken again after it runs out; a second claim of the same call is refused (23505); a `done` run without a result and an unknown decision are refused (23514); another user sees nothing; deleting a conversation removes its runs. Nothing persisted.
-
+Before applying, in a rolled-back transaction on the live database, and again after applying it (23.11.2026): the owner can't start a conversation, append a message, write or change a tool run, or set the lease (42501 / 0 rows); the service role writes all of it; the lease is taken once, refused while held and taken again after it runs out; a second claim of the same call is refused (23505); a `done` run without a result and an unknown decision are refused (23514); another user sees nothing; deleting a conversation removes its runs. After applying: 5 policies on the four tables, RLS on for all four. The store's own queries were then run against the live database without writing anything (`npm run check:agent:db`, 10 checks): every query is accepted, inserts are refused only by the foreign key, no row was written.

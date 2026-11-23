@@ -21,7 +21,8 @@ sources:
   - scripts/assistant-eval/run.ts
   - scripts/assistant-eval/cases.ts
   - scripts/agent-check/run.ts
-  - supabase/migrations/20261123140000_assistant_turns_and_tool_runs.sql
+  - supabase/migrations/20261123143607_assistant_turns_and_tool_runs.sql
+  - scripts/agent-check/db.ts
 related:
   - "[[claude-mcp]]"
   - "[[../_plans/phase-2-assistant]]"
@@ -60,7 +61,7 @@ Every tool call gets a row in `assistant_tool_runs` (`settleCalls` in `run-turn.
 - a write ran but its result didn't reach the conversation (a crash, a failed write): the next turn reads the recorded result instead of running the tool again — even when the user wrote a new message instead of answering;
 - a run recorded as started but never finished was interrupted: the model is told the outcome is unknown and to check before trying again.
 
-The lease keeps turns apart; the runs make a retry safe. Both, and the rule that only the server writes these tables, come with the second migration — prepared and checked in a rolled-back transaction on 23.11.2026, **not applied** (it needs Ozan's approval). Until then the Supabase store can't run; the eval and the offline checks use the in-memory store, which keeps the same rules.
+The lease keeps turns apart; the runs make a retry safe. Both, and the rule that only the server writes these tables, came with the second migration (`20261123143607_assistant_turns_and_tool_runs`, applied with Ozan's approval on 23.11.2026). The app's store (`supabaseConversationStore`) writes with the service role, bound to the signed-in user; the eval and the offline checks use the in-memory store, which keeps the same rules.
 
 ## Why the history never changes
 
@@ -122,6 +123,7 @@ Prices per million tokens (input / 5-min cache write / cache read / output): Opu
 ## Testing
 
 - `npm run check:agent` (`scripts/agent-check/run.ts`) — free, offline: the loop with a scripted stand-in for the Claude API, the in-memory store and a stand-in tool runner. 70 checks: every stop reason, approve / decline / a new message instead, one turn at a time, a result surviving a failed append, an interrupted run, invalid writes, the step limit, a broken stream (aborted, re-run, partial spend), API error codes, the budget, a throwing handler, the fallback echo rule, costs.
+- `npm run check:agent:db` (`scripts/agent-check/db.ts`) — free, against the live database **without writing**: every store and ledger query on a conversation that doesn't exist — reads come back empty, updates touch no row, inserts are refused only by the foreign key. Proves the queries (tables, columns, the lease's filter) are ones the database accepts.
 - `npm run eval:assistant` — paid, against the live API and Ozan's library ([[../../scripts/assistant-eval/README]]).
 - Checked against the live API on 23.11.2026 (a few tiny requests, < $0.01): consecutive messages of one role — `user, user` and `assistant, assistant`, also a `tool_result` message followed by a new user message — are accepted and read as one turn, so a turn that ends without a reply (refusal, error) doesn't break the next one. (The skill's bundled error table says 400; the live API doesn't.)
 
