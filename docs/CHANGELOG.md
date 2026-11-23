@@ -6,6 +6,33 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 23.11.2026 — v1.46.3 — Phase 2 design approved; schema prepared
+
+- New: [[_plans/phase-2-assistant]] — Phase 2 as one server-side Claude agent
+  on the shared tool layer, the in-app panel its first door. Ozan approved
+  all six proposals: Phase 2 now; conversations kept on the server,
+  append-only; writes confirmed with a card in the app; model and effort by
+  a paid eval; web search on (3 per turn); a dollar budget of $100 a month.
+- Why the history moves to the server: Claude's 5.5 models bind each
+  thinking block to the exact conversation before it, and today's route
+  rebuilds the system prompt every request (date and library summary),
+  keeps the history in the browser and trims it to 30 messages.
+- Measured: the in-app chat ran 17 turns in July, 3 in August, none since.
+- Prepared, not applied: `supabase/migrations/20261123031712_assistant_conversations.sql`
+  — `assistant_conversations`, `assistant_messages` (append-only),
+  `assistant_spend`. Dry run in a rolled-back transaction on the live
+  database: the owner starts a conversation and appends; a message can't be
+  edited or deleted, nor a conversation's model / prompt / tools changed; a
+  duplicate turn number is refused; another user sees and appends nothing;
+  only the service role writes spend; deleting a conversation removes its
+  messages and keeps its spend rows; a message bumps the conversation's
+  `updated_at`.
+- `ANTHROPIC_API_KEY` copied from the main folder's `.env.local` into the
+  worktree's (value not shown).
+- Docs: [[_plans/phase-2-assistant]], [[_plans/personal-assistant]].
+
+---
+
 ## 20.11.2026 — v1.46.2 — Stuck-item sweep, 800 s and the refresh warning on main
 
 - v1.45.2–v1.46.1 merged to main with Ozan's approval (merge `3a6ac0b`; main
