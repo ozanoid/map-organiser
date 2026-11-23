@@ -2,7 +2,7 @@
 title: "Faz 2 — Platform asistanı Claude'a: tasarım"
 type: plan
 domain: ai
-version: 1.3.0
+version: 1.4.0
 last_updated: 23.11.2026
 status: stable
 related:
@@ -22,7 +22,7 @@ related:
 
 - Faz 2 "uygulama içi sohbetin modelini değiştirmek" değil, **sunucu tarafında ortak bir Claude ajanı** kurmaktır. claude.ai'ın kullandığı araç katmanını (`src/lib/assistant/tools`, 16 araç) Claude API üzerinden platformun kendisi de kullanır.
 - İlk kapı uygulama içi asistan paneli. Sonraki fazlar aynı çekirdeği kullanır: Telegram sohbeti (Faz 3), plan sonrası e-postaya verilen cevaplar (Faz 4), haftalık keşif ajanı (Faz 6).
-- Gemini'nin diğer işleri (Instagram okuma, mekan profili, sıralama, AI Plan) yerinde kalır.
+- Gemini'nin diğer işleri (Instagram okuma, mekan profili, sıralama, AI Plan) bu fazın ilk adımlarında yerinde kalır. **Yön (Ozan, 23.11.2026):** Gemini'nin yaptığı her iş uygun şekilde Claude'a taşınacak — iki yol: aracın içindeki modeli değiştirmek ya da işi tümüyle asistana vermek. Hangisinin nerede uygulanacağı **6. karar**; açık kalan ilk beş karardan sonra konuşulacak.
 
 ## Kararlar (Ozan, 23.11.2026)
 
@@ -31,7 +31,7 @@ related:
 | 1 | Sıra | Faz 2 şimdi, "ortak ajan çekirdeği + ilk kapı uygulama içi sohbet" olarak. |
 | 2 | Sohbet geçmişi | Sunucuda kalıcı, yalnız sona eklenir (aşağıda neden). |
 | 3 | Yazma onayı | Uygulamada onay kartı: yazan bir araç, kullanıcı karttan onaylamadan çalışmaz. |
-| 4 | Model ve effort | Ücretli eval ile seçilir (Opus 5.5 ve Sonnet 5.5, iki-üç effort seviyesi; tahmini $3–7, ölçülmedi). |
+| 4 | Model ve effort | Ücretli eval ile seçilir (Opus 5.5 ve Sonnet 5.5, iki-üç effort seviyesi; tahmini $3–7, ölçülmedi). **Seçildi: Sonnet 5.5, effort high** (Ozan, 23.11.2026, eval'den sonra; eval $5.03). |
 | 5 | Web araması | Açık; tur başına en fazla 3 arama. |
 | 6 | Bütçe | Dolar bazında, platform geneli aylık $100; her API çağrısı bir harcama defterine yazılır. Gemini sayaçları değişmez. |
 
@@ -127,7 +127,7 @@ SQL: `supabase/migrations/20261123123953_assistant_conversations.sql` — uygula
   - Tarih hesabının cevaba yazılması ("Saturday is 2026-11-28.", "Dün = 2026-11-22."): bağlam satırı artık dünü ve önümüzdeki 6 günü tarihleriyle veriyor; sızıntı kayboldu.
   - Hitap: aynı sohbette "sen" ve "siz" karışıyordu; talimat Türkçede "sen" diyor (Ozan değiştirebilir).
 - **Karar 5'ten sapma (ölçüldü):** `max_uses: 3` istek başına sınır, ama `web_search_20260209`'da aramayı modelin yazdığı kod yaptığında bir çağrıda 4 arama faturalandı. Sınır pratikte ~3–4; arama başı $0.01.
-- **Öneri:** **Sonnet 5.5, effort high.** Araç seçimi ve derinlik Opus 5.5 medium'a yakın, yarı fiyat, tur başına ~4 sn daha hızlı, son koşularda not sızıntısı yok. Opus 5.5 medium daha zengin ama iki kat pahalı ve ara notları cevaba sızıyor. Karar Ozan'ın; seçilen model buraya ve `DEFAULT_AGENT_MODEL`'e (`src/lib/agent/models.ts`) yazılır.
+- **Karar (Ozan, 23.11.2026): Sonnet 5.5, effort high** — önerildiği gibi. Araç seçimi ve derinlik Opus 5.5 medium'a yakın, yarı fiyat, tur başına ~4 sn daha hızlı, son koşularda not sızıntısı yok; Opus 5.5 medium daha zengin ama iki kat pahalı ve ara notları cevaba sızıyor. `DEFAULT_AGENT_MODEL` (`src/lib/agent/models.ts`) buna çevrildi.
 
 ## Kod incelemesi ve düzeltmeler (23.11.2026)
 
@@ -200,5 +200,5 @@ Canlı veritabanında geri alınan bir işlem içinde denendi, hepsi beklendiği
 | Adım | Durum (23.11.2026) |
 |---|---|
 | Şema | Uygulandı (Ozan'ın onayıyla, 23.11.2026; sürüm 20261123123953). Uygulandıktan sonra doğrulandı: üç tabloda RLS açık, altı policy, bir tetikleyici |
-| Çekirdek ve eval | Yazıldı, `feat/personal-assistant` dalında (main'de değil); hiçbir route henüz çağırmıyor. Eval koşuldu ($5.03), sonuçlar yukarıda. İnceleme bulguları düzeltildi; ikinci şema adımı hazır, onay bekliyor. Model kararı Ozan'da |
+| Çekirdek ve eval | Yazıldı, `feat/personal-assistant` dalında (main'de değil); hiçbir route henüz çağırmıyor. Eval koşuldu ($5.03), sonuçlar yukarıda. İnceleme bulguları düzeltildi; ikinci şema adımı hazır, onay bekliyor. Model: Sonnet 5.5, effort high (Ozan, 23.11.2026) |
 | Uygulama içi kapı | — |

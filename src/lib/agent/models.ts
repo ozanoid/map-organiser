@@ -20,9 +20,10 @@ export const AGENT_MODELS = {
 
 export type AgentModelId = keyof typeof AGENT_MODELS;
 
-/** The model new conversations start on. Provisional until the eval picks
- *  one; a conversation keeps the model it started with. */
-export const DEFAULT_AGENT_MODEL: AgentModelId = "claude-opus-5-5";
+/** The model new conversations start on — Sonnet 5.5 at effort high, Ozan's
+ *  choice after the eval of 23.11.2026 (docs/_plans/phase-2-assistant.md).
+ *  A conversation keeps the model it started with. */
+export const DEFAULT_AGENT_MODEL: AgentModelId = "claude-sonnet-5-5";
 
 export function isAgentModel(id: string): id is AgentModelId {
   return Object.hasOwn(AGENT_MODELS, id);

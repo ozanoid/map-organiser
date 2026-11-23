@@ -76,7 +76,7 @@ After a refusal fallback mid-answer, the API's rule for sending the turn back is
 
 | Field | Value | Why |
 |---|---|---|
-| `model` | the conversation's (default `claude-opus-5-5`, provisional until the eval decides) | fixed per conversation |
+| `model` | the conversation's — new ones start on `claude-sonnet-5-5` (effort high), Ozan's choice after the eval (23.11.2026) | fixed per conversation |
 | `output_config.effort` | per model (`models.ts`) | fixed per model: a change invalidates every open conversation's cache |
 | `thinking` | not sent | always on for the 5.5 models; `display` defaults to omitted |
 | `max_tokens` | 16,000 | thinking + text + tool input of one call |

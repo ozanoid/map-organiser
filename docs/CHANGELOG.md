@@ -6,6 +6,20 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 23.11.2026 — v1.47.2 — Model chosen: Sonnet 5.5, effort high
+
+- Ozan chose the eval's recommendation: new agent conversations start on
+  `claude-sonnet-5-5` at effort high (`DEFAULT_AGENT_MODEL` in
+  `src/lib/agent/models.ts`; was the provisional `claude-opus-5-5`).
+- Direction recorded (Ozan, 23.11.2026): everything Gemini does moves to
+  Claude in a fitting way — the tool's model swapped, or the work handed to
+  the assistant itself. How, per job, is decision 6, discussed after the
+  open decisions 2–5.
+- Docs: [[_plans/phase-2-assistant]], [[_plans/personal-assistant]],
+  [[04-integrations/claude-agent]].
+
+---
+
 ## 23.11.2026 — v1.47.1 — Agent core: tool runs, one turn at a time, server-only writes
 
 - An independent review of v1.47.0 found that an approved write could run
