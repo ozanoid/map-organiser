@@ -6,6 +6,21 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 23.11.2026 — v1.46.4 — Phase 2 schema applied
+
+- Ozan approved the SQL; `assistant_conversations` applied to the live
+  database (version 20261123123953; the file renamed from the prepared
+  `20261123031712_…` to the recorded version). Checked after applying: RLS on
+  for all three tables, six policies, one trigger, the trigger function's
+  `EXECUTE` limited to `postgres` and `service_role`.
+- New table doc: [[02-backend/schema/assistant-conversations]]; the three
+  tables, the trigger and its function added to [[02-backend/schema/_README]]
+  and [[02-backend/rls-policies]].
+- `@anthropic-ai/sdk` 1.8.0 added (the agent core is next).
+- Docs: [[_plans/phase-2-assistant]], [[_plans/personal-assistant]].
+
+---
+
 ## 23.11.2026 — v1.46.3 — Phase 2 design approved; schema prepared
 
 - New: [[_plans/phase-2-assistant]] — Phase 2 as one server-side Claude agent

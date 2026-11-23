@@ -2,7 +2,7 @@
 title: "Faz 2 — Platform asistanı Claude'a: tasarım"
 type: plan
 domain: ai
-version: 1.0.0
+version: 1.1.0
 last_updated: 23.11.2026
 status: stable
 related:
@@ -16,7 +16,7 @@ related:
 
 # Faz 2 — Platform asistanı Claude'a: tasarım
 
-> **Onaylandı (Ozan, 23.11.2026):** aşağıdaki altı karar önerildiği gibi. [[personal-assistant]] planının Faz 2'si. Şema SQL'i uygulanmadan önce ayrıca gösterilir.
+> **Onaylandı (Ozan, 23.11.2026):** aşağıdaki altı karar önerildiği gibi. [[personal-assistant]] planının Faz 2'si. Şema SQL'i Ozan'a gösterildi ve onayıyla uygulandı (23.11.2026).
 
 ## Ne anladım
 
@@ -62,7 +62,7 @@ Değişen bilgi talimatı değiştirmez. Bugünün tarihi ve saat dilimi her yen
 
 ### Şema
 
-SQL: `supabase/migrations/<sürüm>_assistant_conversations.sql` — uygulanmadan önce Ozan'a gösterilir. Özet:
+SQL: `supabase/migrations/20261123123953_assistant_conversations.sql` — uygulandı (23.11.2026); tablo dokümanı [[../02-backend/schema/assistant-conversations]]. Özet:
 
 - `assistant_conversations (id, user_id, door, model, system_prompt, tools, created_at, updated_at)`. `door` şimdilik yalnız `'app'`; Telegram gibi yeni kapılar bir migration'la eklenir. `tools` ilk gönderilen araç dizisinin JSON metni.
 - `assistant_messages (conversation_id, seq, role, content, created_at)`, birincil anahtar `(conversation_id, seq)`; `content` metin (JSON). `jsonb` değil: `jsonb` anahtar sırasını değiştirir, bu da geri gönderilen geçmişi "değişmiş" yapabilir.
@@ -150,6 +150,6 @@ SQL: `supabase/migrations/<sürüm>_assistant_conversations.sql` — uygulanmada
 
 | Adım | Durum (23.11.2026) |
 |---|---|
-| Şema | SQL hazırlandı, onay bekliyor |
-| Çekirdek ve eval | — |
+| Şema | Uygulandı (Ozan'ın onayıyla, 23.11.2026; sürüm 20261123123953). Uygulandıktan sonra doğrulandı: üç tabloda RLS açık, altı policy, bir tetikleyici |
+| Çekirdek ve eval | `@anthropic-ai/sdk` 1.8.0 kuruldu; çekirdek yazılıyor |
 | Uygulama içi kapı | — |

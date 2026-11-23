@@ -2,8 +2,8 @@
 title: RLS Policies
 type: overview
 domain: backend
-version: 1.6.1
-last_updated: 19.11.2026
+version: 1.7.0
+last_updated: 23.11.2026
 status: stable
 sources:
   - pg_policies (via Supabase MCP)
@@ -25,6 +25,9 @@ Truth source: `pg_policies`, fetched via Supabase MCP `execute_sql`. See per-tab
 | Table | Policy | Role | CMD | Predicate |
 |---|---|---|---|---|
 | `api_usage` | Users manage own usage | authenticated | ALL | `auth.uid() = user_id` |
+| `assistant_conversations` | Users read own / start own / delete own assistant conversations | authenticated | SELECT, INSERT, DELETE | `auth.uid() = user_id` — no UPDATE: model, prompt and tools are fixed ([[schema/assistant-conversations]]) |
+| `assistant_messages` | Users read own / append own assistant messages | authenticated | SELECT, INSERT | the conversation is the user's — append-only, no UPDATE or DELETE |
+| `assistant_spend` | Users read own assistant spend | authenticated | SELECT | `auth.uid() = user_id` — only the service role writes |
 | `categories` | Users manage own categories | authenticated | ALL | `auth.uid() = user_id` |
 | `import_job_items` | `import_job_items_select` | authenticated | SELECT | `auth.uid() = user_id` — read-only by design ([[schema/import-jobs]]) |
 | `import_jobs` | `import_jobs_select` / `_insert` / `_update` | authenticated | SELECT, INSERT, UPDATE | `auth.uid() = user_id` |

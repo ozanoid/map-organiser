@@ -2,8 +2,8 @@
 title: Schema
 type: overview
 domain: backend
-version: 1.3.3
-last_updated: 18.11.2026
+version: 1.4.0
+last_updated: 23.11.2026
 status: stable
 sources:
   - Supabase project hukppmaevcapvbrvxtph (via MCP)
@@ -47,6 +47,9 @@ All user-facing tables in the `public` schema of the Supabase project `hukppmaev
 | `vocabulary_migrations` | [[vocabulary]] | 0 | Audit trail of dictionary refreshes |
 | `import_jobs` | [[import-jobs]] | 0 | One row per import job — a Takeout upload or (v1.28.0, migration pending) a shared Instagram post |
 | `import_job_items` | [[import-jobs]] | 0 | The import queue — one row per place, carrying its own stage |
+| `assistant_conversations` | [[assistant-conversations]] | 0 | The platform Claude agent's conversations (23.11.2026): model, system prompt and tools fixed at the start |
+| `assistant_messages` | [[assistant-conversations]] | 0 | A conversation's turns, append-only, stored exactly as sent / received |
+| `assistant_spend` | [[assistant-conversations]] | 0 | One row per Claude API call: tokens, web searches, dollars; the monthly cap is its sum |
 
 > `public.spatial_ref_sys` exists but it's a PostGIS internal table (8500 rows of SRID reference data). Not documented separately.
 
@@ -70,6 +73,7 @@ All user-facing tables in the `public` schema of the Supabase project `hukppmaev
 | `increment_api_usage(p_user_id, p_sku, p_cost)` | RPC | Atomic UPSERT into `api_usage` for cost tracking. SECURITY DEFINER. |
 | `claim_import_items(p_limit)` | RPC | Claims the next slice of the import queue with `FOR UPDATE SKIP LOCKED`. Service-role only — `EXECUTE` revoked from `public`/`anon`/`authenticated`. See [[import-jobs]]. |
 | `create_plan(p_user_id, p_plan)` · `apply_plan_changes(p_user_id, p_plan_id, p_changes)` | RPC | The atomic write path for plans (18.11.2026): create a plan with its days and stops; apply a batch of edits in one transaction. SECURITY INVOKER; `authenticated` + `service_role` only. Helpers: `plan_insert_stop`, `plan_assert_caller`. See [[plans#Functions — the write path]]. |
+| `assistant_message_touches_conversation()` | trigger function | On `assistant_messages` INSERT, bumps the conversation's `updated_at`. SECURITY DEFINER, empty `search_path`; `EXECUTE` revoked from `public`/`anon`/`authenticated`. See [[assistant-conversations]]. |
 
 Triggers:
 
@@ -77,6 +81,7 @@ Triggers:
 |---|---|---|---|
 | `on_auth_user_created` | `auth.users` | AFTER INSERT | `handle_new_user()` |
 | `on_profile_created_default_categories` | `public.profiles` | AFTER INSERT | `create_default_categories()` |
+| `assistant_message_touches_conversation` | `public.assistant_messages` | AFTER INSERT | `assistant_message_touches_conversation()` |
 
 ## Storage buckets
 
@@ -121,7 +126,7 @@ The schema has been built up through 28 migrations on Supabase. Use Supabase MCP
 | 27 | 20260415202047 | create_shared_links_table |
 | 28 | 20260415230552 | add_cascade_delete_trip_day_places_place_id |
 
-**Since 18.11.2026** the SQL of each migration is kept in `supabase/migrations/` (file name = the version Supabase recorded + the name). The list above stops at #28; the live project has 65 — use `list_migrations`. Migrations of 18.11.2026: `20261118005355_plans_tables`, `20261118005402_visits`, `20261118005404_list_place_notes`, `20261118005405_assistant_source`, `20261118010309_plan_functions`.
+**Since 18.11.2026** the SQL of each migration is kept in `supabase/migrations/` (file name = the version Supabase recorded + the name). The list above stops at #28; the live project has 65 — use `list_migrations`. Migrations of 18.11.2026: `20261118005355_plans_tables`, `20261118005402_visits`, `20261118005404_list_place_notes`, `20261118005405_assistant_source`, `20261118010309_plan_functions`. Of 23.11.2026: `20261123123953_assistant_conversations`.
 
 Adding a new migration: write the file, show it to Ozan, apply it with Supabase MCP `apply_migration`, then update the affected per-table doc.
 
