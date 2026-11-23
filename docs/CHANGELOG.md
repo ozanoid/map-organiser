@@ -6,6 +6,26 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 23.11.2026 — v1.47.7 — Decision 6: Gemini's work moves to Claude
+
+- Inventory of every Gemini call (code + `api_usage` since June): the old
+  in-app chat, `rank_places`, the search bar's AI mode (parse + rank), AI
+  Plan, compare, place profiles, the Instagram read. Usage is low; the
+  profiles' August backfill (515) is the only volume.
+- Ozan's decisions: the search bar's AI mode, AI Plan and compare are
+  handed to the assistant (they open it with a ready request); `rank_places`
+  goes to the assistant (the tool returns short profiles, the talking
+  Claude ranks); profiles and the Instagram read keep their pipelines with
+  a Claude model — Haiku 5.5 or Sonnet 5.5 decided by measurement, and
+  whether to rewrite the existing ~900 profiles too; one spend ledger and
+  one $100 cap for every Claude call. Order: the in-app door, `rank_places`,
+  the model swaps, the buttons, then Gemini's library and key removed.
+- Checked live (Models API): Claude takes images and PDFs, not video or
+  audio — Phase 5's video understanding stays a separate decision.
+- Docs: [[_plans/phase-2-assistant]], [[_plans/personal-assistant]].
+
+---
+
 ## 23.11.2026 — v1.47.6 — Next: the in-app door
 
 - Ozan's decision: the next piece of work is the in-app door (the panel on

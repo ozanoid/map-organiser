@@ -2,7 +2,7 @@
 title: "Faz 2 — Platform asistanı Claude'a: tasarım"
 type: plan
 domain: ai
-version: 1.8.0
+version: 1.9.0
 last_updated: 23.11.2026
 status: stable
 related:
@@ -22,7 +22,7 @@ related:
 
 - Faz 2 "uygulama içi sohbetin modelini değiştirmek" değil, **sunucu tarafında ortak bir Claude ajanı** kurmaktır. claude.ai'ın kullandığı araç katmanını (`src/lib/assistant/tools`, 16 araç) Claude API üzerinden platformun kendisi de kullanır.
 - İlk kapı uygulama içi asistan paneli. Sonraki fazlar aynı çekirdeği kullanır: Telegram sohbeti (Faz 3), plan sonrası e-postaya verilen cevaplar (Faz 4), haftalık keşif ajanı (Faz 6).
-- Gemini'nin diğer işleri (Instagram okuma, mekan profili, sıralama, AI Plan) bu fazın ilk adımlarında yerinde kalır. **Yön (Ozan, 23.11.2026):** Gemini'nin yaptığı her iş uygun şekilde Claude'a taşınacak — iki yol: aracın içindeki modeli değiştirmek ya da işi tümüyle asistana vermek. Hangisinin nerede uygulanacağı **6. karar**; açık kalan ilk beş karardan sonra konuşulacak.
+- Gemini'nin diğer işleri (Instagram okuma, mekan profili, sıralama, AI Plan, arama, karşılaştırma) **Claude'a taşınır** (Ozan, 23.11.2026): iş başına yol ve sıra aşağıda, "6. karar".
 
 ## Kararlar (Ozan, 23.11.2026)
 
@@ -128,6 +128,31 @@ SQL: `supabase/migrations/20261123123953_assistant_conversations.sql` — uygula
   - Hitap: aynı sohbette "sen" ve "siz" karışıyordu; uygulama içi asistanın talimatı Türkçede "sen" diyor — **Ozan onayladı (23.11.2026)**. claude.ai'ın talimatında bu satır yok.
 - **Karar 5'ten sapma (ölçüldü, Ozan kabul etti):** `max_uses: 3` istek başına sınır, ama `web_search_20260209`'da aramayı modelin yazdığı kod yaptığında bir çağrıda 4 arama faturalandı. Sınır pratikte ~3–4; arama başı $0.01. Asıl maliyet arama ücreti değil, sonuçları okumanın token'ı: Sonnet'te arama yapılan çağrı $0.106 tuttu, $0.03'ü arama. Seçenekler (sınırı 2'ye indirmek, süzmeyen eski sürüm) konuşuldu; böyle kalıyor (Ozan, 23.11.2026).
 - **Karar (Ozan, 23.11.2026): Sonnet 5.5, effort high** — önerildiği gibi. Araç seçimi ve derinlik Opus 5.5 medium'a yakın, yarı fiyat, tur başına ~4 sn daha hızlı, son koşularda not sızıntısı yok; Opus 5.5 medium daha zengin ama iki kat pahalı ve ara notları cevaba sızıyor. `DEFAULT_AGENT_MODEL` (`src/lib/agent/models.ts`) buna çevrildi.
+
+## 6. karar — Gemini'nin işleri Claude'a (Ozan, 23.11.2026)
+
+Yön: Gemini'nin yaptığı her iş Claude'a geçer. İş başına iki yol: **modeli değiştirmek** (iş ayrı bir çağrı olarak kalır, aynı talimat ve çıktı şablonu, Gemini yerine Claude) ya da **işi asistana vermek** (ayrı çağrı kalkar; asistan veriyi araçtan alır, kararı kendisi verir). Kullanılmayan ve asistanın karşıladığı özellikler kaldırılabilir.
+
+Envanter (kod: `generateText` / `streamText` çağıran her yer; kullanım: `api_usage`, tüm hesaplar, Haziran–Kasım 2026):
+
+| İş | Kod | Ne zaman | Kullanım | Yol |
+|---|---|---|---|---|
+| Eski uygulama içi sohbet | `src/app/api/ai/chat/route.ts`, `src/lib/ai/chat-tools.ts` | Paneldeki her mesaj | Tem 17, Ağu 3, sonra 0 | Kaldırılır — uygulama içi kapıyla (5. karar) |
+| `rank_places` sıralama hakemi | `src/lib/assistant/tools/rank-places.ts` → `src/lib/ai/rank-engine.ts` | Asistan / claude.ai öznel sorunca | Tem 22, Kas 34 (çoğu eval) | **Asistana verilir**: araç kısa profilleri döndürür, sıralamayı konuşan Claude yapar |
+| Arama çubuğu yapay zekâ modu | `src/app/api/ai/parse-query/route.ts`, `src/app/api/ai/rank-results/route.ts` | Arama çubuğuna doğal dille yazınca | Tem 18 (+ sıralama), Ağustos'tan beri 0 | **Asistana devredilir** (6.1) |
+| AI Plan | `src/app/api/ai/day-plan/route.ts` | Plan sayfasındaki düğme | Tem 8, Kas 1 | **Asistana devredilir** (6.1) |
+| Karşılaştır | `src/app/api/ai/compare/route.ts` | Karşılaştırma ekranı | Tem 2, sonra 0 | **Asistana devredilir** (6.1) |
+| Mekan profili yazma | `src/lib/ai/generate-profile.ts` (zenginleştirme kuyruğu, yenileme cron'u, elle zenginleştirme) | Kayıttan sonra arka planda | Ağu 515 (toplu doldurma), Eki 20, Kas 6 | **Model değiştirilir** — hangi Claude: ölçümle (6.2) |
+| Instagram postu okuma | `src/lib/instagram/read-post.ts` (yalnız metin: açıklama, etiketler, profil yazıları) | Kısayol ya da sohbette Instagram linki | Eki 12, Kas 6 | **Model değiştirilir** — hangi Claude: ölçümle (6.2) |
+
+Claude'un canlı model bilgisinde (Models API, 23.11.2026) girdi türü olarak yalnız görsel ve PDF var, video ve ses yok. Faz 5'teki video anlama işi orada ayrı karar.
+
+Kararlar:
+- **6.1 — A:** arama çubuğunun yapay zekâ modu, AI Plan ve Karşılaştır asistana devredilir: düğme ya da arama çubuğu asistanı açar ve isteği hazır yazar ("Bu planı günlere dağıt"); kaydeden sonuç onay kartıyla gelir. Uygulama içi kapıdan sonra. Kapının tasarımı bunun için "asistanı hazır bir istekle açma" girişini içerir.
+- **6.2 — ölçümden sonra:** profil yazma ve Instagram okuma için Haiku 5.5 mi Sonnet 5.5 mi. Instagram: 35 postluk eval iki modelle, şart bugünkü gibi sıfır yanlış. Profil: ~10 mekanda Gemini / Haiku / Sonnet profilleri yan yana. Tahmini ~$1–2 (ölçülmedi).
+- **6.3 — ölçüme göre:** mevcut ~900 profil Claude ile yeniden yazılsın mı. Haiku ve toplu iş API'siyle tahmini ~$1 (ölçülmedi).
+- **6.4 — tek defter, tek tavan:** bütün Claude çağrıları (sohbet, eval, profil, Instagram…) `assistant_spend`'e yazılır ve aynı aylık $100 tavana girer. Defterin `purpose` listesine yeni türler bir migration'la eklenir (o iş başlarken, SQL gösterilerek). Tavan dolunca arka plan işi bekler: mekan kaydedilir, profili sonraki aya kalır.
+- **6.5 — sıra:** (1) uygulama içi kapı, içinde eski Gemini sohbetinin kaldırılması; (2) `rank_places`'in asistana verilmesi; (3) profil ve Instagram için model değişikliği, ölçümle; (4) düğmelerin asistana devri; (5) Gemini kütüphanesinin (`@ai-sdk/google`) ve `GOOGLE_GENERATIVE_AI_API_KEY`'in kaldırılması.
 
 ## Kod incelemesi ve düzeltmeler (23.11.2026)
 

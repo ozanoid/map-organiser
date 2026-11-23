@@ -247,7 +247,7 @@ v4'ün açık backlog'u çok kullanıcılı ürün içindi. Bu yönle:
 5. Keşif kaynak listesi: hangi hesaplar ve bloglar (Faz 6; saved koleksiyondan aday çıkarılacak).
 6. Instagram export'unun içeriği (koleksiyon adı ve post linkleri) dosya gelince doğrulanacak.
 7. ~~`update_places` Faz 0'a alınsın mı?~~ Evet (Ozan, 17.11.2026).
-8. `rank_places` testte 41–64 sn sürdü (Gemini; Faz 2 eval'inde 23 çağrı, ortanca 16,7 sn, 6,7–39 sn). claude.ai'da Claude'un kendisinin değerlendirmesi — `search_places`'e kısa profil özetleri ekleyip Gemini'yi atlamak — daha hızlı ve muhtemelen daha isabetli. **Genişledi (Ozan, 23.11.2026):** Gemini'nin yaptığı her iş uygun şekilde Claude'a taşınacak — aracın modelini değiştirerek ya da işi asistana vererek; [[phase-2-assistant]] 6. karar, ilk beş karardan sonra konuşulacak.
+8. `rank_places` testte 41–64 sn sürdü (Gemini; Faz 2 eval'inde 23 çağrı, ortanca 16,7 sn, 6,7–39 sn). claude.ai'da Claude'un kendisinin değerlendirmesi — `search_places`'e kısa profil özetleri ekleyip Gemini'yi atlamak — daha hızlı ve muhtemelen daha isabetli. **Karar (Ozan, 23.11.2026):** `rank_places` asistana verilir — araç kısa profilleri döndürür, sıralamayı konuşan Claude yapar. Gemini'nin diğer işleri de Claude'a geçer (arama, AI Plan ve karşılaştırma asistana devredilir; profil yazma ve Instagram okumada model değişir, hangi Claude ölçümle): [[phase-2-assistant#6. karar — Gemini'nin işleri Claude'a (Ozan, 23.11.2026)]].
 9. Ortak `queryPlaces`: "İ" katlama ve ~20 MB payload. Kalıcı çözüm SQL tarafında (katlanmış metin kolonu + index, liste görünümü için hafif projeksiyon) — şema değişikliği, ayrı iş.
 
 ## Bu dokümanın bakımı
