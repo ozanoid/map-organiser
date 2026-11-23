@@ -2,7 +2,7 @@
 title: "Faz 2 — Platform asistanı Claude'a: tasarım"
 type: plan
 domain: ai
-version: 1.6.0
+version: 1.7.0
 last_updated: 23.11.2026
 status: stable
 related:
@@ -125,7 +125,7 @@ SQL: `supabase/migrations/20261123123953_assistant_conversations.sql` — uygula
 - **Bulunan ve düzeltilen (talimat ve bağlam):**
   - Yazma önerisinden önce ne kaydedileceğini anlatma: tek değişikliklerde artık bir cümle var ("Dünkü ziyareti kaydediyorum: Bolland & Crust, 22 Kasım, 4 puan…"). Plan ve listelerde iki model de metinsiz karta gidiyor → **onay kartı, önerilen planı / listeyi okunur biçimde kendisi göstermeli** (uygulama içi kapının işi).
   - Tarih hesabının cevaba yazılması ("Saturday is 2026-11-28.", "Dün = 2026-11-22."): bağlam satırı artık dünü ve önümüzdeki 6 günü tarihleriyle veriyor; sızıntı kayboldu.
-  - Hitap: aynı sohbette "sen" ve "siz" karışıyordu; talimat Türkçede "sen" diyor (Ozan değiştirebilir).
+  - Hitap: aynı sohbette "sen" ve "siz" karışıyordu; uygulama içi asistanın talimatı Türkçede "sen" diyor — **Ozan onayladı (23.11.2026)**. claude.ai'ın talimatında bu satır yok.
 - **Karar 5'ten sapma (ölçüldü, Ozan kabul etti):** `max_uses: 3` istek başına sınır, ama `web_search_20260209`'da aramayı modelin yazdığı kod yaptığında bir çağrıda 4 arama faturalandı. Sınır pratikte ~3–4; arama başı $0.01. Asıl maliyet arama ücreti değil, sonuçları okumanın token'ı: Sonnet'te arama yapılan çağrı $0.106 tuttu, $0.03'ü arama. Seçenekler (sınırı 2'ye indirmek, süzmeyen eski sürüm) konuşuldu; böyle kalıyor (Ozan, 23.11.2026).
 - **Karar (Ozan, 23.11.2026): Sonnet 5.5, effort high** — önerildiği gibi. Araç seçimi ve derinlik Opus 5.5 medium'a yakın, yarı fiyat, tur başına ~4 sn daha hızlı, son koşularda not sızıntısı yok; Opus 5.5 medium daha zengin ama iki kat pahalı ve ara notları cevaba sızıyor. `DEFAULT_AGENT_MODEL` (`src/lib/agent/models.ts`) buna çevrildi.
 

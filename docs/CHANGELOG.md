@@ -6,6 +6,16 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 23.11.2026 — v1.47.5 — Turkish address: "sen"
+
+- Ozan confirmed the in-app assistant addresses him as "sen" in Turkish
+  (the app door's system prompt, `src/lib/agent/prompt.ts`); it mixed
+  "sen" and "siz" before. claude.ai's instructions don't carry the line.
+  No code change.
+- Docs: [[_plans/phase-2-assistant]].
+
+---
+
 ## 23.11.2026 — v1.47.4 — Web search cap: per call, as is
 
 - Ozan's decision after the measurement: the agent's web search stays at
