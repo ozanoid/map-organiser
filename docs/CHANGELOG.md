@@ -6,6 +6,17 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 23.11.2026 — v1.47.4 — Web search cap: per call, as is
+
+- Ozan's decision after the measurement: the agent's web search stays at
+  `max_uses: 3` per Claude call — about 3–4 per message, since a message can
+  span several calls and the filtering code made 4 searches in one call.
+  Recorded as an update of Phase 2 decision 5 (it said "3 per turn"). No
+  code change.
+- Docs: [[_plans/phase-2-assistant]], [[04-integrations/claude-agent]].
+
+---
+
 ## 23.11.2026 — v1.47.3 — Second agent migration applied
 
 - Ozan approved; `assistant_turns_and_tool_runs` applied to the live

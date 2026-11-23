@@ -113,7 +113,7 @@ Prices per million tokens (input / 5-min cache write / cache read / output): Opu
 
 - Most of a turn's time is the tools: `rank_places` (Gemini) 15–40 s, web search 15–27 s; a model call 1–15 s. Text usually comes after all tools (9–21 s on average).
 - Writes: for one change the model says what it saves in a sentence; for a plan or a list it goes to the card without text — the door's approval card has to show the proposal readably.
-- Web search: `max_uses: 3` is per request, but with `web_search_20260209` the searches the model's filtering code makes counted 4 in one call.
+- Web search: `max_uses: 3` is per request, but with `web_search_20260209` the searches the model's filtering code makes counted 4 in one call. Ozan kept it as is (23.11.2026): about 3–4 per message. Most of a searching call's cost is reading the results, not the searches — on Sonnet $0.106, of which $0.03 for 3 searches.
 - Caching works as designed: after the first call of a conversation, each call read the ~27k-token prefix from the cache (26,917 tokens written once for $0.067 on Sonnet, then read for $0.0027 a call — a twentieth of the normal input price).
 
 ## Errors

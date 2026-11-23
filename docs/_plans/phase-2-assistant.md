@@ -2,7 +2,7 @@
 title: "Faz 2 — Platform asistanı Claude'a: tasarım"
 type: plan
 domain: ai
-version: 1.5.0
+version: 1.6.0
 last_updated: 23.11.2026
 status: stable
 related:
@@ -32,7 +32,7 @@ related:
 | 2 | Sohbet geçmişi | Sunucuda kalıcı, yalnız sona eklenir (aşağıda neden). |
 | 3 | Yazma onayı | Uygulamada onay kartı: yazan bir araç, kullanıcı karttan onaylamadan çalışmaz. |
 | 4 | Model ve effort | Ücretli eval ile seçilir (Opus 5.5 ve Sonnet 5.5, iki-üç effort seviyesi; tahmini $3–7, ölçülmedi). **Seçildi: Sonnet 5.5, effort high** (Ozan, 23.11.2026, eval'den sonra; eval $5.03). |
-| 5 | Web araması | Açık; tur başına en fazla 3 arama. |
+| 5 | Web araması | Açık; tur başına en fazla 3 arama. **Ölçümden sonra (Ozan, 23.11.2026):** sınır Claude çağrısı başına 3 (`max_uses`); bir mesaj birkaç çağrıdan oluşabildiği ve süzme kodu bir çağrıda 4 arama yapabildiği için pratikte mesaj başına 3–4 — böyle kalıyor. |
 | 6 | Bütçe | Dolar bazında, platform geneli aylık $100; her API çağrısı bir harcama defterine yazılır. Gemini sayaçları değişmez. |
 
 ## Bugünkü durum (kanıtla)
@@ -80,7 +80,7 @@ SQL: `supabase/migrations/20261123123953_assistant_conversations.sql` — uygula
 - **Talimat tek kaynak:** `mcp.ts`'teki `INSTRUCTIONS` ortak bir modüle taşınır; MCP sunucusu ve uygulama içi ajan aynı metni kullanır. Uygulamaya özgü kısa bir ek: yazma işlemleri uygulamanın onay kartıyla onaylanır.
 - **Düşünme ve effort:** Opus 5.5'te düşünme her zaman açık, derinliği `output_config.effort` belirler. Seçim eval'den.
 - **Önbellek:** sistem talimatı ve araçlar sohbet boyunca sabit, geçmiş yalnız büyüyor; üst seviye `cache_control` her isteğin son bloğuna kadar önbelleğe alır. Önceki adımlar önbellekten okunur (Opus 5.5'te önbellek okuması normal girişin yirmide biri).
-- **Web araması:** Anthropic'in sunucu aracı `web_search_20260209`, `max_uses: 3`. Uzun sürerse dönen `pause_turn` döngüde devam ettirilir.
+- **Web araması:** Anthropic'in sunucu aracı `web_search_20260209`, `max_uses: 3` (çağrı başına; karar 5). Bizim kodumuz aramaz: araç listede açık durur, aramaya Claude karar verir, Anthropic yürütür; sonuçları süzmek için Claude'un yazdığı küçük kod Anthropic'in kum havuzunda çalışır. Uzun sürerse dönen `pause_turn` döngüde devam ettirilir.
 - **Sınırlar:** tur başına en fazla adım sayısı ve `max_tokens`; `refusal` ve `max_tokens` duruşları ayrıca ele alınır.
 - **Bütçe:** her turdan önce bu ayın `assistant_spend` toplamı $100'e bakılır. Doluysa tur başlamaz, açık bir mesaj döner. Console'daki organizasyon limitine çarpınca API'nin verdiği hata ("You have reached your specified API usage limits") anlaşılır bir mesaja çevrilir.
 - **Telemetri:** her adımın kullanımı loglanır; Langfuse izleri elle kurulur (AI SDK'nın otomatik izleri bu yolda yok).
@@ -126,7 +126,7 @@ SQL: `supabase/migrations/20261123123953_assistant_conversations.sql` — uygula
   - Yazma önerisinden önce ne kaydedileceğini anlatma: tek değişikliklerde artık bir cümle var ("Dünkü ziyareti kaydediyorum: Bolland & Crust, 22 Kasım, 4 puan…"). Plan ve listelerde iki model de metinsiz karta gidiyor → **onay kartı, önerilen planı / listeyi okunur biçimde kendisi göstermeli** (uygulama içi kapının işi).
   - Tarih hesabının cevaba yazılması ("Saturday is 2026-11-28.", "Dün = 2026-11-22."): bağlam satırı artık dünü ve önümüzdeki 6 günü tarihleriyle veriyor; sızıntı kayboldu.
   - Hitap: aynı sohbette "sen" ve "siz" karışıyordu; talimat Türkçede "sen" diyor (Ozan değiştirebilir).
-- **Karar 5'ten sapma (ölçüldü):** `max_uses: 3` istek başına sınır, ama `web_search_20260209`'da aramayı modelin yazdığı kod yaptığında bir çağrıda 4 arama faturalandı. Sınır pratikte ~3–4; arama başı $0.01.
+- **Karar 5'ten sapma (ölçüldü, Ozan kabul etti):** `max_uses: 3` istek başına sınır, ama `web_search_20260209`'da aramayı modelin yazdığı kod yaptığında bir çağrıda 4 arama faturalandı. Sınır pratikte ~3–4; arama başı $0.01. Asıl maliyet arama ücreti değil, sonuçları okumanın token'ı: Sonnet'te arama yapılan çağrı $0.106 tuttu, $0.03'ü arama. Seçenekler (sınırı 2'ye indirmek, süzmeyen eski sürüm) konuşuldu; böyle kalıyor (Ozan, 23.11.2026).
 - **Karar (Ozan, 23.11.2026): Sonnet 5.5, effort high** — önerildiği gibi. Araç seçimi ve derinlik Opus 5.5 medium'a yakın, yarı fiyat, tur başına ~4 sn daha hızlı, son koşularda not sızıntısı yok; Opus 5.5 medium daha zengin ama iki kat pahalı ve ara notları cevaba sızıyor. `DEFAULT_AGENT_MODEL` (`src/lib/agent/models.ts`) buna çevrildi.
 
 ## Kod incelemesi ve düzeltmeler (23.11.2026)
