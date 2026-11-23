@@ -2,7 +2,7 @@
 title: "Faz 2 — Platform asistanı Claude'a: tasarım"
 type: plan
 domain: ai
-version: 1.2.0
+version: 1.3.0
 last_updated: 23.11.2026
 status: stable
 related:
@@ -129,6 +129,34 @@ SQL: `supabase/migrations/20261123123953_assistant_conversations.sql` — uygula
 - **Karar 5'ten sapma (ölçüldü):** `max_uses: 3` istek başına sınır, ama `web_search_20260209`'da aramayı modelin yazdığı kod yaptığında bir çağrıda 4 arama faturalandı. Sınır pratikte ~3–4; arama başı $0.01.
 - **Öneri:** **Sonnet 5.5, effort high.** Araç seçimi ve derinlik Opus 5.5 medium'a yakın, yarı fiyat, tur başına ~4 sn daha hızlı, son koşularda not sızıntısı yok. Opus 5.5 medium daha zengin ama iki kat pahalı ve ara notları cevaba sızıyor. Karar Ozan'ın; seçilen model buraya ve `DEFAULT_AGENT_MODEL`'e (`src/lib/agent/models.ts`) yazılır.
 
+## Kod incelemesi ve düzeltmeler (23.11.2026)
+
+Bağımsız bir inceleme çekirdekte üç önemli bulgu çıkardı; ikisi gerçek, biri canlı API'de doğrulanınca düştü:
+
+1. **Onaylanan bir yazma iki kez çalışabiliyordu.** Araç önce çalışıyor, sonucu sonra sohbete yazılıyordu. İki sekme ya da çift tık iki plan oluşturabilirdi; sonucu yazamayan bir hata kartı yeniden açardı. İleride Telegram'ın geciken cevabı tekrar göndermesiyle bu sıradanlaşır.
+   - **Çözüm (kalıcı):** her araç çağrısı çalışmadan önce kararıyla birlikte kaydedilir, sonucu sonra eklenir (`assistant_tool_runs`). Aynı çağrıyı ikinci kez kaydetmek veritabanında imkânsızdır.
+   - Sohbete ulaşmamış bir sonuç kayıttan okunur, araç yeniden çalışmaz. Yarıda kalan çalışma için modele "sonucu belirsiz, önce kontrol et" denir.
+   - Ayrıca sohbet başına tek tur kilidi var: ikinci istek para harcamadan "cevap hâlâ yazılıyor" alır.
+2. **Kullanıcı kendi sohbet satırını yazabiliyordu.** Kendi talimatı ve araçları olan bir sohbet açıp platformun anahtarı ve bütçesiyle çalıştırabilirdi; sign-up kapalı olduğu için bugün risk düşük.
+   - **Çözüm:** bu tablolara yalnız sunucu yazar; kullanıcı okur ve sohbetini silebilir.
+3. **"Ardışık aynı rol mesajları 400 verir" endişesi.** Canlı API'de denendi: iki kullanıcı mesajı, iki asistan mesajı ve araç sonucunun ardından yeni bir kullanıcı mesajı kabul ediliyor ve tek tur gibi okunuyor. Hata yolları sohbeti bozmuyor; düzeltme gerekmedi.
+
+Küçük bulgular da düzeltildi:
+- Kopan akış artık durduruluyor; yoksa sunucu üretmeye ve faturalamaya devam ediyordu.
+- Geçersiz girdili bir yazma onay kartı açmıyor; hata modele hemen dönüyor.
+- Adım sınırında model bir kez daha çağrılıp elindekini söylüyor.
+- Panelin olay işleyicisi hata atarsa tur durmuyor ve yeniden faturalanmıyor.
+- Yedek modele geçilen bir istekte reddeden deneme doğru modelin fiyatından sayılıyor.
+
+**Şema değişikliği hazır, uygulanmadı:** `supabase/migrations/20261123140000_assistant_turns_and_tool_runs.sql`. İçeriği:
+- kullanıcının iki INSERT policy'si kaldırılıyor;
+- `assistant_conversations.turn_lease_until` sütunu ekleniyor;
+- `assistant_tool_runs` tablosu açılıyor (sahibi okur, yazan yalnız sunucu).
+
+Canlı veritabanında geri alınan bir işlem içinde denendi, hepsi beklendiği gibi; hiçbir şey kalıcı olmadı. Ozan onaylamadan uygulanmaz.
+
+Ücretsiz kontrol: `npm run check:agent` — sahte bir Claude istemcisiyle döngünün her yolu, 70 kontrol, hepsi geçiyor.
+
 ## Geçiş yolu
 
 1. **Şema** (3 tablo) — SQL gösterilir, onayla uygulanır. Çalışan kodu etkilemez; tablolar yeni.
@@ -172,5 +200,5 @@ SQL: `supabase/migrations/20261123123953_assistant_conversations.sql` — uygula
 | Adım | Durum (23.11.2026) |
 |---|---|
 | Şema | Uygulandı (Ozan'ın onayıyla, 23.11.2026; sürüm 20261123123953). Uygulandıktan sonra doğrulandı: üç tabloda RLS açık, altı policy, bir tetikleyici |
-| Çekirdek ve eval | Yazıldı, `feat/personal-assistant` dalında (main'de değil); hiçbir route henüz çağırmıyor. Eval koşuldu ($5.03), sonuçlar yukarıda. Model kararı Ozan'da |
+| Çekirdek ve eval | Yazıldı, `feat/personal-assistant` dalında (main'de değil); hiçbir route henüz çağırmıyor. Eval koşuldu ($5.03), sonuçlar yukarıda. İnceleme bulguları düzeltildi; ikinci şema adımı hazır, onay bekliyor. Model kararı Ozan'da |
 | Uygulama içi kapı | — |

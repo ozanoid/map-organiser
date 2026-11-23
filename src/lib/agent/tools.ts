@@ -55,6 +55,16 @@ export function needsApproval(name: string): boolean {
   return BY_NAME.get(name)?.annotations.readOnlyHint === false;
 }
 
+/** Checks a call before anything is decided about it: an unknown tool or an
+ *  input its schema refuses gets an error result, and never an approval
+ *  card. */
+export function checkToolCall(name: string, input: unknown): { ok: true } | { ok: false; message: string } {
+  const tool = BY_NAME.get(name);
+  if (!tool) return { ok: false, message: `There is no tool named ${name}.` };
+  const parsed = parseToolInput(tool, input);
+  return parsed.ok ? { ok: true } : { ok: false, message: parsed.message };
+}
+
 /** Runs one tool call the model made. Never throws: a bad input or a
  *  failure comes back as an error result the model reads. */
 export async function executeToolCall(ctx: AssistantContext, name: string, input: unknown): Promise<ToolOutcome> {

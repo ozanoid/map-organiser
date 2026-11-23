@@ -79,12 +79,17 @@ export interface CallCost {
  * fallback both the declined attempt and the fallback's, each at its own
  * model's price; the top-level usage covers only the attempt that produced
  * the message. Without iterations the top-level usage is the whole call.
+ *
+ * A `message` entry may leave its model out; it is then the requested
+ * model's own attempt (`requestedModel`) — not the model that produced the
+ * message, which after a fallback is the fallback.
  */
-export function costOfMessage(message: Pick<BetaMessage, "model" | "usage">): CallCost {
+export function costOfMessage(message: Pick<BetaMessage, "model" | "usage">, requestedModel?: string): CallCost {
   const usage = message.usage;
   const entries: { model: string; tokens: TokenCounts }[] = usage.iterations?.length
     ? usage.iterations.map((entry) => ({
-        model: ("model" in entry && entry.model) || message.model,
+        model:
+          ("model" in entry && entry.model) || (entry.type === "message" && requestedModel) || message.model,
         tokens: entry,
       }))
     : [{ model: message.model, tokens: usage }];

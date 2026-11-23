@@ -15,6 +15,7 @@ export type AgentErrorCode =
   | "connection" // the API couldn't be reached, or the stream broke twice
   | "aborted" // the caller cancelled
   | "conflict" // the conversation changed in another tab or request
+  | "turn_in_progress" // another turn of this conversation is still running
   | "nothing_pending" // an approval arrived but no tool call is waiting for one
   | "not_found"; // no such conversation for this user
 
@@ -29,6 +30,7 @@ const USER_MESSAGES: Record<AgentErrorCode, string> = {
   connection: "Couldn't reach Claude. Try again.",
   aborted: "Stopped.",
   conflict: "This conversation changed somewhere else. Reload to see the latest.",
+  turn_in_progress: "A reply is still being written in this conversation. Wait for it, then try again.",
   nothing_pending: "There's nothing waiting for approval.",
   not_found: "Conversation not found.",
 };

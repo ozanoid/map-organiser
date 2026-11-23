@@ -2,12 +2,13 @@
 title: assistant_conversations, assistant_messages, assistant_spend
 type: table
 domain: backend
-version: 1.0.0
+version: 1.1.0
 last_updated: 23.11.2026
 status: draft
 sources:
   - Supabase project hukppmaevcapvbrvxtph (live)
   - supabase/migrations/20261123123953_assistant_conversations.sql
+  - supabase/migrations/20261123140000_assistant_turns_and_tool_runs.sql
 related:
   - "[[_README]]"
   - "[[api_usage]]"
@@ -89,3 +90,14 @@ No UPDATE policy anywhere: a conversation's model, prompt and tools can't change
 ## Checked
 
 Before applying, in a rolled-back transaction on the live database as the signed-in owner, another user and the service role: the owner starts a conversation and appends; starting one for another user, a `door` other than `app`, editing a conversation or a message, deleting a message, a user writing spend → refused or 0 rows; a duplicate `seq` → refused; another user sees and appends nothing; the service role writes spend and the owner reads it; deleting a conversation removes its messages and keeps its spend rows with `conversation_id` null; a message bumps `updated_at`. After applying (23.11.2026): RLS on for all three, six policies, one trigger, the function's `EXECUTE` limited to `postgres` and `service_role`.
+
+## Next migration — prepared, not applied
+
+`supabase/migrations/20261123140000_assistant_turns_and_tool_runs.sql` (23.11.2026, waiting for Ozan's approval; the file is renamed to the recorded version when applied):
+
+- drops the two user INSERT policies — only the server (service role) writes conversations and messages. Today a signed-in user could insert a conversation with any system prompt and tools, or an assistant message, and the server would run it on the platform's key and budget;
+- `assistant_conversations.turn_lease_until timestamptz` — one turn at a time per conversation;
+- `assistant_tool_runs (conversation_id, tool_use_id, name, decision, status, result, is_error, created_at, finished_at)`, PK `(conversation_id, tool_use_id)`, ON DELETE CASCADE; `decision` CHECK `auto | approved | declined | not_run | invalid`, `status` CHECK `running | done`, and `done` ⇔ result, `is_error` and `finished_at` are set. RLS: the owner reads; only the server writes.
+
+Checked in a rolled-back transaction on the live database (23.11.2026): the owner can't start a conversation, append a message, write or change a tool run, or set the lease; the service role writes all of it; the lease is taken once, refused while held and taken again after it runs out; a second claim of the same call is refused (23505); a `done` run without a result and an unknown decision are refused (23514); another user sees nothing; deleting a conversation removes its runs. Nothing persisted.
+

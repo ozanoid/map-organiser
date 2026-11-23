@@ -6,6 +6,40 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 23.11.2026 — v1.47.1 — Agent core: tool runs, one turn at a time, server-only writes
+
+- An independent review of v1.47.0 found that an approved write could run
+  twice (two tabs, a double submit, a retried webhook, or a result that
+  failed to reach the conversation) and that a signed-in user could insert
+  their own conversation — any system prompt and tools — and have the
+  server run it on the platform's key and budget.
+- Fixed in the core: every tool call is recorded with its decision before
+  it runs and with its result after (`settleCalls`); a call is never run
+  twice, a result that didn't reach the conversation is used from the
+  record, an interrupted run is reported as such. One turn at a time per
+  conversation (a 15-minute lease). The Supabase store now writes with the
+  service role, scoped to the user in code.
+- Also: a broken stream is aborted before the retry; an invalid write input
+  gets no approval card; at the step limit the model gets one last call to
+  answer; door event handlers can't break a turn; a refusal fallback's
+  declined attempt is priced at the requested model.
+- Checked against the live API (< $0.01): consecutive messages of one role
+  are accepted and read as one turn — the reviewer's worry that an error
+  path breaks the conversation doesn't hold. `tool_choice: none` returned
+  an empty reply on both models, so the step limit doesn't use it.
+- Prepared, **not applied** (needs Ozan's approval):
+  `supabase/migrations/20261123140000_assistant_turns_and_tool_runs.sql` —
+  drops the user INSERT policies, adds `turn_lease_until` and
+  `assistant_tool_runs`. Checked in a rolled-back transaction on the live
+  database; nothing persisted.
+- New: `npm run check:agent` (`scripts/agent-check/`) — 70 free offline
+  checks of the loop with a scripted Claude API.
+- Docs: [[04-integrations/claude-agent]],
+  [[02-backend/schema/assistant-conversations]],
+  [[_plans/phase-2-assistant]].
+
+---
+
 ## 23.11.2026 — v1.47.0 — The Claude agent core and its eval
 
 - New: `src/lib/agent/` — the platform's own Claude agent, one core for
