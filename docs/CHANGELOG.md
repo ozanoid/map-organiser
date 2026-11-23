@@ -6,6 +6,16 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 23.11.2026 — v1.47.6 — Next: the in-app door
+
+- Ozan's decision: the next piece of work is the in-app door (the panel on
+  the agent core) — a design proposal with `/ui-ux-pro-max` first, built
+  after his approval; it starts once decision 6 (moving Gemini's work to
+  Claude) has been discussed.
+- Docs: [[_plans/phase-2-assistant]].
+
+---
+
 ## 23.11.2026 — v1.47.5 — Turkish address: "sen"
 
 - Ozan confirmed the in-app assistant addresses him as "sen" in Turkish

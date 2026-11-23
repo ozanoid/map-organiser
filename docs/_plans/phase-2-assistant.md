@@ -2,7 +2,7 @@
 title: "Faz 2 — Platform asistanı Claude'a: tasarım"
 type: plan
 domain: ai
-version: 1.7.0
+version: 1.8.0
 last_updated: 23.11.2026
 status: stable
 related:
@@ -201,4 +201,4 @@ Uygulamadan önce ve sonra canlı veritabanında geri alınan bir işlem içinde
 |---|---|
 | Şema | Uygulandı (Ozan'ın onayıyla, 23.11.2026; sürüm 20261123123953). Uygulandıktan sonra doğrulandı: üç tabloda RLS açık, altı policy, bir tetikleyici |
 | Çekirdek ve eval | Yazıldı, `feat/personal-assistant` dalında (main'de değil); hiçbir route henüz çağırmıyor. Eval koşuldu ($5.03), sonuçlar yukarıda. İnceleme bulguları düzeltildi; ikinci şema adımı uygulandı (sürüm 20261123143607). Model: Sonnet 5.5, effort high (Ozan, 23.11.2026) |
-| Uygulama içi kapı | — |
+| Uygulama içi kapı | Sıradaki iş (Ozan, 23.11.2026): önce `/ui-ux-pro-max` ile tasarım önerisi, onaydan sonra yazım; 6. karar konuşulduktan sonra başlar |
