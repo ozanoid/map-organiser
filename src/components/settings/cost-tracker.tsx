@@ -15,6 +15,8 @@ interface UsageItem {
 interface UsageData {
   month: string;
   usage: UsageItem[];
+  /** The Claude assistant (Phase 2): dollars this month, platform-wide cap. */
+  assistant?: { spentUsd: number; capUsd: number };
   totalEstimatedCost: number;
 }
 
@@ -62,6 +64,28 @@ export function CostTracker() {
       </div>
 
       <div className="space-y-3">
+        {data.assistant && (
+          <div className="space-y-1">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-medium">Claude assistant</span>
+              <span className="text-muted-foreground">
+                ${data.assistant.spentUsd.toFixed(2)} / ${data.assistant.capUsd.toFixed(0)} cap
+              </span>
+            </div>
+            <div className="h-2 bg-muted rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all ${
+                  data.assistant.spentUsd >= data.assistant.capUsd
+                    ? "bg-red-500"
+                    : data.assistant.spentUsd > data.assistant.capUsd * 0.8
+                      ? "bg-amber-500"
+                      : "bg-emerald-500"
+                }`}
+                style={{ width: `${Math.min(100, (data.assistant.spentUsd / data.assistant.capUsd) * 100)}%` }}
+              />
+            </div>
+          </div>
+        )}
         {data.usage.map((item) => {
           const percentage = item.freeLimit > 0
             ? Math.min(100, (item.count / item.freeLimit) * 100)

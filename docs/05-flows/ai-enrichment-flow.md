@@ -2,8 +2,8 @@
 title: AI Enrichment Flow
 type: flow
 domain: places
-version: 1.8.3
-last_updated: 19.11.2026
+version: 1.8.4
+last_updated: 24.11.2026
 status: stable
 sources:
   - src/app/api/places/[id]/enrich/route.ts
@@ -120,11 +120,11 @@ buckets added as those features shipped):
 - **COMPARE — `AI_MONTHLY_COMPARE_CAP = 200` runs** (v1.19.0, S2 F-04).
   One unit per `/api/ai/compare` request (SKU `ai_compare`); deliberate-click
   only from the compare page, never auto-fired.
-- **CHAT — `AI_MONTHLY_CHAT_CAP = 200` turns** (v1.21.0, S3 AI-02, SKU
-  `ai_chat`). One unit per user TURN charged in the chat route's
-  `onFinish` — an approval-continuation POST is free; `stopWhen:
-  stepCountIs(6)` bounds in-turn LLM fan-out. See
-  [[ai-chat-flow]].
+- **CHAT — removed in v1.48.0** with the Gemini chat (it was
+  `AI_MONTHLY_CHAT_CAP = 200` turns, SKU `ai_chat`, which stays for past
+  rows). The Claude assistant that replaced it is capped by the platform's
+  own spend ledger — $100 a month for every Claude call
+  (`assistant_spend`). See [[ai-chat-flow]].
 - **AI PLAN — `AI_MONTHLY_TRIP_PLAN_CAP = 50` generations** (v1.22.0,
   S4 AI-09, SKU `ai_trip_plan` — the names keep "trip"). One unit per
   `/api/ai/day-plan` generation; deliberate-click only from the plan

@@ -32,6 +32,15 @@ export interface Conversation {
   tools: string;
 }
 
+/** How the last turn ended — so a reload can say why a message has no
+ *  reply. `seq` is the history's length when it ended: once anything is
+ *  appended after, it no longer describes the end of the conversation. */
+export interface TurnRecord {
+  status: "done" | "awaiting_approval" | "refused" | "max_tokens" | "step_limit" | "error";
+  code?: string;
+  seq: number;
+}
+
 /** What became of a tool call: run without asking (a read), approved or
  *  declined on the card, answered "not run" (the user moved on, the turn hit
  *  a limit, the call was cut off) or refused for an invalid input. */
@@ -60,9 +69,16 @@ export interface ConversationStore {
    *  point at them). */
   readonly persistent: boolean;
   create(conversation: Omit<Conversation, "id">): Promise<Conversation>;
+  /** The conversation the user opened last in a door (New chat, or later
+   *  picking one) — not the one written to last: a turn still running in an
+   *  older conversation must not pull the door back to it. And whether a
+   *  turn of it is running now (its lease hasn't run out). */
+  latest(door: Door): Promise<{ id: string; turnInProgress: boolean } | null>;
   /** The conversation and its messages in order. AgentError("not_found")
    *  when it doesn't exist or isn't the user's. */
-  load(id: string): Promise<{ conversation: Conversation; messages: StoredMessage[] }>;
+  load(id: string): Promise<{ conversation: Conversation; messages: StoredMessage[]; lastTurn: TurnRecord | null }>;
+  /** Records how a turn ended (see TurnRecord). */
+  recordTurn(conversationId: string, turn: TurnRecord): Promise<void>;
   /** Adds the message at `seq`. AgentError("conflict") when that position
    *  is taken — another request appended first. */
   append(conversationId: string, message: StoredMessage): Promise<void>;
@@ -107,10 +123,26 @@ export function supabaseConversationStore(admin: SupabaseClient, userId: string)
       return { ...c, id: data.id as string };
     },
 
+    async latest(door) {
+      const { data, error } = await admin
+        .from("assistant_conversations")
+        .select("id, turn_lease_until")
+        .eq("user_id", userId)
+        .eq("door", door)
+        .order("opened_at", { ascending: false })
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) return null;
+      const lease = data.turn_lease_until ? Date.parse(data.turn_lease_until) : 0;
+      return { id: data.id as string, turnInProgress: lease > Date.now() };
+    },
+
     async load(id) {
       const { data: row, error } = await admin
         .from("assistant_conversations")
-        .select("id, user_id, door, model, system_prompt, tools")
+        .select("id, user_id, door, model, system_prompt, tools, last_turn_status, last_turn_code, last_turn_seq")
         .eq("id", id)
         .eq("user_id", userId)
         .maybeSingle();
@@ -145,7 +177,25 @@ export function supabaseConversationStore(admin: SupabaseClient, userId: string)
           tools: row.tools,
         },
         messages,
+        lastTurn:
+          row.last_turn_status && typeof row.last_turn_seq === "number"
+            ? { status: row.last_turn_status, code: row.last_turn_code ?? undefined, seq: row.last_turn_seq }
+            : null,
       };
+    },
+
+    async recordTurn(conversationId, turn) {
+      const { error } = await admin
+        .from("assistant_conversations")
+        .update({
+          last_turn_status: turn.status,
+          last_turn_code: turn.status === "error" ? (turn.code ?? "upstream") : null,
+          last_turn_seq: turn.seq,
+          last_turn_at: new Date().toISOString(),
+        })
+        .eq("id", conversationId)
+        .eq("user_id", userId);
+      if (error) throw error;
     },
 
     async append(conversationId, message) {
@@ -240,9 +290,10 @@ export function supabaseConversationStore(admin: SupabaseClient, userId: string)
  *  through JSON like the database does, so the eval sends back exactly what
  *  the app would. */
 export function memoryConversationStore(): ConversationStore {
-  const conversations = new Map<string, Conversation & { leaseUntil: number }>();
+  const conversations = new Map<string, Conversation & { leaseUntil: number; lastTurn: TurnRecord | null }>();
   const messages = new Map<string, { seq: number; role: StoredMessage["role"]; content: string }[]>();
   const runs = new Map<string, Map<string, ToolRun>>();
+  const order: string[] = [];
   const get = (id: string) => {
     const conversation = conversations.get(id);
     if (!conversation) throw new AgentError("not_found");
@@ -252,17 +303,26 @@ export function memoryConversationStore(): ConversationStore {
     persistent: false,
     async create(c) {
       const conversation = { ...c, id: crypto.randomUUID() };
-      conversations.set(conversation.id, { ...conversation, leaseUntil: 0 });
+      conversations.set(conversation.id, { ...conversation, leaseUntil: 0, lastTurn: null });
       messages.set(conversation.id, []);
       runs.set(conversation.id, new Map());
+      order.push(conversation.id);
       return conversation;
     },
+    async latest(door) {
+      const id = [...order].reverse().find((c) => conversations.get(c)?.door === door);
+      return id ? { id, turnInProgress: conversations.get(id)!.leaseUntil > Date.now() } : null;
+    },
     async load(id) {
-      const { id: cid, userId, door, model, systemPrompt, tools } = get(id);
+      const { id: cid, userId, door, model, systemPrompt, tools, lastTurn } = get(id);
       return {
         conversation: { id: cid, userId, door, model, systemPrompt, tools },
         messages: messages.get(id)!.map((m) => ({ seq: m.seq, role: m.role, content: decode(m.content) })),
+        lastTurn,
       };
+    },
+    async recordTurn(conversationId, turn) {
+      get(conversationId).lastTurn = { ...turn };
     },
     async append(conversationId, message) {
       get(conversationId);

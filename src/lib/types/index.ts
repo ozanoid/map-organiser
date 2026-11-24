@@ -381,6 +381,9 @@ export interface GooglePlaceData {
 }
 
 export interface PlaceFilters {
+  /** Exactly these places — the assistant's "Show on map" (?ids=…).
+   *  Combines with the other filters like any filter. */
+  ids?: string[];
   country?: string;
   city?: string;
   category_ids?: string[];

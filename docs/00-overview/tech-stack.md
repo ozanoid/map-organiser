@@ -2,8 +2,8 @@
 title: Tech Stack
 type: overview
 domain: overview
-version: 1.7.1
-last_updated: 19.11.2026
+version: 1.7.2
+last_updated: 24.11.2026
 status: stable
 sources:
   - package.json
@@ -61,15 +61,18 @@ Every runtime, library, and tool the repo currently depends on. Pin sources are 
 | `@supabase/supabase-js` | `^2.103.0` | Postgres + Auth + Storage client | Used by `createServiceClient` in `src/lib/supabase/server.ts`. |
 | `@supabase/ssr` | `^0.12.0` | SSR cookie auth | Powers all three clients (browser/server/proxy) in `src/lib/supabase/`. |
 | `@tanstack/react-query` | `^5.101.2` | Server-state cache | Default `staleTime: 60_000`, `refetchOnWindowFocus: false`. |
-| `zustand` | `^5.0.14` | Client state store | Currently only `src/lib/stores/import-store.ts`. |
+| `zustand` | `^5.0.14` | Client state store | `src/lib/stores/import-store.ts`; `assistant-store.ts` (the assistant panel's open state and a request written by another screen, v1.48.0). |
 | `zod` | `^4.6.7` | Runtime validation (below 4.6.6, validating an oversized constrained collection could exhaust memory) | Used on every mutation API route + every AI structured output. |
 
 ## AI
 
 | Lib | Version | Role | Notes |
 |---|---|---|---|
-| `ai` | `^6.0.228` | AI SDK v6 — model-agnostic call layer (`generateText` + `Output.object`; `streamText` for the chat assistant, v1.21.0) | Used by Phase 4 `step=profile` enrich branch + `/api/ai/*`. Direct provider wiring (not AI Gateway) — see [[../04-integrations/gemini]] for the explicit choice. |
-| `@ai-sdk/react` | `3.0.230` | `useChat` for the assistant panel (v1.21.0) | ⚠️ version-lockstep with `ai@6` — see [[../04-integrations/gemini#npm-packages]]. |
+| `ai` | `^6.0.228` | AI SDK v6 — model-agnostic call layer (`generateText` + `Output.object`); its UI message stream (`createUIMessageStream`) carries the Claude assistant's turns to the panel (v1.48.0; the Gemini chat used `streamText`, v1.21.0) | Used by Phase 4 `step=profile` enrich branch + `/api/ai/*`. Direct provider wiring (not AI Gateway) — see [[../04-integrations/gemini]] for the explicit choice. |
+| `@anthropic-ai/sdk` | `^1.8.0` | The Claude API — the platform's agent core (`src/lib/agent/`, v1.47.x): streamed messages, tool use, server-side fallback, prompt caching | See [[../04-integrations/claude-agent]]. |
+| `@ai-sdk/react` | `3.0.230` | `useChat` for the assistant panel (v1.21.0; the Claude panel since v1.48.0) | ⚠️ version-lockstep with `ai@6` — see [[../04-integrations/gemini#npm-packages]]. |
+| `react-markdown` | `10.1.0` (exact) | The assistant's replies as Markdown (v1.48.0) | Raw HTML never rendered, images never loaded — [[../03-frontend/components/assistant]]. |
+| `remark-gfm` | `4.0.1` (exact) | Lists, tables and autolinks in those replies | — |
 | `@ai-sdk/google` | `^3.0.141` | Google provider for AI SDK (3.0.75 until v1.43.0 — its `@ai-sdk/provider-utils` had a low-severity advisory) | `createGoogleGenerativeAI({ apiKey: GOOGLE_GENERATIVE_AI_API_KEY })`. Model: `gemini-3-flash-preview` (since 15.07.2026). |
 
 ## Observability

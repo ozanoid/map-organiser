@@ -2,8 +2,8 @@
 title: Settings components
 type: component
 domain: frontend
-version: 1.4.1
-last_updated: 19.11.2026
+version: 1.5.0
+last_updated: 24.11.2026
 status: stable
 sources:
   - src/components/settings/api-keys-manager.tsx
@@ -54,6 +54,7 @@ Five components powering the Settings page tabs. All `"use client"`.
 - **API calls:** `GET /api/user/usage` (fetch monthly usage).
 - **State:** `data`, `loading`.
 - **Renders:**
+  - **Claude assistant** row first (v1.48.0): dollars spent this month against the $100 cap (`assistant` in the response), same bar colours.
   - Per-SKU usage rows — name, count, free limit, progress bar (emerald < 80 %, amber 80–100 %, red > 100 %).
   - Estimated cost per row.
   - Total estimated cost at the bottom (green if $0, red if charged).

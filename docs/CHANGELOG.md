@@ -6,6 +6,89 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 24.11.2026 — v1.48.0 — The in-app assistant runs on Claude
+
+- New routes ([[02-backend/api-routes/assistant]]): `POST /api/assistant/chat`
+  runs one turn of the agent core and streams it in the AI SDK UI message
+  format — the panel sends only the new message or its card answers;
+  `GET /api/assistant/conversation` gives the latest conversation as the
+  panel shows it (and whether a turn of it is running), `POST` starts a new
+  one. A turn finishes on the server even if the panel closes (`after()`).
+- New panel ([[03-frontend/components/assistant]], [[05-flows/ai-chat-flow]]),
+  built to the approved mockups A–D: a row per tool as it runs, Markdown
+  replies with links, a card per proposed change showing the proposal in
+  words (built on the server from the call — `describeWrites`), Saved / Not
+  saved / Couldn't save states, the conversation kept on the server (reload,
+  other tabs and devices agree), writing while a card waits closes it as not
+  saved, a turn running elsewhere is waited for, errors with Try again where
+  it helps, "Show on map" for search and ranking results (new `ids` filter,
+  `?ids=…`, with an "N from the assistant" chip on the map and places pages).
+  The panel can be opened with a request written (`openAssistant(draft)`),
+  for AI Plan, Compare and the search bar next (decision 6.1).
+- Settings → usage: a "Claude assistant" row, dollars this month against
+  the $100 cap; added to the total. `ai-settings` reports
+  `assistantAvailable` (the Claude key); the header button uses it.
+- Removed: the Gemini chat — `/api/ai/chat`, `src/lib/ai/chat-tools.ts`,
+  `src/lib/ai/prompts/chat.ts` and the `chat` AI budget (the `ai_chat` SKU
+  stays for past rows).
+- New dependencies: `react-markdown` 10.1.0, `remark-gfm` 4.0.1 (exact pins;
+  `npm audit --omit=dev`: 0 vulnerabilities).
+- Fixed after an independent review of the door, before it shipped:
+  - The turn is split in two (`openTurn` checks, `run` does it): a refusal
+    before the turn — a turn already running, the budget, answers that
+    don't fit — is a plain HTTP error with nothing written; the panel puts
+    the user's text back and reloads. It no longer resends on its own: the
+    answers to the cards go once, explicitly (an automatic resend looped on
+    a refusal).
+  - An answer must be for exactly the cards waiting now (`conflict`
+    otherwise): an older tab can no longer decline a card the user hasn't
+    seen.
+  - The reply carries the id the stored conversation gives it
+    (`replyMessageId`), so an answer to a card updates the message in place
+    instead of adding a copy.
+  - Try again is a turn input (`retry`): it carries the turn on without
+    sending the user's message twice or running a call again — also after
+    a failed append or an interrupted run.
+  - How the last turn ended is recorded on the conversation; a reload shows
+    its note (and Try again) again. A card answered before a reload shows
+    "Saving…", not its buttons; a run whose turn is gone shows as
+    interrupted.
+  - "New chat" sticks: the panel shows the conversation opened last
+    (`opened_at`), not the one a running turn wrote to last.
+  - The panel ignores a server copy older than what it streamed
+    (`version`); text blocks stay apart; reads that weren't run show as
+    skipped, not failed; cards and Try again wait while a reply is written.
+  - "Show on map" names up to 25 places (`MAX_PLACE_IDS`, the most
+    `search_places` returns; it was 10).
+  - Replies never load images (a reply can carry a web page's text; an
+    image URL would leak what it holds) — an image is a link; a link
+    starting `/\` is no longer taken for an app link.
+  - The trace is flushed after the turn, not alongside it; 44 px buttons;
+    the composer stops at 8,000 characters.
+- Schema: `20261124120000_assistant_open_and_last_turn.sql` (`opened_at`,
+  `last_turn_*`) — written and checked in a rolled-back transaction,
+  **not applied**: waits for Ozan's approval; the door's routes need it.
+- Checked: build, types, lint; `npm run check:agent` 120 offline checks
+  (incl. the checks before a turn, Try again, the recorded outcome, the
+  panel's view of a stored conversation and a live turn's stream). Not yet
+  tried end to end in a signed-in browser.
+- Docs: [[02-backend/api-routes/assistant]] (new), [[05-flows/ai-chat-flow]]
+  and [[03-frontend/components/assistant]] (rewritten),
+  [[02-backend/api-routes/ai]], [[02-backend/api-routes/_README]],
+  [[02-backend/api-routes/user]], [[02-backend/schema/api_usage]],
+  [[03-frontend/components/settings]], [[03-frontend/components/layout]],
+  [[03-frontend/hooks/use-filters]], [[03-frontend/hooks/use-places]],
+  [[03-frontend/state-management]], [[04-integrations/gemini]],
+  [[04-integrations/claude-agent]], [[04-integrations/claude-mcp]],
+  [[02-backend/schema/assistant-conversations]], [[06-ops/deployment]],
+  [[02-backend/api-routes/places]], [[01-domain/places]],
+  [[01-domain/users-and-profiles]], [[03-frontend/routing]],
+  [[03-frontend/components/map]], [[00-overview/tech-stack]],
+  [[05-flows/ai-enrichment-flow]],
+  [[_plans/phase-2-assistant]], [[_plans/personal-assistant]].
+
+---
+
 ## 24.11.2026 — v1.47.8 — In-app door: design approved
 
 - Ozan approved the panel design (mockups A–D) and every recommendation on

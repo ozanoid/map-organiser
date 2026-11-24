@@ -2,8 +2,8 @@
 title: User & Profile
 type: entity
 domain: users
-version: 1.5.1
-last_updated: 19.11.2026
+version: 1.5.2
+last_updated: 24.11.2026
 status: stable
 sources:
   - src/lib/supabase/client.ts
@@ -156,7 +156,7 @@ The encryption layer is documented in [[../06-ops/encryption]] (when written).
 
 The `increment_api_usage(p_user_id, p_sku, p_cost)` SECURITY DEFINER function does an UPSERT: if today's row exists, `count += 1`; otherwise insert with `count = 1`.
 
-`CostTracker` (`src/components/settings/cost-tracker.tsx`) aggregates the rows for display in Settings → API.
+`CostTracker` (`src/components/settings/cost-tracker.tsx`) aggregates the rows for display in Settings → API. The Claude assistant's spend isn't in `api_usage`: it is the agent's own ledger (`assistant_spend`, [[../02-backend/schema/assistant-conversations]]), shown as its own row against the $100 monthly cap and added to the total (`GET /api/user/usage`, v1.48.0).
 
 ## Relationships
 

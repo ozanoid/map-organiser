@@ -2,8 +2,8 @@
 title: usePlaces
 type: hook
 domain: frontend
-version: 1.2.3
-last_updated: 20.11.2026
+version: 1.2.4
+last_updated: 24.11.2026
 status: stable
 sources:
   - src/lib/hooks/use-places.ts
@@ -15,6 +15,8 @@ related:
 ---
 
 # `usePlaces` and family
+
+> **v1.48.0:** `fetchPlaces` serializes `ids` (the assistant's "Show on map"); `GET /api/places` already took it.
 
 > **v1.18.0:** `fetchPlaces` serializes `open_now=true`; `usePlaces` adds `refetchInterval: 60s` while the open-now filter is active (the list is a server-evaluated snapshot — the interval bounds its staleness).
 

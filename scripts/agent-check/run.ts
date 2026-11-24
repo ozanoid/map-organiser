@@ -14,7 +14,11 @@ import { AgentError } from "@/lib/agent/errors";
 import { CONTEXT_TAG, echoable, type StoredMessage } from "@/lib/agent/history";
 import { MAX_STEPS } from "@/lib/agent/models";
 import { costOfMessage } from "@/lib/agent/pricing";
-import { runTurn, startConversation, type AgentDeps, type TurnEvents, type TurnResult } from "@/lib/agent/run-turn";
+import { replyMessageId, toUIMessages } from "@/lib/agent/ui";
+import { turnStream } from "@/lib/agent/ui-stream";
+import { approvalsAnswered, type AssistantUIMessage } from "@/lib/agent/ui-types";
+import type { ToolRun } from "@/lib/agent/store";
+import { openTurn, runTurn, startConversation, type AgentDeps, type TurnEvents, type TurnResult } from "@/lib/agent/run-turn";
 import type { SpendEntry, SpendLedger } from "@/lib/agent/spend";
 import { memoryConversationStore, type ConversationStore } from "@/lib/agent/store";
 
@@ -50,12 +54,12 @@ class FakeClient {
     this.requests.push(JSON.parse(JSON.stringify(params)));
     const script = this.queue.shift();
     if (!script) throw new Error("no scripted response left");
-    const listeners: ((delta: string) => void)[] = [];
+    const listeners: ((event: any) => void)[] = [];
     let current: any;
     const id = `msg_${++this.n}`;
     const handle = {
-      on(event: string, cb: (delta: string) => void) {
-        if (event === "text") listeners.push(cb);
+      on(event: string, cb: (event: any) => void) {
+        if (event === "streamEvent") listeners.push(cb);
         return handle;
       },
       get currentMessage() {
@@ -80,7 +84,11 @@ class FakeClient {
             new Headers()
           );
         }
-        for (const block of script.content) if (block.type === "text") listeners.forEach((cb) => cb(block.text));
+        script.content.forEach((block, index) => {
+          if (block.type !== "text") return;
+          const event = { type: "content_block_delta", index, delta: { type: "text_delta", text: block.text } };
+          listeners.forEach((cb) => cb(event));
+        });
         current = message(id, script.model ?? params.model, script.stop, script.content, script.usage);
         return current;
       },
@@ -266,7 +274,7 @@ async function main() {
     t.client.queue.push({ kind: "message", stop: "tool_use", content: [toolUse("w1", "update_places", VALID_STATUS)] });
     await t.turn(t.msg("İşaretle"));
     t.client.queue.push({ kind: "message", stop: "end_turn", content: [text("Tamam, kaydetmedim.")] });
-    const r = await t.turn({ kind: "approval", decisions: {} });
+    const r = await t.turn({ kind: "approval", decisions: { w1: false } });
     const h = await t.history();
     expect("done, the write never ran", r.status === "done" && t.ran.length === 0);
     expect("result: declined, as an error", results(h[2])[0]?.text.includes("declined") && results(h[2])[0]?.err);
@@ -328,11 +336,60 @@ async function main() {
     t.faults.finishOnce = true; // the run's result isn't recorded
     const err = await throws(t.turn({ kind: "approval", decisions: { w1: true } }));
     expect("the approval turn fails recording the result", err === "injected: finishToolRun failed", err);
+    expect("the card is decided: answering it again → nothing_pending", (await throws(t.turn({ kind: "approval", decisions: { w1: true } }))) === "nothing_pending");
     t.client.queue.push({ kind: "message", stop: "end_turn", content: [text("Kontrol edeyim.")] });
-    await t.turn({ kind: "approval", decisions: { w1: true } });
+    const r = await t.turn({ kind: "retry" });
     const h = await t.history();
+    expect("Try again carries the turn on", r.status === "done" && roles(h) === "uaua", roles(h));
     expect("not run a second time", t.ran.length === 1, t.ran.length);
     expect("the model is told it was interrupted", results(h[2])[0]?.text.startsWith("This call was interrupted"), results(h[2]));
+  }
+
+  say("## Try again after the result's append failed");
+  {
+    const t = await setup();
+    t.client.queue.push({ kind: "message", stop: "tool_use", content: [toolUse("w1", "log_visit", VALID_VISIT), toolUse("r1", "get_visits", {})] });
+    await t.turn(t.msg("Dün gittim"));
+    t.faults.appendAt = 2;
+    await throws(t.turn({ kind: "approval", decisions: { w1: true } }));
+    t.client.queue.push({ kind: "message", stop: "end_turn", content: [text("Kaydedildi.")] });
+    const r = await t.turn({ kind: "retry" });
+    const h = await t.history();
+    expect("done, nothing run twice", r.status === "done" && t.ran.length === 2, t.ran);
+    expect("the recorded results go to the model", results(h[2]).map((x) => x.text).join("|") === `${JSON.stringify({ ran: "log_visit" })}|${JSON.stringify({ ran: "get_visits" })}`, results(h[2]));
+  }
+
+  say("## the checks before a turn");
+  {
+    const t = await setup();
+    t.client.queue.push({ kind: "message", stop: "tool_use", content: [toolUse("w1", "log_visit", VALID_VISIT), toolUse("w2", "update_places", VALID_STATUS)] });
+    await t.turn(t.msg("İkisi"));
+    expect("answers for some of the cards → conflict", (await throws(t.turn({ kind: "approval", decisions: { w1: true } }))) === "conflict");
+    expect("answers for other calls → conflict", (await throws(t.turn({ kind: "approval", decisions: { w1: true, w9: true } }))) === "conflict");
+    expect("Try again while cards wait → conflict", (await throws(t.turn({ kind: "retry" }))) === "conflict");
+    expect("nothing written, nothing run, no model call", roles(await t.history()) === "ua" && t.ran.length === 0 && t.client.requests.length === 1);
+    t.client.queue.push({ kind: "message", stop: "end_turn", content: [text("Tamam.")] });
+    expect("the lease was given back each time", (await t.turn({ kind: "approval", decisions: { w1: true, w2: false } })).status === "done");
+    expect("Try again after an answer → conflict", (await throws(t.turn({ kind: "retry" }))) === "conflict");
+    const open = await openTurn(t.deps, t.conversation.id, t.msg("Selam"));
+    expect("an open turn holds the lease", (await throws(t.turn(t.msg("aynı anda")))) === "turn_in_progress");
+    t.client.queue.push({ kind: "message", stop: "end_turn", content: [text("Merhaba.")] });
+    expect("and runs when asked", (await open.run()).status === "done" && open.history.length === 6, open.history.length);
+  }
+
+  say("## Try again after Claude was busy");
+  {
+    const t = await setup();
+    t.client.queue.push({ kind: "api_error", status: 529, type: "overloaded_error" });
+    expect("busy", (await throws(t.turn(t.msg("Selam")))) === "busy");
+    let rec = (await t.store.load(t.conversation.id)).lastTurn;
+    expect("recorded: an error, busy, at the end of the conversation", rec?.status === "error" && rec.code === "busy" && rec.seq === 1, rec);
+    t.client.queue.push({ kind: "message", stop: "end_turn", content: [text("Merhaba!")] });
+    const r = await t.turn({ kind: "retry" });
+    const h = await t.history();
+    expect("the same message answered, not sent twice", r.status === "done" && roles(h) === "ua" && t.client.requests[1].messages.length === 1, roles(h));
+    rec = (await t.store.load(t.conversation.id)).lastTurn;
+    expect("recorded: done, at the new end", rec?.status === "done" && rec.code === undefined && rec.seq === 2, rec);
   }
 
   say("## an invalid write gets no card");
@@ -355,8 +412,9 @@ async function main() {
     t.client.queue.push({ kind: "message", stop: "tool_use", content: [toolUse("w1", "log_visit", VALID_VISIT), toolUse("w2", "update_places", { nope: 1 })] });
     const r1 = await t.turn(t.msg("İkisi"));
     expect("card for the valid one only", r1.status === "awaiting_approval" && r1.pending.map((p) => `${p.id}:${p.needsApproval}`).join(",") === "w1:true,w2:false", r1.pending);
+    expect("an answer for the call without a card → conflict", (await throws(t.turn({ kind: "approval", decisions: { w1: true, w2: true } }))) === "conflict" && t.ran.length === 0);
     t.client.queue.push({ kind: "message", stop: "end_turn", content: [text("ok")] });
-    await t.turn({ kind: "approval", decisions: { w1: true, w2: true } });
+    await t.turn({ kind: "approval", decisions: { w1: true } });
     const h = await t.history();
     expect("only the valid write ran", t.ran.map((x) => x.name).join(",") === "log_visit");
     expect("the invalid one's error is its result", results(h[2]).find((x) => x.id === "w2")?.err === true);
@@ -512,6 +570,118 @@ async function main() {
     expect("a refusal fallback: the declined attempt at Opus 5.5, the rescue at Opus 5", Math.abs(fallback.costUsd - ((1000 * 4 + 100 * 20) + (1000 * 5 + 200 * 25)) / 1e6) < 1e-9, fallback.costUsd);
     const unknown = costOfMessage({ model: "claude-mystery-9", usage: { input_tokens: 1_000_000, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0, cache_creation: null, server_tool_use: null, iterations: null } as any });
     expect("an unlisted model costs the highest listed price, and is reported", unknown.costUsd === 5 && unknown.unpricedModels[0] === "claude-mystery-9", unknown);
+  }
+
+  say("## the panel's view of a stored conversation");
+  {
+    const history: StoredMessage[] = [
+      { seq: 0, role: "user", content: [{ type: "text", text: "<context>Now…</context>" }, { type: "text", text: "Kadıköy brunch?" }] as any },
+      { seq: 1, role: "assistant", content: [thinking("s"), toolUse("r1", "search_places", { query: "brunch" })] as any },
+      { seq: 2, role: "user", content: [{ type: "tool_result", tool_use_id: "r1", content: JSON.stringify({ total_matches: 2, places: [{ id: "p1", name: "Joie" }, { id: "p2", name: "Neni" }] }) }] as any },
+      { seq: 3, role: "assistant", content: [text("İki yer var."), toolUse("w1", "log_visit", VALID_VISIT), toolUse("r3", "get_plans", {})] as any },
+      { seq: 4, role: "user", content: [{ type: "tool_result", tool_use_id: "w1", content: "x", is_error: true }, { type: "tool_result", tool_use_id: "r3", content: "x", is_error: true }, { type: "text", text: "<context>Now…</context>" }, { type: "text", text: "Boşver" }] as any },
+      { seq: 5, role: "assistant", content: [text("Peki."), toolUse("w2", "update_places", VALID_STATUS), toolUse("r2", "get_visits", {})] as any },
+    ];
+    const runs = new Map<string, ToolRun>([
+      ["w1", { toolUseId: "w1", name: "log_visit", decision: "not_run", status: "done", outcome: { text: "x", isError: true } }],
+      ["r3", { toolUseId: "r3", name: "get_plans", decision: "not_run", status: "done", outcome: { text: "x", isError: true } }],
+    ]);
+    const quiet = { turnInProgress: false, lastTurn: null };
+    const ui = toUIMessages(history, runs, { w2: { title: "Update Cervejaria Ramiro", lines: [{ label: "Status", text: "Visited" }] } }, quiet);
+    const parts = (i: number) => ui[i].parts.filter((p: any) => p.type !== "step-start") as any[];
+    expect("4 messages: user, assistant (2 steps), user, assistant", ui.map((m) => m.role[0]).join("") === "uaua", ui.map((m) => m.role));
+    expect("ids from the stored positions", ui.map((m) => m.id).join(",") === "u0,a1,u4,a5", ui.map((m) => m.id));
+    expect("the context block is hidden; the text shows", (parts(0)[0] as any).text === "Kadıköy brunch?");
+    expect("one assistant message per turn, a step per model call", ui[1].parts.filter((p) => p.type === "step-start").length === 2);
+    const search = parts(1).find((p) => p.toolCallId === "r1");
+    expect("a read: done, with places to put on the map, not marked a write", search?.state === "output-available" && search.output.places.length === 2 && search.output.summary === "2 places" && !search.toolMetadata, search);
+    const answered = parts(1).find((p) => p.toolCallId === "w1");
+    expect("a write answered 'not run' by a new message: not saved, marked a write", answered?.state === "output-denied" && answered.toolMetadata?.write === true, answered);
+    expect("a read answered 'not run': skipped, not failed", parts(1).find((p) => p.toolCallId === "r3")?.state === "output-denied");
+    const card = parts(3).find((p) => p.toolCallId === "w2");
+    expect("the last message's write: a card, with its preview", card?.state === "approval-requested" && card.toolMetadata?.preview?.title === "Update Cervejaria Ramiro", card?.state);
+    const waitingRead = parts(3).find((p) => p.toolCallId === "r2");
+    expect("a read made with it waits", waitingRead?.state === "input-available");
+    expect("no note while a card waits", !ui[3].parts.some((p) => p.type === "data-turn"));
+    const answeredCard = { ...ui[3], parts: ui[3].parts.map((p: any) => (p.toolCallId === "w2" ? { ...p, state: "approval-responded", approval: { id: "w2", approved: true } } : p)) };
+    expect("the answers go out once every card has one (the waiting read doesn't block it)", approvalsAnswered({ messages: [...ui.slice(0, 3), answeredCard] as AssistantUIMessage[] }) && !approvalsAnswered({ messages: ui }));
+
+    const savingRuns = new Map([...runs, ["w2", { toolUseId: "w2", name: "update_places", decision: "approved", status: "running", outcome: null } as ToolRun]]);
+    const saving = toUIMessages(history, savingRuns, {}, { turnInProgress: true, lastTurn: null });
+    expect("a card answered and saving (a reload mid-turn): no buttons", (saving[3].parts.find((p: any) => p.toolCallId === "w2") as any)?.state === "approval-responded");
+    const crashed = toUIMessages(history, savingRuns, {}, quiet);
+    const crashedCard = crashed[3].parts.find((p: any) => p.toolCallId === "w2") as any;
+    expect("…and the turn gone (a crash): not 'saving' for ever — interrupted, Try again below", crashedCard?.state === "output-error" && /may or may not/.test(crashedCard.errorText) && (crashed[3].parts.at(-1) as any)?.data?.code === "interrupted", crashedCard);
+    const saved = toUIMessages(history, new Map([...runs, ["w2", { toolUseId: "w2", name: "update_places", decision: "approved", status: "done", outcome: { text: JSON.stringify({ updated: 1 }), isError: false } }]]), {}, quiet);
+    expect("saved, but the turn broke off before the result was stored: shown saved", (saved[3].parts.find((p: any) => p.toolCallId === "w2") as any)?.state === "output-available");
+
+    expect("a new message's reply id: after the user's message", replyMessageId(history, "message") === "a7");
+    expect("an answer's reply: the message with the cards", replyMessageId(history, "approval") === "a5");
+    const afterTools: StoredMessage[] = [...history.slice(0, 3)];
+    expect("Try again after tool results: the turn's message", replyMessageId(afterTools, "retry") === "a1");
+    expect("Try again after the user's message: a new one where the reply goes", replyMessageId(history.slice(0, 1), "retry") === "a1");
+
+    const userOnly = history.slice(0, 1);
+    const busyNote = toUIMessages(userOnly, new Map(), {}, { turnInProgress: false, lastTurn: { status: "error", code: "busy", seq: 1 } });
+    const note = busyNote.at(-1)?.parts.find((p: any) => p.type === "data-turn") as any;
+    expect("a failed turn after a reload: its note, Try again offered, in the reply's message", busyNote.at(-1)?.id === "a1" && note?.data?.code === "busy" && note.data.retry === true && /busy/.test(note.data.message), busyNote);
+    const spent = toUIMessages(userOnly, new Map(), {}, { turnInProgress: false, lastTurn: { status: "error", code: "budget_exhausted", seq: 1 } });
+    expect("a failure trying again won't fix: no Try again", (spent.at(-1)?.parts[0] as any)?.data?.retry === false);
+    const refused = toUIMessages(userOnly, new Map(), {}, { turnInProgress: false, lastTurn: { status: "refused", seq: 1 } });
+    expect("a refusal after a reload: its note", (refused.at(-1)?.parts[0] as any)?.data?.status === "refused");
+    const broke = toUIMessages(userOnly, new Map(), {}, { turnInProgress: false, lastTurn: { status: "done", seq: 0 } });
+    expect("no record of how it ended: 'interrupted', with Try again", (broke.at(-1)?.parts[0] as any)?.data?.code === "interrupted" && (broke.at(-1)?.parts[0] as any)?.data?.retry === true);
+    const running = toUIMessages(userOnly, new Map(), {}, { turnInProgress: true, lastTurn: null });
+    expect("no note while a turn runs", running.length === 1);
+    const stale = toUIMessages(history.slice(0, 4).concat([{ seq: 4, role: "user", content: [{ type: "tool_result", tool_use_id: "w1", content: "x" }, { type: "tool_result", tool_use_id: "r3", content: "x" }] as any }]), runs, {}, { turnInProgress: false, lastTurn: { status: "error", code: "busy", seq: 2 } });
+    expect("a record from earlier in the conversation doesn't describe its end", ((stale.at(-1)?.parts.at(-1) as any)?.data?.code ?? "") === "interrupted", stale.at(-1)?.parts.at(-1));
+  }
+
+  say("## a live turn, as the panel receives it");
+  {
+    const chunks: any[] = [];
+    const writer = { write: (c: unknown) => chunks.push(c), merge: () => undefined, onError: undefined } as any;
+    const ui = turnStream(writer, {
+      continuing: [],
+      // No database here: building the card's preview fails.
+      toolCtx: { supabase: null as never, userId: "u", appUrl: "http://localhost" },
+      history: [],
+    });
+    ui.events.text!("Bakıyorum.", 0);
+    ui.events.step!({ step: 1, model: "m", stopReason: "tool_use", cost: {} as any, ms: 1, content: [text("Bakıyorum."), toolUse("r1", "search_places", { query: "x" })] as any });
+    ui.events.toolResult!({ id: "r1", name: "search_places", text: JSON.stringify({ places: [{ id: "p", name: "P" }] }), isError: false, decision: "auto" });
+    ui.events.text!("Önce", 0);
+    ui.events.text!(" bir.", 0);
+    ui.events.text!("Sonra iki.", 2);
+    ui.events.step!({ step: 2, model: "m", stopReason: "tool_use", cost: {} as any, ms: 1, content: [text("Önce bir."), toolUse("w1", "log_visit", VALID_VISIT)] as any });
+    ui.events.toolResult!({ id: "old", name: "log_visit", text: "Not run", isError: true, decision: "not_run" });
+    await ui.finish({ status: "awaiting_approval", steps: 2, costUsd: 0, pending: [{ id: "w1", name: "log_visit", input: VALID_VISIT, needsApproval: true }], messageCount: 4 });
+    const types = chunks.map((c) => c.type + (c.toolCallId ? `:${c.toolCallId}` : ""));
+    expect(
+      "step, text, the read and its result, a new step with two text blocks, the card after the turn, the outcome",
+      types.join(",") ===
+        "start-step,text-start,text-delta,text-end,tool-input-available:r1,tool-output-available:r1,finish-step,start-step,text-start,text-delta,text-delta,text-end,text-start,text-delta,text-end,tool-input-available:w1,tool-approval-request:w1,finish-step,data-turn",
+      types
+    );
+    expect("a result for an earlier message's call isn't sent", !types.includes("tool-output-error:old"));
+    expect("the card goes out even when its preview can't be built", chunks.some((c) => c.type === "tool-approval-request" && c.approvalId === "w1"));
+    expect("the write is marked one; the read isn't", chunks.find((c) => c.type === "tool-input-available" && c.toolCallId === "w1")?.toolMetadata?.write === true && !chunks.find((c) => c.type === "tool-input-available" && c.toolCallId === "r1")?.toolMetadata);
+    expect("the outcome carries the conversation's length", chunks.at(-1)?.data?.version === 4, chunks.at(-1));
+
+    const skipped: any[] = [];
+    const k = turnStream({ write: (c: unknown) => skipped.push(c) } as any, { continuing: ["r9"], toolCtx: null as never, history: [] });
+    k.events.toolResult!({ id: "r9", name: "get_visits", text: "Not run", isError: true, decision: "not_run" });
+    expect("a read answered 'not run': skipped, not an error", skipped.some((c) => c.type === "tool-output-denied" && c.toolCallId === "r9"));
+
+    const failed: any[] = [];
+    const f = turnStream({ write: (c: unknown) => failed.push(c) } as any, { continuing: [], toolCtx: null as never, history: [] });
+    f.fail(new AgentError("budget_exhausted"), 3);
+    const turn = failed.find((c) => c.type === "data-turn");
+    expect("a failed turn reaches the panel with its code, message and length", turn?.data?.code === "budget_exhausted" && /budget/.test(turn?.data?.message ?? "") && turn.data.version === 3, turn);
+    expect("…and no Try again for it", turn?.data?.retry === false);
+    const busy: any[] = [];
+    turnStream({ write: (c: unknown) => busy.push(c) } as any, { continuing: [], toolCtx: null as never, history: [] }).fail(new AgentError("busy"), 1);
+    expect("Claude busy: Try again", busy.find((c) => c.type === "data-turn")?.data?.retry === true);
   }
 
   say();

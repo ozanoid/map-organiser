@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import {
@@ -23,6 +24,7 @@ export function AppHeader() {
   const [addOpen, setAddOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const router = useRouter();
+  const queryClient = useQueryClient();
   const supabase = createClient();
   const [user, setUser] = useState<User | null>(null);
   const { theme, setTheme } = useTheme();
@@ -37,7 +39,7 @@ export function AppHeader() {
     await supabase.auth.signOut();
     // Sign-out is a client-side nav — clear the module-scope assistant
     // conversation so the next account on this device starts clean.
-    resetAssistantChat();
+    resetAssistantChat(queryClient);
     router.push("/login");
     router.refresh();
   }

@@ -2,8 +2,8 @@
 title: API Routes
 type: overview
 domain: backend
-version: 1.11.3
-last_updated: 19.11.2026
+version: 1.12.0
+last_updated: 24.11.2026
 status: stable
 sources:
   - src/app/api/
@@ -31,7 +31,8 @@ All Next.js route handlers grouped by area. Each linked doc is the canonical ref
 | Shared | `/api/shared/*` | **Mixed** — GET `/[slug]` public via service role | [[shared]] |
 | Stats | `/api/stats` | Required | [[stats]] |
 | User | `/api/user/*` — includes `ai-settings` (Phase 1) and `ai-suggestions/*` (Phase 5 moderation queue: list, accept, reject) | Required | [[user]] |
-| AI | `/api/ai/*` — `parse-query`, `rank-results` (Phase 6 NL filtering), `compare` (v1.19.0), `chat` (v1.21.0 assistant, streaming), `day-plan` (AI Plan — v1.22.0 as `trip-plan`; the group's only writing route) | Required | [[ai]] |
+| AI | `/api/ai/*` — `parse-query`, `rank-results` (Phase 6 NL filtering), `compare` (v1.19.0), `day-plan` (AI Plan — v1.22.0 as `trip-plan`; the group's only writing route). `chat` was removed in v1.48.0 | Required | [[ai]] |
+| Assistant | `/api/assistant/chat` (one turn of the Claude agent, streaming), `/api/assistant/conversation` (latest conversation, New chat) — v1.48.0 | Required | [[assistant]] |
 | Search | `/api/search/*` (Mapbox geocoder proxy) | Required | [[search]] |
 | Instagram | `/api/instagram/import` (POST — start an import from a post URL, work runs in `after()`) + `/api/instagram/import/[id]` (GET — the dialog's progress view) — v1.28.0; `/api/instagram/import/[id]/pick` (POST — add the place picked for a skipped venue) — v1.28.1 | Required | [[instagram]] |
 | Cron | `/api/cron/refresh-places` (15.07.2026) — daily periodic-refresh sweep; `/api/cron/drain-imports` (v1.26.0) — every minute, drains the import queue for Takeout and Instagram jobs | **`CRON_SECRET` bearer** (service-role) | [[../../06-ops/runbooks/periodic-refresh]], [[places]] |

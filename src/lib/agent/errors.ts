@@ -14,9 +14,9 @@ export type AgentErrorCode =
   | "upstream" // the API failed
   | "connection" // the API couldn't be reached, or the stream broke twice
   | "aborted" // the caller cancelled
-  | "conflict" // the conversation changed in another tab or request
+  | "conflict" // the conversation changed in another tab or request: the input no longer fits it
   | "turn_in_progress" // another turn of this conversation is still running
-  | "nothing_pending" // an approval arrived but no tool call is waiting for one
+  | "nothing_pending" // an approval arrived but no card is waiting for one
   | "not_found"; // no such conversation for this user
 
 const USER_MESSAGES: Record<AgentErrorCode, string> = {
@@ -29,11 +29,23 @@ const USER_MESSAGES: Record<AgentErrorCode, string> = {
   upstream: "Claude hit an error. Try again.",
   connection: "Couldn't reach Claude. Try again.",
   aborted: "Stopped.",
-  conflict: "This conversation changed somewhere else. Reload to see the latest.",
+  conflict: "This conversation changed in another tab. Here's the latest.",
   turn_in_progress: "A reply is still being written in this conversation. Wait for it, then try again.",
-  nothing_pending: "There's nothing waiting for approval.",
+  nothing_pending: "This was already answered in another tab. Here's the latest.",
   not_found: "Conversation not found.",
 };
+
+/** The message for a code — also for one recorded with a turn (a reload
+ *  shows why the last turn ended). */
+export function userMessageFor(code: string): string {
+  return (USER_MESSAGES as Record<string, string | undefined>)[code] ?? USER_MESSAGES.upstream;
+}
+
+/** Failures that trying again can fix: Claude busy, failing or unreachable,
+ *  or our own side failing unexpectedly ("upstream" covers both). */
+export function isTransient(code: string): boolean {
+  return code === "busy" || code === "upstream" || code === "connection";
+}
 
 export class AgentError extends Error {
   readonly userMessage: string;

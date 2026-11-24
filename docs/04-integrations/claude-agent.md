@@ -2,8 +2,8 @@
 title: "Claude agent (platform side)"
 type: integration
 domain: integrations
-version: 1.1.0
-last_updated: 23.11.2026
+version: 1.3.0
+last_updated: 24.11.2026
 status: draft
 sources:
   - src/lib/agent/run-turn.ts
@@ -23,6 +23,11 @@ sources:
   - scripts/agent-check/run.ts
   - supabase/migrations/20261123143607_assistant_turns_and_tool_runs.sql
   - scripts/agent-check/db.ts
+  - src/lib/agent/door.ts
+  - src/lib/agent/ui-stream.ts
+  - src/lib/agent/ui.ts
+  - src/lib/agent/ui-types.ts
+  - src/lib/agent/describe-writes.ts
 related:
   - "[[claude-mcp]]"
   - "[[../_plans/phase-2-assistant]]"
@@ -33,25 +38,33 @@ related:
 
 The platform's own assistant: Claude, called by our server through the Claude API, using the same tools claude.ai reaches over MCP ([[claude-mcp]]). One core (`src/lib/agent/`) for every door; the first door is the in-app panel ([[../_plans/phase-2-assistant]] — not wired yet). Added 23.11.2026.
 
-**State (23.11.2026):** the core is on `feat/personal-assistant`, not on main; no route calls it yet. It ran against the live Claude API and the live database through the eval (below): 209 model calls, $5.03.
+**State (24.11.2026):** on `feat/personal-assistant`, not on main. The core ran against the live Claude API and the live database through the eval (below): 209 model calls, $5.03. Its first door — the app's assistant panel — is built (v1.48.0): [[../02-backend/api-routes/assistant]], [[../05-flows/ai-chat-flow]], [[../03-frontend/components/assistant]]; an independent review's findings are fixed, the third migration (where the panel stands, how the last turn ended) is written but **not applied** — it waits for Ozan's approval, and the door needs it; not yet tried end to end in a signed-in browser.
 
 ## How a turn runs
 
-`runTurn(deps, conversationId, input, events)` in `run-turn.ts`:
+Two steps in `run-turn.ts`: `openTurn(deps, conversationId, input)` checks, `run(events)` does the turn. (`runTurn` does both, for the eval and the offline checks.) The input is the user's **message**, their **approval** — the answers to the cards waiting — or **retry** (Try again).
 
-1. Takes the conversation's **turn lease** — one turn at a time per conversation; another request gets `turn_in_progress` at once, before anything is paid for. The lease runs out after 15 minutes (a route runs at most 800 s), so a crashed turn frees it.
-2. Loads the conversation (model, system prompt, tools — fixed when it started) and its messages; checks the month's spend against the cap ($100, `assistant_spend`, platform-wide). Over it, the turn doesn't start.
-3. Opens with a user message. A new message: a `<context>` block with the user's local date and time, yesterday's date and the next six days' dates (worked out by the model, that arithmetic leaked into its replies), then the text — and any calls still waiting for a card are answered "not run" first. An answer to the card: the waiting calls' results.
-4. Calls the model (streamed), records the call in the ledger, stores the reply, and:
+`openTurn` writes nothing; a refusal there holds nothing and leaves the user's text theirs to send again (the app door answers it as a plain HTTP error):
+
+1. Takes the conversation's **turn lease** — one turn at a time per conversation; another request gets `turn_in_progress` at once, before anything is paid for. The lease runs out after 15 minutes (a route runs at most 800 s), so a crashed turn frees it. Every refusal below gives it back.
+2. Loads the conversation (model, system prompt, tools — fixed when it started) and its messages.
+3. Checks the input against the conversation as it is now. An approval must answer exactly the cards waiting (`cardsWaiting`: valid writes no request has decided — a decision leaves a run record): none waiting → `nothing_pending`; answers for other calls, or not for all of them → `conflict` (a tab showing an older card must not decide one the user hasn't seen). A retry needs something to carry on (`canRetry`): the conversation ends with a user message — the turn broke off before the model answered — or with the model's calls and no card among them — it broke off before their results were stored; otherwise `conflict`.
+4. Checks the month's spend against the cap ($100, `assistant_spend`, platform-wide). Over it, the turn doesn't start.
+
+`run`:
+
+1. Opens with a user message. A new message: a `<context>` block with the user's local date and time, yesterday's date and the next six days' dates (worked out by the model, that arithmetic leaked into its replies), then the text — and any calls still waiting for a card are answered "not run" first. An answer to the card: the waiting calls' results. A retry appends no user message: it runs the reads the model had asked for (a call with a record keeps its recorded result) or goes straight to the model.
+2. Calls the model (streamed), records the call in the ledger, stores the reply, and:
    - `tool_use` with only reads → runs them (in parallel), stores the results, calls again;
    - a valid call to a tool that saves something → stops with `awaiting_approval`; the next turn is the user's answer. A call whose input fails its schema gets its error at once and never a card; if no valid write is left, the turn goes on;
    - `pause_turn` (a long web search) → sends it back, the API carries on;
    - `max_tokens` → stores what came, answers a cut-off call "not run", stops;
    - `refusal` → stores nothing for it, stops;
    - `end_turn` → stores the reply, done.
-5. After 10 tool rounds (`MAX_STEPS`) the calls are answered "not run — answer with what you have", and the model gets one last call to do so (`step_limit`). (`tool_choice: none` would be simpler but returned an empty reply on both models, 23.11.2026.)
+3. After 10 tool rounds (`MAX_STEPS`) the calls are answered "not run — answer with what you have", and the model gets one last call to do so (`step_limit`). (`tool_choice: none` would be simpler but returned an empty reply on both models, 23.11.2026.)
+4. Records how the turn ended on the conversation — the status, an error's code, and the history's length then (`recordTurn`, `last_turn_*`) — and gives the lease back. A reload uses it to say why a message has no reply; once anything is appended after it, it no longer describes the end.
 
-Events (`text`, `step`, `toolResult`, `stepRetried`) let a door stream the reply and show tool cards. A handler that throws is logged and ignored — a display problem must not stop, or re-bill, a turn.
+Events (`text` with the content block's index, `step`, `toolResult`, `stepRetried`) let a door stream the reply and show tool cards. A handler that throws is logged and ignored — a display problem must not stop, or re-bill, a turn.
 
 ## Tool runs: never twice, never lost
 
@@ -116,14 +129,24 @@ Prices per million tokens (input / 5-min cache write / cache read / output): Opu
 - Web search: `max_uses: 3` is per request, but with `web_search_20260209` the searches the model's filtering code makes counted 4 in one call. Ozan kept it as is (23.11.2026): about 3–4 per message. Most of a searching call's cost is reading the results, not the searches — on Sonnet $0.106, of which $0.03 for 3 searches.
 - Caching works as designed: after the first call of a conversation, each call read the ~27k-token prefix from the cache (26,917 tokens written once for $0.067 on Sonnet, then read for $0.0027 a call — a twentieth of the normal input price).
 
+## The app door (v1.48.0)
+
+The panel ([[../03-frontend/components/assistant]]) speaks the AI SDK's UI message format; the server converts both ways ([[../02-backend/api-routes/assistant]]):
+
+- **Live:** `turnStream` (`ui-stream.ts`) turns the agent's events into stream chunks — a step per model call, a text part per content block as it streams, a part per tool call and its result, the turn's outcome as `data-turn` (with the conversation's length, and whether Try again can help). A write call is held until the turn pauses, then sent with its **preview** and an approval request; every write is marked as one (`toolMetadata.write`).
+- **Stored:** `toUIMessages` (`ui.ts`) turns the append-only history (and the tool runs, and the recorded last turn) into the same UI messages, so a reload shows what the live stream showed: a card already answered shows "Saving…" while its turn runs, a run the turn never finished shows as interrupted, the last turn's outcome note comes back.
+- **One message id scheme** (`replyMessageId`): an assistant message's id is its first model message's position (`a{seq}`). The live stream's reply uses the same id, so a turn that carries a message on — an answer to its cards, Try again — updates it in place.
+- **Previews** (`describe-writes.ts`): the card's text from the call's input — ids resolved to names through the user's own rows; a place proposed from a Google Maps search named from that search's result in the conversation. The model doesn't describe plans or lists before calling (eval), so the card has to.
+- **After the browser:** the chat route waits for the turn with `after()`; the turn lease makes another tab wait instead of starting a second turn.
+
 ## Errors
 
-`AgentError` (`errors.ts`) with a code per cause and a message for the user: the platform cap (`budget_exhausted`), the Console's organisation limit (`spend_limit` — a 429 with `enforced_spend_limit_reached`), billing, busy (rate limit / overload after the SDK's two retries), auth, a rejected request, an API failure, connection, a conflict (another request appended first, or answered the same calls), a turn already in progress, nothing pending, not found.
+`AgentError` (`errors.ts`) with a code per cause and a message for the user (`userMessageFor`, also for a recorded code): the platform cap (`budget_exhausted`), the Console's organisation limit (`spend_limit` — a 429 with `enforced_spend_limit_reached`), billing, busy (rate limit / overload after the SDK's two retries), auth, a rejected request, an API failure, connection, a conflict (the input no longer fits the conversation: another request appended first or answered the same calls, the answers aren't for the cards waiting now, nothing to try again), a turn already in progress, nothing pending, not found. `isTransient` — busy, an API failure, connection — marks the ones Try again can fix.
 
 ## Testing
 
-- `npm run check:agent` (`scripts/agent-check/run.ts`) — free, offline: the loop with a scripted stand-in for the Claude API, the in-memory store and a stand-in tool runner. 70 checks: every stop reason, approve / decline / a new message instead, one turn at a time, a result surviving a failed append, an interrupted run, invalid writes, the step limit, a broken stream (aborted, re-run, partial spend), API error codes, the budget, a throwing handler, the fallback echo rule, costs.
-- `npm run check:agent:db` (`scripts/agent-check/db.ts`) — free, against the live database **without writing**: every store and ledger query on a conversation that doesn't exist — reads come back empty, updates touch no row, inserts are refused only by the foreign key. Proves the queries (tables, columns, the lease's filter) are ones the database accepts.
+- `npm run check:agent` (`scripts/agent-check/run.ts`) — free, offline: the loop with a scripted stand-in for the Claude API, the in-memory store and a stand-in tool runner; since v1.48.0 also the panel's view of a stored conversation (`toUIMessages`) and a live turn as the panel receives it (`turnStream`). 120 checks: every stop reason, approve / decline / a new message instead, one turn at a time, a result surviving a failed append, an interrupted run, Try again (after a busy API, a failed append, an interrupted run), the checks before a turn (answers that don't fit the cards, nothing to retry, the lease given back), the recorded outcome, invalid writes, the step limit, a broken stream (aborted, re-run, partial spend), API error codes, the budget, a throwing handler, the fallback echo rule, costs; the panel's view (ids, saving / interrupted cards, skipped reads, outcome notes after a reload, reply ids) and the live stream (text blocks, write marks, versions, Try again).
+- `npm run check:agent:db` (`scripts/agent-check/db.ts`) — free, against the live database **without writing**: every store and ledger query on a conversation that doesn't exist — reads come back empty, updates touch no row, inserts are refused only by the foreign key — plus `latest` read-only on the user's own rows. Proves the queries (tables, columns, the lease's filter) are ones the database accepts.
 - `npm run eval:assistant` — paid, against the live API and Ozan's library ([[../../scripts/assistant-eval/README]]).
 - Checked against the live API on 23.11.2026 (a few tiny requests, < $0.01): consecutive messages of one role — `user, user` and `assistant, assistant`, also a `tool_result` message followed by a new user message — are accepted and read as one turn, so a turn that ends without a reply (refusal, error) doesn't break the next one. (The skill's bundled error table says 400; the live API doesn't.)
 

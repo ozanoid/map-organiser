@@ -69,7 +69,7 @@ export function toolCallsIn(content: BetaContentBlockParam[]): ToolCall[] {
  * assistant's and it called tools. Results always go in the next user
  * message, so anything else means nothing is pending.
  */
-export function pendingToolCalls(history: StoredMessage[]): ToolCall[] {
+export function pendingToolCalls(history: readonly StoredMessage[]): ToolCall[] {
   const last = history.at(-1);
   return last?.role === "assistant" ? toolCallsIn(last.content) : [];
 }

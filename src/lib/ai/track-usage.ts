@@ -126,10 +126,6 @@ export const AI_MONTHLY_RANK_BACKSTOP = AI_MONTHLY_SEARCH_CAP * 3;
 /** v1.19.0 — hardcoded like its siblings (caps are code constants here,
  *  not env vars; keep the convention). One unit per compare request. */
 export const AI_MONTHLY_COMPARE_CAP = 200;
-/** v1.21.0 (S3 AI-02) — one unit per chat TURN (charged in the route's
- *  onFinish; an approval-continuation POST does NOT burn a second unit).
- *  The stopWhen step ceiling in the chat route bounds per-turn fan-out. */
-export const AI_MONTHLY_CHAT_CAP = 200;
 /** v1.22.0 (S4 AI-09) — one unit per plan generation; deliberate-click
  *  only from the plan page's AI Plan dialog. */
 export const AI_MONTHLY_TRIP_PLAN_CAP = 50;
@@ -142,7 +138,6 @@ export type AiBudgetKind =
   | "profile"
   | "rank_backstop"
   | "compare"
-  | "chat"
   | "trip_plan"
   | "instagram";
 
@@ -151,7 +146,6 @@ const BUDGETS: Record<AiBudgetKind, { sku: AiSku; cap: number }> = {
   profile: { sku: "ai_place_profile", cap: AI_MONTHLY_PROFILE_CAP },
   rank_backstop: { sku: "ai_rank_results", cap: AI_MONTHLY_RANK_BACKSTOP },
   compare: { sku: "ai_compare", cap: AI_MONTHLY_COMPARE_CAP },
-  chat: { sku: "ai_chat", cap: AI_MONTHLY_CHAT_CAP },
   trip_plan: { sku: "ai_trip_plan", cap: AI_MONTHLY_TRIP_PLAN_CAP },
   instagram: { sku: "ai_instagram_read", cap: AI_MONTHLY_INSTAGRAM_CAP },
 };

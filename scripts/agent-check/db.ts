@@ -49,6 +49,10 @@ async function main() {
   expect("load → not_found", (await outcome(store.load(ghost))) === "agent:not_found");
   expect("takeTurn (the lease's filter runs) → not_found", (await outcome(store.takeTurn(ghost, 60_000))) === "agent:not_found");
   expect("releaseTurn → touches nothing", (await outcome(store.releaseTurn(ghost))) === "ok:null");
+  expect(
+    "recordTurn (an error with its code) → touches nothing",
+    (await outcome(store.recordTurn(ghost, { status: "error", code: "busy", seq: 0 }))) === "ok:null"
+  );
   expect("toolRuns → []", (await outcome(store.toolRuns(ghost, ["toolu_x"]))) === "ok:[]");
   expect("toolRuns with no ids → [] without a query", (await outcome(store.toolRuns(ghost, []))) === "ok:[]");
   const claim = await outcome(
@@ -61,6 +65,10 @@ async function main() {
   expect("finishToolRun → touches nothing", (await outcome(store.finishToolRun(ghost, "toolu_a", done))) === "ok:null");
   const append = await outcome(store.append(ghost, { seq: 0, role: "user", content: [{ type: "text", text: "x" }] }));
   expect("append → refused by the foreign key only", append === "pg:23503", append);
+
+  say("## the store, read-only on the user's own rows");
+  const latest = await outcome(store.latest("app"));
+  expect("latest (ordered by when it was opened) → a conversation or none", /^ok:(null|\{)/.test(latest), latest);
 
   say("## the ledger");
   const spent = await outcome(supabaseSpendLedger(admin).monthToDate());

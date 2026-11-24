@@ -2,8 +2,8 @@
 title: "Claude connector (MCP server)"
 type: integration
 domain: integrations
-version: 1.7.0
-last_updated: 23.11.2026
+version: 1.7.1
+last_updated: 24.11.2026
 status: draft
 sources:
   - src/app/api/mcp/route.ts
@@ -15,6 +15,7 @@ sources:
   - src/lib/assistant/instructions.ts
   - src/lib/assistant/run-tool.ts
   - src/lib/assistant/verify-token.ts
+  - src/lib/api/origin.ts
   - src/lib/assistant/oauth.ts
   - src/lib/assistant/owner.ts
   - src/lib/assistant/library.ts

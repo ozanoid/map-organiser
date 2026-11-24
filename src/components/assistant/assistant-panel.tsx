@@ -1,714 +1,530 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useQueryClient } from "@tanstack/react-query";
-import { useAiSearchStore, HIDE_BELOW_SCORE } from "@/lib/stores/ai-search-store";
-import { filtersToQueryString } from "@/lib/hooks/use-filters";
-import type { PlaceFilters, VisitStatus } from "@/lib/types";
-import type { AppliedFilters } from "@/lib/ai/chat-tools";
-import { useChat, Chat } from "@ai-sdk/react";
-import {
-  DefaultChatTransport,
-  lastAssistantMessageIsCompleteWithApprovalResponses,
-  isToolUIPart,
-  type UIMessage,
-  type UIMessagePart,
-  type UIDataTypes,
-  type UITools,
-} from "ai";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
+import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { Chat, useChat } from "@ai-sdk/react";
+import { DefaultChatTransport, isToolUIPart, type DynamicToolUIPart } from "ai";
+import { Loader2, Plus, Send, Sparkles } from "lucide-react";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { AssistantMarkdown } from "@/components/assistant/assistant-markdown";
+import { ChangeCard, isWritePart, ToolRow, TurnNote } from "@/components/assistant/assistant-parts";
 import {
-  Sparkles,
-  Loader2,
-  Send,
-  Square,
-  RotateCcw,
-  Search,
-  BarChart3,
-  Scale,
-  BookOpen,
-  ListPlus,
-  Check,
-  X,
-  Star,
-  MapIcon,
-  LayoutList,
-} from "lucide-react";
-import type { ChatPlaceHit } from "@/lib/ai/chat-tools";
+  approvalsAnswered,
+  lastStepToolParts,
+  type AssistantUIMessage,
+  type ChatRequestBody,
+  type ConversationResponse,
+  type DoorErrorBody,
+  type SendIntent,
+  type TurnOutcome,
+} from "@/lib/agent/ui-types";
+import { useAssistantStore } from "@/lib/stores/assistant-store";
 
 /**
- * v1.21.0 (S3 AI-02): the assistant chat panel — a right Sheet on
- * desktop (max-w-md override), full-width on mobile. Session-only
- * memory: the Chat instance lives at module scope, so closing/reopening
- * the panel keeps the conversation; "new chat" swaps in a fresh instance
- * + sessionId (groups Langfuse traces). Nothing is persisted.
+ * The app's assistant: Claude, through the agent core on the server
+ * (docs/04-integrations/claude-agent.md). A right sheet on desktop,
+ * full-screen on mobile; opened from the header or, with a request already
+ * written, from other screens (useAssistantStore).
  *
- * Mutating tools pause in `approval-requested` — the confirm card here
- * is the action-confirmation UX; approve/deny round-trips via
- * addToolApprovalResponse and sendAutomaticallyWhen resubmits.
+ * The conversation lives on the server. The panel loads the latest one,
+ * sends only what is new — the user's text, their answers to the cards, or
+ * Try again — and takes the server's copy whenever it isn't streaming, as
+ * long as that copy isn't older than what it has streamed. A reload,
+ * another tab or another device shows the same conversation. A turn runs
+ * to the end on the server even if the panel closes; while one runs
+ * elsewhere the panel waits for it.
  */
 
-function makeChat(sessionId: string) {
-  return new Chat<UIMessage>({
-    transport: new DefaultChatTransport({
-      api: "/api/ai/chat",
-      // The browser's zone: the server tells the model the user's date,
-      // not its own (UTC is already tomorrow on an Istanbul night).
-      body: { sessionId, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone },
-    }),
-    // MUST live on the Chat instance: useChat silently ignores every
-    // ChatInit option (this one included) when a prebuilt `chat` is
-    // passed — hook-level sendAutomaticallyWhen never reaches the
-    // instance and the approval flow dies without an error.
-    sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithApprovalResponses,
-  });
-}
+const CONVERSATION_KEY = ["assistant", "conversation"] as const;
 
-let sharedSessionId: string | null = null;
-let sharedChat: Chat<UIMessage> | null = null;
-let sharedOwnerId: string | null = null;
-
-function getSharedChat(ownerId: string | null) {
-  // Module scope survives client-side sign-out/sign-in — bind the
-  // conversation to the authenticated user so a shared-device account
-  // switch never sees the previous user's chat.
-  if (ownerId && sharedOwnerId && sharedOwnerId !== ownerId) {
-    sharedChat = null;
-    sharedSessionId = null;
-  }
-  if (ownerId) sharedOwnerId = ownerId;
-  if (!sharedChat || !sharedSessionId) {
-    sharedSessionId =
-      typeof crypto !== "undefined" && "randomUUID" in crypto
-        ? crypto.randomUUID()
-        : `s-${Math.random().toString(36).slice(2)}`;
-    sharedChat = makeChat(sharedSessionId);
-  }
-  return sharedChat;
-}
-
-/** Called on sign-out so the next account on this device starts clean. */
-export function resetAssistantChat() {
-  sharedChat = null;
-  sharedSessionId = null;
-  sharedOwnerId = null;
-}
-
-const SUGGESTIONS = [
-  "Where should I eat in London tonight?",
-  "Compare my top 2 rated cafes in Istanbul",
-  "How many places have I visited this year?",
+const EXAMPLES = [
+  "Bu akşam Londra'da nerede yiyebilirim?",
+  "Cumartesi için Kadıköy'de brunch planı yap",
+  "Dün Bolland & Crust'a gittim, 4 puan",
 ];
 
-/** Mutation tools whose success must refresh open views. */
-const MUTATION_INVALIDATIONS: Record<string, string[][]> = {
-  "tool-add_to_list": [["lists"], ["places"]],
-  "tool-create_list": [["lists"]],
-  "tool-set_visit_status": [["places"], ["stats"]],
-};
-
-const TOOL_LABELS: Record<string, { icon: typeof Search; label: string }> = {
-  "tool-search_places": { icon: Search, label: "Searching your places" },
-  "tool-rank_places": { icon: Sparkles, label: "Judging matches semantically" },
-  "tool-get_place_details": { icon: BookOpen, label: "Reading details" },
-  "tool-compare_places": { icon: Scale, label: "Comparing places" },
-  "tool-get_stats": { icon: BarChart3, label: "Crunching your stats" },
-  "tool-add_to_list": { icon: ListPlus, label: "Adding to list" },
-  "tool-create_list": { icon: ListPlus, label: "Creating list" },
-  "tool-set_visit_status": { icon: Check, label: "Updating status" },
-};
-
-const APPROVAL_DESCRIPTIONS: Record<
-  string,
-  (input: any) => string
-> = {
-  "tool-add_to_list": (i) =>
-    `Add ${i?.place_ids?.length ?? "?"} place${(i?.place_ids?.length ?? 0) > 1 ? "s" : ""} to a list?`,
-  "tool-create_list": (i) =>
-    `Create list "${i?.name ?? "…"}"${i?.place_ids?.length ? ` with ${i.place_ids.length} places` : ""}?`,
-  "tool-set_visit_status": (i) =>
-    `Mark this place as ${i?.status ?? "no status"}?`,
-};
-
-export function AssistantPanel({
-  open,
-  onOpenChange,
-  userId,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  userId: string | null;
-}) {
-  const [chat, setChat] = useState(() => getSharedChat(userId));
-  const { messages, sendMessage, status, stop, error, clearError, addToolApprovalResponse } =
-    useChat({ chat });
-  const [input, setInput] = useState("");
-  const queryClient = useQueryClient();
-  const router = useRouter();
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const invalidatedRef = useRef(new Set<string>());
-
-  const busy = status === "streaming" || status === "submitted";
-
-  // A pending approval must be answered before a new message goes out:
-  // convertToModelMessages would otherwise hit a dangling
-  // approval-requested tool part and every subsequent turn would fail.
-  const pendingApproval = useMemo(() => {
-    const last = messages[messages.length - 1];
-    if (!last || last.role !== "assistant") return false;
-    return last.parts.some(
-      (p) => isToolUIPart(p) && p.state === "approval-requested"
-    );
-  }, [messages]);
-
-  // Chat-driven mutations bypass the TanStack mutation hooks — refresh
-  // affected caches when a mutation tool's output lands.
-  useEffect(() => {
-    for (const m of messages) {
-      for (const part of m.parts) {
-        if (!isToolUIPart(part)) continue;
-        const keys = MUTATION_INVALIDATIONS[part.type];
-        if (!keys || part.state !== "output-available") continue;
-        if (invalidatedRef.current.has(part.toolCallId)) continue;
-        invalidatedRef.current.add(part.toolCallId);
-        for (const key of keys) queryClient.invalidateQueries({ queryKey: key });
-      }
-    }
-  }, [messages, queryClient]);
-
-  // Pin to bottom on new content while open.
-  useEffect(() => {
-    if (open) {
-      scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
-    }
-  }, [messages, open]);
-
-  function submit() {
-    const text = input.trim();
-    if (!text || busy || pendingApproval) return;
-    clearError();
-    sendMessage({ text });
-    setInput("");
-  }
-
-  function newChat() {
-    stop();
-    sharedSessionId = null;
-    sharedChat = null;
-    invalidatedRef.current.clear();
-    setChat(getSharedChat(userId));
-  }
-
-  /**
-   * v1.23.0 parity: push a tool result's full match set into the map or
-   * places view. Writes through the SAME ai-search-store the AI search
-   * bar uses, so the banner ("query + clear ✕"), card sort/hide, why
-   * lines and SaveFilterButton all work unchanged. requires_semantic_
-   * ranking is FALSE — rankings (when present) come from the rank tool,
-   * so the orchestrator must not fire a second rerank.
-   */
-  function pushToView(
-    target: "map" | "places",
-    applied: AppliedFilters,
-    opts?: { intent?: string; allRanked?: { id: string; score: number; why: string }[] }
-  ) {
-    const filters: PlaceFilters = {
-      city: applied.city ?? undefined,
-      country: applied.country ?? undefined,
-      category_ids: applied.category_ids ?? undefined,
-      tag_ids: applied.tag_ids ?? undefined,
-      list_id: applied.list_id ?? undefined,
-      visit_status: (applied.visit_status ?? undefined) as VisitStatus | undefined,
-      google_rating_min: applied.google_rating_min ?? undefined,
-      open_now: applied.open_now ?? undefined,
-      search: applied.search ?? undefined,
-      sort: "google_rating_desc",
+async function readError(res: Response, fallback: string): Promise<DoorErrorBody> {
+  try {
+    const body = (await res.json()) as { error?: unknown; code?: unknown };
+    return {
+      error: typeof body.error === "string" ? body.error : fallback,
+      ...(typeof body.code === "string" ? { code: body.code } : {}),
     };
-    const store = useAiSearchStore.getState();
-    if (opts?.allRanked?.length && opts.intent) {
-      store.applyParse({
-        semantic_intent: opts.intent,
-        requires_semantic_ranking: false,
-        needs_clarification: null,
-        query: opts.intent,
-        targetFilters: filters,
-      });
-      store.applyRankings(opts.allRanked);
-    } else {
-      // Hard-filter push: clear any stale AI-search state so old
-      // rankings don't reorder/hide the fresh result set.
-      store.reset();
-    }
-    router.push(`/${target}?${filtersToQueryString(filters)}`);
-    onOpenChange(false);
+  } catch {
+    return { error: fallback };
   }
+}
 
+/** The server refused the turn before it started: nothing was written. */
+class DoorError extends Error {
+  constructor(
+    message: string,
+    readonly code: string | undefined
+  ) {
+    super(message);
+  }
+}
+
+/** The chat transport's fetch: a refused turn becomes a DoorError (the
+ *  AI SDK's own would put the response body in a plain Error). */
+async function chatFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  const res = await fetch(input, init);
+  // An API call without a session is redirected to the sign-in page.
+  if (res.redirected) throw new DoorError("You've been signed out. Sign in again to continue.", "signed_out");
+  if (!res.ok) {
+    const body = await readError(res, "Something went wrong. Try again.");
+    throw new DoorError(body.error, body.code);
+  }
+  return res;
+}
+
+/** The latest conversation; the first time, a new one. */
+async function fetchConversation(): Promise<ConversationResponse> {
+  const res = await fetch("/api/assistant/conversation");
+  if (!res.ok) throw new Error((await readError(res, "Couldn't load the assistant.")).error);
+  const data = (await res.json()) as ConversationResponse;
+  return data.conversation ? data : createConversation();
+}
+
+async function createConversation(): Promise<ConversationResponse> {
+  const res = await fetch("/api/assistant/conversation", { method: "POST" });
+  if (!res.ok) throw new Error((await readError(res, "Couldn't start a new chat.")).error);
+  return (await res.json()) as ConversationResponse;
+}
+
+// One Chat per conversation, kept while the app runs: closing the panel
+// mid-stream keeps the stream and the messages.
+const chats = new Map<string, Chat<AssistantUIMessage>>();
+// The newest version of each conversation this tab has seen (its length in
+// stored messages): a server copy older than that is a fetch that started
+// before a turn ended here, and is skipped.
+const versions = new Map<string, number>();
+
+function seen(conversationId: string, version: number | undefined) {
+  if (version !== undefined && version > (versions.get(conversationId) ?? -1)) versions.set(conversationId, version);
+}
+
+/** Called on sign-out: the next account on this device starts clean. */
+export function resetAssistantChat(queryClient?: QueryClient) {
+  chats.clear();
+  versions.clear();
+  queryClient?.removeQueries({ queryKey: ["assistant"] });
+}
+
+function requestBody(conversationId: string, messages: AssistantUIMessage[], intent: SendIntent | undefined): ChatRequestBody {
+  const last = messages.at(-1);
+  if (intent?.intent === "retry") return { conversationId, input: { kind: "retry" } };
+  if (intent?.intent === "approval" && last) {
+    // The answers to the cards of the paused call.
+    const decisions = Object.fromEntries(
+      lastStepToolParts(last).flatMap((p) => (p.state === "approval-responded" ? [[p.toolCallId, p.approval.approved]] : []))
+    );
+    return { conversationId, input: { kind: "approval", decisions } };
+  }
+  const text = (last?.parts ?? []).flatMap((p) => (p.type === "text" ? [p.text] : [])).join("\n");
+  return {
+    conversationId,
+    input: { kind: "message", text, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone },
+  };
+}
+
+function chatFor(conversationId: string, data: ConversationResponse, queryClient: QueryClient) {
+  let chat = chats.get(conversationId);
+  if (!chat) {
+    seen(conversationId, data.version);
+    chat = new Chat<AssistantUIMessage>({
+      id: conversationId,
+      messages: data.messages,
+      transport: new DefaultChatTransport<AssistantUIMessage>({
+        api: "/api/assistant/chat",
+        fetch: chatFetch,
+        prepareSendMessagesRequest: ({ messages, body }) => ({
+          body: requestBody(conversationId, messages, body as SendIntent | undefined),
+        }),
+      }),
+      onFinish: ({ message }) => {
+        seen(conversationId, outcomeOf(message)?.version);
+        // A saved change: refresh what the user may be looking at.
+        const wrote = message.parts.some(
+          (p) => p.type === "dynamic-tool" && p.state === "output-available" && p.approval?.approved
+        );
+        if (wrote) {
+          for (const key of ["places", "lists", "plans", "visits", "tags"]) {
+            void queryClient.invalidateQueries({ queryKey: [key] });
+          }
+        }
+        // After every request — done, broken off or refused before it
+        // started (a DoorError: nothing written, the cards may have
+        // changed): the server's copy says for sure.
+        void queryClient.invalidateQueries({ queryKey: CONVERSATION_KEY });
+      },
+    });
+    chats.set(conversationId, chat);
+  }
+  return chat;
+}
+
+/** The last message without its outcome note: a turn that carries it on
+ *  writes a new one at the end. */
+function withoutOutcome(messages: AssistantUIMessage[]): AssistantUIMessage[] {
+  const last = messages.at(-1);
+  if (last?.role !== "assistant" || !last.parts.some((p) => p.type === "data-turn")) return messages;
+  return [...messages.slice(0, -1), { ...last, parts: last.parts.filter((p) => p.type !== "data-turn") }];
+}
+
+export function AssistantPanel() {
+  const open = useAssistantStore((s) => s.open);
+  const setOpen = useAssistantStore((s) => s.setOpen);
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent
-        side="right"
-        className="data-[side=right]:w-full data-[side=right]:sm:max-w-md gap-0 p-0"
-      >
-        <SheetHeader className="flex-row items-center justify-between border-b py-3 pr-12">
-          <SheetTitle className="flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-emerald-600" />
-            Assistant
-          </SheetTitle>
-          {messages.length > 0 && (
-            <button
-              type="button"
-              onClick={newChat}
-              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground cursor-pointer"
-              title="Start a new chat"
-            >
-              <RotateCcw className="h-3 w-3" />
-              New chat
-            </button>
-          )}
-        </SheetHeader>
-
-        <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
-          {messages.length === 0 && (
-            <div className="pt-8 text-center space-y-4">
-              <Sparkles className="h-8 w-8 text-emerald-600/40 mx-auto" />
-              <p className="text-sm text-muted-foreground px-6">
-                Ask about your saved places — search, compare, add to lists,
-                or check your stats.
-              </p>
-              <div className="flex flex-col items-stretch gap-2 px-2">
-                {SUGGESTIONS.map((s) => (
-                  <button
-                    key={s}
-                    type="button"
-                    onClick={() => {
-                      clearError();
-                      sendMessage({ text: s });
-                    }}
-                    className="text-left text-xs rounded-lg border px-3 py-2 text-muted-foreground hover:bg-accent hover:text-accent-foreground cursor-pointer transition-colors"
-                  >
-                    {s}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {messages.map((message) => (
-            <MessageView
-              key={message.id}
-              message={message}
-              addToolApprovalResponse={addToolApprovalResponse}
-              onPushView={pushToView}
-            />
-          ))}
-
-          {status === "submitted" && (
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <Loader2 className="h-3 w-3 animate-spin" />
-              Thinking…
-            </div>
-          )}
-
-          {error && (
-            <div className="text-xs text-red-600 dark:text-red-400 border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/30 rounded-lg px-3 py-2">
-              {friendlyError(error)}
-            </div>
-          )}
-        </div>
-
-        <div className="border-t p-3">
-          {pendingApproval && (
-            <p className="text-[11px] text-muted-foreground mb-2">
-              Respond to the pending action above first.
-            </p>
-          )}
-          <div className="flex items-end gap-2">
-            <Textarea
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  submit();
-                }
-              }}
-              placeholder="Ask your assistant…"
-              className="min-h-10 max-h-40 text-sm resize-none"
-              rows={1}
-              disabled={pendingApproval}
-            />
-            {busy ? (
-              <Button
-                size="icon"
-                variant="outline"
-                onClick={() => stop()}
-                className="shrink-0 cursor-pointer"
-                aria-label="Stop"
-              >
-                <Square className="h-4 w-4" />
-              </Button>
-            ) : (
-              <Button
-                size="icon"
-                onClick={submit}
-                disabled={!input.trim() || pendingApproval}
-                className="shrink-0 cursor-pointer"
-                aria-label="Send"
-              >
-                <Send className="h-4 w-4" />
-              </Button>
-            )}
-          </div>
-        </div>
+    <Sheet open={open} onOpenChange={setOpen}>
+      <SheetContent side="right" className="data-[side=right]:w-full data-[side=right]:sm:max-w-md gap-0 p-0">
+        {open && <PanelBody />}
       </SheetContent>
     </Sheet>
   );
 }
 
-// ── Message rendering ───────────────────────────────────────────────
+function PanelBody() {
+  const queryClient = useQueryClient();
+  const query = useQuery({
+    queryKey: CONVERSATION_KEY,
+    queryFn: fetchConversation,
+    refetchOnWindowFocus: false,
+    // A turn running elsewhere (another tab, a closed panel): check until it ends.
+    refetchInterval: (q) => (q.state.data?.conversation?.turnInProgress ? 3000 : false),
+  });
+  const newChat = useMutation({
+    mutationFn: createConversation,
+    onSuccess: (data) => queryClient.setQueryData(CONVERSATION_KEY, data),
+  });
 
-type AnyPart = UIMessagePart<UIDataTypes, UITools>;
-
-type PushViewFn = (
-  target: "map" | "places",
-  applied: AppliedFilters,
-  opts?: { intent?: string; allRanked?: { id: string; score: number; why: string }[] }
-) => void;
-
-function MessageView({
-  message,
-  addToolApprovalResponse,
-  onPushView,
-}: {
-  message: UIMessage;
-  addToolApprovalResponse: (r: { id: string; approved: boolean }) => void;
-  onPushView: PushViewFn;
-}) {
-  if (message.role === "user") {
-    const text = message.parts
-      .map((p) => (p.type === "text" ? p.text : ""))
-      .join("");
-    if (!text) return null;
-    return (
-      <div className="flex justify-end">
-        <div className="max-w-[85%] rounded-2xl rounded-br-sm bg-emerald-600 text-white text-sm px-3.5 py-2 whitespace-pre-wrap">
-          {text}
-        </div>
-      </div>
-    );
-  }
-
+  const data = query.data;
   return (
-    <div className="space-y-2">
-      {message.parts.map((part, i) => (
-        <PartView
-          key={i}
-          part={part}
-          addToolApprovalResponse={addToolApprovalResponse}
-          onPushView={onPushView}
+    <>
+      <SheetHeader className="flex-row items-center justify-between border-b py-3 pr-12">
+        <SheetTitle className="flex items-center gap-2">
+          <Sparkles className="h-4 w-4 text-emerald-600" aria-hidden />
+          Assistant
+        </SheetTitle>
+        {data && data.messages.length > 0 && (
+          <button
+            type="button"
+            onClick={() => newChat.mutate()}
+            disabled={newChat.isPending}
+            className="flex min-h-11 items-center gap-1 rounded-md px-3 text-xs text-muted-foreground hover:bg-accent hover:text-foreground cursor-pointer transition-colors"
+          >
+            {newChat.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : <Plus className="h-3.5 w-3.5" aria-hidden />}
+            New chat
+          </button>
+        )}
+      </SheetHeader>
+
+      {query.isPending ? (
+        <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
+          Loading your conversation…
+        </div>
+      ) : query.isError || !data?.conversation ? (
+        <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center text-sm text-muted-foreground" role="alert">
+          {query.error?.message ?? "Couldn't load the assistant."}
+          <Button variant="outline" size="sm" className="min-h-11 cursor-pointer" onClick={() => void query.refetch()}>
+            Try again
+          </Button>
+        </div>
+      ) : (
+        <ConversationView
+          key={data.conversation.id}
+          conversationId={data.conversation.id}
+          data={data}
+          dataUpdatedAt={query.dataUpdatedAt}
+          turnElsewhere={data.conversation.turnInProgress}
         />
-      ))}
-    </div>
-  );
-}
-
-function PartView({
-  part,
-  addToolApprovalResponse,
-  onPushView,
-}: {
-  part: AnyPart;
-  addToolApprovalResponse: (r: { id: string; approved: boolean }) => void;
-  onPushView: PushViewFn;
-}) {
-  if (part.type === "text") {
-    if (!part.text.trim()) return null;
-    return (
-      <div className="text-sm leading-relaxed whitespace-pre-wrap">
-        <Bold text={part.text} />
-      </div>
-    );
-  }
-
-  if (!isToolUIPart(part)) return null;
-
-  const meta = TOOL_LABELS[part.type];
-  const label = meta?.label ?? "Working";
-  const Icon = meta?.icon ?? Sparkles;
-
-  switch (part.state) {
-    case "input-streaming":
-    case "input-available":
-      return (
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Loader2 className="h-3 w-3 animate-spin" />
-          {label}…
-        </div>
-      );
-
-    case "approval-requested": {
-      const describe = APPROVAL_DESCRIPTIONS[part.type];
-      return (
-        <div className="rounded-xl border border-emerald-200 dark:border-emerald-900 bg-emerald-50/50 dark:bg-emerald-950/20 p-3 space-y-2">
-          <p className="text-sm font-medium flex items-center gap-1.5">
-            <Icon className="h-3.5 w-3.5 text-emerald-600" />
-            {describe ? describe(part.input) : "Run this action?"}
-          </p>
-          <div className="flex gap-2">
-            <Button
-              size="sm"
-              className="h-7 text-xs gap-1 cursor-pointer"
-              onClick={() =>
-                addToolApprovalResponse({
-                  id: (part as any).approval.id,
-                  approved: true,
-                })
-              }
-            >
-              <Check className="h-3 w-3" />
-              Approve
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-7 text-xs gap-1 cursor-pointer"
-              onClick={() =>
-                addToolApprovalResponse({
-                  id: (part as any).approval.id,
-                  approved: false,
-                })
-              }
-            >
-              <X className="h-3 w-3" />
-              Cancel
-            </Button>
-          </div>
-        </div>
-      );
-    }
-
-    case "output-available":
-      return <ToolResult type={part.type} output={part.output} onPushView={onPushView} />;
-
-    case "output-denied":
-      return (
-        <div className="text-xs text-muted-foreground italic">
-          Action cancelled.
-        </div>
-      );
-
-    case "output-error":
-      return (
-        <div className="text-xs text-red-600 dark:text-red-400">
-          {label} failed{(part as any).errorText ? `: ${(part as any).errorText}` : ""}.
-        </div>
-      );
-
-    default:
-      return null;
-  }
-}
-
-/** "Show all on map / as list" row under search/rank results. */
-function PushRow({
-  count,
-  onPush,
-}: {
-  count: number;
-  onPush: (target: "map" | "places") => void;
-}) {
-  if (count === 0) return null;
-  return (
-    <div className="flex gap-1.5 px-2 py-1.5 border-t bg-muted/30">
-      <button
-        type="button"
-        onClick={() => onPush("map")}
-        className="flex-1 inline-flex items-center justify-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 cursor-pointer transition-colors"
-      >
-        <MapIcon className="h-3 w-3" />
-        Show all on map ({count})
-      </button>
-      <button
-        type="button"
-        onClick={() => onPush("places")}
-        className="flex-1 inline-flex items-center justify-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 cursor-pointer transition-colors"
-      >
-        <LayoutList className="h-3 w-3" />
-        Show as list ({count})
-      </button>
-    </div>
-  );
-}
-
-function PlaceHitRows({ hits, showWhy }: { hits: (ChatPlaceHit & { why?: string })[]; showWhy?: boolean }) {
-  return (
-    <>
-      {hits.slice(0, 6).map((p) => (
-        <Link
-          key={p.id}
-          href={`/places/${p.id}`}
-          className="flex items-center gap-2 px-3 py-2 hover:bg-accent transition-colors"
-        >
-          <div className="min-w-0 flex-1">
-            <p className="text-xs font-medium truncate">{p.name}</p>
-            <p className="text-[10px] text-muted-foreground truncate">
-              {showWhy && p.why
-                ? p.why
-                : [p.category, p.city].filter(Boolean).join(" · ")}
-            </p>
-          </div>
-          {p.google_rating != null && (
-            <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground shrink-0">
-              <Star className="h-2.5 w-2.5 fill-amber-400 text-amber-400" />
-              {p.google_rating}
-            </span>
-          )}
-        </Link>
-      ))}
-    </>
-  );
-}
-
-function ToolResult({
-  type,
-  output,
-  onPushView,
-}: {
-  type: string;
-  output: unknown;
-  onPushView: PushViewFn;
-}) {
-  const out = output as any;
-
-  if (out && typeof out === "object" && "error" in out && out.error) {
-    return (
-      <div className="text-xs text-muted-foreground italic">{out.error}</div>
-    );
-  }
-
-  if (type === "tool-search_places") {
-    const hits: ChatPlaceHit[] = out?.places ?? [];
-    if (hits.length === 0) return null;
-    return (
-      <div className="rounded-xl border divide-y overflow-hidden">
-        <PlaceHitRows hits={hits} />
-        {(out?.total_matches ?? 0) > 6 && (
-          <p className="px-3 py-1.5 text-[10px] text-muted-foreground">
-            +{out.total_matches - 6} more
-          </p>
-        )}
-        {out?.applied_filters && (
-          <PushRow
-            count={out.total_matches ?? hits.length}
-            onPush={(target) => onPushView(target, out.applied_filters)}
-          />
-        )}
-      </div>
-    );
-  }
-
-  // v1.23.0 parity: semantically ranked results — why-lines inline, and
-  // the push carries the FULL scored list so map/grid sort/hide/why all
-  // match what the AI search bar would have produced. `notice` marks a
-  // degraded (rating-order) result: rows + push still render.
-  if (type === "tool-rank_places") {
-    const hits: (ChatPlaceHit & { why?: string })[] = out?.places ?? [];
-    if (hits.length === 0 && !out?.notice) return null;
-    const ranked: { score: number }[] | undefined = out?.all_ranked;
-    // The pushed view hides judge-scored rows below the threshold —
-    // promise the count that will actually be visible.
-    const visibleCount = ranked
-      ? ranked.filter((r) => r.score >= HIDE_BELOW_SCORE).length
-      : out?.total_matches ?? hits.length;
-    return (
-      <div className="rounded-xl border divide-y overflow-hidden">
-        {out?.notice && (
-          <p className="px-3 py-1.5 text-[10px] text-muted-foreground italic">
-            {out.notice}
-          </p>
-        )}
-        <PlaceHitRows hits={hits} showWhy />
-        {visibleCount > 6 && (
-          <p className="px-3 py-1.5 text-[10px] text-muted-foreground">
-            +{visibleCount - 6} more · ranked semantically
-          </p>
-        )}
-        {out?.applied_filters && (
-          <PushRow
-            count={visibleCount}
-            onPush={(target) =>
-              onPushView(target, out.applied_filters, {
-                intent: out.semantic_intent,
-                allRanked: out.all_ranked,
-              })
-            }
-          />
-        )}
-      </div>
-    );
-  }
-
-  if (type === "tool-add_to_list") {
-    return (
-      <p className="text-xs text-emerald-700 dark:text-emerald-400">
-        ✓ Added {out?.added_count ?? 0} to “{out?.list_name}”
-        {out?.already_in_list ? ` (${out.already_in_list} already there)` : ""}
-      </p>
-    );
-  }
-  if (type === "tool-create_list") {
-    return (
-      <p className="text-xs text-emerald-700 dark:text-emerald-400">
-        ✓ Created “{out?.list_name}”
-        {out?.added_count ? ` with ${out.added_count} places` : ""}
-      </p>
-    );
-  }
-  if (type === "tool-set_visit_status") {
-    return (
-      <p className="text-xs text-emerald-700 dark:text-emerald-400">
-        ✓ {out?.place_name}: {out?.status ?? "status cleared"}
-      </p>
-    );
-  }
-
-  // Read-only tools whose data the model verbalises — no card needed.
-  return null;
-}
-
-/** Renders **bold** spans; everything else is plain text (prompt keeps
- *  the model to bold-only markdown). */
-function Bold({ text }: { text: string }) {
-  const segments = text.split(/(\*\*[^*]+\*\*)/g);
-  return (
-    <>
-      {segments.map((seg, i) =>
-        seg.startsWith("**") && seg.endsWith("**") ? (
-          <strong key={i}>{seg.slice(2, -2)}</strong>
-        ) : (
-          <span key={i}>{seg}</span>
-        )
       )}
     </>
   );
 }
 
-function friendlyError(error: Error): string {
-  // DefaultChatTransport throws with the raw response BODY as the
-  // message — match on body content, not status digits.
-  const msg = error.message || "";
-  if (/limit/i.test(msg))
-    return "Monthly AI chat limit reached — resets on the 1st.";
-  if (msg.includes("ai_disabled") || msg.includes("ai_unavailable"))
-    return "AI features are disabled in Settings.";
-  return "Something went wrong. Try again.";
+function ConversationView({
+  conversationId,
+  data,
+  dataUpdatedAt,
+  turnElsewhere,
+}: {
+  conversationId: string;
+  data: ConversationResponse;
+  dataUpdatedAt: number;
+  turnElsewhere: boolean;
+}) {
+  const queryClient = useQueryClient();
+  const router = useRouter();
+  const setOpen = useAssistantStore((s) => s.setOpen);
+  const [chat] = useState(() => chatFor(conversationId, data, queryClient));
+  const { messages, setMessages, sendMessage, status, error, clearError, addToolApprovalResponse } = useChat({ chat });
+  const [input, setInput] = useState(() => useAssistantStore.getState().takeDraft() ?? "");
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const appliedAt = useRef(0);
+
+  const busy = status === "submitted" || status === "streaming";
+
+  // The server's copy wins whenever nothing is streaming here — unless it
+  // is older than what this tab has streamed (it will be fetched again).
+  useEffect(() => {
+    if (busy || dataUpdatedAt === appliedAt.current) return;
+    appliedAt.current = dataUpdatedAt;
+    if (data.version < (versions.get(conversationId) ?? -1)) return;
+    seen(conversationId, data.version);
+    setMessages(data.messages);
+  }, [busy, conversationId, data.messages, data.version, dataUpdatedAt, setMessages]);
+
+  // A request written by another screen while the panel is open.
+  useEffect(
+    () =>
+      useAssistantStore.subscribe((s) => {
+        if (s.draft !== null) setInput(useAssistantStore.getState().takeDraft() ?? "");
+      }),
+    []
+  );
+
+  // Keep the newest content in view.
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
+  }, [messages]);
+
+  const last = messages.at(-1);
+  const waitingCards =
+    last?.role === "assistant" ? lastStepToolParts(last).filter((p) => p.state === "approval-requested") : [];
+  const locked = busy || turnElsewhere;
+
+  async function send(text: string) {
+    const trimmed = text.trim();
+    if (!trimmed || locked) return;
+    clearError();
+    if (waitingCards.length && last) {
+      // Writing instead of answering: the cards close, nothing is saved.
+      const ids = new Set(waitingCards.map((p) => p.toolCallId));
+      setMessages(
+        messages.map((m) =>
+          m === last
+            ? {
+                ...m,
+                parts: m.parts.map((p) =>
+                  p.type === "dynamic-tool" && ids.has(p.toolCallId) && p.state === "approval-requested"
+                    ? ({ ...p, state: "output-denied", approval: { id: p.approval.id, approved: false } } as DynamicToolUIPart)
+                    : p
+                ),
+              }
+            : m
+        )
+      );
+    }
+    setInput("");
+    await sendMessage({ text: trimmed });
+    if (chat.error instanceof DoorError) {
+      // Not sent: the message goes back where the user wrote it.
+      setMessages(chat.messages.at(-1)?.role === "user" ? chat.messages.slice(0, -1) : chat.messages);
+      setInput((current) => current || trimmed);
+    }
+  }
+
+  async function answer(approvalId: string, approved: boolean) {
+    if (locked) return;
+    await addToolApprovalResponse({ id: approvalId, approved });
+    // Sent once every card of the paused call has its answer.
+    if (!approvalsAnswered({ messages: chat.messages })) return;
+    clearError();
+    setMessages(withoutOutcome(chat.messages));
+    await sendMessage(undefined, { body: { intent: "approval" } satisfies SendIntent });
+  }
+
+  async function retry() {
+    if (locked) return;
+    clearError();
+    setMessages(withoutOutcome(chat.messages));
+    await sendMessage(undefined, { body: { intent: "retry" } satisfies SendIntent });
+  }
+
+  function showOnMap(ids: string[]) {
+    setOpen(false);
+    router.push(`/map?ids=${ids.join(",")}`);
+  }
+
+  return (
+    <>
+      <div
+        ref={scrollRef}
+        className="flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 py-4"
+        role="log"
+        aria-live="polite"
+        aria-busy={busy}
+        aria-label="Conversation with the assistant"
+      >
+        {messages.length === 0 && (
+          <div className="space-y-4 pt-8 text-center">
+            <Sparkles className="mx-auto h-8 w-8 text-emerald-600/50" aria-hidden />
+            <div className="space-y-1 px-6">
+              <p className="text-sm font-medium">Ask about your places</p>
+              <p className="text-sm text-muted-foreground">
+                Search your saved places, plan an outing, keep a list, or log where you went.
+              </p>
+            </div>
+            <div className="flex flex-col items-stretch gap-2 px-2">
+              {EXAMPLES.map((example) => (
+                <button
+                  key={example}
+                  type="button"
+                  onClick={() => void send(example)}
+                  disabled={locked}
+                  className="min-h-11 rounded-lg border px-3 py-2 text-left text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground cursor-pointer transition-colors"
+                >
+                  {example}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {messages.map((message) =>
+          message.role === "user" ? (
+            <UserBubble key={message.id} message={message} />
+          ) : (
+            <AssistantMessage
+              key={message.id}
+              message={message}
+              locked={locked}
+              onAnswer={(id, approved) => void answer(id, approved)}
+              onShowOnMap={showOnMap}
+              onRetry={() => void retry()}
+            />
+          )
+        )}
+
+        {(status === "submitted" || (status === "streaming" && last?.role === "assistant" && !hasVisible(last))) && (
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+            Thinking…
+          </div>
+        )}
+
+        {turnElsewhere && !busy && (
+          <TurnNote
+            outcome={{ status: "error", code: "turn_in_progress", message: "" }}
+            locked
+            onRetry={() => undefined}
+          />
+        )}
+
+        {error && (
+          <div
+            className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-400"
+            role="alert"
+          >
+            {error instanceof DoorError ? error.message : "Couldn't reach the assistant. Check your connection and try again."}
+          </div>
+        )}
+      </div>
+
+      <div className="border-t p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        {waitingCards.length > 0 && (
+          <p className="mb-2 text-xs text-muted-foreground">
+            Answer the card above, or write a new message — the proposal won&apos;t be saved.
+          </p>
+        )}
+        <form
+          className="flex items-end gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void send(input);
+          }}
+        >
+          <Textarea
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                e.preventDefault();
+                void send(input);
+              }
+            }}
+            placeholder="Ask your assistant…"
+            aria-label="Message the assistant"
+            maxLength={8000}
+            className="min-h-11 max-h-40 resize-none text-base sm:text-sm"
+            rows={1}
+          />
+          <Button
+            type="submit"
+            size="icon"
+            disabled={!input.trim() || locked}
+            className="h-11 w-11 shrink-0 cursor-pointer"
+            aria-label="Send"
+          >
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Send className="h-4 w-4" aria-hidden />}
+          </Button>
+        </form>
+      </div>
+    </>
+  );
+}
+
+function outcomeOf(message: AssistantUIMessage): TurnOutcome | undefined {
+  for (let i = message.parts.length - 1; i >= 0; i--) {
+    const part = message.parts[i];
+    if (part.type === "data-turn") return part.data;
+  }
+  return undefined;
+}
+
+function hasVisible(message: AssistantUIMessage): boolean {
+  return message.parts.some((p) => (p.type === "text" && p.text.trim() !== "") || isToolUIPart(p));
+}
+
+function UserBubble({ message }: { message: AssistantUIMessage }) {
+  const text = message.parts.map((p) => (p.type === "text" ? p.text : "")).join("");
+  if (!text) return null;
+  return (
+    <div className="flex justify-end">
+      <div className="max-w-[85%] whitespace-pre-wrap break-words rounded-2xl rounded-br-sm bg-emerald-600 px-3.5 py-2 text-sm text-white">
+        {text}
+      </div>
+    </div>
+  );
+}
+
+function AssistantMessage({
+  message,
+  locked,
+  onAnswer,
+  onShowOnMap,
+  onRetry,
+}: {
+  message: AssistantUIMessage;
+  /** A reply is being written (here or elsewhere): cards and Try again wait. */
+  locked: boolean;
+  onAnswer: (approvalId: string, approved: boolean) => void;
+  onShowOnMap: (ids: string[]) => void;
+  onRetry: () => void;
+}) {
+  // Reads made with a write wait for the card's answer.
+  const step = lastStepToolParts(message);
+  const cardWaits = step.some((p) => p.state === "approval-requested");
+  const waiting = new Set(cardWaits ? step.flatMap((p) => (p.state === "input-available" ? [p.toolCallId] : [])) : []);
+  return (
+    <div className="space-y-2">
+      {message.parts.map((part, i) => {
+        if (part.type === "text") return part.text.trim() ? <AssistantMarkdown key={i} text={part.text} /> : null;
+        if (part.type === "dynamic-tool") {
+          return isWritePart(part) ? (
+            <ChangeCard key={part.toolCallId} part={part} locked={locked} othersWaiting={cardWaits} onAnswer={onAnswer} />
+          ) : (
+            <ToolRow key={part.toolCallId} part={part} waiting={waiting.has(part.toolCallId)} locked={locked} onShowOnMap={onShowOnMap} />
+          );
+        }
+        if (part.type === "data-turn") return <TurnNote key={i} outcome={part.data} locked={locked} onRetry={onRetry} />;
+        return null;
+      })}
+    </div>
+  );
 }

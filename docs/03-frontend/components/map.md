@@ -2,8 +2,8 @@
 title: Map components
 type: component
 domain: frontend
-version: 1.4.1
-last_updated: 18.11.2026
+version: 1.4.2
+last_updated: 24.11.2026
 status: stable
 sources:
   - src/components/map/map-view.tsx
@@ -101,6 +101,7 @@ Two components. `MapView` is a self-contained Mapbox renderer; `MapContent` is t
 - **Composes:**
   - `MapView` (with ref).
   - `FilterPanel` (desktop) / `FilterSheet` (mobile).
+  - `AssistantPicksChip` (v1.48.0) next to the clear-filters chip: while `?ids=` is set ("Show on map" from the assistant), "N from the assistant ✕" — one tap back to every place, other filters kept ([[assistant]]).
   - `SearchResultPanel` (search → save), `AddPlaceDialog`.
   - Marker detail: the inline side-panel on desktop; `PlaceDetailSheet`
     (full detail bottom-sheet) on mobile — gated by `useIsDesktop` (v1.24.0).

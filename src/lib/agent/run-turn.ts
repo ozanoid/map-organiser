@@ -26,7 +26,7 @@ import { AGENT_MODELS, FALLBACK_BETA, MAX_STEPS, MAX_TOKENS, isAgentModel, type 
 import { costOfMessage, type CallCost } from "@/lib/agent/pricing";
 import { systemPromptFor } from "@/lib/agent/prompt";
 import { MONTHLY_CAP_USD, type SpendLedger, type SpendPurpose } from "@/lib/agent/spend";
-import type { Conversation, ConversationStore, Door, NewToolRun, ToolRunDecision } from "@/lib/agent/store";
+import type { Conversation, ConversationStore, Door, NewToolRun, ToolRunDecision, TurnRecord } from "@/lib/agent/store";
 import { agentToolDefinitions, checkToolCall, executeToolCall, needsApproval } from "@/lib/agent/tools";
 import { log } from "@/lib/telemetry/logger";
 
@@ -59,8 +59,14 @@ const TURN_LEASE_MS = 15 * 60 * 1000;
 
 export type TurnInput =
   | { kind: "message"; text: string; timeZone: string }
-  /** Tool-use id → approved. A write call without a decision is declined. */
-  | { kind: "approval"; decisions: Record<string, boolean> };
+  /** The answers to the cards waiting now: tool-use id → approved — one for
+   *  every waiting card, no other (else "conflict": the cards have changed
+   *  since the user saw them). */
+  | { kind: "approval"; decisions: Record<string, boolean> }
+  /** Carry on a turn that broke off (Try again): from the user's message
+   *  or the tool results it ended with, or by running the reads the model
+   *  had asked for. Appends no user message. */
+  | { kind: "retry" };
 
 export interface StepInfo {
   step: number;
@@ -74,15 +80,16 @@ export interface StepInfo {
 }
 
 export interface TurnEvents {
-  /** Assistant text as it streams. */
-  text?(delta: string): void;
+  /** Assistant text as it streams; `block` is the content block's index in
+   *  the model call — a new index is a new paragraph block. */
+  text?(delta: string, block: number): void;
   /** The model call broke off and is being re-run: drop the text streamed
    *  since the step began. */
   stepRetried?(step: number): void;
   /** A model call finished. */
   step?(info: StepInfo): void;
   /** A tool call was answered — run, declined, not run or refused. */
-  toolResult?(result: { id: string; name: string; text: string; isError: boolean }): void;
+  toolResult?(result: { id: string; name: string; text: string; isError: boolean; decision: ToolRunDecision }): void;
 }
 
 export type TurnStatus =
@@ -105,6 +112,8 @@ export interface TurnResult {
   costUsd: number;
   /** When awaiting approval: every call in the paused message. */
   pending: PendingCall[];
+  /** The history's length after the turn — a version a door can compare. */
+  messageCount: number;
 }
 
 export interface AgentDeps {
@@ -145,41 +154,145 @@ export async function startConversation(
   });
 }
 
+/**
+ * A turn that has passed its checks and holds the conversation's lease:
+ * nothing has been written yet. `run` does the turn, records how it ended
+ * and gives the lease back.
+ */
+export interface OpenTurn {
+  /** The conversation as stored when the turn opened; the turn appends to
+   *  it as it goes. */
+  readonly history: readonly StoredMessage[];
+  run(events?: TurnEvents): Promise<TurnResult>;
+}
+
+/**
+ * Opens a turn: takes the conversation's lease (one turn at a time), loads
+ * it, and checks the input against it and the month's budget. A refusal
+ * here (AgentError) has written nothing and holds nothing — a door can
+ * answer it as a plain error and the user's text is still theirs to send.
+ */
+export async function openTurn(deps: AgentDeps, conversationId: string, input: TurnInput): Promise<OpenTurn> {
+  const now = deps.now ?? (() => new Date());
+  if (!(await deps.store.takeTurn(conversationId, TURN_LEASE_MS))) throw new AgentError("turn_in_progress");
+  try {
+    const { conversation, messages } = await deps.store.load(conversationId);
+    if (conversation.userId !== deps.toolCtx.userId) throw new AgentError("not_found");
+    if (!isAgentModel(conversation.model)) throw new AgentError("rejected", `not an agent model: ${conversation.model}`);
+
+    const history: StoredMessage[] = [...messages];
+    const pending = pendingToolCalls(history);
+    if (input.kind === "approval" || input.kind === "retry") {
+      // A call with a run record was decided by an earlier request (and may
+      // have run); the cards still waiting are the valid writes without one.
+      const recorded = new Set(
+        pending.length ? (await deps.store.toolRuns(conversationId, pending.map((c) => c.id))).map((r) => r.toolUseId) : []
+      );
+      const isRecorded = (id: string) => recorded.has(id);
+      if (input.kind === "approval") {
+        const cards = cardsWaiting(pending, isRecorded).map((c) => c.id);
+        if (cards.length === 0) throw new AgentError("nothing_pending");
+        // The answers must be for the cards waiting now: a tab showing an
+        // older card mustn't decide one the user hasn't seen.
+        const answered = Object.keys(input.decisions);
+        if (answered.length !== cards.length || cards.some((id) => !Object.hasOwn(input.decisions, id))) {
+          throw new AgentError("conflict", "the answers don't match the cards waiting now");
+        }
+      } else if (!canRetry(history, isRecorded)) {
+        throw new AgentError("conflict", "nothing to try again");
+      }
+    }
+
+    // The budget gates the whole turn, before anything is written or run.
+    const spent = await deps.ledger.monthToDate(now());
+    if (spent >= MONTHLY_CAP_USD) {
+      log.warn("agent.budget_exhausted", { userId: deps.toolCtx.userId, spentUsd: spent });
+      throw new AgentError("budget_exhausted");
+    }
+
+    return { history, run: (events = {}) => runOpenTurn(deps, conversation, history, pending, input, events) };
+  } catch (e) {
+    await releaseLease(deps, conversationId);
+    throw e;
+  }
+}
+
+/** The calls waiting for the user's card: valid writes that no request
+ *  has decided yet (a decision leaves a run record). */
+export function cardsWaiting(pending: ToolCall[], isRecorded: (toolUseId: string) => boolean): ToolCall[] {
+  return pending.filter((c) => !isRecorded(c.id) && needsApproval(c.name) && checkToolCall(c.name, c.input).ok);
+}
+
+/**
+ * Whether a retry can carry the conversation on: it ends with a user
+ * message (the user's, or tool results) — the turn broke off before the
+ * model answered — or with the model's calls and no card waiting among
+ * them — it broke off before their results were stored.
+ */
+export function canRetry(history: readonly StoredMessage[], isRecorded: (toolUseId: string) => boolean): boolean {
+  const pending = pendingToolCalls(history);
+  if (pending.length === 0) return history.at(-1)?.role === "user";
+  return cardsWaiting(pending, isRecorded).length === 0;
+}
+
+/** openTurn and run, for callers that don't answer the checks apart (the
+ *  eval, the offline checks). */
 export async function runTurn(
   deps: AgentDeps,
   conversationId: string,
   input: TurnInput,
   events: TurnEvents = {}
 ): Promise<TurnResult> {
+  return (await openTurn(deps, conversationId, input)).run(events);
+}
+
+async function releaseLease(deps: AgentDeps, conversationId: string) {
+  await deps.store.releaseTurn(conversationId).catch((e: unknown) =>
+    log.warn("agent.release_turn_failed", { conversationId, error: e instanceof Error ? e.message : String(e) })
+  );
+}
+
+function runOpenTurn(
+  deps: AgentDeps,
+  conversation: Conversation,
+  history: StoredMessage[],
+  pending: ToolCall[],
+  input: TurnInput,
+  events: TurnEvents
+): Promise<TurnResult> {
   return propagateAttributes(
     {
       traceName: "assistant",
       userId: deps.toolCtx.userId,
-      sessionId: conversationId,
+      sessionId: conversation.id,
       tags: ["assistant", deps.purpose],
     },
     () =>
       startActiveObservation(
         "assistant-turn",
         async (agent) => {
-          agent.update({ input: input.kind === "message" ? input.text : { approval: input.decisions } });
+          agent.update({
+            input: input.kind === "message" ? input.text : input.kind === "approval" ? { approval: input.decisions } : "retry",
+          });
+          let outcome: TurnRecord = { status: "error", code: "upstream", seq: history.length };
           try {
-            if (!(await deps.store.takeTurn(conversationId, TURN_LEASE_MS))) throw new AgentError("turn_in_progress");
-            try {
-              const result = await turn(deps, conversationId, input, events, (text) => agent.update({ output: text }));
-              agent.update({ metadata: { status: result.status, steps: result.steps, costUsd: result.costUsd } });
-              return result;
-            } finally {
-              await deps.store.releaseTurn(conversationId).catch((e: unknown) =>
-                log.warn("agent.release_turn_failed", {
-                  conversationId,
-                  error: e instanceof Error ? e.message : String(e),
-                })
-              );
-            }
+            const result = await turn(deps, conversation, history, pending, input, events, (text) =>
+              agent.update({ output: text })
+            );
+            outcome = { status: result.status, seq: result.messageCount };
+            agent.update({ metadata: { status: result.status, steps: result.steps, costUsd: result.costUsd } });
+            return result;
           } catch (e) {
+            outcome = { status: "error", code: e instanceof AgentError ? e.code : "upstream", seq: history.length };
             agent.update({ level: "ERROR", statusMessage: e instanceof Error ? e.message : String(e) });
             throw e;
+          } finally {
+            await deps.store
+              .recordTurn(conversation.id, outcome)
+              .catch((e: unknown) =>
+                log.warn("agent.record_turn_failed", { conversationId: conversation.id, error: e instanceof Error ? e.message : String(e) })
+              );
+            await releaseLease(deps, conversation.id);
           }
         },
         { asType: "agent" }
@@ -189,27 +302,17 @@ export async function runTurn(
 
 async function turn(
   deps: AgentDeps,
-  conversationId: string,
+  conversation: Conversation,
+  history: StoredMessage[],
+  pending: ToolCall[],
   input: TurnInput,
   events: TurnEvents,
   setOutput: (text: string) => void
 ): Promise<TurnResult> {
   const now = deps.now ?? (() => new Date());
-  const { conversation, messages } = await deps.store.load(conversationId);
-  if (conversation.userId !== deps.toolCtx.userId) throw new AgentError("not_found");
+  const conversationId = conversation.id;
   if (!isAgentModel(conversation.model)) throw new AgentError("rejected", `not an agent model: ${conversation.model}`);
   const effort = deps.effort ?? AGENT_MODELS[conversation.model].effort;
-
-  const history: StoredMessage[] = [...messages];
-  const pending = pendingToolCalls(history);
-  if (input.kind === "approval" && pending.length === 0) throw new AgentError("nothing_pending");
-
-  // The budget gates the whole turn, before anything is written or run.
-  const spent = await deps.ledger.monthToDate(now());
-  if (spent >= MONTHLY_CAP_USD) {
-    log.warn("agent.budget_exhausted", { userId: deps.toolCtx.userId, spentUsd: spent });
-    throw new AgentError("budget_exhausted");
-  }
 
   const append = async (role: StoredMessage["role"], content: BetaContentBlockParam[]) => {
     const message: StoredMessage = { seq: history.length, role, content };
@@ -226,11 +329,16 @@ async function turn(
       contextBlock(now(), input.timeZone),
       { type: "text", text: input.text },
     ]);
-  } else {
+  } else if (input.kind === "approval") {
     await append(
       "user",
       await settleCalls(deps, conversationId, pending, { kind: "decided", decisions: input.decisions }, events)
     );
+  } else if (pending.length) {
+    // A retry after the turn broke off between the model's calls and their
+    // results: the reads run now (a recorded call keeps its record). With
+    // no calls waiting, the history ends with a user message already.
+    await append("user", await settleCalls(deps, conversationId, pending, { kind: "auto" }, events));
   }
 
   const tools = JSON.parse(conversation.tools) as BetaToolUnion[];
@@ -285,6 +393,7 @@ async function turn(
       steps: step,
       costUsd,
       pending: pendingCalls,
+      messageCount: history.length,
     });
 
     switch (message.stop_reason) {
@@ -326,7 +435,7 @@ async function turn(
               }))
             );
             for (const { call, message: why } of invalid) {
-              emit(events.toolResult, { id: call.id, name: call.name, text: why, isError: true });
+              emit(events.toolResult, { id: call.id, name: call.name, text: why, isError: true, decision: "invalid" });
             }
             return finished(
               "awaiting_approval",
@@ -397,12 +506,14 @@ async function settleCalls(
     (await deps.store.toolRuns(conversationId, calls.map((call) => call.id))).map((run) => [run.toolUseId, run])
   );
   const outcomes = new Map<string, ToolOutcome>();
+  const decisions = new Map<string, ToolRunDecision>();
   const fresh: NewToolRun[] = [];
   const toRun: ToolCall[] = [];
   const interrupted: ToolCall[] = [];
 
   for (const call of calls) {
     const run = recorded.get(call.id);
+    if (run) decisions.set(call.id, run.decision);
     if (run?.status === "done" && run.outcome) {
       outcomes.set(call.id, run.outcome);
       continue;
@@ -434,6 +545,7 @@ async function settleCalls(
       decision = "auto";
     }
     fresh.push({ toolUseId: call.id, name: call.name, decision, outcome });
+    decisions.set(call.id, decision);
     if (outcome) outcomes.set(call.id, outcome);
     else toRun.push(call);
   }
@@ -461,7 +573,7 @@ async function settleCalls(
 
   return calls.map((call) => {
     const outcome = outcomes.get(call.id)!;
-    emit(events.toolResult, { id: call.id, name: call.name, ...outcome });
+    emit(events.toolResult, { id: call.id, name: call.name, ...outcome, decision: decisions.get(call.id)! });
     return toolResult(call.id, outcome.text, outcome.isError);
   });
 }
@@ -489,7 +601,11 @@ async function callModel(
       { asType: "generation" }
     );
     const stream = deps.client.beta.messages.stream(params, { signal: deps.signal });
-    stream.on("text", (delta) => emit(events.text, delta));
+    stream.on("streamEvent", (event) => {
+      if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
+        emit(events.text, event.delta.text, event.index);
+      }
+    });
     try {
       const message = await stream.finalMessage();
       const cost = costOfMessage(message, params.model);

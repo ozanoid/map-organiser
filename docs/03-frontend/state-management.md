@@ -2,8 +2,8 @@
 title: State Management
 type: overview
 domain: frontend
-version: 1.5.0
-last_updated: 18.11.2026
+version: 1.6.0
+last_updated: 24.11.2026
 status: stable
 sources:
   - src/lib/providers.tsx
@@ -96,7 +96,7 @@ const [queryClient] = useState(
 
 ## Zustand setup
 
-There's exactly **one** Zustand store today: `src/lib/stores/import-store.ts`.
+Zustand stores: `src/lib/stores/import-store.ts` (below), `ai-search-store.ts` (above) and, since v1.48.0, `assistant-store.ts` — the assistant panel's open state and a request another screen wrote for it (`openAssistant(draft)`; [[components/assistant]]).
 
 Pattern:
 

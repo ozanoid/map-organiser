@@ -10,6 +10,7 @@ import { useFilterPersistStore } from "@/lib/stores/filter-persist-store";
 import { BulkActionBar } from "@/components/places/bulk-action-bar";
 import { FilterSheet } from "@/components/filters/filter-sheet";
 import { ClearFiltersChip } from "@/components/filters/clear-filters-chip";
+import { AssistantPicksChip } from "@/components/filters/assistant-picks-chip";
 import { SavedFilterChips } from "@/components/filters/saved-filter-chips";
 import { FilterPanel } from "@/components/filters/filter-panel";
 import { Button } from "@/components/ui/button";
@@ -245,6 +246,7 @@ function PlacesContent() {
           {/* One-tap clear next to Filters (v1.23.0 mobile UX) —
               clearing shouldn't require opening the sheet. */}
           <ClearFiltersChip className="lg:hidden" />
+          <AssistantPicksChip />
           <Button
             variant="outline"
             size="sm"

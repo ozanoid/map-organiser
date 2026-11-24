@@ -12,6 +12,7 @@ import { useIsDesktop } from "@/lib/hooks/use-is-desktop";
 import type { RetrievedPlaceData } from "@/lib/hooks/use-place-search";
 import { FilterSheet } from "@/components/filters/filter-sheet";
 import { ClearFiltersChip } from "@/components/filters/clear-filters-chip";
+import { AssistantPicksChip } from "@/components/filters/assistant-picks-chip";
 import { googleMapsPlaceUrl } from "@/lib/google/maps-url";
 import { FilterPanel } from "@/components/filters/filter-panel";
 import { VisitStatusToggle, VisitStatusBadge } from "@/components/places/visit-status-toggle";
@@ -363,6 +364,7 @@ export function MapContent({ mapboxToken }: { mapboxToken: string }) {
           </Button>
           {/* One-tap clear next to Filters (v1.23.0 mobile UX). */}
           <ClearFiltersChip className="lg:hidden shadow-md" />
+          <AssistantPicksChip className="shadow-md" />
         </div>
 
         {/* FAB — hidden when detail or search panel is open */}

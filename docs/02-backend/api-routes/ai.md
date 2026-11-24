@@ -2,8 +2,8 @@
 title: AI routes
 type: route-group
 domain: backend
-version: 1.9.2
-last_updated: 18.11.2026
+version: 1.10.0
+last_updated: 24.11.2026
 status: stable
 sources:
   - src/app/api/ai/parse-query/route.ts
@@ -15,10 +15,7 @@ sources:
   - src/app/api/ai/compare/route.ts
   - src/lib/ai/schemas/compare.ts
   - src/lib/ai/prompts/compare.ts
-  - src/app/api/ai/chat/route.ts
-  - src/lib/ai/chat-tools.ts
   - src/lib/ai/rank-engine.ts
-  - src/lib/ai/prompts/chat.ts
   - src/app/api/ai/day-plan/route.ts
   - src/lib/ai/schemas/day-plan.ts
   - src/lib/ai/prompts/day-plan.ts
@@ -54,7 +51,6 @@ and `chat`'s approval-gated tools also mutate.
 | `POST` | `/api/ai/parse-query` | Parse a free-form NL query into structured filters + semantic intent |
 | `POST` | `/api/ai/rank-results` | LLM-as-judge rerank for queries with fuzzy semantic intent |
 | `POST` | `/api/ai/compare` | S2 F-04 (v1.19.0): per-theme winners + occasion picks for 2-4 places from stored profiles |
-| `POST` | `/api/ai/chat` | S3 AI-02 (v1.21.0): assistant agent loop — streamText + 8 tools (v1.23.0: +`rank_places`, the LLM-as-judge server twin; rides `rank_backstop` + `ai_rank_results` SKU inside the turn), streaming UIMessage response |
 | `POST` | `/api/ai/day-plan` | AI Plan (S4 AI-09, v1.22.0 as `/api/ai/trip-plan`; on the plans model since v1.37.0): distribute candidate places across a plan's days — geo/theme grouping, a part of the day per stop, per-day theme + narrative. The group's only WRITING route. |
 
 ## Shared gating
@@ -212,21 +208,9 @@ S2 F-04 (v1.19.0). Side-by-side AI comparison of 2-4 saved places.
 - **Telemetry:** `propagateAttributes({traceName: "ai-compare"})` + `experimental_telemetry` functionId `ai.compare`; events `ai.compare` / `ai.compare.llm_failed`.
 - **Consumer:** `AiCompareCard` on `/places/compare` — deliberate-click only (never auto-fires on page load; each run costs a budget unit).
 
-## `POST /api/ai/chat`
+## `POST /api/ai/chat` — removed (v1.48.0)
 
-S3 AI-02 v1 (v1.21.0). The assistant agent loop — the group's only STREAMING route (deliberate exception to the "never streamText" rule, amended in [[../../04-integrations/gemini]]).
-
-- **Body:** `{ messages: UIMessage[], sessionId?: string, timeZone?: string }`. `timeZone` is the browser's IANA zone (v1.39.0): the system prompt's "today" is the user's date there, UTC when it is missing or not a zone — before, it was the server's UTC date, a day behind on an Istanbul night. History is client-held (session-only memory — no DB table in v1); the server additionally trims to the last 30 messages.
-- **Gates:** same four gates BEFORE the stream starts (auth → `after(flushLangfuse)` → `ai_features_enabled` → client → **budget `chat`**: SKU `ai_chat`, cap `AI_MONTHLY_CHAT_CAP = 200`/month → 429). Mid-stream LLM failures surface as stream error parts, not HTTP statuses.
-- **Agent loop:** `streamText` + `stopWhen: stepCountIs(6)` + 8 tools from `src/lib/ai/chat-tools.ts`, all executing under the request's cookie client (RLS = ownership boundary):
-  - read-only: `search_places` (shared `queryPlaces()` engine — same JS post-filters as GET /api/places), `get_place_details`, `compare_places` (data-only; the CHAT model verbalises — no nested ai_compare LLM call/unit), `get_stats` (shared `computeUserStats()`).
-  - `rank_places` (v1.23.0) — LLM-as-judge over ALL hard-filter matches via `rank-engine.ts`; agent-invoked only for soft criteria; degraded rating-order `notice` fallback; tracks `ai_rank_results` per ATTEMPT behind `rank_backstop`
-  - mutating, `needsApproval: true` (v6 built-in approval flow — loop pauses, UI confirm card, `addToolApprovalResponse` resubmits): `add_to_list`, `create_list`, `set_visit_status`. The two list tools write through the list module (`addPlacesToList`, `createList` with `created_via = assistant` — one `save_list` transaction each; v1.40.0); ids that aren't the user's places are counted as `unknown_ids`, not sent.
-  - Tool outputs are compact projections (id/name/city/rating/tldr…), never full google_data rows.
-- **Budget unit = one user TURN**, charged in `onFinish` only when the last inbound message is a `user` message — an approval-continuation POST (assistant message last) does not burn a second unit. `stopWhen` is the in-turn runaway guard.
-- **Response:** `result.toUIMessageStreamResponse()` — UIMessage stream consumed by `useChat`.
-- **Telemetry:** `propagateAttributes({traceName: "ai-chat", sessionId})` + functionId `ai.chat`; `sessionId` groups a conversation's turn traces in Langfuse. `export const maxDuration = 120` (multi-step turns; also bounds the flush).
-- **Consumer:** `AssistantPanel` (header ✨ launcher) — see [[../../05-flows/ai-chat-flow]].
+The Gemini assistant route of v1.21.0 is gone: the in-app assistant runs on Claude through the agent core — [[assistant]], [[../../05-flows/ai-chat-flow]]. Its tools (`src/lib/ai/chat-tools.ts`), prompt and `chat` budget went with it; the `ai_chat` SKU stays defined for past usage rows.
 
 ## `POST /api/ai/day-plan`
 

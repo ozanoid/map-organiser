@@ -2,8 +2,8 @@
 title: Layout components
 type: component
 domain: frontend
-version: 1.2.0
-last_updated: 16.10.2026
+version: 1.2.1
+last_updated: 24.11.2026
 status: stable
 sources:
   - src/components/layout/app-header.tsx
@@ -31,7 +31,7 @@ App chrome. All `"use client"`. Rendered by `src/app/(app)/layout.tsx` (header/s
 - **API/DB:** `supabase.auth.getUser()` for current user.
 - **State:** `addOpen` (Add Place dialog), `mounted` (hydration guard), `user` (auth user), `theme`.
 - **Shadcn used:** `Button`, `DropdownMenu` family, `Avatar`/`AvatarFallback`/`AvatarImage`.
-- **Renders:** mobile-only logo + title; Add Place button; theme cycle button (Sun → Moon → Monitor); user avatar dropdown with initials, name, email, sign-out.
+- **Renders:** mobile-only logo + title; Add Place button; theme cycle button (Sun → Moon → Monitor); user avatar dropdown with initials, name, email, sign-out (which also clears the assistant's conversations and cache — `resetAssistantChat(queryClient)`).
 - **Composes:** `AddPlaceDialog` from `places/`.
 - **Instagram links (v1.28.1):** the header's `AddPlaceDialog` gets
   `onInstagramLink`, so it never runs an Instagram import itself. A pasted post

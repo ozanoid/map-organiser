@@ -2,13 +2,14 @@
 title: assistant_conversations, assistant_messages, assistant_spend, assistant_tool_runs
 type: table
 domain: backend
-version: 2.0.0
-last_updated: 23.11.2026
+version: 2.1.0
+last_updated: 24.11.2026
 status: draft
 sources:
   - Supabase project hukppmaevcapvbrvxtph (live)
   - supabase/migrations/20261123123953_assistant_conversations.sql
   - supabase/migrations/20261123143607_assistant_turns_and_tool_runs.sql
+  - supabase/migrations/20261124120000_assistant_open_and_last_turn.sql
 related:
   - "[[_README]]"
   - "[[api_usage]]"
@@ -18,7 +19,7 @@ related:
 
 # `assistant_conversations`, `assistant_messages`, `assistant_spend`, `assistant_tool_runs`
 
-The platform's own Claude agent keeps its conversations here ([[../../_plans/phase-2-assistant]]). Created on 23.11.2026 in two migrations: `assistant_conversations` (version 20261123123953) and `assistant_turns_and_tool_runs` (version 20261123143607 — server-only writes, the turn lease, tool runs). Only the agent core writes them, with the service role (`supabaseConversationStore`, `src/lib/agent/store.ts`); no route uses the core yet.
+The platform's own Claude agent keeps its conversations here ([[../../_plans/phase-2-assistant]]). Created on 23.11.2026 in two migrations: `assistant_conversations` (version 20261123123953) and `assistant_turns_and_tool_runs` (version 20261123143607 — server-only writes, the turn lease, tool runs). Only the agent core writes them, with the service role (`supabaseConversationStore`, `src/lib/agent/store.ts`); the app's assistant routes use it (v1.48.0, [[../api-routes/assistant]]). A third migration is written and **not applied yet** — see "Pending" below; the door's code needs it.
 
 ## Why the history lives on the server and never changes
 
@@ -39,6 +40,22 @@ Claude's 5.5 models always think, and each thinking block is bound to the exact 
 | `turn_lease_until` | timestamptz | yes | — | The turn lease: while it is in the future, a turn of this conversation is running and another one is refused. Set by the server before a turn, cleared after; a crashed turn's lease runs out (15 minutes, longer than a route can run). |
 
 Index: `assistant_conversations_latest_idx (user_id, door, updated_at desc)` — "the user's latest conversation in this door".
+
+## Pending — the third migration (written 24.11.2026, not applied)
+
+`20261124120000_assistant_open_and_last_turn.sql` — two fixes from the review of the in-app door. Waits for Ozan's approval; the door's code (`latest`, `load`, `recordTurn`) reads and writes these columns, so the routes fail until it is applied.
+
+| Column | Type | Nullable | Default | Notes |
+|---|---|---|---|---|
+| `opened_at` | timestamptz | no | `now()` | When the user last opened the conversation in its door ("New chat" now; picking an old one later). The door shows the one opened last — ordering by `updated_at` pulled the panel back to an older conversation whose turn was still appending. |
+| `last_turn_status` | text | yes | — | CHECK `done` \| `awaiting_approval` \| `refused` \| `max_tokens` \| `step_limit` \| `error`. How the last turn ended — so a reload can say why a message has no reply; the history holds only what the model saw. |
+| `last_turn_code` | text | yes | — | The error's code (`busy`, `budget_exhausted`, …); CHECK only with `error`. |
+| `last_turn_seq` | integer | yes | — | CHECK ≥ 0. The history's length when it ended: once a message is appended after, the record no longer describes the end of the conversation. |
+| `last_turn_at` | timestamptz | yes | — | When it was recorded. |
+
+Index `assistant_conversations_open_idx (user_id, door, opened_at desc)` replaces `assistant_conversations_latest_idx`. Written by the server only, like the rest; users read their own rows as before. No backfill (no rows on 23.11.2026).
+
+Checked in a rolled-back transaction on the live database (24.11.2026): a new conversation is the one opened last; recording an error and a refusal works; a code without an error and an unknown status are refused (23514); the owner can't write the new columns (0 rows) and reads their own; nothing persisted.
 
 ## `assistant_messages`
 

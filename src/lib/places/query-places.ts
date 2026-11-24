@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { MAX_PLACE_IDS } from "@/lib/places/limits";
 import { parsePostgisPoint } from "@/lib/geo";
 import { isOpenNow } from "@/lib/places/open-now";
 
@@ -80,7 +81,7 @@ export async function queryPlaces(
     // an ids-filter where NOTHING survives must mean "no matches", not
     // "no filter": falling through would return the caller's ENTIRE
     // library (the chat compare_places tool hit exactly this).
-    const ids = filters.ids.filter((id) => UUID_RE.test(id)).slice(0, 10);
+    const ids = filters.ids.filter((id) => UUID_RE.test(id)).slice(0, MAX_PLACE_IDS);
     if (ids.length === 0) return { places: [], sqlRows: 0 };
     query = query.in("id", ids);
   }

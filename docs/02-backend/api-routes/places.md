@@ -2,8 +2,8 @@
 title: Places routes
 type: route-group
 domain: backend
-version: 2.5.4
-last_updated: 20.11.2026
+version: 2.5.5
+last_updated: 24.11.2026
 status: stable
 sources:
   - src/lib/places/query-places.ts
@@ -93,7 +93,7 @@ All require auth except `drain-imports`, which is bearer-authed with `CRON_SECRE
 - **DB:** `places` SELECT, joins to `categories`; secondary in-memory filtering for tags and lists (via `place_tags` / `list_places` lookups).
 - **Response:** `Place[]` with `location` parsed to `{ lat, lng }`. `200`.
 - **Notes:** Tag/list filters applied post-query in JS. `google_rating_desc` sort happens post-fetch (JSONB sort).
-- **`ids`** (v1.19.0, compare view): CSV of place ids (cap 10) → `.in("id", ids)`. Deliberately on the LIST route — it has the EWKB-safe location parser + subcategory join the `[id]` route lacks.
+- **`ids`** (v1.19.0, compare view; the assistant's "Show on map" since v1.48.0): CSV of place ids — valid UUIDs, at most `MAX_PLACE_IDS` = 25 (`src/lib/places/limits.ts`; the most `search_places` returns; it was 10) → `.in("id", ids)`. Deliberately on the LIST route — it has the EWKB-safe location parser + subcategory join the `[id]` route lacks.
 - **`open_now=true`** (v1.18.0): dynamic filter — JS post-filter evaluating `isOpenNow(google_data.work_timetable, google_data.tz)` at request time in the place's local timezone (`src/lib/places/open-now.ts`). Places without timetable/tz are EXCLUDED (unknown ≠ open). The same module also exports `isOpenOnDate(timetable, isoDate)` (v1.22.0) — **day-granular**, not point-in-time: "does the place open at all on this calendar date" (weekday straight from the ISO date, tz-independent; missing timetable → null = unknown ≠ closed, listed-but-empty day → false). Used by `/api/ai/trip-plan` to precompute per-trip-day open flags — not by this route group's filters.
 
 

@@ -18,6 +18,5 @@ const handler = withMcpAuth(assistantMcpHandler, verifyAssistantToken, {
 export { handler as GET, handler as POST, handler as DELETE };
 
 // rank_places waits on one Gemini call that took 41–64 s in testing
-// (17.11.2026); the other tools answer in under a second. Same ceiling as
-// the in-app assistant's /api/ai/chat.
+// (17.11.2026); the other tools answer in under a second.
 export const maxDuration = 120;

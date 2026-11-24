@@ -2,8 +2,8 @@
 title: Place
 type: entity
 domain: places
-version: 1.9.1
-last_updated: 19.11.2026
+version: 1.9.2
+last_updated: 24.11.2026
 status: stable
 sources:
   - src/lib/types/index.ts
@@ -207,7 +207,7 @@ All `/api/places/*` routes live in `src/app/api/places/`. See [[../02-backend/ap
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/api/places` | List with filters (country, city, category_ids, tag_ids, list_id, rating_min, google_rating_min, visit_status, search, sort). |
+| `GET` | `/api/places` | List with filters (country, city, category_ids, tag_ids, list_id, rating_min, google_rating_min, visit_status, search, sort, ids — up to 25 named places: compare, and the assistant's "Show on map"). |
 | `POST` | `/api/places` | Create a single place (used by manual UI and parse-link flow). |
 | `GET` | `/api/places/[id]` | Detail. |
 | `PATCH` | `/api/places/[id]` | Update. |
