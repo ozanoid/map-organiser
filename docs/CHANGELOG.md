@@ -6,6 +6,17 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 24.11.2026 — v1.47.8 — In-app door: design approved
+
+- Ozan approved the panel design (mockups A–D) and every recommendation on
+  its open questions: no Stop button in the first version; writing while a
+  card waits is allowed (the card closes as not saved); "Show on map" stays;
+  English chrome, replies in the user's language; latest conversation plus
+  "New chat" only; Turkish example prompts.
+- Docs: [[_plans/phase-2-assistant]].
+
+---
+
 ## 23.11.2026 — v1.47.7 — Decision 6: Gemini's work moves to Claude
 
 - Inventory of every Gemini call (code + `api_usage` since June): the old

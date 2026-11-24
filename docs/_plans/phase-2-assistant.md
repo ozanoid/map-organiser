@@ -2,8 +2,8 @@
 title: "Faz 2 — Platform asistanı Claude'a: tasarım"
 type: plan
 domain: ai
-version: 1.9.0
-last_updated: 23.11.2026
+version: 1.10.0
+last_updated: 24.11.2026
 status: stable
 related:
   - "[[personal-assistant]]"
@@ -94,6 +94,7 @@ SQL: `supabase/migrations/20261123123953_assistant_conversations.sql` — uygula
   - açılışta son sohbet sunucudan yüklenir — sayfa yenilense de sohbet kaybolmaz;
   - "Yeni sohbet" yeni bir sohbet açar.
   - Tasarım `/ui-ux-pro-max` ile.
+- **Tasarım kararları (Ozan, 24.11.2026 — önerildiği gibi):** taslaklar A–D (araç ilerlemesi, okunur plan / liste onay kartları, kaydedilince linkli "Saved" kartı, durum ve hata mesajları). İlk sürümde **Durdur yok** (tur sunucuda sürer, en fazla 10 adım); **kart beklerken yazılabilir** — yeni mesaj kartı "kaydedilmedi" olarak kapatır, kartın altında uyarı; **"Haritada göster"** arama ve sıralama sonuçlarında kalır; panelin düğme ve menüleri **İngilizce** (uygulama gibi), cevaplar kullanıcının dilinde; ilk sürümde **yalnız son sohbet ve "New chat"** — sohbet listesi ve silme sonra; boş ekranda **Türkçe örnek istekler**. Panel sayfa yenilense ya da kapansa da tur sunucuda tamamlanır; açılınca "yazılıyor" görünür, cevap gelince yerine oturur. Panel hazır bir istekle açılabilir (6.1'in girişi).
 - **Kalkanlar:** `src/lib/ai/chat-tools.ts`, `src/lib/ai/prompts/chat.ts`, `/api/ai/chat` ve `chat` AI bütçesi. `ai_chat` SKU'su geçmiş satırlar için tanımlı kalır.
 
 ## Eval
