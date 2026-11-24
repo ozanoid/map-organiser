@@ -15,6 +15,12 @@ import { log } from "@/lib/telemetry/logger";
  * Priced and written to the same ledger as every other Claude call (Phase 2,
  * decision 6.4), so it counts toward the one monthly cap.
  *
+ * The API constrains the answer to a JSON schema compiled into a grammar.
+ * String formats compile large: two arrays of `format: uuid` made the place
+ * profile's grammar "too large" (400, 24.11.2026). So the schema sent leaves
+ * formats out, and the answer is checked against the full zod schema here —
+ * formats included — after the call is recorded.
+ *
  * Gemini does this work until the 6.2 measurement picks the Claude model
  * (docs/_plans/phase-2-assistant.md); the measurement runs through here.
  */
@@ -76,12 +82,12 @@ export async function structuredClaude<S extends z.ZodType>(
   const started = Date.now();
   let message;
   try {
-    message = await anthropicClient().messages.parse({
+    message = await anthropicClient().messages.create({
       model,
       max_tokens: call.maxTokens,
       system: [{ type: "text", text: call.system, cache_control: { type: "ephemeral" } }],
       messages: [{ role: "user", content: call.prompt }],
-      output_config: { effort, format: zodOutputFormat(call.schema) },
+      output_config: { effort, format: { type: "json_schema", schema: wireSchema(call.schema) } },
     });
   } catch (e) {
     generation.update({ level: "ERROR", statusMessage: e instanceof Error ? e.message : String(e) }).end();
@@ -145,8 +151,35 @@ export async function structuredClaude<S extends z.ZodType>(
   if (message.stop_reason === "max_tokens") {
     throw new StructuredCallError("max_tokens", `${call.label}: cut off at ${call.maxTokens} tokens`);
   }
-  if (message.parsed_output == null) {
-    throw new StructuredCallError("unparsed", `${call.label}: the answer didn't match the schema`);
+  const text = message.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("");
+  let json: unknown;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    throw new StructuredCallError("unparsed", `${call.label}: the answer isn't JSON`);
   }
-  return { output: message.parsed_output as z.infer<S>, cost, thinkingTokens, ms };
+  const parsed = call.schema.safeParse(json);
+  if (!parsed.success) {
+    const issues = parsed.error.issues
+      .slice(0, 5)
+      .map((i) => `${i.path.join(".")}: ${i.message}`)
+      .join("; ");
+    throw new StructuredCallError("unparsed", `${call.label}: the answer didn't match the schema — ${issues}`);
+  }
+  return { output: parsed.data as z.infer<S>, cost, thinkingTokens, ms };
+}
+
+/** The schema as the API compiles it: the SDK's strict JSON Schema of the
+ *  zod schema (required fields, no extra properties, unsupported keywords
+ *  dropped), without string formats — see above. */
+function wireSchema(schema: z.ZodType): Record<string, unknown> {
+  const strip = (node: unknown): unknown =>
+    Array.isArray(node)
+      ? node.map(strip)
+      : node && typeof node === "object"
+        ? Object.fromEntries(
+            Object.entries(node).flatMap(([k, v]) => (k === "format" && typeof v === "string" ? [] : [[k, strip(v)]]))
+          )
+        : node;
+  return strip(zodOutputFormat(schema).schema) as Record<string, unknown>;
 }

@@ -2,7 +2,7 @@
 title: Tech Stack
 type: overview
 domain: overview
-version: 1.7.2
+version: 1.8.0
 last_updated: 24.11.2026
 status: stable
 sources:
@@ -149,7 +149,10 @@ These are common adjacent picks that this repo deliberately doesn't use:
 - **Security audit (v1.43.0, 19.11.2026).** `npm audit` went from 36 vulnerable packages (2 critical, 14 high) to 4 moderate, all in the `shadcn` CLI's `ts-morph` → `minimatch` chain (dev only; `npm audit` offers only a downgrade). Upgrades stayed inside each package's major. Re-run `npm audit` after dependency changes; GitHub's Dependabot list counts per advisory, so its numbers are higher.
 - Scripts: `dev`, `build`, `start`, `lint`, and `eval:instagram` (v1.28.0 —
   the Instagram import's regression run; makes paid API calls, writes nothing to
-  the DB; see [[../05-flows/instagram-import-flow#measured-quality]]).
+  the DB; see [[../05-flows/instagram-import-flow#measured-quality]]; since
+  v1.50.0 `--model=` picks the reader). Also `eval:profiles` (v1.50.0, paid —
+  place profiles written by Gemini and Claude models side by side, nothing
+  saved), `eval:assistant`, `check:agent`, `check:agent:db`, `check:assistant`.
 - **Keep `node_modules` in step with the lockfile.** On 16.10.2026 a local
   install held `ai@7.0.31` and `@ai-sdk/google@4.0.18` while the lockfile pins
   `6.0.228` / `3.0.75`; `npm install` re-synced them. The 7

@@ -2,8 +2,8 @@
 title: Full Profile Flow (AI Phase 4)
 type: flow
 domain: places
-version: 1.5.0
-last_updated: 05.08.2026
+version: 1.6.0
+last_updated: 24.11.2026
 status: stable
 sources:
   - src/app/api/places/[id]/enrich/route.ts
@@ -59,7 +59,14 @@ signal quality.
 
 The profile logic itself lives in `src/lib/ai/generate-profile.ts`
 (extracted from the route so the cron can run it with the service
-client); `enrich?step=profile` is now a thin HTTP shell over it.
+client); `enrich?step=profile` is now a thin HTTP shell over it. Since
+v1.50.0 it is three steps: `profileInputs` (the place and its prompts),
+`writeProfile` (the model call, the count limits and the meta stamps —
+Gemini, or a Claude model through `structuredClaude` for the Phase 2 6.2
+measurement) and `generatePlaceProfile` (gates, save, auto-apply), which
+still writes with Gemini.
+
+Measured on 24.11.2026 (Phase 2, 6.2): on 10 places, Gemini 3 Flash wrote 10/10 profiles with 62 of 74 quotes found word for word in the reviews (84%), 30.1 s each; Claude Haiku 5.5 (effort high) 10/10, 84/89 (94%), 40.0 s, $0.006 a profile; Claude Sonnet 5.5 (effort medium) 10/10, 99/102 (97%), 14.7 s, $0.047 a profile. Category and sub-category agreed on 9 of 10 (LX Factory: Gemini Museum & Culture, both Claude models Shopping). Production still uses Gemini until Ozan picks the model.
 
 The user never waits for this — they save the place, see the lite profile
 chips, and the full profile materializes later on the place detail page via

@@ -6,6 +6,38 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 24.11.2026 — v1.50.0 — 6.2 measured: Claude for profiles and Instagram reads
+
+- The measurement harness (production keeps Gemini until Ozan picks):
+  `structuredClaude` (`src/lib/agent/structured.ts`) — one structured-output
+  Claude call, system prompt cached, priced into the one ledger; Claude
+  Haiku 5.5 in the price list; `readPost` takes a reader (Gemini by
+  default), `generate-profile.ts` split into `profileInputs` /
+  `writeProfile` / `generatePlaceProfile` (unchanged for production);
+  `npm run eval:instagram -- --model=…`, new `npm run eval:profiles`.
+- Found while measuring: two arrays of `format: uuid` made the profile
+  schema's grammar "too large" for structured outputs (400). The schema
+  sent leaves string formats out; the answer is checked against the full
+  zod schema after the call is recorded (it was also possible for a
+  billed call to go unrecorded when the SDK's own parsing threw — fixed).
+- Instagram (35 posts; 1 deleted; 42 places to add): Gemini 35 correct,
+  0 wrong; Claude Haiku 5.5 (high) 36 correct, 0 wrong, $0.00076 a read.
+  Haiku passed the precision contract, so Sonnet wasn't run (the plan).
+- Profiles (10 places): quotes found word for word in the reviews —
+  Gemini 84%, Haiku 5.5 high 94%, Sonnet 5.5 medium 97%; time 30 / 40 /
+  15 s; cost per profile $0.0095 (SKU) / $0.006 / $0.047. Category agreed
+  on 9 of 10. Side by side: https://claude.ai/artifact/5GY7RV3aX3fio8qatL4cUN
+- Spent ≈ $1.42 (Claude $0.55 in the ledger, the rest HikerAPI, Google
+  Maps search through DataForSEO and Gemini), inside the approved
+  $1.6–2.5. Two Sonnet passes failed on a dropped connection and were run
+  again; three of Gemini's Instagram posts likewise.
+- Docs: [[04-integrations/claude-agent]], [[05-flows/full-profile-flow]],
+  [[05-flows/instagram-import-flow]], [[04-integrations/gemini]],
+  [[05-flows/observability-flow]], [[06-ops/env-vars]],
+  [[00-overview/tech-stack]], [[_plans/phase-2-assistant]].
+
+---
+
 ## 24.11.2026 — v1.49.0 — rank_places: Claude ranks, no Gemini judge
 
 - `rank_places` (MCP and the app's assistant) no longer asks Gemini to

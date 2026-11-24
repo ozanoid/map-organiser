@@ -2,8 +2,8 @@
 title: Instagram Import Flow
 type: flow
 domain: places
-version: 1.3.1
-last_updated: 19.11.2026
+version: 1.4.0
+last_updated: 24.11.2026
 status: stable
 sources:
   - src/components/map/map-content.tsx
@@ -359,6 +359,8 @@ the owner's profile carries the phone, website or coordinates that pin it. One
 profile read per account, five in parallel. See [[../04-integrations/hikerapi]].
 
 ### 2. Classify (one Gemini call)
+
+> **v1.50.0:** `readPost` takes a `reader` (`PostReader`, passed through `AnalyzeDeps.reader`): Gemini by default — production unchanged — or a Claude model through `structuredClaude`, which retries once on an unusable answer and never on a refusal. The eval runs it with `--model=claude-haiku-5-5 --effort=high`. Measured on 24.11.2026 (35 posts, 1 deleted, 42 places to add): Gemini 35 correct, 1 optional, 0 wrong (83.3%); Claude Haiku 5.5 high 36 correct, 1 optional, 0 wrong (85.7%), ~$0.0008 a read against Gemini's ~$0.0014, no unusable answer. The model choice is Ozan's (Phase 2, 6.2).
 
 `readPost` (`src/lib/instagram/read-post.ts`): `gemini-3-flash-preview`,
 `Output.object(PostReadingSchema)`, `thinkingLevel: "low"`; the prompt carries the

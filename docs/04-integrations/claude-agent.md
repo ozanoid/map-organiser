@@ -2,7 +2,7 @@
 title: "Claude agent (platform side)"
 type: integration
 domain: integrations
-version: 1.4.0
+version: 1.5.0
 last_updated: 24.11.2026
 status: draft
 sources:
@@ -16,6 +16,7 @@ sources:
   - src/lib/agent/prompt.ts
   - src/lib/agent/errors.ts
   - src/lib/agent/client.ts
+  - src/lib/agent/structured.ts
   - src/lib/assistant/instructions.ts
   - src/lib/assistant/run-tool.ts
   - scripts/assistant-eval/run.ts
@@ -160,6 +161,10 @@ The panel ([[../03-frontend/components/assistant]]) speaks the AI SDK's UI messa
 ## Errors
 
 `AgentError` (`errors.ts`) with a code per cause and a message for the user (`userMessageFor`, also for a recorded code): the platform cap (`budget_exhausted`), the Console's organisation limit (`spend_limit` — a 429 with `enforced_spend_limit_reached`), billing, busy (rate limit / overload after the SDK's two retries), auth, a rejected request, an API failure, connection, a conflict (the input no longer fits the conversation: another request appended first or answered the same calls, the answers aren't for the cards waiting now, nothing to try again), a turn already in progress, nothing pending, not found. `isTransient` — busy, an API failure, connection — marks the ones Try again can fix.
+
+## One-shot structured calls (`structured.ts`, v1.50.0)
+
+`structuredClaude` — one Claude call outside the agent loop that answers in a fixed JSON shape (structured outputs): a place profile, an Instagram post's reading. Its system prompt is cached, the call is priced and written to the same ledger as every other Claude call (decision 6.4), and a refusal, a cut-off or an off-schema answer comes back as `StructuredCallError` after the call is recorded. The schema sent leaves string formats out — two arrays of `format: uuid` made the profile's grammar "too large" (400, 24.11.2026) — and the answer is checked against the full zod schema in code. Used by the 6.2 measurement (`npm run eval:profiles`, `npm run eval:instagram -- --model=…`); production keeps Gemini until the model is chosen. Claude Haiku 5.5 is in the price list ($0.10 / $0.50 per MTok up to a 100K-token prompt, $0.50 / $2.50 above).
 
 ## Testing
 

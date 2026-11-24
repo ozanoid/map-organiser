@@ -37,6 +37,29 @@ Needs `DATAFORSEO_LOGIN` / `DATAFORSEO_PASSWORD`, `HIKERAPI_KEY`,
 `GOOGLE_GENERATIVE_AI_API_KEY` and a Mapbox token in `.env.local`. Each post
 line shows the time it took and the searches it made.
 
+### Which model reads the posts (v1.50.0)
+
+```bash
+npm run eval:instagram -- --model=claude-haiku-5-5 --effort=high
+```
+
+`--model` is `gemini` (the default, as in production), `claude-haiku-5-5` or
+`claude-sonnet-5-5`; `--effort` is `low`, `medium` or `high` (default `high`). A
+Claude read needs `ANTHROPIC_API_KEY` and is written to `assistant_spend`
+(purpose `eval`, the owner's account); its cost is printed in the summary.
+
+Measured 24.11.2026 (35 posts, 1 deleted, 42 places to add):
+
+| Reader | Correct | Optional | Wrong / spurious | Recall | Per read |
+|---|---|---|---|---|---|
+| Gemini 3 Flash | 35 | 1 | 0 | 83.3% | ~$0.0014 |
+| Claude Haiku 5.5, high | 36 | 1 | 0 | 85.7% | $0.00076 (34 reads, $0.0259) |
+
+Posts that differed: `C0iuUU3Mspu` and `DWJ0aQljNFx` (Haiku found, Gemini
+missed), `DZxOpyQsN3f` (Gemini found, Haiku left an ambiguous candidate out).
+Three of Gemini's posts hit network errors in the full run and were run again
+with `--only=`.
+
 ## Cost per full run (35 posts, measured 18.11.2026)
 
 - HikerAPI 140 requests ≈ $0.14 at $1 / 1,000
