@@ -40,7 +40,8 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 - 6.3, approved: `npm run regen:profiles` rewrites the existing profiles
   with the current writer — plain calls, no Batch API (Ozan); every place
   with reviews whose profile it didn't write, re-runnable, `--dry-run`
-  (895 today), `--apply-suggestions` optional.
+  (895 today), `--apply-suggestions` optional; it saves the profiles it
+  replaces to a git-ignored backup file before the first write.
 - Schema, written and checked in a rolled-back transaction, **not
   applied**: `20261124180000_assistant_spend_purposes.sql` widens the
   ledger's `purpose` CHECK to `profile` and `instagram`.

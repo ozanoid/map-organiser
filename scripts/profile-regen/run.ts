@@ -13,7 +13,13 @@
  * across every account — so a run that stops can simply be run again. Goes
  * through generatePlaceProfile: each owner's AI switch, the monthly cap (the
  * run stops there), the ledger (purpose 'profile'). Progress on stdout.
+ *
+ * Before the first write the profiles it is about to replace are saved to
+ * scripts/profile-regen/out/backup-<time>.json (git-ignored): a rewrite
+ * can't be undone from the database.
  */
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { createClient } from "@supabase/supabase-js";
 import { PROFILE_WRITER } from "@/lib/agent/models";
 import { generatePlaceProfile } from "@/lib/ai/generate-profile";
@@ -52,6 +58,20 @@ async function main() {
   if (dryRun) return;
 
   const started = new Date().toISOString();
+  const backup: { id: string; user_id: string; name: string; place_profile: unknown }[] = [];
+  for (let i = 0; i < todo.length; i += 200) {
+    const { data, error } = await admin
+      .from("places")
+      .select("id, user_id, name, place_profile:google_data->place_profile")
+      .in("id", todo.slice(i, i + 200).map((r) => r.id));
+    if (error) throw error;
+    backup.push(...(data as typeof backup));
+  }
+  const outDir = join(process.cwd(), "scripts/profile-regen/out");
+  mkdirSync(outDir, { recursive: true });
+  const backupFile = join(outDir, `backup-${started.replace(/[:.]/g, "-")}.json`);
+  writeFileSync(backupFile, JSON.stringify(backup, null, 1));
+  console.log(`# ${backup.length} current profiles saved to ${backupFile}`);
   const counts: Record<string, number> = {};
   let next = 0;
   let stop: string | null = null;

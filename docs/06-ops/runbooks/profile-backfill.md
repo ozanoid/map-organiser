@@ -62,6 +62,9 @@ Worst case per place (reviews + profile): ≈ \$0.055 (v1.51.0; ~\$0.011 at Gemi
 > (Phase 2, 6.3): every place with reviews whose profile it didn't write,
 > re-runnable, `--dry-run` to count, `--apply-suggestions` to re-run the
 > tag / sub-category auto-apply too.
+> Before its first write it saves the profiles it is about to replace to
+> `scripts/profile-regen/out/backup-<time>.json` (git-ignored) — the
+> database keeps no copy of an overwritten profile.
 
 ### Rate limiting
 
