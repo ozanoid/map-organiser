@@ -2,7 +2,7 @@
 title: AI routes
 type: route-group
 domain: backend
-version: 1.10.0
+version: 1.11.0
 last_updated: 24.11.2026
 status: stable
 sources:
@@ -15,7 +15,6 @@ sources:
   - src/app/api/ai/compare/route.ts
   - src/lib/ai/schemas/compare.ts
   - src/lib/ai/prompts/compare.ts
-  - src/lib/ai/rank-engine.ts
   - src/app/api/ai/day-plan/route.ts
   - src/lib/ai/schemas/day-plan.ts
   - src/lib/ai/prompts/day-plan.ts

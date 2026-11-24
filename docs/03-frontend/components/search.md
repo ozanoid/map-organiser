@@ -2,8 +2,8 @@
 title: Search components
 type: component
 domain: frontend
-version: 1.2.0
-last_updated: 16.07.2026
+version: 1.3.0
+last_updated: 24.11.2026
 status: stable
 sources:
   - src/components/search/ai-search-input.tsx
@@ -31,10 +31,13 @@ search-related primitives (saved queries, query history, voice input).
 > input bar is no longer rendered anywhere. FilterPanel mounts
 > `<AiSearchInput bannerOnly />` — only the active-AI state surfaces
 > (query banner with its own clear ✕, clarification, adaptive broaden
-> toggle), fed by the two remaining producers: saved ✨ filter chips
-> re-running the pipeline, and the assistant's push writing the same
-> store. The component's input-mode code, the parse/rank endpoints and
-> the whole pipeline stay intact (rank-engine reuses them).
+> toggle), fed by the one remaining producer: saved ✨ filter chips
+> re-running the pipeline. (The Gemini assistant's push into the same
+> store went with that assistant in v1.48.0; `rank-engine`, which ran the
+> rank prompt for `rank_places`, was deleted in v1.49.0.) The component's
+> input-mode code, the parse/rank endpoints and the whole pipeline stay
+> intact — until the search bar's AI mode is handed to the assistant
+> (Phase 2, decision 6.1).
 
 > `src/components/search/ai-search-input.tsx`
 

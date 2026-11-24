@@ -2,8 +2,8 @@
 title: AI Search Flow (LLM-as-judge, Phase 6.5)
 type: flow
 domain: places
-version: 2.8.1
-last_updated: 16.10.2026
+version: 2.9.0
+last_updated: 24.11.2026
 status: stable
 sources:
   - src/lib/places/query-places.ts
@@ -109,6 +109,13 @@ Two entry points (both call the same `useAiSearch` mutation):
 > field; active-state banner/clarification/broaden survive). This flow's
 > pipeline is now driven exclusively by saved ✨ chips and the
 > assistant's `rank_places`/push. Endpoints and functions unchanged.
+>
+> **v1.48.0–v1.49.0 (24.11.2026):** the push went with the Gemini
+> assistant (v1.48.0) — the Claude assistant shows places with
+> `/map?ids=…` instead ([[ai-chat-flow]]) — and `rank_places` no longer
+> uses this flow's rank prompt (v1.49.0: Claude ranks the candidates
+> itself). Saved ✨ chips are the only producer left; the search bar's AI
+> mode is to be handed to the assistant (Phase 2, decision 6.1).
 
 ## Steps
 

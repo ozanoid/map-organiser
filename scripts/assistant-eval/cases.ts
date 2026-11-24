@@ -94,8 +94,10 @@ export const CASES: EvalCase[] = [
         text: "Going to Lisbon next weekend — what are my best dinner options there, and what do reviewers rave about?",
       },
     ],
-    expectTools: [["search_places", "rank_places"], ["read_reviews", "get_places"]],
-    note: "Lisbon restaurants from the library (Ramiro, Zé da Mouraria, Taberna Sal Grosso…), dishes from reviews.",
+    // Since v1.49.0 rank_places carries review-derived pros and themes: the
+    // dishes can come from those without another call (24.11.2026 run).
+    expectTools: [["search_places", "rank_places"]],
+    note: "Lisbon restaurants from the library (Ramiro, Zé da Mouraria, Taberna Sal Grosso…), dishes from reviews or rank_places' profiles.",
   },
   {
     id: "web-new-openings",

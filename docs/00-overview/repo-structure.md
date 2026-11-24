@@ -2,8 +2,8 @@
 title: Repo Structure
 type: overview
 domain: overview
-version: 1.13.2
-last_updated: 19.11.2026
+version: 1.14.0
+last_updated: 24.11.2026
 status: stable
 sources:
   - src/
@@ -118,9 +118,8 @@ src/
     ├── auth/                  safe-next.ts — same-site `next` validation for login and the OAuth callback (17.11.2026)
     ├── ai/                    AI SDK v6 wiring (Gemini 3 Flash). client.ts, context-builder.ts,
     │                          dedup.ts, normalize.ts, track-usage.ts (budgets), generate-profile.ts,
-    │                          chat-tools.ts (assistant tool belt, v1.21.0; +rank_places v1.23.0); rank-engine.ts (server-side LLM-as-judge twin, v1.23.0);
-    │                          schemas/ (Zod — +compare.ts v1.19.0, +day-plan.ts v1.22.0); prompts/ (place-profile-full.ts, compare.ts, chat.ts,
-    │                          day-plan.ts v1.22.0); extract/ (lite-profile.ts,
+    │                          schemas/ (Zod — +compare.ts v1.19.0, +day-plan.ts v1.22.0); prompts/ (place-profile-full.ts, compare.ts,
+    │                          parse-query.ts, rank-results.ts, day-plan.ts v1.22.0); extract/ (lite-profile.ts,
     │                          category-resolver.ts, features-extractor.ts,
     │                          suggestions-from-profile.ts); apply-suggestions.ts.
     ├── text/                  fold.ts — Turkish-aware text folding for matching (17.11.2026; moved from instagram/normalize.ts)

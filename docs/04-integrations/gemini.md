@@ -2,7 +2,7 @@
 title: Google Gemini (LLM)
 type: integration
 domain: integrations
-version: 1.11.0
+version: 1.12.0
 last_updated: 24.11.2026
 status: stable
 sources:
@@ -111,7 +111,7 @@ The output is Zod-validated at the SDK boundary, so route code can treat it as a
 | `POST /api/ai/parse-query` (Phase 6) | Parse NL search query into structured filters + semantic intent. | Per user-submitted query | ~700 ms – 1.5 s | `ai_parse_query` |
 | `POST /api/ai/compare` (S2 F-04, v1.19.0) | Per-theme winners + occasion picks for 2-4 places from stored profiles. | Deliberate click on /places/compare | ~2-5 s | `ai_compare` |
 | `POST /api/ai/rank-results` (Phase 6) | LLM-as-judge rerank against `place_profile.searchable_summary` when `requires_semantic_ranking` is set. | Conditional — only when the query has fuzzy intent | ~1–2 s | `ai_rank_results` |
-| `rank_places` assistant tool (MCP and the Claude agent) | Same LLM-as-judge prompt/schema as rank-results, run server-side via `rank-engine.ts`; `functionId: ai.mcp.rank`. Moves to Claude next (Phase 2, decision 6). | When the assistant ranks by a vibe | 7–39 s (23 calls in the 23.11.2026 eval, median 16.7 s) | `ai_rank_results` (behind the 3× `rank_backstop`) |
+| ~~`rank_places` assistant tool~~ — **moved to Claude in v1.49.0 (24.11.2026)** | Was: the rank-results prompt/schema run server-side via `rank-engine.ts` (deleted). Now the tool returns candidates with profiles and the conversing Claude judges them — no Gemini call ([[claude-mcp]]). | — | was 7–39 s (23 calls in the 23.11.2026 eval, median 16.7 s) | was `ai_rank_results` |
 | `POST /api/ai/day-plan` (AI Plan; S4 AI-09, v1.22.0 as `/api/ai/trip-plan`) | Distributes ≤40 candidate places across a plan's days (idx-referenced `DayPlanSchema`; applied as one atomic batch of plan changes). Input ≈ 15-20k tokens (compact ~350-tok/candidate projection + plan frame). | Deliberate click on the plan page's AI Plan dialog | ~3-8 s | `ai_trip_plan` (1 unit per generation, spent even when generation fails — the plan stays untouched) |
 | `readPost` (`src/lib/instagram/read-post.ts`, v1.28.0) — inside the `after()` job of `POST /api/instagram/import` | Instagram import: classifies every account a post points at (venue / venue_brand_multi / person / media_or_creator / brand_or_product / other), marks featured venues, quotes branch hints, addresses, plain-text venues and the area. `Output.object(PostReadingSchema)` with `thinkingLevel: "low"`; caption ≤ 3,000 chars, bios ≤ 200. It never picks a Google place — `resolve.ts` does that deterministically, and every quote is checked against the post text first. `functionId: ai.instagram-read-post`. | One per shared post (a repeat share within 10 min reuses the job); one retry when the answer has no usable object (`NoOutputGeneratedError` / `NoObjectGeneratedError` — 1 of 35 eval reads, v1.28.2) | not measured | `ai_instagram_read` (1 unit per call, retries and failed reads included) |
 

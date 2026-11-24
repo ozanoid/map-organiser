@@ -2,7 +2,7 @@
 title: "Claude agent (platform side)"
 type: integration
 domain: integrations
-version: 1.3.0
+version: 1.4.0
 last_updated: 24.11.2026
 status: draft
 sources:
@@ -124,10 +124,27 @@ Prices per million tokens (input / 5-min cache write / cache read / output): Opu
 | Sonnet 5.5 medium | 11/12 | $0.029 | 13.4 s |
 | Opus 5.5 low | 9/12 | $0.058 | 13.5 s |
 
-- Most of a turn's time is the tools: `rank_places` (Gemini) 15–40 s, web search 15–27 s; a model call 1–15 s. Text usually comes after all tools (9–21 s on average).
+- Most of a turn's time is the tools: `rank_places` (Gemini) 15–40 s, web search 15–27 s; a model call 1–15 s. Text usually comes after all tools (9–21 s on average). Since v1.49.0 `rank_places` doesn't call a model (below).
 - Writes: for one change the model says what it saves in a sentence; for a plan or a list it goes to the card without text — the door's approval card has to show the proposal readably.
 - Web search: `max_uses` is per request, and with `web_search_20260209` the searches the model's filtering code makes counted 4 in one call with a limit of 3. Ozan first kept 3 (23.11.2026); the signed-in test (24.11.2026) showed it too tight — the filtering code spent all three in its first step, couldn't use the results and had no search left, and the reply said it couldn't search. Now 10 per request (Ozan, 24.11.2026): a ceiling against a runaway loop, not a budget — the model decides how often to search; spend is bounded by the monthly cap and the turn's 10 calls. Conversations started before keep 3 (their tools are fixed). Price: $0.01 a search, plus the tokens of what the model reads (the filtering code is free with web search) — on Sonnet a searching call cost $0.106 in the eval ($0.03 of it 3 searches) and $0.049 in the test ($0.03 searches).
 - Caching works as designed: after the first call of a conversation, each call read the ~27k-token prefix from the cache (26,917 tokens written once for $0.067 on Sonnet, then read for $0.0027 a call — a twentieth of the normal input price).
+
+### `rank_places` handed to Claude (v1.49.0, 24.11.2026)
+
+The tool returns the candidates with short profiles and Claude ranks them (decision 6). The six subjective cases of the eval on Sonnet 5.5 high, against the 23.11 run with the Gemini judge (same cases, same library):
+
+| Case | Picks before (Gemini judge) | Picks after (Claude) | Turn time | Cost (Claude) |
+|---|---|---|---|---|
+| trendy-solo (London, solo, trendy) | Lucia's, Carmel, Bambi, Impala | Barrafina, Impala, Bistro Freddie, Carmel — chosen for counter seating | 36.1 → 25.6 s | $0.126 → $0.199 |
+| kadikoy-brunch | Joie, Neni | Joie, Neni | 13.6 → 9.8 s | $0.015 → $0.029 |
+| friday-plan (Soho dinner + bar) | Lina Stores + El Siete | Impala + El Siete | 18.2 → 16.0 s | $0.088 → $0.090 |
+| laptop-cafe | Thingy, Clarnico, Cinnamon Village 2, E5 Bakehouse | Thingy, Saint Espresso (Here East), Clarnico | 25.7 → 10.3 s | $0.029 → $0.072 |
+| lisbon-dinner | 7 restaurants | the same 7 + 4 | 12.7 → 13.8 s | $0.051 → $0.066 |
+| romantic-list | Luce e Limoni, Bistro Freddie, Salut!, CIRO'S, Perilla | the same five | 41.5 → 26.0 s | $0.064 → $0.125 |
+
+- Turns 30% faster on average (22.3 → 15.5 s); the call itself 0.4 s.
+- The pool costs more than estimated: 16–22k tokens read per ranking (estimated 9–12k; JSON tokenizes at ~2 characters a token, not 4). Claude's cost for the six cases $0.394 → $0.607; the Gemini calls it replaces cost $0.02 each (4 in the old run), so ~$0.02–0.035 more per ranking question.
+- `lisbon-dinner` answered from the profiles without `read_reviews` — the dishes are in the pros and themes; the case's expectation was loosened accordingly.
 
 ## The app door (v1.48.0)
 
@@ -136,6 +153,7 @@ The panel ([[../03-frontend/components/assistant]]) speaks the AI SDK's UI messa
 - **Live:** `turnStream` (`ui-stream.ts`) turns the agent's events into stream chunks — a step per model call, a text part per content block as it streams, a part per tool call and its result, the turn's outcome as `data-turn` (with the conversation's length, and whether Try again can help). A write call is held until the turn pauses, then sent with its **preview** and an approval request; every write is marked as one (`toolMetadata.write`).
 - **Stored:** `toUIMessages` (`ui.ts`) turns the append-only history (and the tool runs, and the recorded last turn) into the same UI messages, so a reload shows what the live stream showed: a card already answered shows "Saving…" while its turn runs, a run the turn never finished shows as interrupted, the last turn's outcome note comes back.
 - **One message id scheme** (`replyMessageId`): an assistant message's id is its first model message's position (`a{seq}`). The live stream's reply uses the same id, so a turn that carries a message on — an answer to its cards, Try again — updates it in place.
+- **Place links** (v1.49.0): the app's prompt (`prompt.ts`) has the model link a saved place to its page in the app (`[name](/places/<id>)`) instead of its maps_url; the panel offers "Show these N on map" for the places a reply links (`placeIdsIn`, `ui-types.ts`). claude.ai keeps maps_url links (the shared instructions).
 - **Previews** (`describe-writes.ts`): the card's text from the call's input — ids resolved to names through the user's own rows; a place proposed from a Google Maps search named from that search's result in the conversation. The model doesn't describe plans or lists before calling (eval), so the card has to.
 - **After the browser:** the chat route waits for the turn with `after()`; the turn lease makes another tab wait instead of starting a second turn.
 

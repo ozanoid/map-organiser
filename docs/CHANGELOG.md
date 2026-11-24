@@ -6,6 +6,47 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 24.11.2026 — v1.49.0 — rank_places: Claude ranks, no Gemini judge
+
+- `rank_places` (MCP and the app's assistant) no longer asks Gemini to
+  score places (Phase 2, decision 6). It filters like `search_places` and
+  returns the best-rated 30 — places carrying a boost tag always among them
+  — each with its row and a short review-derived profile (pros, cons, the
+  four most talked-about themes, what it is good for); the conversing
+  Claude judges and ranks them, and looks closer at finalists with
+  `get_places` / `read_reviews`. Inputs stay compatible (`intent` optional
+  and echoed back; `limit` is now the number of candidates, up to 30).
+- One profile shape for every tool: `src/lib/assistant/profile.ts`
+  (`get_places` keeps the full view, unchanged; `rank_places` the
+  shortlist view). `src/lib/ai/rank-engine.ts` deleted; the pool helper
+  moved to `place-filters.ts`. The search bar's AI mode is untouched.
+- The shared instruction drops "costs an AI call". The app's prompt links
+  a saved place to its page (`/places/<id>`); the panel offers "Show these
+  N on map" for the places a reply links (Ozan's choice, 1A) — a rank row
+  shows its candidate count and nothing to map.
+- Measured (24.11.2026, the eval's six subjective cases on Sonnet 5.5 high
+  vs the 23.11 run with the Gemini judge; run cost $0.61): picks largely
+  the same; turns 22.3 → 15.5 s on average, the call 0.4 s (was 15–64 s);
+  Claude's cost for the six $0.394 → $0.607, ~$0.02–0.035 more per
+  ranking question net of the $0.02 Gemini call; the pool is 16–22k tokens
+  (estimated 9–12k). `lisbon-dinner`'s tool expectation loosened: it
+  answered from the profiles, without `read_reviews`.
+- Also fixed: stale mentions of the Gemini chat's push into the search
+  store (comments in `ai-search-store.ts`, `use-ai-search.ts`) and of its
+  files in the repo map.
+- Checks: `npm run check:agent` 127 offline; `npm run check:assistant --
+  rank` (free) — the tool's shape, the default pool, a boost tag, and
+  `get_places`' profile.
+- Docs: [[04-integrations/claude-mcp]], [[04-integrations/claude-agent]],
+  [[04-integrations/gemini]], [[02-backend/api-routes/ai]],
+  [[02-backend/api-routes/assistant]], [[03-frontend/components/assistant]],
+  [[03-frontend/components/search]], [[05-flows/ai-chat-flow]],
+  [[05-flows/ai-search-flow]],
+  [[00-overview/repo-structure]], [[_plans/phase-2-assistant]],
+  [[_plans/personal-assistant]].
+
+---
+
 ## 24.11.2026 — v1.48.0 — The in-app assistant runs on Claude
 
 - New routes ([[02-backend/api-routes/assistant]]): `POST /api/assistant/chat`

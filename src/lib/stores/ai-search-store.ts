@@ -192,10 +192,9 @@ export const useAiSearchStore = create<AiSearchState>((set) => ({
       traceparent: null,
     }),
 
-  // Only fail a rerank that is actually pending: an assistant push
-  // (v1.23.0) can land rankings while an AI-search rerank is in flight —
-  // that late failure must not flip the banner to "failed" over working
-  // pushed rankings.
+  // Only fail a rerank that is actually pending. (Until v1.48.0 the
+  // Gemini assistant could push rankings while an AI-search rerank was in
+  // flight; nothing else writes them now, so the guard is a no-op.)
   failRerank: () =>
     set((s) =>
       s.rerankStatus === "pending"

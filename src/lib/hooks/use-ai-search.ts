@@ -155,9 +155,9 @@ export function useAiSearch() {
     },
     onSuccess: (data, query) => {
       // Staleness guard (v1.23.0): if something replaced or cleared the
-      // trace context while this parse was in flight — a newer search,
-      // or an assistant push writing the store — this result belongs to
-      // an abandoned pipeline. Applying it would clobber the newer view.
+      // trace context while this parse was in flight — a newer search —
+      // this result belongs to an abandoned pipeline. Applying it would
+      // clobber the newer view.
       if (
         useAiSearchStore.getState().traceparent !==
         (data as ParseQueryOutput & { _tp: string })._tp

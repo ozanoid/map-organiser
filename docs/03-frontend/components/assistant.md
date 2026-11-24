@@ -2,7 +2,7 @@
 title: Assistant components
 type: component
 domain: frontend
-version: 2.1.0
+version: 2.2.0
 last_updated: 24.11.2026
 status: draft
 sources:
@@ -46,8 +46,9 @@ Zustand: `open`, `draft`, `openAssistant(draft?)`, `setOpen`, `takeDraft()`. Any
 
 ## Parts (`assistant-parts.tsx`)
 
-- `ToolRow` — a read tool or web search: spinner → check with a summary ("12 places"); "after your answer" when it waits for a card; **Show N on map** for search / rank results (`/map?ids=…`); top web results as links; **Skipped** when it wasn't run (or the turn stopped before it), **didn't work** when it failed. Labels per tool in `READ_TOOLS` (presentation only).
+- `ToolRow` — a read tool or web search: spinner → check with a summary ("12 places"; `rank_places`: "Read place profiles · 30 candidates"); "after your answer" when it waits for a card; **Show N on map** for a search's results (`/map?ids=…`); top web results as links; **Skipped** when it wasn't run (or the turn stopped before it), **didn't work** when it failed. Labels per tool in `READ_TOOLS` (presentation only).
 - `ChangeCard` — a write: the card with its preview (`toolMetadata.preview`: title, subtitle, lines with a label column, "+ N more"), **Save / Not now** (destructive styling for deleting a visit or cancelling a plan); then *Saving…* (or "Will save — answer the other card" while another card waits), **Saved** with "Open …" link, **Not saved**, or **Couldn't save** with the reason (also "Interrupted before it finished" for a run whose turn is gone). `isWritePart` reads the server's mark (`toolMetadata.write`) — no list of write tools on the client. The "Open …" link into the app closes the panel.
+- `MapButton` — the one "Show on map" button: on a search row, and under a reply that links saved places — **Show these N on map** for the places the reply links to (`placeIdsIn`: `/places/<id>` links and same-origin URLs, in order, at most 25; v1.49.0). Shown once the reply is written.
 - `TurnNote` — the turn's outcome when it isn't a plain answer: a turn running elsewhere, an error with **Try again** when the server says it can help (`retry`), a refusal, a cut-off reply.
 
 ## `AssistantMarkdown` (`assistant-markdown.tsx`)
