@@ -6,6 +6,62 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 24.11.2026 — v1.51.0 — Profiles by Claude Sonnet 5.5, Instagram reads by Haiku 5.5
+
+- Ozan's choice after the 6.2 measurement: place profiles are written by
+  Claude Sonnet 5.5 at medium (`PROFILE_WRITER`) and Instagram posts read
+  by Claude Haiku 5.5 at high (`INSTAGRAM_READER`), both in
+  `src/lib/agent/models.ts`. Production uses them on this branch; main
+  still runs Gemini until the merge.
+- One ledger, one cap (decision 6.4): each call goes to `assistant_spend`
+  under its purpose (`profile`, `instagram`); over the monthly cap the place
+  is saved without a profile (the refresh sweep or the backfill writes it
+  later) and an Instagram import fails with `budget_exceeded`. The Gemini-era
+  `ai_place_profile` / `ai_instagram_read` rows are no longer written (the
+  SKUs stay for past months) and the per-user PROFILE (1000) / INSTAGRAM
+  (300) budgets are removed from `src/lib/ai/track-usage.ts`. The gates need
+  `ANTHROPIC_API_KEY` instead of the Gemini key. That 300-post budget also
+  bounded the import's HikerAPI and Google Maps searches; nothing bounds them
+  by count now (open question to Ozan).
+- The post reader is a required argument (`readPost`, `AnalyzeDeps.reader`):
+  no silent default to Gemini.
+- Settings → AI follows the provider each feature needs: the master switch is
+  usable while either key is set, one banner per missing key, and the
+  profile backfill and the suggestions queue need Claude.
+- The profile backfill's estimate (`GET /api/user/backfill-profiles`) priced
+  Gemini and DataForSEO reviews at $1 / 1,000: now the writer's measured
+  cost (`PROFILE_WRITER_AVG_USD` = $0.047, `models.ts`) and the reviews
+  SKU's real price ($7.50 / 1,000, `SKU_CONFIG`). The panel's copy no longer
+  names Gemini Flash.
+- `scripts/assistant-check/tsconfig.json`: relative paths instead of the
+  deprecated `baseUrl`, like the eval's.
+- Settings → usage: the Claude row ("Claude", was "Claude assistant")
+  shows what each purpose took this month (`assistant.byPurpose`).
+- 6.3, approved: `npm run regen:profiles` rewrites the existing profiles
+  with the current writer — plain calls, no Batch API (Ozan); every place
+  with reviews whose profile it didn't write, re-runnable, `--dry-run`
+  (895 today), `--apply-suggestions` optional.
+- Schema, written and checked in a rolled-back transaction, **not
+  applied**: `20261124180000_assistant_spend_purposes.sql` widens the
+  ledger's `purpose` CHECK to `profile` and `instagram`.
+- Docs: [[04-integrations/claude-agent]], [[04-integrations/gemini]],
+  [[04-integrations/hikerapi]], [[04-integrations/_README]],
+  [[05-flows/full-profile-flow]], [[05-flows/ai-enrichment-flow]],
+  [[05-flows/instagram-import-flow]], [[02-backend/schema/api_usage]],
+  [[02-backend/schema/assistant-conversations]],
+  [[02-backend/api-routes/instagram]], [[02-backend/api-routes/user]],
+  [[03-frontend/components/settings]], [[06-ops/env-vars]],
+  [[06-ops/runbooks/periodic-refresh]], [[06-ops/runbooks/profile-backfill]],
+  [[00-overview/tech-stack]], [[_plans/phase-2-assistant]],
+  [[02-backend/api-routes/places]], [[02-backend/api-routes/_README]],
+  [[04-integrations/claude-mcp]], [[00-overview/repo-structure]],
+  [[00-overview/system-overview]], [[00-overview/glossary]],
+  [[01-domain/places]], [[01-domain/categories-and-tags]],
+  [[01-domain/users-and-profiles]], [[05-flows/_README]],
+  [[05-flows/place-import-flow]], [[05-flows/lite-profile-flow]].
+
+---
+
 ## 24.11.2026 — v1.50.0 — 6.2 measured: Claude for profiles and Instagram reads
 
 - The measurement harness (production keeps Gemini until Ozan picks):

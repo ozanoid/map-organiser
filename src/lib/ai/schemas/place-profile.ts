@@ -10,7 +10,7 @@ import { z } from "zod";
  *           suggestions (existing-match only) are populated. Other fields null.
  *
  *   - full: produced by /api/places/[id]/enrich?step=profile after reviews
- *           are fetched. Single Gemini Flash call returns the full object.
+ *           are fetched. One model call (PROFILE_WRITER) returns the full object.
  *
  * The same JSONB path (places.google_data.place_profile) holds either
  * variant; consumers branch on `completeness`.

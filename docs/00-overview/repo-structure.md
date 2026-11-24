@@ -2,7 +2,7 @@
 title: Repo Structure
 type: overview
 domain: overview
-version: 1.14.0
+version: 1.14.1
 last_updated: 24.11.2026
 status: stable
 sources:
@@ -116,7 +116,7 @@ src/
     │                          place projection, name resolution, time + busyness helpers), place-filters.ts, mcp.ts (MCP server),
     │                          verify-token.ts, oauth.ts (resource paths, redirect allowlist), owner.ts — see [[../04-integrations/claude-mcp]]
     ├── auth/                  safe-next.ts — same-site `next` validation for login and the OAuth callback (17.11.2026)
-    ├── ai/                    AI SDK v6 wiring (Gemini 3 Flash). client.ts, context-builder.ts,
+    ├── ai/                    AI SDK v6 wiring (Gemini 3 Flash; profiles by Claude since v1.51.0). client.ts, context-builder.ts,
     │                          dedup.ts, normalize.ts, track-usage.ts (budgets), generate-profile.ts,
     │                          schemas/ (Zod — +compare.ts v1.19.0, +day-plan.ts v1.22.0); prompts/ (place-profile-full.ts, compare.ts,
     │                          parse-query.ts, rank-results.ts, day-plan.ts v1.22.0); extract/ (lite-profile.ts,
@@ -142,7 +142,7 @@ src/
     ├── google/                URL parser + category mapping + Takeout parser + usage tracker + key access (the Google
     │                          Places API modules were removed in v1.42.0 — every lookup goes through DataForSEO)
     ├── hikerapi/              client.ts — HikerAPI (Instagram data) wrapper, server-only (v1.28.0)
-    ├── instagram/             The Instagram import (v1.28.0): url.ts + types.ts (client-safe), analyze.ts, read-post.ts (Gemini),
+    ├── instagram/             The Instagram import (v1.28.0): url.ts + types.ts (client-safe), analyze.ts, read-post.ts (Claude Haiku 5.5 since v1.51.0),
     │                          resolve.ts (deterministic pinning rules), normalize.ts, maps-link.ts, import-job.ts, provenance.ts
     ├── import/                process-place.ts (resolveIdentity / findExisting / importPlace / ensurePlacePhoto),
     │                          kick-drain.ts (nudge the drain; shared by both imports, v1.28.0)

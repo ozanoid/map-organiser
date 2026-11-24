@@ -5,6 +5,11 @@ import { createClient } from "@/lib/supabase/server";
 /**
  * AI SKU registry. Pricing in USD per 1k calls (approximate).
  *
+ * Gemini calls only. Place profiles and Instagram post reads are Claude calls
+ * since v1.51.0 (24.11.2026): each is priced into the agent's ledger
+ * (assistant_spend, src/lib/agent/spend.ts) and stops at its monthly cap.
+ * Their SKUs below stay for the months that still have rows.
+ *
  * Model: gemini-3-flash-preview (since 15.07.2026). Verified rates
  * (ai.google.dev pricing, standard tier):
  *   - $0.50 / 1M input tokens (text)
@@ -28,6 +33,7 @@ export const AI_SKU_CONFIG = {
     costPer1k: 20.0,
     freeMonthly: 0,
   },
+  // Gemini profiles until v1.51.0 — nothing writes it now.
   ai_place_profile: {
     name: "AI Place Profile",
     costPer1k: 9.5,
@@ -67,8 +73,8 @@ export const AI_SKU_CONFIG = {
     costPer1k: 12.0,
     freeMonthly: 0,
   },
-  // Instagram import: one unit = one post read (~1.2k in / ~0.3k out
-  // tokens with low thinking ≈ $0.0015).
+  // Instagram import until v1.51.0 (Gemini) — nothing writes it now. One unit
+  // was one post read (~1.2k in / ~0.3k out tokens, low thinking ≈ $0.0015).
   ai_instagram_read: {
     name: "AI Instagram Read",
     costPer1k: 1.5,
@@ -104,24 +110,23 @@ export async function trackAiUsage(
 }
 
 /**
- * Per-user MONTHLY AI budgets — two separate buckets (15.07.2026;
- * replaced the single per-call cap after the Gemini 3 price verification
- * showed searches dominate cost).
+ * Per-user MONTHLY AI budgets for the Gemini features (15.07.2026; replaced
+ * the single per-call cap after the Gemini 3 price verification showed
+ * searches dominate cost).
  *
  * - SEARCH: 500 searches/month. One search burns ONE budget unit no
  *   matter how many LLM calls it makes — counted via the ai_parse_query
  *   SKU (every search runs exactly one parse; rank re-fires from broaden
  *   toggles are free). Ceiling ≈ 500 × ~$0.021 ≈ $10.5/month.
- * - PROFILE: 1000 place-profile generations/month — covers the add-place
- *   chain, manual refresh chain, backfill, and the cron sweep together.
- *   Ceiling = 1000 × ~$9.5/1k ≈ $9.5/month. A full ~470-place backfill
- *   fits inside a single month.
  * - RANK BACKSTOP: rank_results is already budgeted through the search
  *   bucket at parse time; its own 3× ceiling exists ONLY so a client-side
  *   rerank-loop bug can't bypass the parse gate and run up cost.
+ *
+ * Place profiles (1000 a month) and Instagram post reads (300 a month) had
+ * buckets here until v1.51.0; as Claude calls they are bounded by the
+ * ledger's monthly cap instead.
  */
 export const AI_MONTHLY_SEARCH_CAP = 500;
-export const AI_MONTHLY_PROFILE_CAP = 1000;
 export const AI_MONTHLY_RANK_BACKSTOP = AI_MONTHLY_SEARCH_CAP * 3;
 /** v1.19.0 — hardcoded like its siblings (caps are code constants here,
  *  not env vars; keep the convention). One unit per compare request. */
@@ -129,25 +134,14 @@ export const AI_MONTHLY_COMPARE_CAP = 200;
 /** v1.22.0 (S4 AI-09) — one unit per plan generation; deliberate-click
  *  only from the plan page's AI Plan dialog. */
 export const AI_MONTHLY_TRIP_PLAN_CAP = 50;
-/** One unit per Instagram post import (one Gemini read; it also bounds the
- *  HikerAPI and Google calls the import makes). */
-export const AI_MONTHLY_INSTAGRAM_CAP = 300;
 
-export type AiBudgetKind =
-  | "search"
-  | "profile"
-  | "rank_backstop"
-  | "compare"
-  | "trip_plan"
-  | "instagram";
+export type AiBudgetKind = "search" | "rank_backstop" | "compare" | "trip_plan";
 
 const BUDGETS: Record<AiBudgetKind, { sku: AiSku; cap: number }> = {
   search: { sku: "ai_parse_query", cap: AI_MONTHLY_SEARCH_CAP },
-  profile: { sku: "ai_place_profile", cap: AI_MONTHLY_PROFILE_CAP },
   rank_backstop: { sku: "ai_rank_results", cap: AI_MONTHLY_RANK_BACKSTOP },
   compare: { sku: "ai_compare", cap: AI_MONTHLY_COMPARE_CAP },
   trip_plan: { sku: "ai_trip_plan", cap: AI_MONTHLY_TRIP_PLAN_CAP },
-  instagram: { sku: "ai_instagram_read", cap: AI_MONTHLY_INSTAGRAM_CAP },
 };
 
 export interface AiCapStatus {

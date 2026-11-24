@@ -6,8 +6,10 @@ import { buildUserContext, type UserContext } from "@/lib/ai/context-builder";
 import { PlaceProfileSchema, type PlaceProfile } from "@/lib/ai/schemas/place-profile";
 import { buildPlaceProfilePrompt } from "@/lib/ai/prompts/place-profile-full";
 import { applyProfileSuggestions } from "@/lib/ai/apply-suggestions";
-import { trackAiUsage, checkAiBudget } from "@/lib/ai/track-usage";
+import { PROFILE_WRITER } from "@/lib/agent/models";
+import { MONTHLY_CAP_USD, supabaseSpendLedger } from "@/lib/agent/spend";
 import { structuredClaude, type ClaudeChoice, type SpendContext } from "@/lib/agent/structured";
+import { createServiceClient } from "@/lib/supabase/server";
 import { loadVocabulary, type Vocabulary } from "@/lib/vocabulary/read";
 
 /** Prompt-stated limits, enforced by truncation after generation — never in the
@@ -18,7 +20,8 @@ const MAX_EVIDENCE_QUOTES = 2;
 export type GenerateProfileOutcome =
   | {
       ok: true;
-      applied: Awaited<ReturnType<typeof applyProfileSuggestions>>;
+      /** null when the suggestions weren't applied (applySuggestions: false). */
+      applied: Awaited<ReturnType<typeof applyProfileSuggestions>> | null;
     }
   | {
       ok: false;
@@ -29,6 +32,7 @@ export type GenerateProfileOutcome =
         | "not_found"
         | "no_reviews"
         | "llm_failed";
+      /** cap_exceeded: this month's Claude spend and the cap, in US dollars. */
       capUsed?: number;
       capLimit?: number;
     };
@@ -48,9 +52,9 @@ export interface ProfileInputs {
 }
 
 /**
- * Who writes the profile: Gemini, until the Phase 2 6.2 measurement picks a
- * Claude model (docs/_plans/phase-2-assistant.md); a Claude model for the
- * measurement, priced into the one ledger.
+ * Who writes the profile: production passes PROFILE_WRITER (Claude Sonnet 5.5,
+ * since v1.51.0), priced into the one ledger; the profile eval can also ask
+ * Gemini, the writer until then (docs/_plans/phase-2-assistant.md, 6.2).
  */
 export type ProfileWriter = { kind: "gemini" } | { kind: "claude"; choice: ClaudeChoice; spend: SpendContext };
 
@@ -226,15 +230,22 @@ export async function writeProfile(
  * Extracted from enrich?step=profile (15.07.2026) so the same logic runs
  * under BOTH the cookie-scoped user client (routes) and the service-role
  * client (the refresh cron). Every query filters by userId explicitly —
- * nothing in this path relies on RLS. Gemini writes it (writeProfile) until
- * the 6.2 measurement decides.
+ * nothing in this path relies on RLS.
+ *
+ * Written by Claude (PROFILE_WRITER — Sonnet 5.5 at medium, Ozan's choice
+ * after the 6.2 measurement); Gemini wrote profiles until 24.11.2026. The
+ * call is priced into the one ledger (purpose 'profile') and stops at its
+ * monthly cap: over it, the place keeps its data and the profile waits.
+ * `applySuggestions: false` replaces the profile alone — the bulk rewrite of
+ * existing profiles (6.3) can leave tags and categories as they are.
  */
 export async function generatePlaceProfile(
   supabase: SupabaseClient,
   userId: string,
-  placeId: string
+  placeId: string,
+  options: { applySuggestions?: boolean } = {}
 ): Promise<GenerateProfileOutcome> {
-  // Gates — same order as the original route: flag → client → cap.
+  // Gates: the user's AI switch → the Claude key → the month's cap.
   const { data: profileRow } = await supabase
     .from("profiles")
     .select("ai_features_enabled")
@@ -244,18 +255,15 @@ export async function generatePlaceProfile(
     return { ok: false, reason: "ai_disabled" };
   }
 
-  if (!getAiClient()) {
+  if (!process.env.ANTHROPIC_API_KEY) {
     return { ok: false, reason: "not_configured" };
   }
 
-  const cap = await checkAiBudget("profile", userId, supabase);
-  if (cap.exceeded) {
-    return {
-      ok: false,
-      reason: "cap_exceeded",
-      capUsed: cap.used,
-      capLimit: cap.cap,
-    };
+  // The ledger is written with the service role, whatever client the caller has.
+  const ledger = supabaseSpendLedger(createServiceClient());
+  const spent = await ledger.monthToDate();
+  if (spent >= MONTHLY_CAP_USD) {
+    return { ok: false, reason: "cap_exceeded", capUsed: spent, capLimit: MONTHLY_CAP_USD };
   }
 
   const inputs = await profileInputs(supabase, userId, placeId);
@@ -263,7 +271,12 @@ export async function generatePlaceProfile(
 
   let profile: PlaceProfile;
   try {
-    profile = (await writeProfile(inputs, { kind: "gemini" }, { userId, placeId })).profile;
+    const writer: ProfileWriter = {
+      kind: "claude",
+      choice: PROFILE_WRITER,
+      spend: { ledger, userId, purpose: "profile" },
+    };
+    profile = (await writeProfile(inputs, writer, { userId, placeId })).profile;
   } catch (e) {
     console.error(`[enrich:profile] LLM call failed for ${placeId}:`, e);
     return { ok: false, reason: "llm_failed" };
@@ -284,6 +297,11 @@ export async function generatePlaceProfile(
     .eq("id", placeId)
     .eq("user_id", userId);
 
+  if (options.applySuggestions === false) {
+    console.log(`[enrich:profile] Done for ${placeId}: profile only, suggestions not applied`);
+    return { ok: true, applied: null };
+  }
+
   // Unified auto-apply (Phase 5.5): considers LLM's primary vs current
   // category, queues a category_change or a sub-cat-with-move when they
   // disagree.
@@ -303,11 +321,9 @@ export async function generatePlaceProfile(
     })),
     currentCategoryId,
     currentCategoryName,
-    modelVersion: MODEL_VERSION,
+    modelVersion: PROFILE_WRITER.model,
     vocabulary,
   });
-
-  trackAiUsage(userId, "ai_place_profile", supabase).catch(() => {});
 
   console.log(
     `[enrich:profile] Done for ${placeId}: tagsApplied=${applied.tagsApplied} tagsQueued=${applied.tagsQueued} subCat=${applied.subcategoryApplied ?? applied.subcategoryQueued ?? "none"} catChange=${applied.categoryChangeQueued ?? "none"}`

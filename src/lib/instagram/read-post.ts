@@ -5,7 +5,7 @@ import { getAiClient, FLASH_MODEL } from "@/lib/ai/client";
 import { structuredClaude, StructuredCallError, type ClaudeChoice, type SpendContext } from "@/lib/agent/structured";
 
 /**
- * One Gemini call reads an Instagram post: which accounts are venues, whether
+ * One model call reads an Instagram post: which accounts are venues, whether
  * the post features them, the branch or street address the post gives, venue
  * names written only in the caption, and the area the post is about.
  *
@@ -49,9 +49,9 @@ export const PostReadingSchema = z.object({
 export type PostReading = z.infer<typeof PostReadingSchema>;
 
 /**
- * Who reads the post: Gemini, until the 6.2 measurement picks a Claude
- * model (docs/_plans/phase-2-assistant.md); a Claude model for the
- * measurement, priced into the one ledger.
+ * Who reads the post: the import passes INSTAGRAM_READER (Claude Haiku 5.5,
+ * since v1.51.0), priced into the one ledger; the eval can also ask Gemini,
+ * the reader until then (docs/_plans/phase-2-assistant.md, 6.2).
  */
 export type PostReader = { kind: "gemini" } | { kind: "claude"; choice: ClaudeChoice; spend: SpendContext };
 export type AccountRole = (typeof ROLES)[number];
@@ -107,7 +107,7 @@ const ATTEMPTS = 2;
 
 export async function readPost(
   input: PostReadingInput,
-  meta: { userId: string; shortcode: string; onAttempt?: () => void; reader?: PostReader }
+  meta: { userId: string; shortcode: string; onAttempt?: () => void; reader: PostReader }
 ): Promise<PostReading> {
   const prompt = `POST DATA (JSON):\n${JSON.stringify(
       {
@@ -128,7 +128,7 @@ export async function readPost(
       null,
       1
     )}`;
-  const reader = meta.reader ?? { kind: "gemini" };
+  const { reader } = meta;
   if (reader.kind === "claude") return readWithClaude(prompt, meta, reader);
 
   const ai = getAiClient();

@@ -15,7 +15,7 @@ import {
  * Lives under the AI tab in Settings. Lists pending proposals that the
  * Phase 4 full place_profile pipeline produced for entities the user
  * doesn't already own:
- *   - new tag names (Gemini found them, fuzzy dedup didn't catch them
+ *   - new tag names (the profile writer found them, fuzzy dedup didn't catch them
  *     as variations of existing tags)
  *   - new sub-category slugs (LLM proposed a slug not in the user's
  *     dictionary under the resolved parent category)

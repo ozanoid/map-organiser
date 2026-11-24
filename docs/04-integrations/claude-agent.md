@@ -2,7 +2,7 @@
 title: "Claude agent (platform side)"
 type: integration
 domain: integrations
-version: 1.5.0
+version: 1.6.0
 last_updated: 24.11.2026
 status: draft
 sources:
@@ -164,7 +164,7 @@ The panel ([[../03-frontend/components/assistant]]) speaks the AI SDK's UI messa
 
 ## One-shot structured calls (`structured.ts`, v1.50.0)
 
-`structuredClaude` — one Claude call outside the agent loop that answers in a fixed JSON shape (structured outputs): a place profile, an Instagram post's reading. Its system prompt is cached, the call is priced and written to the same ledger as every other Claude call (decision 6.4), and a refusal, a cut-off or an off-schema answer comes back as `StructuredCallError` after the call is recorded. The schema sent leaves string formats out — two arrays of `format: uuid` made the profile's grammar "too large" (400, 24.11.2026) — and the answer is checked against the full zod schema in code. Used by the 6.2 measurement (`npm run eval:profiles`, `npm run eval:instagram -- --model=…`); production keeps Gemini until the model is chosen. Claude Haiku 5.5 is in the price list ($0.10 / $0.50 per MTok up to a 100K-token prompt, $0.50 / $2.50 above).
+`structuredClaude` — one Claude call outside the agent loop that answers in a fixed JSON shape (structured outputs): a place profile, an Instagram post's reading. Its system prompt is cached, the call is priced and written to the same ledger as every other Claude call (decision 6.4), and a refusal, a cut-off or an off-schema answer comes back as `StructuredCallError` after the call is recorded. The schema sent leaves string formats out — two arrays of `format: uuid` made the profile's grammar "too large" (400, 24.11.2026) — and the answer is checked against the full zod schema in code. Used by the 6.2 measurement (`npm run eval:profiles`, `npm run eval:instagram -- --model=…`) and, since v1.51.0, in production: place profiles by Claude Sonnet 5.5 at medium (`PROFILE_WRITER`) and Instagram reads by Claude Haiku 5.5 at high (`INSTAGRAM_READER`) — Ozan's choice, both in `models.ts`. Each is recorded under its own purpose (`profile`, `instagram`), and each stops at the monthly cap: the place is saved without a profile (the refresh sweep or the Settings backfill writes it later), an Instagram import fails with `budget_exceeded`. Settings shows the month's spend per purpose. The existing profiles are rewritten with `npm run regen:profiles` (6.3). Claude Haiku 5.5 is in the price list ($0.10 / $0.50 per MTok up to a 100K-token prompt, $0.50 / $2.50 above).
 
 ## Testing
 

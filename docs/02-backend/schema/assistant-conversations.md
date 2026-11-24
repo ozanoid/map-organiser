@@ -2,7 +2,7 @@
 title: assistant_conversations, assistant_messages, assistant_spend, assistant_tool_runs
 type: table
 domain: backend
-version: 2.1.0
+version: 2.2.0
 last_updated: 24.11.2026
 status: draft
 sources:
@@ -67,7 +67,7 @@ One row per Claude API call. The dollar amount is computed with the price at the
 | `id` | bigint | no | identity | **PK**. |
 | `user_id` | uuid | no | — | FK → `auth.users.id`, ON DELETE CASCADE. |
 | `conversation_id` | uuid | yes | — | FK → `assistant_conversations.id`, ON DELETE SET NULL — deleting a conversation keeps what it cost. |
-| `purpose` | text | no | — | CHECK `chat` \| `eval`. |
+| `purpose` | text | no | — | CHECK `chat` \| `eval`; `profile` \| `instagram` added by the pending migration below (v1.51.0). |
 | `model` | text | no | — | The model that served the call. |
 | `request_id` | text | yes | — | The API's request id, for support. |
 | `input_tokens`, `output_tokens`, `cache_write_tokens`, `cache_read_tokens` | integer | no | `0` | CHECK ≥ 0. |
@@ -118,6 +118,10 @@ Before applying, in a rolled-back transaction on the live database as the signed
 ## Checked — the second migration
 
 Before applying, in a rolled-back transaction on the live database, and again after applying it (23.11.2026): the owner can't start a conversation, append a message, write or change a tool run, or set the lease (42501 / 0 rows); the service role writes all of it; the lease is taken once, refused while held and taken again after it runs out; a second claim of the same call is refused (23505); a `done` run without a result and an unknown decision are refused (23514); another user sees nothing; deleting a conversation removes its runs. After applying: 5 policies on the four tables, RLS on for all four. The store's own queries were then run against the live database without writing anything (`npm run check:agent:db`, 10 checks): every query is accepted, inserts are refused only by the foreign key, no row was written.
+
+## Pending — `assistant_spend` purposes (written 24.11.2026, not applied)
+
+`20261124180000_assistant_spend_purposes.sql` widens the `purpose` CHECK to `chat`, `eval`, `profile`, `instagram`: place profiles (Claude Sonnet 5.5) and Instagram reads (Claude Haiku 5.5) are Claude calls in the one ledger (decision 6.4). Checked in a rolled-back transaction: a `profile` and an `instagram` row are accepted, an unknown purpose is refused (23514), the 299 existing rows pass, nothing persisted. Waits for Ozan's approval; the profile writer and the Instagram import need it (without it their ledger rows would be refused and logged, the spend unrecorded).
 
 ## Checked — the third migration
 

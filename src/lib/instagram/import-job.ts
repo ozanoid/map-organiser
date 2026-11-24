@@ -1,7 +1,9 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { HikerApiError } from "@/lib/hikerapi/client";
-import { checkAiBudget, trackAiUsage } from "@/lib/ai/track-usage";
+import { AgentError } from "@/lib/agent/errors";
+import { INSTAGRAM_READER } from "@/lib/agent/models";
+import { MONTHLY_CAP_USD, supabaseSpendLedger } from "@/lib/agent/spend";
 import { trackUsage } from "@/lib/google/track-usage";
 import { findExisting } from "@/lib/import/process-place";
 import { kickDrain } from "@/lib/import/kick-drain";
@@ -85,6 +87,7 @@ function errorCode(e: unknown): InstagramJobError {
   if (e instanceof InstagramImportError) return e.code;
   if (e instanceof HikerApiError && e.status === 0) return "not_configured";
   if (e instanceof Error && e.message === "ai_not_configured") return "not_configured";
+  if (e instanceof AgentError && e.code === "auth") return "not_configured";
   return "service_error";
 }
 
@@ -114,14 +117,16 @@ export async function runInstagramImportJob(args: {
   };
 
   try {
-    const budget = await checkAiBudget("instagram", userId, admin);
-    if (budget.exceeded) {
+    // The read is a Claude call: one ledger, one monthly cap for every
+    // Claude call (Phase 2, decision 6.4). Over it, the import waits for
+    // next month.
+    const ledger = supabaseSpendLedger(admin);
+    if ((await ledger.monthToDate()) >= MONTHLY_CAP_USD) {
       await finish({ phase: "failed", shortcode, error: "budget_exceeded" });
       return;
     }
 
     const billed = { hikerapi_request: 0, dataforseo_maps_search: 0, mapbox_geocoding: 0 };
-    let aiCalls = 0;
     let analysis;
     try {
       analysis = await analyzeInstagramPost(postUrl, {
@@ -129,18 +134,15 @@ export async function runInstagramImportJob(args: {
         onBilled: (sku) => {
           billed[sku]++;
         },
-        onAiCall: () => {
-          aiCalls++;
-        },
+        reader: { kind: "claude", choice: INSTAGRAM_READER, spend: { ledger, userId, purpose: "instagram" } },
       });
     } finally {
-      // Billed whether or not the read succeeded — a failed or retried Gemini
-      // call costs the same as a good one.
+      // Billed whether or not the read succeeded. The Claude read is in the
+      // ledger already (structuredClaude records every answered call).
       const tracking: Promise<void>[] = [];
       for (const sku of ["hikerapi_request", "dataforseo_maps_search", "mapbox_geocoding"] as const) {
         for (let i = 0; i < billed[sku]; i++) tracking.push(trackUsage(userId, sku, admin));
       }
-      for (let i = 0; i < aiCalls; i++) tracking.push(trackAiUsage(userId, "ai_instagram_read", admin));
       await Promise.all(tracking);
     }
 

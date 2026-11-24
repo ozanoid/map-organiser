@@ -9,9 +9,18 @@ import { BackfillProfilesPanel } from "@/components/settings/backfill-profiles-p
 
 interface AiSettingsState {
   enabled: boolean;
+  /** Gemini is set up: AI search, AI Plan, Compare. */
   available: boolean;
+  /** Claude is set up: the assistant, place profiles, Instagram imports. */
+  assistantAvailable: boolean;
   cronRefreshEnabled: boolean;
 }
+
+/** One line per AI provider this deployment is missing. */
+const PROVIDERS = [
+  { flag: "available", env: "GOOGLE_GENERATIVE_AI_API_KEY", what: "AI search, AI Plan and Compare are" },
+  { flag: "assistantAvailable", env: "ANTHROPIC_API_KEY", what: "The assistant, place profiles and Instagram imports are" },
+] as const;
 
 /**
  * Settings → AI tab.
@@ -112,7 +121,8 @@ export function AiSettings() {
 
   if (!state) return null;
 
-  const disabled = !state.available || saving;
+  // The switch governs features on both providers: usable when either is set up.
+  const disabled = (!state.available && !state.assistantAvailable) || saving;
 
   return (
     <div className="space-y-4">
@@ -148,18 +158,21 @@ export function AiSettings() {
         </button>
       </div>
 
-      {!state.available && (
-        <div className="flex items-start gap-2 text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 p-3 rounded-md">
+      {PROVIDERS.filter((p) => !state[p.flag]).map((p) => (
+        <div
+          key={p.env}
+          className="flex items-start gap-2 text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 p-3 rounded-md"
+        >
           <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
           <div>
-            AI features are not configured on this deployment. The
+            {p.what} not configured on this deployment: the
             <code className="font-mono mx-1 text-[10px] bg-amber-100 dark:bg-amber-900/60 px-1 rounded">
-              GOOGLE_GENERATIVE_AI_API_KEY
+              {p.env}
             </code>
             environment variable is missing.
           </div>
         </div>
-      )}
+      ))}
 
       <Separator />
 
@@ -200,8 +213,9 @@ export function AiSettings() {
       </div>
 
       {/* Phase 5: moderation queue + Phase 6 follow-up: profile backfill.
-          Both gated on master AI toggle + provider availability. */}
-      {state.enabled && state.available && (
+          Both gated on the master AI toggle and on Claude, which writes the
+          profiles and with them the suggestions (v1.51.0). */}
+      {state.enabled && state.assistantAvailable && (
         <>
           <Separator />
           <BackfillProfilesPanel />

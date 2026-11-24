@@ -2,8 +2,8 @@
 title: Instagram routes
 type: route-group
 domain: backend
-version: 1.3.0
-last_updated: 19.11.2026
+version: 1.4.0
+last_updated: 24.11.2026
 status: stable
 sources:
   - src/app/api/instagram/import/route.ts
@@ -75,8 +75,9 @@ import queue (`/api/cron/drain-imports`). Full sequence:
   1. 400 `Invalid body`.
   2. 400 "That isn't an Instagram post or reel link."
   3. 503 "Instagram import isn't set up on this server." — `HIKERAPI_KEY`,
-     `GOOGLE_GENERATIVE_AI_API_KEY` (via `isAiAvailable`) or the DataForSEO
-     credentials (`dataForSeoClientFromEnv`, v1.42.0) missing.
+     `ANTHROPIC_API_KEY` (the post is read by Claude Haiku 5.5 since v1.51.0;
+     `GOOGLE_GENERATIVE_AI_API_KEY` before) or the DataForSEO credentials
+     (`dataForSeoClientFromEnv`, v1.42.0) missing.
   4. 400 "Instagram import reads the post with AI. Turn on AI features in
      Settings." — `profiles.ai_features_enabled` is off.
   (Until v1.42.0 a fifth gate refused users without a Google Places key: the
@@ -96,9 +97,9 @@ import queue (`/api/cron/drain-imports`). Full sequence:
 - **Response:** **`202 { jobId }`**. `500` with the error text when the tag or the
   job insert fails.
 - **Side effects (after the response):** `after(async () => { await runInstagramImportJob(...); await flushLangfuse(); })`
-  on `createServiceClient()` — monthly AI budget check, HikerAPI + Gemini + Google
+  on `createServiceClient()` — the monthly Claude cap check, HikerAPI + the Claude read + Google
   Maps search (DataForSEO; v1.42.0, was Google Text Search) and Mapbox city
-  lookups through `analyzeInstagramPost`, `trackUsage` / `trackAiUsage`,
+  lookups through `analyzeInstagramPost`, `trackUsage` (the read itself goes to the Claude ledger, v1.51.0),
   `import_job_items` INSERT, tag + note on already-saved places
   (`attachInstagramSource`), `import_jobs` UPDATE (`meta`, `total`, `status`,
   `finished_at`), then `kickDrain` when places were queued. Every write is keyed
@@ -217,9 +218,11 @@ import queue (`/api/cron/drain-imports`). Full sequence:
   cookie client first, then moves the item on the service role — there is no
   UPDATE policy either, and the guard (a stored option, a `skipped` item) is
   what limits a session to the transition the import offered.
-- **Not an `/api/ai/*` route.** It spends a Gemini call, gated like the AI
-  routes: the server's Gemini key, `profiles.ai_features_enabled`, and the monthly
-  `instagram` budget (300 posts per user). See [[../../04-integrations/gemini]].
+- **Not an `/api/ai/*` route.** It spends one Claude call (Haiku 5.5, v1.51.0; a
+  Gemini call before), gated by the server's `ANTHROPIC_API_KEY`,
+  `profiles.ai_features_enabled` and the platform's monthly Claude cap ($100, the
+  one ledger; until v1.51.0 the `instagram` budget, 300 posts per user). See
+  [[../../04-integrations/claude-agent]].
 - **Places are not created here.** New places come out of the drain with
   `source = 'instagram'` — a picked place too; this group only writes jobs,
   items, the tag, and the tag + note on places the user already had.

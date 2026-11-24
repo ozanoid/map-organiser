@@ -32,8 +32,9 @@ export async function GET() {
 
   return NextResponse.json({
     enabled: profile?.ai_features_enabled ?? true,
+    // Two providers: AI search, AI Plan and Compare run on Gemini; the
+    // assistant, place profiles and Instagram reads on Claude (v1.51.0).
     available: isAiAvailable(),
-    // The assistant runs on Claude (Phase 2); the other AI features on Gemini.
     assistantAvailable: isAssistantConfigured(),
     cronRefreshEnabled: profile?.cron_refresh_enabled ?? false,
   });

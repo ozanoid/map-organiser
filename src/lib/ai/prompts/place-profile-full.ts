@@ -69,7 +69,7 @@ function compactReview(r: { rating?: number; text?: string }, maxChars = 1000) {
  * Token budgeting: 50 reviews × ≤1000 chars ≈ up to 50K input chars ≈ ~12.5K
  * input tokens worst case (most reviews are shorter). Plus user context
  * (~500 tokens) + system rules (~500 tokens). Output is ~1-2K tokens.
- * Comfortably under Gemini Flash's window.
+ * Comfortably under the writer's context window.
  */
 export function buildPlaceProfilePrompt(
   place: PromptInputPlace,

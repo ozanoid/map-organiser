@@ -2,8 +2,8 @@
 title: Lite Profile Flow
 type: flow
 domain: places
-version: 1.2.2
-last_updated: 16.10.2026
+version: 1.2.3
+last_updated: 24.11.2026
 status: stable
 sources:
   - src/lib/ai/extract/lite-profile.ts
@@ -28,8 +28,8 @@ into the Add Place dialog, suggestion chips materialize instantly.
 
 **No LLM call.** Everything is rule-based — Google `types` mapping, DataForSEO
 `attributes` flag extraction, fuzzy match against the user's existing tags
-and lists. Phase 4 will produce the full `place_profile` via Gemini once
-reviews are fetched.
+and lists. Phase 4 produces the full `place_profile` with an LLM once
+reviews are fetched (Claude since v1.51.0).
 
 ## Trigger
 
@@ -162,7 +162,7 @@ DataForSEO emits a wide attribute bag (`has_wi_fi`, `has_seating_outdoors`, `has
 
 What stays (a value can still surface if the user has a matching tag): `vegan` and other `dietary`, `live-music`, `dog-friendly`, `lgbtq-friendly`, `accessible`, `family-friendly`, all `cuisine_types`, `private-room`, `bar-seating`, `rooftop`.
 
-**Phase 4 fallback role:** When the full profile starts producing tag proposals, the same suppress set runs over the LLM's `new_proposals` output so that even if Gemini suggests `"wifi"` as a new tag, it gets dropped before reaching the moderation queue. The set is the safety net under the LLM, not a replacement for it.
+**Phase 4 fallback role:** When the full profile starts producing tag proposals, the same suppress set runs over the LLM's `new_proposals` output so that even if the writer suggests `"wifi"` as a new tag, it gets dropped before reaching the moderation queue. The set is the safety net under the LLM, not a replacement for it.
 
 ## Open questions
 

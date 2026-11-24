@@ -2,7 +2,7 @@
 title: API Routes
 type: overview
 domain: backend
-version: 1.12.0
+version: 1.12.1
 last_updated: 24.11.2026
 status: stable
 sources:
@@ -68,7 +68,7 @@ These hold for every route. See [[../_agent/conventions#api-routes]] for the ful
    - `404` — not found / no ownership.
    - `409` — duplicate (e.g. `google_place_id` collision).
    - `500` — unhandled error.
-5. **Cost-tracked external calls go through `trackUsage`** (`src/lib/google/track-usage.ts`) → `increment_api_usage` RPC. Apply to every Google Places, DataForSEO, HikerAPI (v1.28.0, `hikerapi_request`) and (since v1.22.0) Mapbox Directions call (`mapbox_directions` — both `getRoute` call sites). For AI calls, use `trackAiUsage` (`src/lib/ai/track-usage.ts`) which writes the same table under `ai_*` SKUs.
+5. **Cost-tracked external calls go through `trackUsage`** (`src/lib/google/track-usage.ts`) → `increment_api_usage` RPC. Apply to every Google Places, DataForSEO, HikerAPI (v1.28.0, `hikerapi_request`) and (since v1.22.0) Mapbox Directions call (`mapbox_directions` — both `getRoute` call sites). For Gemini calls, use `trackAiUsage` (`src/lib/ai/track-usage.ts`) which writes the same table under `ai_*` SKUs. Claude calls don't: `structuredClaude` and the agent record their dollars in `assistant_spend` (one ledger, one monthly cap — the assistant since v1.48.0, profiles and Instagram reads since v1.51.0).
 6. **Service-role client** (`createServiceClient()`) only where no session can do the job: the public share read (`/api/shared/[slug]`, and the original-content reads in `.../save`), both cron routes (cross-user, no cookie), the `import_job_items` insert in `POST /api/places/import-jobs` (the table has no INSERT policy), the Instagram import's background job in `POST /api/instagram/import` (runs after the response; writes items), and `POST /api/instagram/import/[id]/pick` (moves an item the session client has just read; the table has no UPDATE policy). Every other route uses the cookie-scoped `createClient()`. Service-role paths must filter by `user_id` (see #2). Canonical list: [[../supabase-clients]].
 7. **PostGIS coords are always parsed.** Every route that returns a place coercion `location` to `{ lat, lng }` via `src/lib/geo.ts#parsePostgisPoint` before serializing.
 
@@ -103,7 +103,7 @@ These are reused across many routes:
 | `applyProfileSuggestions` | `src/lib/ai/apply-suggestions.ts` | 4-band auto-apply policy for LLM output. |
 | `buildLiteProfile` | `src/lib/ai/extract/lite-profile.ts` | LLM-less rule-based profile inline in `parse-link`. |
 | `dedupProposals` / `isFuzzyMatch` | `src/lib/ai/dedup.ts`, `normalize.ts` | Post-LLM and accept-time fuzzy match. |
-| `trackAiUsage` / `checkAiBudget` | `src/lib/ai/track-usage.ts` | Per-SKU AI counter + monthly budget gates (search 500 / profile 1000 / compare 200 / chat 200 / trip_plan 50 / instagram 300). |
+| `trackAiUsage` / `checkAiBudget` | `src/lib/ai/track-usage.ts` | Per-SKU Gemini counter + monthly budget gates (search 500 / compare 200 / trip_plan 50; chat removed in v1.48.0, profile and instagram in v1.51.0 — the Claude ledger's cap covers those). |
 | `findExisting` / `importPlace` | `src/lib/import/process-place.ts` | Duplicate check by place_id / CID without an API call; per-place import used by the drain (`ImportDefaults.source` sets `places.source`). |
 | `kickDrain` | `src/lib/import/kick-drain.ts` | Non-awaited `GET /api/cron/drain-imports` with the `CRON_SECRET` bearer — fired by the Takeout create route and the Instagram job (v1.28.0, moved out of the import-jobs route), and by the Instagram pick route (v1.28.1). |
 | `analyzeInstagramPost` / `runInstagramImportJob` | `src/lib/instagram/analyze.ts`, `import-job.ts` | Instagram post → venues → Google places (writes nothing) / the job that turns that into `import_job_items` (v1.28.0). See [[instagram]]. |

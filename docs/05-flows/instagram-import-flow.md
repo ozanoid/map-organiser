@@ -2,7 +2,7 @@
 title: Instagram Import Flow
 type: flow
 domain: places
-version: 1.4.0
+version: 1.5.0
 last_updated: 24.11.2026
 status: stable
 sources:
@@ -119,13 +119,13 @@ sequenceDiagram
   participant D as Add Place dialog (InstagramImportPanel)
   participant R as POST /api/instagram/import
   participant J as after() job (runInstagramImportJob)
-  participant X as HikerAPI / Gemini / Google Maps (DataForSEO)
+  participant X as HikerAPI / Claude / Google Maps (DataForSEO)
   participant Q as drain-imports (queue)
   participant P as POST /api/instagram/import/[id]/pick
   D->>R: { url }
   R-->>D: 202 { jobId }  (or 200 { jobId, reused: true })
   R->>J: after(): read the post
-  J->>X: post + profiles → one Gemini read → candidate searches
+  J->>X: post + profiles → one Claude read → candidate searches
   J->>Q: import_job_items (stage import / skipped) + kickDrain
   Q->>Q: import → photo → reviews → profile (same as Takeout)
   loop every 1.5 s while reading / adding, every 3 s while a photo is pending
@@ -183,17 +183,19 @@ route keeps the session and body checks and maps a refusal to its status.
 
 ### C. Background job — `runInstagramImportJob` (`src/lib/instagram/import-job.ts`)
 
-8. `checkAiBudget("instagram")` — 300 posts per user per calendar month (UTC).
+8. The platform's monthly Claude cap ($100, `assistant_spend`; v1.51.0 — before,
+   `checkAiBudget("instagram")`, 300 posts per user per calendar month).
    Over it, the job fails with `budget_exceeded` before any paid call.
 9. `analyzeInstagramPost` (`src/lib/instagram/analyze.ts`), detailed in
-   [[#how-a-venue-is-pinned]]: HikerAPI → one Gemini read → Google Maps search
+   [[#how-a-venue-is-pinned]]: HikerAPI → one Claude read (`INSTAGRAM_READER`) → Google Maps search
    through DataForSEO → deterministic rules. It writes nothing.
 10. Usage: each HikerAPI request → `hikerapi_request`, each Google Maps search →
     `dataforseo_maps_search`, each city lookup → `mapbox_geocoding` (before
-    v1.42.0: each Text Search → `text_search_enterprise`), each Gemini call →
-    `ai_instagram_read` (all in a
-    `finally`, so a failed analysis is still counted; a read that needed its
-    retry counts two — v1.28.2).
+    v1.42.0: each Text Search → `text_search_enterprise`), all in a
+    `finally`, so a failed analysis is still counted. The read itself is a
+    Claude call `structuredClaude` records in the ledger (purpose `instagram`;
+    a retried read is two rows); until v1.51.0 each Gemini call wrote
+    `ai_instagram_read`.
 11. One `import_job_items` row per decision (service-role insert):
 
     | Decision | `stage` | `reason` | `place_id` | `payload` |
@@ -358,12 +360,15 @@ coauthors ∪ caption @mentions ∪ **the owner, always** — on a venue's own p
 the owner's profile carries the phone, website or coordinates that pin it. One
 profile read per account, five in parallel. See [[../04-integrations/hikerapi]].
 
-### 2. Classify (one Gemini call)
+### 2. Classify (one model call)
 
+> **v1.51.0:** production reads posts with Claude Haiku 5.5 at high (`INSTAGRAM_READER`, Ozan's choice after the measurement below); the reader is a required argument now (no default), the import job passes it, gates on `ANTHROPIC_API_KEY` and the Claude ledger's monthly cap, and no longer writes `ai_instagram_read`.
+>
 > **v1.50.0:** `readPost` takes a `reader` (`PostReader`, passed through `AnalyzeDeps.reader`): Gemini by default — production unchanged — or a Claude model through `structuredClaude`, which retries once on an unusable answer and never on a refusal. The eval runs it with `--model=claude-haiku-5-5 --effort=high`. Measured on 24.11.2026 (35 posts, 1 deleted, 42 places to add): Gemini 35 correct, 1 optional, 0 wrong (83.3%); Claude Haiku 5.5 high 36 correct, 1 optional, 0 wrong (85.7%), ~$0.0008 a read against Gemini's ~$0.0014, no unusable answer. The model choice is Ozan's (Phase 2, 6.2).
 
-`readPost` (`src/lib/instagram/read-post.ts`): `gemini-3-flash-preview`,
-`Output.object(PostReadingSchema)`, `thinkingLevel: "low"`; the prompt carries the
+`readPost` (`src/lib/instagram/read-post.ts`): `INSTAGRAM_READER` through
+`structuredClaude` (v1.51.0; before, `gemini-3-flash-preview`,
+`Output.object(PostReadingSchema)`, `thinkingLevel: "low"`); the prompt carries the
 caption (≤ 3,000 chars), the location tag, the owner and each account with its
 profile (bio ≤ 200 chars). The system prompt states that precision matters more
 than recall and defines "featured" (shown or recommended as a place to go — not
@@ -402,7 +407,7 @@ Nothing the model returns is trusted unless the post says it
 - Each verified plain-text venue: merged into a matching candidate
   (name ≥ 0.7), lending it the post's address and area; otherwise its own
   candidate if the model marked it featured (`not_featured` if not).
-- **City and area** (v1.42.0). The post's city (Gemini's, verified) is placed
+- **City and area** (v1.42.0). The post's city (the read's, verified) is placed
   once with Mapbox — city-level lookups only (place, locality, district,
   region). The verified hints (branch hint → neighbourhood → district) are then
   looked up on Google Maps through DataForSEO around that city, in that order,
@@ -574,10 +579,13 @@ Remaining misses, by reason (the runner prints them):
 | Google Maps search (DataForSEO, v1.42.0) | about 3 per venue; 1–6 for a one-venue post, 16–27 for a 6–10-venue post (eval, 18.11.2026) | `dataforseo_maps_search` | $2 / 1,000, no free tier |
 | Mapbox city lookup (v1.42.0) | 1 per city the post names | `mapbox_geocoding` | free up to 100,000 a month, then $0.75 / 1,000 |
 | *Before v1.42.0:* Google Text Search (Enterprise) | 19 and 26 in two reads on 18.11.2026, 9.5 a read on average in October | `text_search_enterprise` | $35 / 1,000 after 1,000 free a month |
-| Gemini read | 1 | `ai_instagram_read` | $1.5 / 1,000 (≈ 1.2k in / 0.3k out tokens) |
+| Gemini read | 1 | `ai_instagram_read` | $1.5 / 1,000 (≈ 1.2k in / 0.3k out tokens) — until v1.51.0 |
+| Claude Haiku 5.5 read (v1.51.0) | 1 (2 when the first answer is unusable) | Claude ledger, purpose `instagram` | ≈ $0.0008 a read (measured, 34 reads $0.0259) |
 | DataForSEO + profile, per place added | as for any import | see [[place-import-flow]] | |
 
-The monthly `instagram` budget (300 posts per user) bounds the first three.
+Until v1.51.0 the monthly `instagram` budget (300 posts per user) bounded the
+first three. Since then nothing caps them by count: the Claude cap counts only
+the read's dollars (see [[../04-integrations/hikerapi]]).
 
 ## Failure modes
 
@@ -585,13 +593,13 @@ The monthly `instagram` budget (300 posts per user) bounds the first three.
 |---|---|---|
 | A | "That's an Instagram profile or page, not a post. Share a post or reel to add the places in it." under the input | An Instagram link that is not a post or reel (`isInstagramUrl` without `parseInstagramPostUrl`). Nothing is sent. |
 | B | 400 "That isn't an Instagram post or reel link." | A non-post URL sent to the route directly — the dialog stops those first (row above). |
-| B | 503 "Instagram import isn't set up on this server." | `HIKERAPI_KEY` or `GOOGLE_GENERATIVE_AI_API_KEY` missing. |
+| B | 503 "Instagram import isn't set up on this server." | `HIKERAPI_KEY`, `ANTHROPIC_API_KEY` (v1.51.0; the Gemini key before) or the DataForSEO credentials missing. |
 | B | 400 "Instagram import reads the post with AI. Turn on AI features in Settings." | `profiles.ai_features_enabled` is off. |
 | B | 400 "…needs a Google Places API key. Add one in Settings." | No per-user key and not an admin. The `google_places_enabled` toggle (it scopes Maps-link lookups) is deliberately not consulted — see Decisions. |
 | B | 500 with the database error text | The tag or the job insert failed. |
-| C | "You've used this month's Instagram imports." | `budget_exceeded`; no Try again. |
+| C | "This month's AI budget is used up. Instagram imports resume on the 1st." (v1.51.0; before: "You've used this month's Instagram imports.") | `budget_exceeded`; no Try again. |
 | C | "Couldn't open this post. It may be private or deleted." | `post_unavailable` (HikerAPI 404). |
-| C | "Something went wrong while reading this post." | `service_error`: HikerAPI still failing after its retries, a Google Maps search (DataForSEO) failing twice, the Gemini read failing twice (an answer with no usable object gets one more call — v1.28.2), or the item insert failing. Try again starts a new job. |
+| C | "Something went wrong while reading this post." | `service_error`: HikerAPI still failing after its retries, a Google Maps search (DataForSEO) failing twice, the read failing twice (an answer with no usable object gets one more call — v1.28.2; a Claude refusal none), or the item insert failing. Try again starts a new job. |
 | C | "This took too long and stopped." | `stalled`: still `reading` after 3 min — the `after()` run died (e.g. hit `maxDuration`). Try again starts a new job (the reuse check skips stalled jobs). |
 | C | "No places in this post" | Nothing could be pinned and no skipped venue is listed: the dialog says no account, location tag or address points to one specific place; on `/map`, "Search manually" opens the map search. |
 | C | "Nothing added yet" | Every venue was skipped; the rows below offer **Pick branch** / **Choose** / **Search**. |
@@ -619,7 +627,7 @@ The monthly `instagram` budget (300 posts per user) bounds the first three.
   — are drained by production's minute cron, i.e. `main`'s code, which has no
   Instagram handling yet (it inserts them as `source 'import'`). The owner
   decided to verify the drain after the merge.
-- **Gemini output varies between runs.** The precision guard held in every run;
+- **The read varies between runs** (measured with Gemini, before v1.51.0). The precision guard held in every run;
   recall moves by about one place.
 - **Telemetry.** The read emits `ai.instagram-read-post` spans
   (`experimental_telemetry`, userId + shortcode); the `after()` run ends with
@@ -635,9 +643,9 @@ The monthly `instagram` budget (300 posts per user) bounds the first three.
 - `src/app/api/instagram/import/[id]/route.ts` — the dialog's progress view (`getInstagramImportView`).
 - `src/app/api/instagram/import/[id]/pick/route.ts` — add the place picked for a skipped venue (`pickInstagramOption`).
 - `src/lib/instagram/start-import.ts`, `view.ts`, `pick.ts` — the gates and job, the view, the pick; shared by the routes and Claude's `add_places` (v1.41.0, [[../04-integrations/claude-mcp#adding-places]]).
-- `src/lib/instagram/import-job.ts` — `runInstagramImportJob`: budget, usage, item rows (options, `near`, `searchName`), finish.
+- `src/lib/instagram/import-job.ts` — `runInstagramImportJob`: the Claude cap check, usage, item rows (options, `near`, `searchName`), finish.
 - `src/lib/instagram/analyze.ts` — `analyzeInstagramPost`: accounts, verification, candidates, area, `near`.
-- `src/lib/instagram/read-post.ts` — the Gemini read and `PostReadingSchema`.
+- `src/lib/instagram/read-post.ts` — the read (Claude since v1.51.0; the Gemini reader stays for the eval) and `PostReadingSchema`.
 - `src/lib/instagram/resolve.ts` — evidence, acceptance rules, tie-breaks, query plan, `optionsFor`.
 - `src/lib/instagram/normalize.ts` — Turkish-aware name, phone, website, address and distance helpers.
 - `src/lib/instagram/maps-link.ts` — find and follow a venue's own Maps link.

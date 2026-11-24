@@ -2,8 +2,8 @@
 title: Integrations
 type: overview
 domain: integrations
-version: 1.6.0
-last_updated: 23.11.2026
+version: 1.7.0
+last_updated: 24.11.2026
 status: stable
 related:
   - "[[supabase]]"
@@ -31,9 +31,9 @@ Third-party services and runtime libraries that materially shape how this app wo
 | **Mapbox** | Map rendering (GL JS) + Directions API for plan routes | [[mapbox]] |
 | **Google Places API** | Not called since v1.42.0 — every place lookup goes through DataForSEO | [[google-places]] |
 | **DataForSEO** (Business Data + Google Maps SERP) | Every place lookup: link previews, imports, enrichment, the Instagram import's search, Claude's Google Maps search (no per-user key) | [[dataforseo]] |
-| **Google Gemini** (Generative Language API) | AI feature provider — `gemini-3-flash-preview`. Phase 4 full place_profile, Phase 6 NL search (both shipped); since v1.28.0 also the one read per Instagram post | [[gemini]] |
+| **Google Gemini** (Generative Language API) | AI feature provider — `gemini-3-flash-preview`: Phase 6 NL search, Compare, AI Plan. Wrote the full place_profile (Phase 4) and read Instagram posts (v1.28.0) until v1.51.0 — both Claude now | [[gemini]] |
 | **Claude (MCP connector)** | The user's library as an MCP server for claude.ai and Claude Code; Supabase Auth is the OAuth 2.1 server (17.11.2026) | [[claude-mcp]] |
-| **Claude API (platform agent)** | The platform's own assistant: Claude called by our server with the same tools, conversations kept append-only, spend in dollars against a $100 monthly cap. Core and eval on the branch (23.11.2026); no route uses it yet | [[claude-agent]] |
+| **Claude API (platform agent)** | The platform's own Claude: the in-app assistant (v1.48.0) — called by our server with the same tools, conversations kept append-only — and, since v1.51.0, place profiles (Sonnet 5.5) and Instagram reads (Haiku 5.5); every call's dollars in one ledger against a $100 monthly cap. On `feat/personal-assistant` | [[claude-agent]] |
 | **HikerAPI** | Instagram data — the post, its tagged/mentioned accounts and their profiles, for the Instagram import (v1.28.0). System-level key `HIKERAPI_KEY` | [[hikerapi]] |
 
 ## Runtime libraries (architecturally significant)
@@ -64,7 +64,7 @@ SKUs — the keys of `SKU_CONFIG` and `AI_SKU_CONFIG`; the canonical list with p
 - DataForSEO: `dataforseo_business_info_live`, `dataforseo_reviews`, `dataforseo_maps_search` (Claude's Google Maps search; since v1.42.0 also the Instagram import's).
 - Mapbox: `mapbox_search_session`, `mapbox_directions` (v1.22.0); `mapbox_load` is registered but nothing tracks map loads.
 - HikerAPI: `hikerapi_request` (v1.28.0).
-- AI: `ai_place_profile`, `ai_parse_query`, `ai_rank_results`, `ai_compare`, `ai_chat`, `ai_trip_plan`, `ai_instagram_read` (v1.28.0), plus the unused `ai_embedding` placeholder.
+- AI: `ai_place_profile`, `ai_parse_query`, `ai_rank_results`, `ai_compare`, `ai_chat`, `ai_trip_plan`, `ai_instagram_read` (v1.28.0), plus the unused `ai_embedding` placeholder. Since v1.51.0 profiles and Instagram reads are Claude calls in the Claude ledger (`assistant_spend`), not these SKUs — [[claude-agent]].
 
 Map tile loads are not counted — Mapbox shows them on its own dashboard.
 

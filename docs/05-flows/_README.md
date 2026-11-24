@@ -2,8 +2,8 @@
 title: Flows
 type: overview
 domain: overview
-version: 1.8.2
-last_updated: 19.11.2026
+version: 1.8.3
+last_updated: 24.11.2026
 status: stable
 related:
   - "[[auth-flow]]"
@@ -35,11 +35,11 @@ End-to-end user / data flows that span multiple subsystems. Each doc traces the 
 | [[signup-flow]] | A new account is created (owner-only since 17.11.2026) | `auth.users`, `handle_new_user`, `create_default_categories`, 12 categories seeded |
 | [[place-import-flow]] | User uploads a Takeout file | `/api/places/import-jobs` → `/api/cron/drain-imports` queue |
 | [[claude-connector-flow]] | Claude connects to the library (custom connector) | `/api/mcp` 401 → resource metadata → Supabase OAuth 2.1 (DCR, PKCE) → `/oauth/consent` → bearer token → tools |
-| [[instagram-import-flow]] | User shares an Instagram post (iOS Shortcut → `/map?add=`) or pastes its link (v1.28.0) | `/api/instagram/import` → `after()`: HikerAPI + one Gemini read + Google Maps search through DataForSEO (v1.42.0) → `/api/cron/drain-imports` queue; dialog polls `/api/instagram/import/[id]` |
+| [[instagram-import-flow]] | User shares an Instagram post (iOS Shortcut → `/map?add=`) or pastes its link (v1.28.0) | `/api/instagram/import` → `after()`: HikerAPI + one Claude read (v1.51.0) + Google Maps search through DataForSEO (v1.42.0) → `/api/cron/drain-imports` queue; dialog polls `/api/instagram/import/[id]` |
 | [[manual-place-create-flow]] | User pastes a Google Maps URL or hits the FAB | `/api/places/parse-link` (with lite_profile) → `/api/places` → enrich chain |
 | [[place-search-flow]] | User searches on the map overlay | `/api/search/suggest` → `/api/search/retrieve/[id]` → `/api/places` |
 | [[lite-profile-flow]] | Rule-based AI suggestions inline in parse-link (Phase 3) | `parse-link` → `buildLiteProfile` → AddPlaceDialog AI chips |
-| [[full-profile-flow]] | Background Gemini full place_profile generation (Phase 4 + 5.5) | `step=reviews` chain → `step=profile` → Gemini Flash → 4-band auto-apply + moderation queue |
+| [[full-profile-flow]] | Background full place_profile generation (Phase 4 + 5.5; Claude Sonnet 5.5 since v1.51.0) | `step=reviews` chain → `step=profile` → Claude (`PROFILE_WRITER`) → 4-band auto-apply + moderation queue |
 | [[ai-enrichment-flow]] | A place is saved (any entry point) | The `enrich` cascade `info → reviews → profile`, per-entry-point coverage, completeness ladder, cost cap — overview |
 | [[ai-search-flow]] | User submits a NL query in the AI search input (Phase 6) | `/api/ai/parse-query` → `/api/places` (hard + soft features) → optional `/api/ai/rank-results` |
 | [[plan-flow]] | User creates a plan (empty or from a list) and edits it | `POST /api/plans` → `PATCH /api/plans/[id] { set, ops }` → optional `/api/plans/[id]/auto-plan` → per-day route |

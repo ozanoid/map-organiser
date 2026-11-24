@@ -4,7 +4,7 @@ import type { BetaMessage } from "@anthropic-ai/sdk/resources/beta/messages/mess
 import { startObservation } from "@langfuse/tracing";
 import type { z } from "zod";
 import { anthropicClient } from "@/lib/agent/client";
-import type { Effort } from "@/lib/agent/models";
+import type { ClaudeChoice } from "@/lib/agent/models";
 import { costOfMessage, type CallCost } from "@/lib/agent/pricing";
 import type { SpendLedger, SpendPurpose } from "@/lib/agent/spend";
 import { log } from "@/lib/telemetry/logger";
@@ -21,15 +21,10 @@ import { log } from "@/lib/telemetry/logger";
  * formats out, and the answer is checked against the full zod schema here —
  * formats included — after the call is recorded.
  *
- * Gemini does this work until the 6.2 measurement picks the Claude model
- * (docs/_plans/phase-2-assistant.md); the measurement runs through here.
+ * The models are chosen in models.ts (PROFILE_WRITER, INSTAGRAM_READER).
  */
 
-/** A Claude model and effort for a structured task. */
-export interface ClaudeChoice {
-  model: "claude-haiku-5-5" | "claude-sonnet-5-5";
-  effort: Effort;
-}
+export type { ClaudeChoice };
 
 /** Whose call it is and why — the ledger row. */
 export interface SpendContext {

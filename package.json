@@ -9,6 +9,7 @@
     "lint": "eslint",
     "eval:instagram": "tsx --env-file=.env.local --tsconfig scripts/instagram-eval/tsconfig.json scripts/instagram-eval/run.ts",
     "eval:profiles": "tsx --env-file=.env.local --tsconfig scripts/profile-eval/tsconfig.json scripts/profile-eval/run.ts",
+    "regen:profiles": "tsx --env-file=.env.local --tsconfig scripts/profile-regen/tsconfig.json scripts/profile-regen/run.ts",
     "check:assistant": "tsx --env-file=.env.local --tsconfig scripts/assistant-check/tsconfig.json scripts/assistant-check/run.ts",
     "eval:assistant": "tsx --env-file=.env.local --tsconfig scripts/assistant-eval/tsconfig.json scripts/assistant-eval/run.ts",
     "check:agent": "tsx --tsconfig scripts/agent-check/tsconfig.json scripts/agent-check/run.ts",

@@ -152,7 +152,9 @@ These are common adjacent picks that this repo deliberately doesn't use:
   the DB; see [[../05-flows/instagram-import-flow#measured-quality]]; since
   v1.50.0 `--model=` picks the reader). Also `eval:profiles` (v1.50.0, paid —
   place profiles written by Gemini and Claude models side by side, nothing
-  saved), `eval:assistant`, `check:agent`, `check:agent:db`, `check:assistant`.
+  saved), `regen:profiles` (v1.51.0, paid — rewrites the existing profiles
+  with the current writer, re-runnable), `eval:assistant`, `check:agent`,
+  `check:agent:db`, `check:assistant`.
 - **Keep `node_modules` in step with the lockfile.** On 16.10.2026 a local
   install held `ai@7.0.31` and `@ai-sdk/google@4.0.18` while the lockfile pins
   `6.0.228` / `3.0.75`; `npm install` re-synced them. The 7

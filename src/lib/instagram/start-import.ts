@@ -2,7 +2,6 @@ import "server-only";
 import { createServiceClient } from "@/lib/supabase/server";
 import type { UserContext } from "@/lib/db/context";
 import { InputError } from "@/lib/db/errors";
-import { isAiAvailable } from "@/lib/ai/client";
 import { dataForSeoClientFromEnv } from "@/lib/dataforseo/client";
 import { parseInstagramPostUrl } from "@/lib/instagram/url";
 import { ensureInstagramTag } from "@/lib/instagram/provenance";
@@ -58,9 +57,9 @@ export async function startInstagramImport(
   const ref = parseInstagramPostUrl(url);
   if (!ref) throw new InstagramImportRefused("That isn't an Instagram post or reel link.", 400);
 
-  // HikerAPI reads the post, Gemini reads it, Google Maps (through
-  // DataForSEO, the server's own account) finds the places.
-  if (!process.env.HIKERAPI_KEY || !isAiAvailable() || !dataForSeoClientFromEnv()) {
+  // HikerAPI fetches the post, Claude reads it (INSTAGRAM_READER), Google
+  // Maps (through DataForSEO, the server's own account) finds the places.
+  if (!process.env.HIKERAPI_KEY || !process.env.ANTHROPIC_API_KEY || !dataForSeoClientFromEnv()) {
     throw new InstagramImportRefused("Instagram import isn't set up on this server.", 503);
   }
   const { data: profile } = await ctx.supabase

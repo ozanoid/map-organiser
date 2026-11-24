@@ -2,7 +2,7 @@
 title: User routes
 type: route-group
 domain: backend
-version: 1.5.0
+version: 1.6.0
 last_updated: 24.11.2026
 status: stable
 sources:
@@ -39,7 +39,7 @@ Two endpoints under `/api/user/*` — both about the **caller's own** profile.
 | `GET` | `/api/user/ai-suggestions` | List pending AI proposals (Phase 5 moderation queue), pre-grouped by `(type, slug, parent)`. |
 | `POST` | `/api/user/ai-suggestions/[id]/accept` | Create the proposed tag / sub-category and apply it to every queued place. |
 | `POST` | `/api/user/ai-suggestions/[id]/reject` | Mark proposal (and siblings) as `rejected`. Vocabulary untouched. |
-| `GET` | `/api/user/backfill-profiles` | Eligibility report: how many places need an AI profile + estimated cost. |
+| `GET` | `/api/user/backfill-profiles` | Eligibility report: how many places need an AI profile + estimated cost (the writer's measured cost a profile, `PROFILE_WRITER_AVG_USD`, plus the DataForSEO reviews price; v1.51.0). |
 | `POST` | `/api/user/backfill-profiles` | Dispatch up to 25 fire-and-forget enrich calls for profile-less places. Client iterates until done. |
 
 All require auth.
@@ -91,13 +91,13 @@ Google key fields (`googleApiKey`, `hasGoogleKey`, `googlePlacesEnabled`) were r
 }
 ```
 
-- **Notes:** Estimated cost = `(count / 1000) * cost_per_1k` per row; summed for the total. Month string is current month. `assistant` (v1.48.0): the Claude assistant's dollars this month from `assistant_spend` — platform-wide, every Claude call (evals included) — and the $100 cap; added to the total. A failed read of the ledger shows $0 and is logged.
+- **Notes:** Estimated cost = `(count / 1000) * cost_per_1k` per row; summed for the total. Month string is current month. `assistant` (v1.48.0): every Claude call's dollars this month from `assistant_spend` — platform-wide: the assistant, place profiles and Instagram reads (v1.51.0), evals — and the $100 cap; added to the total. `assistant.byPurpose` (v1.51.0): the same split by purpose (`chat`, `profile`, `instagram`, `eval`; `monthSpendByPurpose`). A failed read of the ledger shows $0 and is logged.
 
 ### `GET /api/user/ai-settings`
 
 - **Source:** `src/app/api/user/ai-settings/route.ts`
 - **DB:** `profiles` SELECT (`ai_features_enabled, cron_refresh_enabled`).
-- **Response:** `{ enabled: boolean, available: boolean, assistantAvailable: boolean, cronRefreshEnabled: boolean }`. `available` reflects the presence of `GOOGLE_GENERATIVE_AI_API_KEY` on the server (the Gemini features); `assistantAvailable` (v1.48.0) the presence of `ANTHROPIC_API_KEY` (the assistant runs on Claude); `cronRefreshEnabled` is the opt-in for the whole periodic refresh sweep (default false — see [[../../06-ops/runbooks/periodic-refresh]]).
+- **Response:** `{ enabled: boolean, available: boolean, assistantAvailable: boolean, cronRefreshEnabled: boolean }`. `available` reflects the presence of `GOOGLE_GENERATIVE_AI_API_KEY` on the server (the Gemini features); `assistantAvailable` (v1.48.0) the presence of `ANTHROPIC_API_KEY` (the assistant, and since v1.51.0 place profiles and Instagram reads, run on Claude — Settings → AI keeps its switch usable while either flag is true and shows the profile backfill and the suggestions queue only with this one); `cronRefreshEnabled` is the opt-in for the whole periodic refresh sweep (default false — see [[../../06-ops/runbooks/periodic-refresh]]).
 
 ### `PUT /api/user/ai-settings`
 

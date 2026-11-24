@@ -35,7 +35,7 @@ import { parseInstagramPostUrl } from "@/lib/instagram/url";
  *
  * 1. HikerAPI: the post, the usertags of a reel, and the profile of every
  *    account the post points at — tagged, coauthor, @mentioned, and the owner.
- * 2. Gemini (one call, read-post.ts): which accounts are venues, whether the
+ * 2. One model call (read-post.ts; Claude Haiku 5.5 in production): which accounts are venues, whether the
  *    post features them, branch/address quotes, plain-text venue names, area.
  *    Every quote is checked against the post text before it is used.
  * 3. Google Maps search (through DataForSEO, places.ts) + resolve.ts: pick
@@ -97,8 +97,8 @@ export interface AnalyzeDeps {
   onBilled?: (sku: "hikerapi_request" | PlacesSku) => void;
   /** One call per model request (a post read can take two — see read-post.ts). */
   onAiCall?: () => void;
-  /** Who reads the post; Gemini unless given (see read-post.ts). */
-  reader?: PostReader;
+  /** Who reads the post (see read-post.ts). */
+  reader: PostReader;
 }
 
 type Source = "tagged" | "coauthor" | "mention" | "owner";

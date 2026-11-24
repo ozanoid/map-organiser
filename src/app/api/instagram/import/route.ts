@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
   const origin = request.nextUrl.origin;
   after(async () => {
     await read(origin);
-    // The Gemini span ends inside this background run; ship it before the
+    // The read's Langfuse span ends inside this background run; ship it before the
     // function freezes (same as the other LLM routes).
     await flushLangfuse();
   });

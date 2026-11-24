@@ -2,7 +2,7 @@
 title: Place
 type: entity
 domain: places
-version: 1.9.2
+version: 1.9.3
 last_updated: 24.11.2026
 status: stable
 sources:
@@ -118,10 +118,10 @@ DataForSEO-only extensions (set when `provider === "dataforseo"`):
 
 ### `google_data.place_profile` shape (Phase 4)
 
-AI pivot data attached to each place once Gemini full profile generation completes. Set by `POST /api/places/[id]/enrich?step=profile`. Two completeness levels:
+AI pivot data attached to each place once the full profile is written (Claude Sonnet 5.5 since v1.51.0; Gemini Flash before). Set by `POST /api/places/[id]/enrich?step=profile`. Two completeness levels:
 
 - **`completeness: "lite"`** — rule-based, no LLM. Only `category_signals`, `features` (DataForSEO-derived), and `suggested_tags.matched_existing` populated. Stays in this state if AI is disabled, reviews never land, or the LLM call fails. Lite profile is NOT persisted in the schema by default — it's returned inline by `parse-link` for the dialog. Full profile overwrites with `completeness: "full"`.
-- **`completeness: "full"`** — Gemini Flash output. All fields populated.
+- **`completeness: "full"`** — the model's output; `model_version` names the writer (`claude-sonnet-5-5` since v1.51.0, a Gemini id before). All fields populated.
 
 Top-level fields:
 - `category_signals: { primary, primary_confidence, sub_category, sub_category_confidence, secondary_role }` — LLM's classification opinion. Apply layer compares `primary` to `places.category_id` and queues a category_change proposal if they disagree (Phase 5.5).

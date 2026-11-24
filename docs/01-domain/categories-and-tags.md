@@ -2,8 +2,8 @@
 title: Categories, Sub-categories & Tags
 type: entity
 domain: places
-version: 1.4.0
-last_updated: 16.10.2026
+version: 1.4.1
+last_updated: 24.11.2026
 status: stable
 sources:
   - src/lib/types/index.ts
@@ -67,7 +67,7 @@ Places carry `places.subcategory_id uuid REFERENCES subcategories.id ON DELETE S
 ### AI interaction with sub-categories
 
 - **Lite path** (Add Place dialog): `src/lib/ai/extract/category-resolver.ts` maps Google `types` to a `(primary, sub_category)` tuple. The dialog auto-pre-selects the sub-cat pill when `sub_category_confidence ≥ 0.85`.
-- **Full path** (background): the Gemini full profile can propose new sub-cat slugs. The 4-band apply policy in `src/lib/ai/apply-suggestions.ts` silent-applies existing matches and queues new ones for moderation. Phase 5.5 added a 4th band — if the LLM's parent category disagrees with the place's current category, the proposal is bundled with a category move; accept-time atomically updates `places.category_id` AND `places.subcategory_id`. See [[../05-flows/full-profile-flow#auto-apply-policy-4-band]].
+- **Full path** (background): the full profile (Claude since v1.51.0; Gemini before) can propose new sub-cat slugs. The 4-band apply policy in `src/lib/ai/apply-suggestions.ts` silent-applies existing matches and queues new ones for moderation. Phase 5.5 added a 4th band — if the LLM's parent category disagrees with the place's current category, the proposal is bundled with a category move; accept-time atomically updates `places.category_id` AND `places.subcategory_id`. See [[../05-flows/full-profile-flow#auto-apply-policy-4-band]].
 
 ## The controlled vocabulary (v1.25.0)
 
