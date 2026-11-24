@@ -17,6 +17,7 @@ const handler = withMcpAuth(assistantMcpHandler, verifyAssistantToken, {
 
 export { handler as GET, handler as POST, handler as DELETE };
 
-// rank_places waits on one Gemini call that took 41–64 s in testing
-// (17.11.2026); the other tools answer in under a second.
+// add_places with an Instagram post waits up to 45 s for the post to be
+// read; the other tools answer in seconds. (rank_places waited 41–64 s on
+// a Gemini call until 24.11.2026; it no longer calls a model.)
 export const maxDuration = 120;

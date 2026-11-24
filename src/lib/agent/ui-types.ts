@@ -1,4 +1,5 @@
 import { isToolUIPart, type UIMessage } from "ai";
+import { MAX_PLACE_IDS } from "@/lib/places/limits";
 
 /**
  * What the app's assistant panel and its server routes agree on — shared,
@@ -110,4 +111,35 @@ export function approvalsAnswered({ messages }: { messages: AssistantUIMessage[]
   if (last?.role !== "assistant") return false;
   const parts = lastStepToolParts(last);
   return parts.some((p) => p.state === "approval-responded") && !parts.some((p) => p.state === "approval-requested");
+}
+
+const PLACE_PATH = /^\/places\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/?$/i;
+const MARKDOWN_LINK = /\]\(\s*<?([^)\s>]+)>?(?:\s+"[^"]*")?\s*\)/g;
+const BARE_URL = /https?:\/\/[^\s)<>\]]+/g;
+
+/**
+ * The saved places a reply links to — `[name](/places/<id>)`, or the same
+ * page as a full URL on the app's own origin — in the order they first
+ * appear, at most MAX_PLACE_IDS. The panel offers to show them on the map.
+ */
+export function placeIdsIn(markdown: string, origin: string): string[] {
+  const hrefs = [
+    ...[...markdown.matchAll(MARKDOWN_LINK)].map((m) => ({ at: m.index, href: m[1] })),
+    // A bare URL ends before the sentence's punctuation.
+    ...[...markdown.matchAll(BARE_URL)].map((m) => ({ at: m.index, href: m[0].replace(/[.,;:!?'"]+$/, "") })),
+  ]
+    .sort((a, b) => a.at - b.at)
+    .map((h) => h.href);
+  const ids: string[] = [];
+  for (const href of hrefs) {
+    let url: URL;
+    try {
+      url = new URL(href, origin);
+    } catch {
+      continue;
+    }
+    const id = url.origin === origin ? PLACE_PATH.exec(url.pathname)?.[1]?.toLowerCase() : undefined;
+    if (id && !ids.includes(id)) ids.push(id);
+  }
+  return ids.slice(0, MAX_PLACE_IDS);
 }

@@ -10,10 +10,11 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { AssistantMarkdown } from "@/components/assistant/assistant-markdown";
-import { ChangeCard, isWritePart, ToolRow, TurnNote } from "@/components/assistant/assistant-parts";
+import { ChangeCard, isWritePart, MapButton, ToolRow, TurnNote } from "@/components/assistant/assistant-parts";
 import {
   approvalsAnswered,
   lastStepToolParts,
+  placeIdsIn,
   type AssistantUIMessage,
   type ChatRequestBody,
   type ConversationResponse,
@@ -393,6 +394,7 @@ function ConversationView({
             <AssistantMessage
               key={message.id}
               message={message}
+              streaming={busy && message === last}
               locked={locked}
               onAnswer={(id, approved) => void answer(id, approved)}
               onShowOnMap={showOnMap}
@@ -495,12 +497,15 @@ function UserBubble({ message }: { message: AssistantUIMessage }) {
 
 function AssistantMessage({
   message,
+  streaming,
   locked,
   onAnswer,
   onShowOnMap,
   onRetry,
 }: {
   message: AssistantUIMessage;
+  /** This message is being written now. */
+  streaming: boolean;
   /** A reply is being written (here or elsewhere): cards and Try again wait. */
   locked: boolean;
   onAnswer: (approvalId: string, approved: boolean) => void;
@@ -511,6 +516,13 @@ function AssistantMessage({
   const step = lastStepToolParts(message);
   const cardWaits = step.some((p) => p.state === "approval-requested");
   const waiting = new Set(cardWaits ? step.flatMap((p) => (p.state === "input-available" ? [p.toolCallId] : [])) : []);
+  // The saved places the reply links to — once it's written.
+  const linked = streaming
+    ? []
+    : placeIdsIn(
+        message.parts.map((p) => (p.type === "text" ? p.text : "")).join("\n"),
+        window.location.origin
+      );
   return (
     <div className="space-y-2">
       {message.parts.map((part, i) => {
@@ -525,6 +537,13 @@ function AssistantMessage({
         if (part.type === "data-turn") return <TurnNote key={i} outcome={part.data} locked={locked} onRetry={onRetry} />;
         return null;
       })}
+      {linked.length > 0 && (
+        <MapButton
+          ids={linked}
+          label={linked.length === 1 ? "Show on map" : `Show these ${linked.length} on map`}
+          onShowOnMap={onShowOnMap}
+        />
+      )}
     </div>
   );
 }

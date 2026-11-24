@@ -33,7 +33,7 @@ import { useAssistantStore } from "@/lib/stores/assistant-store";
 const READ_TOOLS: Record<string, { icon: LucideIcon; running: string; done: string }> = {
   get_library_overview: { icon: Library, running: "Checking your library", done: "Checked your library" },
   search_places: { icon: Search, running: "Searching your places", done: "Searched your places" },
-  rank_places: { icon: Sparkles, running: "Ranking places for you", done: "Ranked places" },
+  rank_places: { icon: Sparkles, running: "Reading place profiles", done: "Read place profiles" },
   get_places: { icon: MapPin, running: "Reading place details", done: "Read place details" },
   read_reviews: { icon: MessageSquareQuote, running: "Reading reviews", done: "Read reviews" },
   get_visits: { icon: Footprints, running: "Checking your visits", done: "Checked your visits" },
@@ -120,14 +120,7 @@ export function ToolRow({
         </span>
       </div>
       {done && places.length > 1 && (
-        <button
-          type="button"
-          onClick={() => onShowOnMap(places.map((p) => p.id))}
-          className="ml-3.5 inline-flex min-h-11 items-center gap-1 rounded-md px-2 text-xs font-medium text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950/40 cursor-pointer transition-colors"
-        >
-          <MapIcon className="h-3.5 w-3.5" aria-hidden />
-          Show {places.length} on map
-        </button>
+        <MapButton ids={places.map((p) => p.id)} label={`Show ${places.length} on map`} indent onShowOnMap={onShowOnMap} />
       )}
       {done && summary?.results && summary.results.length > 0 && (
         <ul className="ml-5.5 space-y-0.5 text-xs">
@@ -146,6 +139,34 @@ export function ToolRow({
         </ul>
       )}
     </div>
+  );
+}
+
+/**
+ * "Show on map": a search's results (on its row), or the saved places a
+ * reply links to (under the reply). One button for both.
+ */
+export function MapButton({
+  ids,
+  label,
+  indent = false,
+  onShowOnMap,
+}: {
+  ids: string[];
+  label: string;
+  /** Lined up with a tool row's text. */
+  indent?: boolean;
+  onShowOnMap: (ids: string[]) => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onShowOnMap(ids)}
+      className={`${indent ? "ml-3.5 " : ""}inline-flex min-h-11 items-center gap-1 rounded-md px-2 text-xs font-medium text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950/40 cursor-pointer transition-colors`}
+    >
+      <MapIcon className="h-3.5 w-3.5" aria-hidden />
+      {label}
+    </button>
   );
 }
 

@@ -14,9 +14,11 @@ import { AgentError } from "@/lib/agent/errors";
 import { CONTEXT_TAG, echoable, type StoredMessage } from "@/lib/agent/history";
 import { MAX_STEPS } from "@/lib/agent/models";
 import { costOfMessage } from "@/lib/agent/pricing";
-import { replyMessageId, toUIMessages } from "@/lib/agent/ui";
+import { replyMessageId, toUIMessages, uiToolOutput } from "@/lib/agent/ui";
+import { systemPromptFor } from "@/lib/agent/prompt";
+import { capWithGuaranteedSeats } from "@/lib/assistant/place-filters";
 import { turnStream } from "@/lib/agent/ui-stream";
-import { approvalsAnswered, type AssistantUIMessage } from "@/lib/agent/ui-types";
+import { approvalsAnswered, placeIdsIn, type AssistantUIMessage } from "@/lib/agent/ui-types";
 import type { ToolRun } from "@/lib/agent/store";
 import { openTurn, runTurn, startConversation, type AgentDeps, type TurnEvents, type TurnResult } from "@/lib/agent/run-turn";
 import type { SpendEntry, SpendLedger } from "@/lib/agent/spend";
@@ -635,6 +637,31 @@ async function main() {
     expect("no note while a turn runs", running.length === 1);
     const stale = toUIMessages(history.slice(0, 4).concat([{ seq: 4, role: "user", content: [{ type: "tool_result", tool_use_id: "w1", content: "x" }, { type: "tool_result", tool_use_id: "r3", content: "x" }] as any }]), runs, {}, { turnInProgress: false, lastTurn: { status: "error", code: "busy", seq: 2 } });
     expect("a record from earlier in the conversation doesn't describe its end", ((stale.at(-1)?.parts.at(-1) as any)?.data?.code ?? "") === "interrupted", stale.at(-1)?.parts.at(-1));
+  }
+
+  say("## ranking: candidates for the model, and the places a reply links to");
+  {
+    const ranked = uiToolOutput("rank_places", JSON.stringify({ intent: "quiet", total_matches: 42, candidates: 30, places: [{ id: "p1", name: "A" }] }));
+    expect("a rank_places row: the candidate count, nothing to put on the map", ranked.summary === "30 candidates" && ranked.places === undefined, ranked);
+    const origin = "https://app.example";
+    const a = "5f4d1459-4a21-4db2-91ee-319ec76bc27b";
+    const b = "11d9588c-0c33-464e-9a29-24f8bbbdd529";
+    const reply = [
+      `Try [Seaborn](/places/${b}) first, then [Camia](${origin}/places/${a}).`,
+      `Also [Seaborn again](/places/${b}) and [on Maps](https://www.google.com/maps/place/?q=place_id:X).`,
+      `Elsewhere: [x](https://evil.example/places/${a}), [list](/lists/${a}), see ${origin}/places/${a.toUpperCase()}.`,
+    ].join("\n");
+    expect("reply links: app place pages only, in order, once each", JSON.stringify(placeIdsIn(reply, origin)) === JSON.stringify([b, a]), placeIdsIn(reply, origin));
+    expect("a bare app URL at the end of a sentence counts", JSON.stringify(placeIdsIn(`Here: ${origin}/places/${b}.`, origin)) === JSON.stringify([b]));
+    const many = Array.from({ length: 30 }, (_, i) => `[p${i}](/places/${String(i).padStart(8, "0")}-0000-4000-8000-000000000000)`).join(" ");
+    expect("at most 25 (what the map takes)", placeIdsIn(many, origin).length === 25);
+    expect("the app tells the model to link saved places to their page", /\(\/places\/<id>\)/.test(systemPromptFor("app")));
+
+    const rows = Array.from({ length: 40 }, (_, i) => ({ id: `r${i}` }));
+    const pool = capWithGuaranteedSeats(rows, new Set(["r35", "r39"]), 30);
+    expect("the pool: the best-rated 30, a tagged place below the cut swapped in for the lowest", pool.length === 30 && pool.some((r) => r.id === "r35") && pool.some((r) => r.id === "r39") && !pool.some((r) => r.id === "r29") && !pool.some((r) => r.id === "r28"), pool.map((r) => r.id));
+    const flood = capWithGuaranteedSeats(rows, new Set(rows.slice(4).map((r) => r.id)), 10);
+    expect("guaranteed seats take at most half the pool", flood.filter((r) => Number(r.id.slice(1)) >= 10).length <= 5, flood.map((r) => r.id));
   }
 
   say("## a live turn, as the panel receives it");

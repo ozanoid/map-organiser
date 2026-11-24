@@ -12,8 +12,8 @@
  * the approval card (recorded, never run), or is declined (the case says
  * which). Conversations stay in memory. Every Claude call is written to
  * assistant_spend with purpose 'eval', so the eval counts toward the
- * monthly cap. Read tools run for real; rank_places and search_google_maps
- * make their own (small) paid calls, counted in api_usage as usual.
+ * monthly cap. Read tools run for real; search_google_maps makes its own
+ * (small) paid call, counted in api_usage as usual.
  *
  * The full transcript of each run goes to scripts/assistant-eval/out/
  * (git-ignored: it holds library content). Progress and the summary are

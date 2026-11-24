@@ -9,8 +9,9 @@ chose the model and effort the agent starts conversations on
 Nothing is written to the library. A call that saves something stops at the
 approval card and is recorded (never run), or — in `decline-mark-visited` — is
 declined, which tests the resume path. Conversations stay in memory. Read tools
-run for real; `rank_places` (Gemini) and `search_google_maps` (DataForSEO) make
-their own small paid calls, counted in `api_usage` as usual.
+run for real; `search_google_maps` (DataForSEO) makes its own small paid call,
+counted in `api_usage` as usual. (`rank_places` called Gemini until 24.11.2026;
+it now returns candidates with profiles and the agent ranks them.)
 
 **It costs money.** Every Claude call is written to `assistant_spend` with
 `purpose = 'eval'`, so it counts toward the platform's monthly cap. A full run

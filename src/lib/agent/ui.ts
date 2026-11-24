@@ -60,8 +60,10 @@ export function uiToolOutput(name: string, text: string): ToolSummary {
       return { summary: plural(total, "place"), places };
     }
     case "rank_places": {
-      const places = placesOf(out.places);
-      return { summary: places.length ? `${plural(places.length, "match", "matches")}` : "No good match", places };
+      // Candidates for the model to judge, not an answer: no "Show on map"
+      // here — the reply's own place links get one (the panel).
+      const n = typeof out.candidates === "number" ? out.candidates : placesOf(out.places).length;
+      return { summary: n ? plural(n, "candidate") : "No match" };
     }
     case "get_places":
       return { summary: plural(placesOf(out.places).length, "place") };

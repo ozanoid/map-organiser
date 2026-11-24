@@ -10,6 +10,7 @@ import {
 } from "@/lib/assistant/library";
 import { localDateTime, placeId } from "@/lib/assistant/place-filters";
 import { defineTool } from "@/lib/assistant/tools/types";
+import { profileForModel, type StoredProfile } from "@/lib/assistant/profile";
 import type { UserContext } from "@/lib/db/context";
 import type { Timetable } from "@/lib/places/open-now";
 import { dayDate, todayAt } from "@/lib/plans/dates";
@@ -52,19 +53,7 @@ interface DetailRow {
   g_timetable: Timetable | null;
   g_hours: { weekday_text?: string[] } | null;
   g_popular: Parameters<typeof busyness>[0];
-  g_profile: {
-    tldr?: string;
-    pros?: string[];
-    cons?: string[];
-    features?: Record<string, unknown>;
-    theme_insights?: Array<{
-      theme?: string;
-      sentiment?: string;
-      salience?: number;
-      mention_count?: number;
-      evidence_quotes?: string[];
-    }>;
-  } | null;
+  g_profile: StoredProfile | null;
   g_description: string | null;
   g_similar: Array<{ cid?: string; title?: string; rating?: number; votes_count?: number }> | null;
 }
@@ -180,17 +169,6 @@ export const getPlaces = defineTool({
     }
 
     const places = rows.map((r) => {
-      const profile = r.g_profile ?? {};
-      const features = profile.features ?? {};
-      const themes = [...(profile.theme_insights ?? [])]
-        .sort((a, b) => (b.salience ?? 0) - (a.salience ?? 0))
-        .slice(0, 6)
-        .map((t) => ({
-          theme: t.theme,
-          sentiment: t.sentiment,
-          mentions: t.mention_count,
-          quote: clip(t.evidence_quotes?.[0], 220),
-        }));
       const instagram = r.notes?.match(INSTAGRAM_POST)?.[0];
       const open = at ? openAt(r, at) : null;
       return {
@@ -251,13 +229,7 @@ export const getPlaces = defineTool({
               ...(busyness(r.g_popular, at) ?? {}),
             }
           : undefined,
-        profile: {
-          summary: profile.tldr,
-          pros: profile.pros?.slice(0, 5),
-          cons: profile.cons?.slice(0, 5),
-          themes,
-          good_for: features,
-        },
+        profile: profileForModel(r.g_profile ?? {}, "full"),
         description: clip(r.g_description, 300),
         similar_not_saved: (r.g_similar ?? [])
           .filter(worthSuggesting)
