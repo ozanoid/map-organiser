@@ -94,8 +94,8 @@ Five components powering the Settings page tabs. All `"use client"`.
 - **Hooks:** [[../hooks/use-backfill-profiles|`useBackfillEligibility`/`useStartBackfill`]].
 - **Why it exists:** Pre-Phase-4 places have no `place_profile` (the AI summary + features payload). Phase 6 NL search soft-features filter and rerank both lean on profile content, so collections with low coverage feel weaker. This panel lets the user opt into bulk generation for their existing places.
 - **Renders:** an emerald-tinted card that summarizes coverage and a `Generate (N)` button. Three counts:
-  - `has_reviews_no_profile` — the profile only (≈ \$0.047 each, Claude Sonnet 5.5, v1.51.0).
-  - `has_cid_no_reviews` — DataForSEO `step=reviews` then chained `step=profile` (≈ \$0.055 each).
+  - `has_reviews_no_profile` — the profile only (≈ \$0.032 each in a batch, Claude Sonnet 5.5, v1.51.0).
+  - `has_cid_no_reviews` — DataForSEO `step=reviews` then chained `step=profile` (≈ \$0.040 each).
   - `no_cid_no_profile` — cannot be enriched (no Google Place ID). Shown as muted "skipped" line.
   - Cost estimate footer with the total in USD — `PROFILE_WRITER_AVG_USD` a profile plus the DataForSEO reviews SKU's price (v1.51.0; it priced Gemini and \$1 / 1,000 reviews before).
 - **Behavior:**

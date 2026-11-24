@@ -37,18 +37,31 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
   profile backfill and the suggestions queue need Claude.
 - The profile backfill's estimate (`GET /api/user/backfill-profiles`) priced
   Gemini and DataForSEO reviews at $1 / 1,000: now the writer's measured
-  cost (`PROFILE_WRITER_AVG_USD` = $0.047, `models.ts`) and the reviews
+  cost (`PROFILE_WRITER_AVG_USD`, `models.ts`: $0.032, the 6.3 rewrite's average) and the reviews
   SKU's real price ($7.50 / 1,000, `SKU_CONFIG`). The panel's copy no longer
   names Gemini Flash.
 - `scripts/assistant-check/tsconfig.json`: relative paths instead of the
   deprecated `baseUrl`, like the eval's.
 - Settings → usage: the Claude row ("Claude", was "Claude assistant")
   shows what each purpose took this month (`assistant.byPurpose`).
+- 6.3 run on 24.11.2026 (Ozan: profile only, every account): 889 profiles
+  rewritten, every place with a stored review; $28.28 for 893 calls
+  (≈ $0.032 a profile — a lone one ≈ $0.05–0.08 while its prompt cache is
+  written), ≈ 12 s a call at four at a time; 97.1% of 6,965 evidence quotes
+  found in the reviews (punctuation aside). The month's Claude spend after
+  it: $34.69 of the $100 cap.
+- Found by the run: 4 of 893 answers carried a malformed tag id and the
+  schema's UUID check threw the whole profile away (the schema sent to
+  Claude can't carry `format: uuid`). `PlaceProfileSchema` checks the shape
+  of `matched_existing` / `suggested_lists` only; `writeProfile` keeps the
+  ids that name the user's own tags and lists, one by one. The four were
+  rewritten after the fix.
 - 6.3, approved: `npm run regen:profiles` rewrites the existing profiles
   with the current writer — plain calls, no Batch API (Ozan); every place
   with reviews whose profile it didn't write, re-runnable, `--dry-run`
-  (895 today), `--apply-suggestions` optional; it saves the profiles it
-  replaces to a git-ignored backup file before the first write.
+  (895 that day), `--apply-suggestions` optional; it saves the profiles it
+  replaces to a git-ignored backup file before the first write and leaves
+  out places whose review list is empty.
 - Schema, applied with Ozan's OK (24.11.2026, version 20261124225502)
   after a check in a rolled-back transaction:
   `20261124225502_assistant_spend_purposes.sql` widens the ledger's

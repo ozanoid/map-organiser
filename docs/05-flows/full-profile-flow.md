@@ -72,7 +72,7 @@ Gemini, or a Claude model through `structuredClaude`) and
 `generatePlaceProfile` (gates, save, auto-apply), which writes with
 `PROFILE_WRITER` (Gemini until v1.51.0).
 
-Measured on 24.11.2026 (Phase 2, 6.2): on 10 places, Gemini 3 Flash wrote 10/10 profiles with 62 of 74 quotes found word for word in the reviews (84%), 30.1 s each; Claude Haiku 5.5 (effort high) 10/10, 84/89 (94%), 40.0 s, $0.006 a profile; Claude Sonnet 5.5 (effort medium) 10/10, 99/102 (97%), 14.7 s, $0.047 a profile. Category and sub-category agreed on 9 of 10 (LX Factory: Gemini Museum & Culture, both Claude models Shopping). Ozan picked Sonnet 5.5 at medium for production (v1.51.0).
+Measured on 24.11.2026 (Phase 2, 6.2): on 10 places, Gemini 3 Flash wrote 10/10 profiles with 62 of 74 quotes found word for word in the reviews (84%), 30.1 s each; Claude Haiku 5.5 (effort high) 10/10, 84/89 (94%), 40.0 s, $0.006 a profile; Claude Sonnet 5.5 (effort medium) 10/10, 99/102 (97%), 14.7 s, $0.047 a profile. Category and sub-category agreed on 9 of 10 (LX Factory: Gemini Museum & Culture, both Claude models Shopping). Ozan picked Sonnet 5.5 at medium for production (v1.51.0). The 6.3 rewrite (24.11.2026, `npm run regen:profiles`) then wrote 889 profiles: 97.1% of 6,965 evidence quotes found in the reviews (punctuation aside), ≈ $0.032 and ≈ 12 s a profile.
 
 The user never waits for this — they save the place, see the lite profile
 chips, and the full profile materializes later on the place detail page via
@@ -217,7 +217,7 @@ match is found, the route reuses that entity — no duplicate row.
 - Subcategory dictionary varies by user; ~500 tokens for 62 default subs.
 - Total input: ~7-14K tokens depending on review lengths.
 - Output: ~1-2K tokens (Zod schema is generous but most fields are short).
-- Well inside the model's window. Cost ≈ $0.047 a profile with Claude Sonnet 5.5 at medium ($2 / $10 per 1M in/out; measured 24.11.2026); Gemini 3 Flash was ≈ $0.008-0.012 ($0.50 / $3.00, verified 15.07.2026).
+- Well inside the model's window. Claude Sonnet 5.5 at medium: $2 / $10 per 1M in/out, $2.50 to write the prompt cache and $0.10 to read it — ≈ $0.032 a profile in a run of many and ≈ $0.05–0.08 for a lone one, whose 13–17k-token system prompt is written to the cache (measured 24.11.2026); Gemini 3 Flash was ≈ $0.008-0.012 ($0.50 / $3.00, verified 15.07.2026).
 
 ## Failure modes
 
@@ -225,6 +225,7 @@ match is found, the route reuses that entity — no duplicate row.
 - **`ANTHROPIC_API_KEY` missing** (v1.51.0; the Gemini key before) → 503 from step=profile. AiSummaryCard skeleton lingers until polling cap (2 min) then stops; user sees the placeholder. Acceptable in dev environments.
 - **Monthly Claude cap reached** ($100 for every Claude call, the `assistant_spend` ledger; v1.51.0 — before, the per-user PROFILE budget of 1000) → step=profile returns 429 before the model call. A backfill dispatch swallows it (fire-and-forget); the import queue ends the item `done` without a profile (`cap_exceeded`), and the refresh sweep skips the place and writes the profile on a later run; a manual refresh surfaces it. Resets on the 1st (UTC). See [[ai-enrichment-flow#cost-cap]].
 - **LLM throws or returns invalid JSON** → caught; 500 returned. `places.google_data.place_profile` stays `lite` (or null). Polling caps at 2 min. User can hit the Refresh button on the (lite or absent) card to retry.
+- **A malformed or unknown tag / list id in the answer** → that id is dropped, the profile kept (`writeProfile` keeps only the ids that name the user's tags and lists; v1.51.0). Before, the schema's UUID check threw the whole profile away — 4 of 893 calls in the 6.3 rewrite.
 - **No reviews on the place** → 400 `no_reviews`. Card stays in pending-with-message state.
 - **Apply-suggestions throws mid-flight** → profile is already persisted (step 5h finished). Some suggestions may apply, some may not. Re-running step=profile is safe; junction rows are deduped by check-then-insert.
 - **Same proposal queued twice** → UNIQUE INDEX `idx_ai_suggestions_unique_pending` rejects with a Postgres error, which the JS client surfaces as a thrown exception. Apply-suggestions catches it implicitly (the counter still increments — we don't distinguish "queued this run" from "already queued").
@@ -232,9 +233,9 @@ match is found, the route reuses that entity — no duplicate row.
 
 ## Cost & throughput
 
-- Per profile: ≈ $0.047 (Claude Sonnet 5.5 at medium, measured 24.11.2026; Gemini Flash was ~$0.001-0.002 in May 2026).
-- 500 places backfill: ≈ $23.5.
-- Tracked in `api_usage` table under SKU `ai_place_profile` (~$1.00 / 1k calls baseline) — until v1.51.0. Since then the profile is a Claude call (Sonnet 5.5, ~$0.047, measured) in the Claude ledger.
+- Per profile: ≈ $0.032 in a run of many, ≈ $0.05–0.08 alone (Claude Sonnet 5.5 at medium, measured 24.11.2026; Gemini Flash was ~$0.001-0.002 in May 2026).
+- 500 places backfill: ≈ $16.
+- Tracked in `api_usage` table under SKU `ai_place_profile` (~$1.00 / 1k calls baseline) — until v1.51.0. Since then the profile is a Claude call (Sonnet 5.5, measured above) in the Claude ledger.
 
 ## Manual refresh
 

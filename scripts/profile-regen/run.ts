@@ -9,7 +9,7 @@
  *                                                     sub-category; category moves queued)
  *   npm run regen:profiles -- --limit=20 --concurrency=4
  *
- * Every place with stored reviews whose profile PROFILE_WRITER didn't write,
+ * Every place with at least one stored review whose profile PROFILE_WRITER didn't write,
  * across every account — so a run that stops can simply be run again. Goes
  * through generatePlaceProfile: each owner's AI switch, the monthly cap (the
  * run stops there), the ledger (purpose 'profile'). Progress on stdout.
@@ -36,17 +36,18 @@ async function main() {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
-  type Row = { id: string; user_id: string; name: string; mv: string | null };
+  type Row = { id: string; user_id: string; name: string; mv: string | null; first: unknown };
   const rows: Row[] = [];
   for (let from = 0; ; from += PAGE) {
     const { data, error } = await admin
       .from("places")
-      .select("id, user_id, name, mv:google_data->place_profile->>model_version")
+      .select("id, user_id, name, mv:google_data->place_profile->>model_version, first:google_data->reviews->0")
       .not("google_data->reviews", "is", null)
       .order("created_at", { ascending: true })
       .range(from, from + PAGE - 1);
     if (error) throw error;
-    rows.push(...(data as Row[]));
+    // An empty review list can't make a profile (generatePlaceProfile answers no_reviews).
+    rows.push(...(data as Row[]).filter((r) => r.first != null));
     if (data.length < PAGE) break;
   }
   const todo = rows.filter((r) => r.mv !== PROFILE_WRITER.model).slice(0, limit);

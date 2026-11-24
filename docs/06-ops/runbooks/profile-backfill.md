@@ -45,18 +45,18 @@ Eligibility split:
 
 | Call | Per-1k cost | Per-place |
 |---|---|---|
-| The profile — Claude Sonnet 5.5 (v1.51.0), Claude ledger purpose `profile` | ≈ \$47 (measured average) | ≈ \$0.047 |
+| The profile — Claude Sonnet 5.5 (v1.51.0), Claude ledger purpose `profile` | ≈ \$32 (measured over the 6.3 rewrite) | ≈ \$0.032 |
 | `dataforseo_reviews` | \$7.50 (one task, measured 19.11.2026) | \$0.0075 |
 
-Worst case per place (reviews + profile): ≈ \$0.055 (v1.51.0; ~\$0.011 at Gemini 3 Flash rates before). A user with 300 reviewless places: ≈ \$16.5. The panel's estimate uses the same figures (`PROFILE_WRITER_AVG_USD`, the DataForSEO reviews SKU); what was really spent shows in the cost tracker.
+Worst case per place (reviews + profile): ≈ \$0.040 (v1.51.0; ~\$0.011 at Gemini 3 Flash rates before). A user with 300 reviewless places: ≈ \$12. A lone profile costs more than the batch average (≈ \$0.05–0.08: its system prompt is written to the prompt cache). The panel's estimate uses the same figures (`PROFILE_WRITER_AVG_USD`, the DataForSEO reviews SKU); what was really spent shows in the cost tracker.
 
 > **Monthly budget interaction (15.07.2026):** profile calls count against
 > the per-user PROFILE budget (`AI_MONTHLY_PROFILE_CAP`, 1000/month) — a
 > full backfill of a ~470-place library fits within a single month
 > alongside normal usage. Searches have their own separate budget.
 >
-> **Since v1.51.0:** profiles are written by Claude Sonnet 5.5 (~$0.047 a
-> profile, measured 24.11.2026) into the Claude ledger, under the platform's
+> **Since v1.51.0:** profiles are written by Claude Sonnet 5.5 (≈ $0.032 a
+> profile in a run of many, measured over the 6.3 rewrite) into the Claude ledger, under the platform's
 > $100 monthly cap; the PROFILE budget is no longer checked. Rewriting the
 > existing profiles with the current writer is `npm run regen:profiles`
 > (Phase 2, 6.3): every place with reviews whose profile it didn't write,
@@ -64,7 +64,19 @@ Worst case per place (reviews + profile): ≈ \$0.055 (v1.51.0; ~\$0.011 at Gemi
 > tag / sub-category auto-apply too.
 > Before its first write it saves the profiles it is about to replace to
 > `scripts/profile-regen/out/backup-<time>.json` (git-ignored) — the
-> database keeps no copy of an overwritten profile.
+> database keeps no copy of an overwritten profile. Places whose review list
+> is empty are left out (no profile can be written from them).
+>
+> **Run on 24.11.2026** (Ozan: profile only, every account): 889 profiles
+> rewritten — every place with a stored review — $28.28 for 893 calls
+> (≈ $0.032 each; the first calls of each run ≈ $0.05–0.08 while the prompt
+> cache was written), ≈ 12 s a call at four at a time, 97.1% of the 6,965
+> evidence quotes found in the reviews (punctuation aside). Four calls failed
+> on a malformed tag id, which then threw the whole profile away; ids are now
+> checked one by one (`writeProfile`) and the four were rewritten. The backups
+> are in `scripts/profile-regen/out/` on Ozan's machine. Until the branch is
+> merged, production (main) keeps writing new and refreshed profiles with
+> Gemini: run it once more after the merge.
 
 ### Rate limiting
 

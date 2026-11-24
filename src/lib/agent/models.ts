@@ -39,17 +39,20 @@ export interface ClaudeChoice {
  * Who writes place profiles and reads Instagram posts — Ozan's choice after
  * the 6.2 measurement (24.11.2026, docs/_plans/phase-2-assistant.md):
  * profiles by Sonnet 5.5 at medium (97% of quotes word for word in the
- * reviews, ~15 s, ~$0.047 a profile), Instagram reads by Haiku 5.5 at high
+ * reviews; in the 6.3 rewrite ≈ 12 s and ≈ $0.032 a profile, a lone one
+ * ≈ $0.05–0.08 while its prompt cache is written), Instagram reads by Haiku 5.5 at high
  * (0 wrong places on the 35-post set, ~$0.0008 a read).
  */
 export const PROFILE_WRITER: ClaudeChoice = { model: "claude-sonnet-5-5", effort: "medium" };
 export const INSTAGRAM_READER: ClaudeChoice = { model: "claude-haiku-5-5", effort: "high" };
 
-/** What one profile by PROFILE_WRITER costs on average, in US dollars — the
- *  6.2 measurement (10 places, $0.0466 each). The estimate shown before a
- *  backfill; the ledger records what every call really cost. Measure again
- *  when PROFILE_WRITER changes. */
-export const PROFILE_WRITER_AVG_USD = 0.047;
+/** What a profile by PROFILE_WRITER costs on average in a run of many, in US
+ *  dollars — measured over the 6.3 rewrite (24.11.2026: 893 calls, $28.28,
+ *  four at a time, the prompt cache warm). The estimate shown before a
+ *  backfill. A lone profile costs more, ≈ $0.05–0.08: its 13–17k-token system
+ *  prompt is written to the cache. The ledger records what every call really
+ *  cost. Measure again when PROFILE_WRITER changes. */
+export const PROFILE_WRITER_AVG_USD = 0.032;
 
 /** Output cap per model call — thinking, text and tool input together. A
  *  call that needs more is cut off (stop reason max_tokens). */

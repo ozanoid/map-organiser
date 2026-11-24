@@ -220,6 +220,17 @@ export async function writeProfile(
       evidence_quotes: t.evidence_quotes.slice(0, MAX_EVIDENCE_QUOTES),
     })) ?? null;
 
+  // The ids the model hands back count only when they name the user's own
+  // tags and lists — the ones the prompt offered. Checked per id, for the same
+  // reason as the limits above: one malformed or unknown id drops that id, not
+  // the profile.
+  const ownTags = new Set(inputs.userContext.tags.map((t) => t.id));
+  const ownLists = new Set(inputs.userContext.lists.map((l) => l.id));
+  profile.suggested_tags.matched_existing = [...new Set(profile.suggested_tags.matched_existing)].filter((id) =>
+    ownTags.has(id)
+  );
+  profile.suggested_lists = [...new Set(profile.suggested_lists)].filter((id) => ownLists.has(id));
+
   return { profile, info };
 }
 

@@ -83,9 +83,10 @@ the next run). A ~500-place library cycles in roughly 5-8 weeks.
 - DataForSEO: biz-info ($0.0054) + reviews ($0.0075 a task, measured
   19.11.2026) ≈ **$0.013/place** → full monthly cycle over ~450 places ≈
   **$6/month**.
-- The profile (only when new reviews): Claude Sonnet 5.5 ≈ $0.047 a profile
-  (6.2 measurement, v1.51.0; Gemini ≈ $0.01 before) — a month that
-  re-profiles 100 places ≈ **$4.7**.
+- The profile (only when new reviews): Claude Sonnet 5.5 ≈ $0.03 a profile
+  when the sweep writes several for one user (the 6.3 rewrite's average,
+  $0.032), ≈ $0.05–0.08 for a lone one (v1.51.0; Gemini ≈ $0.01 before) — a
+  month that re-profiles 100 places ≈ **$3–8**.
 
 ## Manual trigger / verification
 
