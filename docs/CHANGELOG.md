@@ -65,9 +65,11 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
     starting `/\` is no longer taken for an app link.
   - The trace is flushed after the turn, not alongside it; 44 px buttons;
     the composer stops at 8,000 characters.
-- Schema: `20261124120000_assistant_open_and_last_turn.sql` (`opened_at`,
-  `last_turn_*`) — written and checked in a rolled-back transaction,
-  **not applied**: waits for Ozan's approval; the door's routes need it.
+- Schema: `20261124143554_assistant_open_and_last_turn.sql` (`opened_at`,
+  `last_turn_*`; the conversations index now orders by `opened_at`) —
+  checked in a rolled-back transaction, applied with Ozan's approval
+  (24.11.2026), verified after; `npm run check:agent:db` 11 checks (the
+  new store queries accepted by the live database, nothing written).
 - Checked: build, types, lint; `npm run check:agent` 120 offline checks
   (incl. the checks before a turn, Try again, the recorded outcome, the
   panel's view of a stored conversation and a live turn's stream). Not yet

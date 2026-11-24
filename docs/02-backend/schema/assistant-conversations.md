@@ -9,7 +9,7 @@ sources:
   - Supabase project hukppmaevcapvbrvxtph (live)
   - supabase/migrations/20261123123953_assistant_conversations.sql
   - supabase/migrations/20261123143607_assistant_turns_and_tool_runs.sql
-  - supabase/migrations/20261124120000_assistant_open_and_last_turn.sql
+  - supabase/migrations/20261124143554_assistant_open_and_last_turn.sql
 related:
   - "[[_README]]"
   - "[[api_usage]]"
@@ -19,7 +19,7 @@ related:
 
 # `assistant_conversations`, `assistant_messages`, `assistant_spend`, `assistant_tool_runs`
 
-The platform's own Claude agent keeps its conversations here ([[../../_plans/phase-2-assistant]]). Created on 23.11.2026 in two migrations: `assistant_conversations` (version 20261123123953) and `assistant_turns_and_tool_runs` (version 20261123143607 — server-only writes, the turn lease, tool runs). Only the agent core writes them, with the service role (`supabaseConversationStore`, `src/lib/agent/store.ts`); the app's assistant routes use it (v1.48.0, [[../api-routes/assistant]]). A third migration is written and **not applied yet** — see "Pending" below; the door's code needs it.
+The platform's own Claude agent keeps its conversations here ([[../../_plans/phase-2-assistant]]). Created on 23.11.2026 in two migrations: `assistant_conversations` (version 20261123123953) and `assistant_turns_and_tool_runs` (version 20261123143607 — server-only writes, the turn lease, tool runs); a third on 24.11.2026, `assistant_open_and_last_turn` (version 20261124143554 — which conversation the door shows, how the last turn ended), applied with Ozan's approval. Only the agent core writes them, with the service role (`supabaseConversationStore`, `src/lib/agent/store.ts`); the app's assistant routes use it (v1.48.0, [[../api-routes/assistant]]).
 
 ## Why the history lives on the server and never changes
 
@@ -38,24 +38,13 @@ Claude's 5.5 models always think, and each thinking block is bound to the exact 
 | `created_at` | timestamptz | no | `now()` | — |
 | `updated_at` | timestamptz | no | `now()` | Bumped by the trigger below when a message is appended. |
 | `turn_lease_until` | timestamptz | yes | — | The turn lease: while it is in the future, a turn of this conversation is running and another one is refused. Set by the server before a turn, cleared after; a crashed turn's lease runs out (15 minutes, longer than a route can run). |
-
-Index: `assistant_conversations_latest_idx (user_id, door, updated_at desc)` — "the user's latest conversation in this door".
-
-## Pending — the third migration (written 24.11.2026, not applied)
-
-`20261124120000_assistant_open_and_last_turn.sql` — two fixes from the review of the in-app door. Waits for Ozan's approval; the door's code (`latest`, `load`, `recordTurn`) reads and writes these columns, so the routes fail until it is applied.
-
-| Column | Type | Nullable | Default | Notes |
-|---|---|---|---|---|
-| `opened_at` | timestamptz | no | `now()` | When the user last opened the conversation in its door ("New chat" now; picking an old one later). The door shows the one opened last — ordering by `updated_at` pulled the panel back to an older conversation whose turn was still appending. |
-| `last_turn_status` | text | yes | — | CHECK `done` \| `awaiting_approval` \| `refused` \| `max_tokens` \| `step_limit` \| `error`. How the last turn ended — so a reload can say why a message has no reply; the history holds only what the model saw. |
-| `last_turn_code` | text | yes | — | The error's code (`busy`, `budget_exhausted`, …); CHECK only with `error`. |
+| `opened_at` | timestamptz | no | `now()` | (20261124143554) When the user last opened the conversation in its door ("New chat" now; picking an old one later). The door shows the one opened last — ordering by `updated_at` pulled the panel back to an older conversation whose turn was still appending. |
+| `last_turn_status` | text | yes | — | (20261124143554) CHECK `done` \| `awaiting_approval` \| `refused` \| `max_tokens` \| `step_limit` \| `error`. How the last turn ended — so a reload can say why a message has no reply; the history holds only what the model saw. |
+| `last_turn_code` | text | yes | — | The error's code (`busy`, `budget_exhausted`, …); CHECK `assistant_conversations_turn_code_only_on_error`: only with `error`. |
 | `last_turn_seq` | integer | yes | — | CHECK ≥ 0. The history's length when it ended: once a message is appended after, the record no longer describes the end of the conversation. |
 | `last_turn_at` | timestamptz | yes | — | When it was recorded. |
 
-Index `assistant_conversations_open_idx (user_id, door, opened_at desc)` replaces `assistant_conversations_latest_idx`. Written by the server only, like the rest; users read their own rows as before. No backfill (no rows on 23.11.2026).
-
-Checked in a rolled-back transaction on the live database (24.11.2026): a new conversation is the one opened last; recording an error and a refusal works; a code without an error and an unknown status are refused (23514); the owner can't write the new columns (0 rows) and reads their own; nothing persisted.
+Index: `assistant_conversations_open_idx (user_id, door, opened_at desc)` — "the conversation the user opened last in this door". It replaced `assistant_conversations_latest_idx (user_id, door, updated_at desc)` on 24.11.2026; `updated_at` is still bumped on every message, nothing orders by it.
 
 ## `assistant_messages`
 
@@ -129,3 +118,7 @@ Before applying, in a rolled-back transaction on the live database as the signed
 ## Checked — the second migration
 
 Before applying, in a rolled-back transaction on the live database, and again after applying it (23.11.2026): the owner can't start a conversation, append a message, write or change a tool run, or set the lease (42501 / 0 rows); the service role writes all of it; the lease is taken once, refused while held and taken again after it runs out; a second claim of the same call is refused (23505); a `done` run without a result and an unknown decision are refused (23514); another user sees nothing; deleting a conversation removes its runs. After applying: 5 policies on the four tables, RLS on for all four. The store's own queries were then run against the live database without writing anything (`npm run check:agent:db`, 10 checks): every query is accepted, inserts are refused only by the foreign key, no row was written.
+
+## Checked — the third migration
+
+Before applying, in a rolled-back transaction on the live database (24.11.2026): a new conversation is the one opened last; recording an error and a refusal works; a code without an error and an unknown status are refused (23514); the owner can't write the new columns (0 rows) and reads their own; nothing persisted. Applied with Ozan's approval on 24.11.2026 (version 20261124143554; the table held no rows, so nothing to backfill). After applying: the five columns, the new index (the old one gone), four CHECK constraints, RLS on, the two policies unchanged; the store's queries — including `load` with the new columns, `recordTurn` and `latest` — accepted by the live database without writing anything (`npm run check:agent:db`, 11 checks).
