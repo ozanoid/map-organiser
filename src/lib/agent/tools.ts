@@ -13,8 +13,16 @@ import { ASSISTANT_TOOLS } from "@/lib/assistant/tools";
 
 const BY_NAME = new Map(ASSISTANT_TOOLS.map((tool) => [tool.name, tool]));
 
-/** Web searches per model call (one API request; a turn can make several). */
-export const WEB_SEARCH_MAX_USES = 3;
+/**
+ * Web searches per model call (one API request; a turn can make several). A
+ * safety ceiling, not a budget: the model decides how often to search and
+ * usually stops after a few. With 3, its filtering code spent all three in
+ * its first step and it couldn't recover (signed-in test, 24.11.2026), so
+ * Ozan raised it to 10 — it stops only a runaway loop. Spend is bounded by
+ * the monthly cap and the turn's step limit. A conversation keeps the value
+ * it started with (its tools are fixed); new ones get this one.
+ */
+export const WEB_SEARCH_MAX_USES = 10;
 
 /**
  * The tools array a new conversation starts with. It is stored with the

@@ -82,10 +82,11 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
   saved, the latest shown). Fixed from it: decided cards keep their
   description after the server's copy loads (previews for every write);
   links into the app close the panel; "Show on map" from the map brings
-  the places into view. Found, not fixed: web search failed once — the
-  model's first filtering step used all 3 allowed searches and it couldn't
-  recover (decision for Ozan); a hydration warning in `CategoryFilter` on
-  `/map` (exists on main too).
+  the places into view. Web search failed once — the model's first
+  filtering step used all 3 allowed searches and it couldn't recover — so
+  Ozan raised `max_uses` to 10 per request (a ceiling against a runaway
+  loop, not a budget; new conversations get it). Found, not fixed: a
+  hydration warning in `CategoryFilter` on `/map` (exists on main too).
 - Docs: [[02-backend/api-routes/assistant]] (new), [[05-flows/ai-chat-flow]]
   and [[03-frontend/components/assistant]] (rewritten),
   [[02-backend/api-routes/ai]], [[02-backend/api-routes/_README]],

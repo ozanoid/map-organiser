@@ -96,7 +96,7 @@ After a refusal fallback mid-answer, the API's rule for sending the turn back is
 | `max_tokens` | 16,000 | thinking + text + tool input of one call |
 | `system` | one text block with `cache_control` | an explicit cache breakpoint at the end of the fixed prefix (tools + system) |
 | `cache_control` (top level) | ephemeral (5 min) | automatic caching of the growing conversation |
-| `tools` | the 16 shared tools as JSON Schema (`eager_input_streaming`) + `web_search_20260209` (`max_uses` 3) | inputs are validated with the tools' zod schemas before they run |
+| `tools` | the 16 shared tools as JSON Schema (`eager_input_streaming`) + `web_search_20260209` (`max_uses` 10 — a safety ceiling, Ozan 24.11.2026; it was 3) | inputs are validated with the tools' zod schemas before they run |
 | `betas`, `fallbacks` | `server-side-fallback-2026-07-01`, `"default"` | a request the safety classifiers decline is re-run on the recommended fallback model inside the same call |
 
 ## Approval
@@ -126,7 +126,7 @@ Prices per million tokens (input / 5-min cache write / cache read / output): Opu
 
 - Most of a turn's time is the tools: `rank_places` (Gemini) 15–40 s, web search 15–27 s; a model call 1–15 s. Text usually comes after all tools (9–21 s on average).
 - Writes: for one change the model says what it saves in a sentence; for a plan or a list it goes to the card without text — the door's approval card has to show the proposal readably.
-- Web search: `max_uses: 3` is per request, but with `web_search_20260209` the searches the model's filtering code makes counted 4 in one call. Ozan kept it as is (23.11.2026): about 3–4 per message. Most of a searching call's cost is reading the results, not the searches — on Sonnet $0.106, of which $0.03 for 3 searches.
+- Web search: `max_uses` is per request, and with `web_search_20260209` the searches the model's filtering code makes counted 4 in one call with a limit of 3. Ozan first kept 3 (23.11.2026); the signed-in test (24.11.2026) showed it too tight — the filtering code spent all three in its first step, couldn't use the results and had no search left, and the reply said it couldn't search. Now 10 per request (Ozan, 24.11.2026): a ceiling against a runaway loop, not a budget — the model decides how often to search; spend is bounded by the monthly cap and the turn's 10 calls. Conversations started before keep 3 (their tools are fixed). Price: $0.01 a search, plus the tokens of what the model reads (the filtering code is free with web search) — on Sonnet a searching call cost $0.106 in the eval ($0.03 of it 3 searches) and $0.049 in the test ($0.03 searches).
 - Caching works as designed: after the first call of a conversation, each call read the ~27k-token prefix from the cache (26,917 tokens written once for $0.067 on Sonnet, then read for $0.0027 a call — a twentieth of the normal input price).
 
 ## The app door (v1.48.0)
