@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { ToolMetadata, ToolSummary, TurnOutcome, WritePreview } from "@/lib/agent/ui-types";
+import { useAssistantStore } from "@/lib/stores/assistant-store";
 
 /**
  * The pieces of an assistant reply other than its text: a row per tool the
@@ -305,8 +306,9 @@ function LinkOut({ url, className, children }: { url: string; className: string;
   } catch {
     // not a URL
   }
+  // Into the app: the panel closes, so the page isn't hidden behind it.
   return internal ? (
-    <Link href={internal} className={className}>
+    <Link href={internal} className={className} onClick={() => useAssistantStore.getState().setOpen(false)}>
       {children}
     </Link>
   ) : (

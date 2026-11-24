@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { describeWrites } from "@/lib/agent/describe-writes";
 import { doorRequest } from "@/lib/agent/door";
-import { pendingToolCalls } from "@/lib/agent/history";
+import { toolCallsIn } from "@/lib/agent/history";
 import { DEFAULT_AGENT_MODEL } from "@/lib/agent/models";
-import { cardsWaiting, startConversation } from "@/lib/agent/run-turn";
+import { startConversation } from "@/lib/agent/run-turn";
+import { checkToolCall, needsApproval } from "@/lib/agent/tools";
 import { toUIMessages } from "@/lib/agent/ui";
 import type { ConversationResponse } from "@/lib/agent/ui-types";
 import { log } from "@/lib/telemetry/logger";
@@ -25,13 +26,13 @@ export async function GET(req: Request) {
     if (!latest) return NextResponse.json({ conversation: null, messages: [], version: 0 } satisfies ConversationResponse);
 
     const { messages: history, lastTurn } = await door.store.load(latest.id);
-    const toolUseIds = history.flatMap((m) =>
-      m.role === "assistant" ? m.content.flatMap((b) => (b.type === "tool_use" ? [b.id] : [])) : []
-    );
-    const runs = new Map((await door.store.toolRuns(latest.id, toolUseIds)).map((r) => [r.toolUseId, r]));
-    // Cards only when no turn is running: a running one may be answering them.
-    const waiting = latest.turnInProgress ? [] : cardsWaiting(pendingToolCalls(history), (id) => runs.has(id));
-    const previews = await describeWrites(door.toolCtx, waiting, history).catch((e: unknown) => {
+    const calls = history.flatMap((m) => (m.role === "assistant" ? toolCallsIn(m.content) : []));
+    const runs = new Map((await door.store.toolRuns(latest.id, calls.map((c) => c.id))).map((r) => [r.toolUseId, r]));
+    // Every proposal keeps its description — the waiting card, and what was
+    // saved or not ("Not saved · Create list: …"), as the live reply showed
+    // it. One batch of name lookups for the whole conversation.
+    const writes = calls.filter((c) => needsApproval(c.name) && checkToolCall(c.name, c.input).ok);
+    const previews = await describeWrites(door.toolCtx, writes, history).catch((e: unknown) => {
       log.warn("agent.preview_failed", { error: e instanceof Error ? e.message : String(e) });
       return {};
     });

@@ -3,12 +3,14 @@
 import Link from "next/link";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { useAssistantStore } from "@/lib/stores/assistant-store";
 
 /**
  * The assistant's replies: Markdown with links (Google Maps, the app's own
  * plans, lists and places), lists and emphasis. Raw HTML in a reply is
  * shown as text, never rendered. Links into the app stay in the app; any
- * other link opens in a new tab. Images are never loaded: a reply can carry
+ * other link opens in a new tab. A link into the app closes the panel, so
+ * the page it opens isn't hidden behind it. Images are never loaded: a reply can carry
  * text from a web page, and an image URL would send whatever it holds to
  * that server the moment the reply showed — an image is a link instead.
  */
@@ -31,7 +33,7 @@ const components: Components = {
     const internal = appPath(href);
     const className = "font-medium text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-400";
     return internal ? (
-      <Link href={internal} className={className}>
+      <Link href={internal} className={className} onClick={() => useAssistantStore.getState().setOpen(false)}>
         {children}
       </Link>
     ) : (

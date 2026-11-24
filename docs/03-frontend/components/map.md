@@ -101,7 +101,7 @@ Two components. `MapView` is a self-contained Mapbox renderer; `MapContent` is t
 - **Composes:**
   - `MapView` (with ref).
   - `FilterPanel` (desktop) / `FilterSheet` (mobile).
-  - `AssistantPicksChip` (v1.48.0) next to the clear-filters chip: while `?ids=` is set ("Show on map" from the assistant), "N from the assistant ✕" — one tap back to every place, other filters kept ([[assistant]]).
+  - `AssistantPicksChip` (v1.48.0) next to the clear-filters chip: while `?ids=` is set ("Show on map" from the assistant), "N from the assistant ✕" — one tap back to every place, other filters kept ([[assistant]]). A new `ids` set is the one filter change that moves the camera: once its places are loaded, `fitToCoords` brings them into view (`fittedIds`) — "Show on map" from the map itself would otherwise leave the camera where it was.
   - `SearchResultPanel` (search → save), `AddPlaceDialog`.
   - Marker detail: the inline side-panel on desktop; `PlaceDetailSheet`
     (full detail bottom-sheet) on mobile — gated by `useIsDesktop` (v1.24.0).

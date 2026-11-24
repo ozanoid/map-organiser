@@ -76,6 +76,24 @@ export function MapContent({ mapboxToken }: { mapboxToken: string }) {
   const [placeListOpen, setPlaceListOpen] = useState(false);
   const mapRef = useRef<MapViewHandle>(null);
   const searchParams = useSearchParams();
+
+  // The assistant's "Show on map" (?ids=…) is a deliberate "show me these":
+  // when the named places change, bring them into view once they're loaded.
+  // (Other filter changes keep the camera still, by design — map-view.tsx.)
+  const idsKey = filters.ids?.join(",") ?? "";
+  const fittedIds = useRef("");
+  useEffect(() => {
+    if (!idsKey) {
+      fittedIds.current = "";
+      return;
+    }
+    if (fittedIds.current === idsKey) return;
+    const wanted = new Set(idsKey.split(","));
+    const named = places.filter((p) => wanted.has(p.id) && p.location);
+    if (named.length === 0) return; // not loaded yet
+    fittedIds.current = idsKey;
+    mapRef.current?.fitToCoords(named.map((p) => p.location));
+  }, [idsKey, places]);
   const router = useRouter();
   const sharedHandled = useRef<string | null>(null);
 

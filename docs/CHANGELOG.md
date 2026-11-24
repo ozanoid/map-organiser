@@ -72,8 +72,20 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
   new store queries accepted by the live database, nothing written).
 - Checked: build, types, lint; `npm run check:agent` 120 offline checks
   (incl. the checks before a turn, Try again, the recorded outcome, the
-  panel's view of a stored conversation and a live turn's stream). Not yet
-  tried end to end in a signed-in browser.
+  panel's view of a stored conversation and a live turn's stream).
+- Tried end to end in a signed-in browser (24.11.2026, the admin test
+  account, localhost; 13 Claude calls, $0.21): a search with "Show on map"
+  and its chip; a list proposal declined, then saved after a reload (no
+  duplicate message; the list was there with its notes); a reload while a
+  web search ran ("still being written", then the reply); New chat kept
+  after a reload; a stale card answered in a second tab (409, nothing
+  saved, the latest shown). Fixed from it: decided cards keep their
+  description after the server's copy loads (previews for every write);
+  links into the app close the panel; "Show on map" from the map brings
+  the places into view. Found, not fixed: web search failed once — the
+  model's first filtering step used all 3 allowed searches and it couldn't
+  recover (decision for Ozan); a hydration warning in `CategoryFilter` on
+  `/map` (exists on main too).
 - Docs: [[02-backend/api-routes/assistant]] (new), [[05-flows/ai-chat-flow]]
   and [[03-frontend/components/assistant]] (rewritten),
   [[02-backend/api-routes/ai]], [[02-backend/api-routes/_README]],
