@@ -7,12 +7,13 @@ import type { BetaMessage } from "@anthropic-ai/sdk/resources/beta/messages/mess
  * on 23.11.2026. Each spend row stores the dollar amount computed at the
  * time, so a later price change here doesn't rewrite history.
  *
- * Listed: the models the agent runs on and the models a refusal can fall
- * back to. A model not listed is charged at the highest listed price of
- * each kind (and logged by the caller) — the budget errs high, never low.
+ * Listed: the models the agent runs on, the models a refusal can fall
+ * back to, and Haiku 5.5 for one-shot structured work (Phase 2, 6.2). A
+ * model not listed is charged at the highest listed price of each kind
+ * (and logged by the caller) — the budget errs high, never low.
  */
 
-interface Price {
+interface Rates {
   input: number;
   cacheWrite5m: number;
   cacheWrite1h: number;
@@ -20,9 +21,25 @@ interface Price {
   output: number;
 }
 
+interface Price extends Rates {
+  /** Rates for a prompt longer than `above` tokens (cached ones included). */
+  long?: { above: number } & Rates;
+}
+
 const PRICES: Record<string, Price> = {
   "claude-opus-5-5": { input: 4, cacheWrite5m: 5, cacheWrite1h: 8, cacheRead: 0.2, output: 20 },
   "claude-sonnet-5-5": { input: 2, cacheWrite5m: 2.5, cacheWrite1h: 4, cacheRead: 0.1, output: 10 },
+  // Haiku 5.5: $0.10 / $0.50 up to a 100K-token prompt, $0.50 / $2.50 above
+  // (Claude API docs, checked 24.11.2026). Cache rates follow the standard
+  // multipliers — writes 1.25× (5 min) and 2× (1 h), reads 0.1× of input.
+  "claude-haiku-5-5": {
+    input: 0.1,
+    cacheWrite5m: 0.125,
+    cacheWrite1h: 0.2,
+    cacheRead: 0.01,
+    output: 0.5,
+    long: { above: 100_000, input: 0.5, cacheWrite5m: 0.625, cacheWrite1h: 1, cacheRead: 0.05, output: 2.5 },
+  },
   // Refusal fallbacks
   "claude-opus-5": { input: 5, cacheWrite5m: 6.25, cacheWrite1h: 10, cacheRead: 0.5, output: 25 },
   "claude-opus-4-8": { input: 5, cacheWrite5m: 6.25, cacheWrite1h: 10, cacheRead: 0.5, output: 25 },
@@ -106,12 +123,13 @@ export function costOfMessage(message: Pick<BetaMessage, "model" | "usage">, req
   for (const { model, tokens } of entries) {
     const price = priceOf(model);
     if (!price && !out.unpricedModels.includes(model)) out.unpricedModels.push(model);
-    const p = price ?? HIGHEST;
     const write1h = tokens.cache_creation?.ephemeral_1h_input_tokens ?? 0;
     const write5m = tokens.cache_creation
       ? tokens.cache_creation.ephemeral_5m_input_tokens
       : (tokens.cache_creation_input_tokens ?? 0);
     const read = tokens.cache_read_input_tokens ?? 0;
+    const prompt = tokens.input_tokens + write5m + write1h + read;
+    const p: Rates = !price ? HIGHEST : price.long && prompt > price.long.above ? price.long : price;
     out.costUsd +=
       (tokens.input_tokens * p.input +
         write5m * p.cacheWrite5m +

@@ -2,6 +2,7 @@ import "server-only";
 import { generateText, NoObjectGeneratedError, NoOutputGeneratedError, Output } from "ai";
 import { z } from "zod";
 import { getAiClient, FLASH_MODEL } from "@/lib/ai/client";
+import { structuredClaude, StructuredCallError, type ClaudeChoice, type SpendContext } from "@/lib/agent/structured";
 
 /**
  * One Gemini call reads an Instagram post: which accounts are venues, whether
@@ -46,6 +47,13 @@ export const PostReadingSchema = z.object({
 });
 
 export type PostReading = z.infer<typeof PostReadingSchema>;
+
+/**
+ * Who reads the post: Gemini, until the 6.2 measurement picks a Claude
+ * model (docs/_plans/phase-2-assistant.md); a Claude model for the
+ * measurement, priced into the one ledger.
+ */
+export type PostReader = { kind: "gemini" } | { kind: "claude"; choice: ClaudeChoice; spend: SpendContext };
 export type AccountRole = (typeof ROLES)[number];
 
 export interface PostReadingInput {
@@ -99,10 +107,8 @@ const ATTEMPTS = 2;
 
 export async function readPost(
   input: PostReadingInput,
-  meta: { userId: string; shortcode: string; onAttempt?: () => void }
+  meta: { userId: string; shortcode: string; onAttempt?: () => void; reader?: PostReader }
 ): Promise<PostReading> {
-  const ai = getAiClient();
-  if (!ai) throw new Error("ai_not_configured");
   const prompt = `POST DATA (JSON):\n${JSON.stringify(
       {
         caption: input.caption.slice(0, 3000),
@@ -122,6 +128,11 @@ export async function readPost(
       null,
       1
     )}`;
+  const reader = meta.reader ?? { kind: "gemini" };
+  if (reader.kind === "claude") return readWithClaude(prompt, meta, reader);
+
+  const ai = getAiClient();
+  if (!ai) throw new Error("ai_not_configured");
   for (let attempt = 1; ; attempt++) {
     meta.onAttempt?.();
     try {
@@ -142,6 +153,40 @@ export async function readPost(
       const unusable = NoOutputGeneratedError.isInstance(e) || NoObjectGeneratedError.isInstance(e);
       if (!unusable || attempt >= ATTEMPTS) throw e;
       console.warn(`[instagram] post ${meta.shortcode}: Gemini returned no usable reading, asking again`);
+    }
+  }
+}
+
+/**
+ * The same reading by a Claude model, as a structured output. An answer that
+ * isn't a usable object (cut off, off the schema) gets one more call, like
+ * Gemini's; a refusal doesn't — asking again won't change it.
+ */
+async function readWithClaude(
+  prompt: string,
+  meta: { shortcode: string; onAttempt?: () => void },
+  reader: Extract<PostReader, { kind: "claude" }>
+): Promise<PostReading> {
+  for (let attempt = 1; ; attempt++) {
+    meta.onAttempt?.();
+    try {
+      const { output } = await structuredClaude(
+        {
+          choice: reader.choice,
+          system: SYSTEM,
+          prompt,
+          schema: PostReadingSchema,
+          maxTokens: 16_000,
+          label: "instagram.read",
+          metadata: { shortcode: meta.shortcode, attempt },
+        },
+        reader.spend
+      );
+      return output;
+    } catch (e) {
+      const retry = e instanceof StructuredCallError && e.reason !== "refusal";
+      if (!retry || attempt >= ATTEMPTS) throw e;
+      console.warn(`[instagram] post ${meta.shortcode}: ${reader.choice.model} returned no usable reading (${e.reason}), asking again`);
     }
   }
 }

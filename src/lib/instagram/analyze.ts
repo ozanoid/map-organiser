@@ -19,7 +19,7 @@ import {
 } from "@/lib/instagram/places";
 import { findMapsLink, resolveMapsLink, type MapsLink } from "@/lib/instagram/maps-link";
 import { cleanName, deslug, distanceM, fold, isCoord, nameScore } from "@/lib/instagram/normalize";
-import { readPost, type AccountRole, type PostReading } from "@/lib/instagram/read-post";
+import { readPost, type AccountRole, type PostReading, type PostReader } from "@/lib/instagram/read-post";
 import {
   resolveCandidate,
   type Area,
@@ -95,8 +95,10 @@ export interface AnalyzeDeps {
   places?: PlaceLookup;
   /** One call per billed request, for usage tracking. */
   onBilled?: (sku: "hikerapi_request" | PlacesSku) => void;
-  /** One call per Gemini request (a post read can take two — see read-post.ts). */
+  /** One call per model request (a post read can take two — see read-post.ts). */
   onAiCall?: () => void;
+  /** Who reads the post; Gemini unless given (see read-post.ts). */
+  reader?: PostReader;
 }
 
 type Source = "tagged" | "coauthor" | "mention" | "owner";
@@ -215,7 +217,7 @@ export async function analyzeInstagramPost(url: string, deps: AnalyzeDeps): Prom
         bio: a.profile?.biography ?? "",
       })),
     },
-    { userId: deps.userId, shortcode: ref.shortcode, onAttempt: deps.onAiCall }
+    { userId: deps.userId, shortcode: ref.shortcode, onAttempt: deps.onAiCall, reader: deps.reader }
   );
 
   // Text the model may quote from. Bios vouch for names; only the post itself

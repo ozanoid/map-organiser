@@ -2,12 +2,13 @@ import "server-only";
 import { generateText, Output } from "ai";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getAiClient, FLASH_MODEL, MODEL_VERSION } from "@/lib/ai/client";
-import { buildUserContext } from "@/lib/ai/context-builder";
-import { PlaceProfileSchema } from "@/lib/ai/schemas/place-profile";
+import { buildUserContext, type UserContext } from "@/lib/ai/context-builder";
+import { PlaceProfileSchema, type PlaceProfile } from "@/lib/ai/schemas/place-profile";
 import { buildPlaceProfilePrompt } from "@/lib/ai/prompts/place-profile-full";
 import { applyProfileSuggestions } from "@/lib/ai/apply-suggestions";
 import { trackAiUsage, checkAiBudget } from "@/lib/ai/track-usage";
-import { loadVocabulary } from "@/lib/vocabulary/read";
+import { structuredClaude, type ClaudeChoice, type SpendContext } from "@/lib/agent/structured";
+import { loadVocabulary, type Vocabulary } from "@/lib/vocabulary/read";
 
 /** Prompt-stated limits, enforced by truncation after generation — never in the
  *  Zod schema, where a violation costs the whole profile instead of one item. */
@@ -32,60 +33,61 @@ export type GenerateProfileOutcome =
       capLimit?: number;
     };
 
+/** What a profile is written from: the prompts, and what applying its
+ *  suggestions needs afterwards. */
+export interface ProfileInputs {
+  systemPrompt: string;
+  userPrompt: string;
+  usedReviewCount: number;
+  /** Every stored review's text — what a quote in the profile must come from. */
+  reviewTexts: string[];
+  userContext: UserContext;
+  vocabulary: Vocabulary;
+  currentCategoryId: string | null;
+  currentCategoryName: string | null;
+}
+
 /**
- * Generate + persist the full place_profile for one place, then run the
- * Phase 5.5 auto-apply pass.
- *
- * Extracted from enrich?step=profile (15.07.2026) so the same logic runs
- * under BOTH the cookie-scoped user client (routes) and the service-role
- * client (the refresh cron). Every query filters by userId explicitly —
- * nothing in this path relies on RLS.
+ * Who writes the profile: Gemini, until the Phase 2 6.2 measurement picks a
+ * Claude model (docs/_plans/phase-2-assistant.md); a Claude model for the
+ * measurement, priced into the one ledger.
  */
-export async function generatePlaceProfile(
+export type ProfileWriter = { kind: "gemini" } | { kind: "claude"; choice: ClaudeChoice; spend: SpendContext };
+
+/** How a profile's writing went, for the measurement. */
+export interface WriteInfo {
+  model: string;
+  ms: number;
+  inputTokens: number;
+  outputTokens: number;
+  thinkingTokens: number;
+  /** Claude: the ledger's figure. Gemini: not priced here (the SKU is). */
+  costUsd: number | null;
+}
+
+/**
+ * The place and its prompts — no model call, nothing saved. Every query
+ * filters by userId: it runs under the cookie-scoped client and the service
+ * role alike.
+ */
+export async function profileInputs(
   supabase: SupabaseClient,
   userId: string,
   placeId: string
-): Promise<GenerateProfileOutcome> {
-  // Gates — same order as the original route: flag → client → cap.
-  const { data: profileRow } = await supabase
-    .from("profiles")
-    .select("ai_features_enabled")
-    .eq("id", userId)
-    .single();
-  if (!profileRow?.ai_features_enabled) {
-    return { ok: false, reason: "ai_disabled" };
-  }
-
-  const aiClient = getAiClient();
-  if (!aiClient) {
-    return { ok: false, reason: "not_configured" };
-  }
-
-  const cap = await checkAiBudget("profile", userId, supabase);
-  if (cap.exceeded) {
-    return {
-      ok: false,
-      reason: "cap_exceeded",
-      capUsed: cap.used,
-      capLimit: cap.cap,
-    };
-  }
-
+): Promise<ProfileInputs | { reason: "not_found" | "no_reviews" }> {
   const { data: placeFull } = await supabase
     .from("places")
     .select("name, address, city, country, google_data, category_id, subcategory_id")
     .eq("id", placeId)
     .eq("user_id", userId)
     .single();
-  if (!placeFull) {
-    return { ok: false, reason: "not_found" };
-  }
+  if (!placeFull) return { reason: "not_found" };
 
   const googleData = (placeFull.google_data as Record<string, unknown>) ?? {};
   const reviewsArr = (googleData as { reviews?: unknown[] }).reviews ?? [];
   if (!Array.isArray(reviewsArr) || reviewsArr.length === 0) {
     // Without reviews, the prompt is starved; defer to a future re-run.
-    return { ok: false, reason: "no_reviews" };
+    return { reason: "no_reviews" };
   }
 
   const [userContext, vocabulary] = await Promise.all([
@@ -115,15 +117,64 @@ export async function generatePlaceProfile(
       vocabulary
     );
 
-  console.log(`[enrich:profile] Calling Gemini for ${placeId}…`);
+  return {
+    systemPrompt,
+    userPrompt,
+    usedReviewCount,
+    reviewTexts: reviewsArr.flatMap((r) =>
+      r && typeof r === "object" && typeof (r as { text?: unknown }).text === "string" ? [(r as { text: string }).text] : []
+    ),
+    userContext,
+    vocabulary,
+    currentCategoryId,
+    currentCategoryName,
+  };
+}
 
-  let profile;
-  try {
+/**
+ * The profile, written by the given model — nothing saved. Throws when the
+ * model call fails or doesn't answer with a profile. The count limits and
+ * the meta fields are applied here, the same for every model.
+ */
+export async function writeProfile(
+  inputs: ProfileInputs,
+  writer: ProfileWriter,
+  meta: { userId: string; placeId: string }
+): Promise<{ profile: PlaceProfile; info: WriteInfo }> {
+  let profile: PlaceProfile;
+  let info: WriteInfo;
+  const started = Date.now();
+  if (writer.kind === "claude") {
+    const result = await structuredClaude(
+      {
+        choice: writer.choice,
+        system: inputs.systemPrompt,
+        prompt: inputs.userPrompt,
+        schema: PlaceProfileSchema,
+        maxTokens: 20_000,
+        label: "profile.write",
+        metadata: { placeId: meta.placeId },
+      },
+      writer.spend
+    );
+    profile = result.output;
+    info = {
+      model: writer.choice.model,
+      ms: result.ms,
+      inputTokens: result.cost.inputTokens + result.cost.cacheReadTokens + result.cost.cacheWriteTokens,
+      outputTokens: result.cost.outputTokens,
+      thinkingTokens: result.thinkingTokens,
+      costUsd: result.cost.costUsd,
+    };
+  } else {
+    const aiClient = getAiClient();
+    if (!aiClient) throw new Error("ai_not_configured");
+    console.log(`[enrich:profile] Calling Gemini for ${meta.placeId}…`);
     const result = await generateText({
       model: aiClient(FLASH_MODEL),
       output: Output.object({ schema: PlaceProfileSchema }),
-      system: systemPrompt,
-      prompt: userPrompt,
+      system: inputs.systemPrompt,
+      prompt: inputs.userPrompt,
       // OTel: gen_ai.* spans → Honeycomb + Langfuse (see
       // instrumentation-node.ts). Runs under both the cookie-authed enrich
       // route and the refresh cron — the parent span in the trace tells
@@ -131,20 +182,25 @@ export async function generatePlaceProfile(
       experimental_telemetry: {
         isEnabled: true,
         functionId: "ai.generate-profile",
-        metadata: { userId, placeId },
+        metadata: { userId: meta.userId, placeId: meta.placeId },
       },
     });
     profile = result.output;
-  } catch (e) {
-    console.error(`[enrich:profile] LLM call failed for ${placeId}:`, e);
-    return { ok: false, reason: "llm_failed" };
+    info = {
+      model: FLASH_MODEL,
+      ms: Date.now() - started,
+      inputTokens: result.usage.inputTokens ?? 0,
+      outputTokens: result.usage.outputTokens ?? 0,
+      thinkingTokens: result.usage.reasoningTokens ?? 0,
+      costUsd: null,
+    };
   }
 
   // Force-stamp meta fields the LLM might miss / get wrong.
   profile.completeness = "full";
   profile.generated_at = new Date().toISOString();
-  profile.model_version = MODEL_VERSION;
-  profile.source_review_count = usedReviewCount;
+  profile.model_version = writer.kind === "claude" ? writer.choice.model : MODEL_VERSION;
+  profile.source_review_count = inputs.usedReviewCount;
 
   // Enforce the prompt's count limits HERE rather than in the Zod schema.
   // A cap in the schema does not trim the extra item, it discards the whole
@@ -159,6 +215,59 @@ export async function generatePlaceProfile(
       ...t,
       evidence_quotes: t.evidence_quotes.slice(0, MAX_EVIDENCE_QUOTES),
     })) ?? null;
+
+  return { profile, info };
+}
+
+/**
+ * Generate + persist the full place_profile for one place, then run the
+ * Phase 5.5 auto-apply pass.
+ *
+ * Extracted from enrich?step=profile (15.07.2026) so the same logic runs
+ * under BOTH the cookie-scoped user client (routes) and the service-role
+ * client (the refresh cron). Every query filters by userId explicitly —
+ * nothing in this path relies on RLS. Gemini writes it (writeProfile) until
+ * the 6.2 measurement decides.
+ */
+export async function generatePlaceProfile(
+  supabase: SupabaseClient,
+  userId: string,
+  placeId: string
+): Promise<GenerateProfileOutcome> {
+  // Gates — same order as the original route: flag → client → cap.
+  const { data: profileRow } = await supabase
+    .from("profiles")
+    .select("ai_features_enabled")
+    .eq("id", userId)
+    .single();
+  if (!profileRow?.ai_features_enabled) {
+    return { ok: false, reason: "ai_disabled" };
+  }
+
+  if (!getAiClient()) {
+    return { ok: false, reason: "not_configured" };
+  }
+
+  const cap = await checkAiBudget("profile", userId, supabase);
+  if (cap.exceeded) {
+    return {
+      ok: false,
+      reason: "cap_exceeded",
+      capUsed: cap.used,
+      capLimit: cap.cap,
+    };
+  }
+
+  const inputs = await profileInputs(supabase, userId, placeId);
+  if ("reason" in inputs) return { ok: false, reason: inputs.reason };
+
+  let profile: PlaceProfile;
+  try {
+    profile = (await writeProfile(inputs, { kind: "gemini" }, { userId, placeId })).profile;
+  } catch (e) {
+    console.error(`[enrich:profile] LLM call failed for ${placeId}:`, e);
+    return { ok: false, reason: "llm_failed" };
+  }
 
   // Persist into google_data.place_profile (re-read to avoid clobbering a
   // concurrent google_data update).
@@ -178,6 +287,7 @@ export async function generatePlaceProfile(
   // Unified auto-apply (Phase 5.5): considers LLM's primary vs current
   // category, queues a category_change or a sub-cat-with-move when they
   // disagree.
+  const { userContext, vocabulary, currentCategoryId, currentCategoryName } = inputs;
   const applied = await applyProfileSuggestions(supabase, profile, {
     userId,
     placeId,

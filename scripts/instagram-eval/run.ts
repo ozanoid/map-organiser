@@ -1,5 +1,10 @@
 /**
- * Instagram import regression run — `npm run eval:instagram [-- --set=dev|holdout|all] [--only=<code>]`
+ * Instagram import regression run — `npm run eval:instagram [-- --set=dev|holdout|all] [--only=<code>]
+ * [--model=gemini|claude-haiku-5-5|claude-sonnet-5-5] [--effort=low|medium|high]`
+ *
+ * The post is read by Gemini unless `--model` names a Claude model (the
+ * Phase 2 6.2 measurement); a Claude read is written to assistant_spend with
+ * purpose 'eval' under the owner's account, and its cost is printed.
  *
  * Runs the production analyzer (src/lib/instagram/analyze.ts) on labelled
  * posts and compares every place it would add with the ground truth in
@@ -12,7 +17,12 @@
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { createClient } from "@supabase/supabase-js";
+import type { Effort } from "@/lib/agent/models";
+import { supabaseSpendLedger, type SpendLedger } from "@/lib/agent/spend";
+import type { ClaudeChoice } from "@/lib/agent/structured";
 import { analyzeInstagramPost } from "@/lib/instagram/analyze";
+import type { PostReader } from "@/lib/instagram/read-post";
 
 interface LabelVenue {
   key: string;
@@ -31,6 +41,14 @@ interface LabelPost {
 const args = process.argv.slice(2);
 const setArg = args.find((a) => a.startsWith("--set="))?.split("=")[1] ?? "all";
 const only = args.find((a) => a.startsWith("--only="))?.split("=")[1];
+const modelArg = args.find((a) => a.startsWith("--model="))?.split("=")[1] ?? "gemini";
+const effortArg = (args.find((a) => a.startsWith("--effort="))?.split("=")[1] ?? "high") as Effort;
+const CLAUDE_MODELS: ClaudeChoice["model"][] = ["claude-haiku-5-5", "claude-sonnet-5-5"];
+const claudeModel = CLAUDE_MODELS.find((m) => m === modelArg);
+if (modelArg !== "gemini" && !claudeModel) {
+  console.error(`--model must be gemini or one of ${CLAUDE_MODELS.join(", ")}`);
+  process.exit(2);
+}
 
 const labels = JSON.parse(readFileSync(join(__dirname, "labels.json"), "utf8")) as LabelPost[];
 const posts = labels.filter((p) => (only ? p.code === only : setArg === "all" || p.set === setArg));
@@ -39,15 +57,41 @@ if (
   !process.env.DATAFORSEO_LOGIN ||
   !process.env.DATAFORSEO_PASSWORD ||
   !process.env.HIKERAPI_KEY ||
-  !process.env.GOOGLE_GENERATIVE_AI_API_KEY
+  !(claudeModel ? process.env.ANTHROPIC_API_KEY : process.env.GOOGLE_GENERATIVE_AI_API_KEY)
 ) {
-  console.error("Needs DATAFORSEO_LOGIN/PASSWORD, HIKERAPI_KEY and GOOGLE_GENERATIVE_AI_API_KEY (.env.local).");
+  console.error(
+    `Needs DATAFORSEO_LOGIN/PASSWORD, HIKERAPI_KEY and ${claudeModel ? "ANTHROPIC_API_KEY" : "GOOGLE_GENERATIVE_AI_API_KEY"} (.env.local).`
+  );
   process.exit(2);
+}
+
+/** The model that reads the posts; a Claude read's cost is counted here as
+ *  it is written to the ledger. */
+let claudeUsd = 0;
+async function postReader(): Promise<PostReader> {
+  if (!claudeModel) return { kind: "gemini" };
+  const admin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+  const { data, error } = await admin.auth.admin.listUsers({ perPage: 200 });
+  if (error) throw error;
+  const owner = data.users.find((u) => u.email === "ozan@maporganiser.com");
+  if (!owner) throw new Error("no owner account");
+  const base = supabaseSpendLedger(admin);
+  const ledger: SpendLedger = {
+    record: async (e) => {
+      claudeUsd += e.costUsd;
+      await base.record(e);
+    },
+    monthToDate: (now) => base.monthToDate(now),
+  };
+  return { kind: "claude", choice: { model: claudeModel, effort: effortArg }, spend: { ledger, userId: owner.id, purpose: "eval" } };
 }
 
 const ids = (v: LabelVenue) => [v.place_id, ...(v.alt_place_ids ?? [])].filter(Boolean) as string[];
 
 async function main() {
+  const reader = await postReader();
   const totals = { include: 0, correct: 0, optional: 0, wrong: 0, spurious: 0, unverifiable: 0, errors: 0 };
   const billed: Record<string, number> = {};
   let aiCalls = 0;
@@ -69,6 +113,7 @@ async function main() {
         onAiCall: () => {
           aiCalls++;
         },
+        reader,
       });
     } catch (e) {
       totals.errors++;
@@ -137,7 +182,7 @@ async function main() {
       `precision ${added ? ((100 * totals.correct) / added).toFixed(1) : "-"}% · recall ${totals.include ? ((100 * totals.correct) / totals.include).toFixed(1) : "-"}%\n` +
       `billed: ${Object.entries(billed)
         .map(([sku, n]) => `${sku} ${n}`)
-        .join(" · ")} · Gemini ${aiCalls}\n` +
+        .join(" · ")} · ${claudeModel ? `${claudeModel} (${effortArg}) ${aiCalls} calls, $${claudeUsd.toFixed(4)}` : `Gemini ${aiCalls}`}\n` +
       `time per post: mean ${(times.reduce((a, b) => a + b, 0) / Math.max(1, times.length) / 1000).toFixed(1)}s · ` +
       `median ${((times.sort((a, b) => a - b)[Math.floor(times.length / 2)] ?? 0) / 1000).toFixed(1)}s · ` +
       `max ${(Math.max(0, ...times) / 1000).toFixed(1)}s`
