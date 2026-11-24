@@ -5,6 +5,10 @@
 
 export type InstagramJobPhase = "reading" | "adding" | "done" | "failed";
 
+/** Why an Instagram import can't start — POST /api/instagram/import answers
+ *  it as `code` next to the message. */
+export type InstagramRefusalCode = "invalid_url" | "not_configured" | "ai_disabled" | "monthly_limit";
+
 export type InstagramJobError =
   | "invalid_url"
   | "post_unavailable"

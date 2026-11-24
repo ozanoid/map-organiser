@@ -11,7 +11,7 @@
 import { randomUUID } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import { AgentError } from "@/lib/agent/errors";
-import { supabaseSpendLedger } from "@/lib/agent/spend";
+import { monthSpendByPurpose, SPEND_PURPOSES, supabaseSpendLedger } from "@/lib/agent/spend";
 import { supabaseConversationStore } from "@/lib/agent/store";
 
 const OWNER = "ozan@maporganiser.com";
@@ -74,6 +74,14 @@ async function main() {
   const spent = await outcome(supabaseSpendLedger(admin).monthToDate());
   expect("monthToDate → a number", /^ok:\d+(\.\d+)?$/.test(spent), spent);
   say(`   (this month so far: $${spent.replace("ok:", "")})`);
+  // Settings → usage: the month split by purpose adds up to the cap's figure.
+  const byPurpose = await monthSpendByPurpose(admin);
+  const keys = Object.keys(byPurpose).sort().join(",");
+  expect("monthSpendByPurpose → every purpose", keys === [...SPEND_PURPOSES].sort().join(","), keys);
+  const parts = Object.values(byPurpose).reduce((a, b) => a + b, 0);
+  const total = Number(spent.replace("ok:", ""));
+  expect("…and its parts add up to monthToDate", Math.abs(parts - total) < 1e-6, { parts, total });
+  say(`   (${SPEND_PURPOSES.map((p) => `${p} $${byPurpose[p].toFixed(2)}`).join(" · ")})`);
 
   say();
   say(failures ? `${failures} FAILED` : "all passed");

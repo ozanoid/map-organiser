@@ -2,8 +2,8 @@
 title: Import job tables
 type: table
 domain: backend
-version: 1.3.4
-last_updated: 19.11.2026
+version: 1.3.5
+last_updated: 24.11.2026
 status: stable
 sources:
   - src/app/api/places/import-jobs/route.ts
@@ -226,7 +226,7 @@ role.
 | `import_job_items_claimable_idx` | `(created_at) where stage in ('import','photo','reviews','profile')` | the claim scan; partial so terminal rows never widen it |
 | `import_job_items_job_idx` | `(job_id)` | progress counts |
 | `import_jobs_user_idx` | `(user_id, created_at desc)` | "my latest job" |
-| `idx_import_jobs_user_kind_created` | `(user_id, kind, created_at desc)` | Since 16.10.2026. "My latest Takeout job" and the Instagram reuse check, both of which now filter on `kind` |
+| `idx_import_jobs_user_kind_created` | `(user_id, kind, created_at desc)` | Since 16.10.2026. "My latest Takeout job" and the Instagram reuse check, both of which now filter on `kind`; since v1.51.0 also the monthly Instagram limit's count (`INSTAGRAM_MONTHLY_POST_LIMIT`) |
 
 ## RLS
 

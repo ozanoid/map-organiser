@@ -160,16 +160,24 @@ Steps 3–6 are `startInstagramImport` (`src/lib/instagram/start-import.ts`,
 v1.41.0), shared with Claude's `add_places` tool, which passes `via:
 'assistant'` (kept on every `meta` the run writes), its own `visit_status` and
 `list_ids`, and runs the read inside the tool call instead of `after()`. The
-route keeps the session and body checks and maps a refusal to its status.
+route keeps the session and body checks and maps a refusal to its status and
+code (`InstagramRefusalCode`, v1.51.0).
 
 3. Gates, in order: session (401) → body `{ url }` (Zod, 400) → it is an
-   Instagram post link (400) → `HIKERAPI_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`
-   and the DataForSEO credentials set (503) → AI features on (400). No Google
+   Instagram post link (400) → `HIKERAPI_KEY`, `ANTHROPIC_API_KEY` (v1.51.0;
+   the Gemini key before) and the DataForSEO credentials set (503) → AI
+   features on (400). No Google
    key since v1.42.0 — the places are searched on Google Maps through the
    server's DataForSEO account.
 4. **Reuse.** The user's newest `kind = 'instagram'` job for the same canonical
    URL, created in the last 10 minutes and whose stored phase is not `failed`,
    is returned as `200 { jobId, reused: true }`. The iOS Shortcut can fire twice.
+   Otherwise the **monthly limit** (v1.51.0): a user's 300 new Instagram jobs
+   this calendar month (UTC), counted from `import_jobs`
+   (`INSTAGRAM_MONTHLY_POST_LIMIT`), refuse the next with
+   `429 { error, code: 'monthly_limit' }` — nothing is created, fetched or
+   paid. Ozan's interim guard for the HikerAPI and Google Maps spend, which the
+   Claude cap doesn't count.
 5. `ensureInstagramTag` finds the user's `instagram` tag (any letter case) or
    creates it with colour `#E4405F`; a lost race with a parallel import falls
    back to the row the unique `(user_id, name)` index kept.
@@ -583,9 +591,12 @@ Remaining misses, by reason (the runner prints them):
 | Claude Haiku 5.5 read (v1.51.0) | 1 (2 when the first answer is unusable) | Claude ledger, purpose `instagram` | ≈ $0.0008 a read (measured, 34 reads $0.0259) |
 | DataForSEO + profile, per place added | as for any import | see [[place-import-flow]] | |
 
-Until v1.51.0 the monthly `instagram` budget (300 posts per user) bounded the
-first three. Since then nothing caps them by count: the Claude cap counts only
-the read's dollars (see [[../04-integrations/hikerapi]]).
+Until v1.51.0 the monthly `instagram` AI budget (300 posts per user) bounded
+the first three. Since v1.51.0 the start does, with the same number:
+`INSTAGRAM_MONTHLY_POST_LIMIT` counts the month's Instagram jobs — the Claude
+cap counts only the read's dollars. Ozan's interim choice; the lasting one
+planned is a monthly dollar cap over every paid service (see
+[[../04-integrations/hikerapi]]).
 
 ## Failure modes
 
@@ -595,7 +606,8 @@ the read's dollars (see [[../04-integrations/hikerapi]]).
 | B | 400 "That isn't an Instagram post or reel link." | A non-post URL sent to the route directly — the dialog stops those first (row above). |
 | B | 503 "Instagram import isn't set up on this server." | `HIKERAPI_KEY`, `ANTHROPIC_API_KEY` (v1.51.0; the Gemini key before) or the DataForSEO credentials missing. |
 | B | 400 "Instagram import reads the post with AI. Turn on AI features in Settings." | `profiles.ai_features_enabled` is off. |
-| B | 400 "…needs a Google Places API key. Add one in Settings." | No per-user key and not an admin. The `google_places_enabled` toggle (it scopes Maps-link lookups) is deliberately not consulted — see Decisions. |
+| B | 429 "You've imported 300 Instagram posts this month, the monthly limit. Imports resume on the 1st." | `monthly_limit` (v1.51.0): 300 new imports this calendar month (UTC). No Try again. |
+| B | Until v1.42.0: 400 "…needs a Google Places API key. Add one in Settings." | No per-user key and not an admin. The `google_places_enabled` toggle (it scopes Maps-link lookups) is deliberately not consulted — see Decisions. |
 | B | 500 with the database error text | The tag or the job insert failed. |
 | C | "This month's AI budget is used up. Instagram imports resume on the 1st." (v1.51.0; before: "You've used this month's Instagram imports.") | `budget_exceeded`; no Try again. |
 | C | "Couldn't open this post. It may be private or deleted." | `post_unavailable` (HikerAPI 404). |

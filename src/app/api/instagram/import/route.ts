@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
     start = await startInstagramImport({ supabase, userId: user.id }, body.data.url);
   } catch (e) {
     if (e instanceof InstagramImportRefused) {
-      return NextResponse.json({ error: e.message }, { status: e.status });
+      return NextResponse.json({ error: e.message, code: e.code }, { status: e.status });
     }
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "Failed to start the import" },

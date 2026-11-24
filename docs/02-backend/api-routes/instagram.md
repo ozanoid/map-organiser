@@ -41,7 +41,7 @@ import queue (`/api/cron/drain-imports`). Full sequence:
 > `pickInstagramOption` (`pick.ts`) — the same code Claude's `add_places` tool
 > calls ([[../../04-integrations/claude-mcp#adding-places]]). Requests,
 > responses and status codes are unchanged; a refusal from the start is
-> `InstagramImportRefused` with its 400 / 503, a pick's not-found is 404 and its
+> `InstagramImportRefused` with its 400 / 429 / 503 and a code (v1.51.0), a pick's not-found is 404 and its
 > refusal 409.
 >
 > **Database:** relies on the Instagram migration in
@@ -89,6 +89,16 @@ import queue (`/api/cron/drain-imports`). Full sequence:
   stored `meta.phase` is `failed` or it is still `reading` after 3 min
   (`STALL_MS`, a lost background run) — so **Try again** gets a fresh job. The iOS Shortcut can fire twice and React
   re-mounts the dialog in development.
+- **Monthly limit (v1.51.0):** after the reuse — a reused job doesn't count — a
+  user's 300 new `kind = 'instagram'` jobs this calendar month (UTC),
+  `INSTAGRAM_MONTHLY_POST_LIMIT`, refuse the next: 429 "You've imported 300
+  Instagram posts this month, the monthly limit. Imports resume on the 1st."
+  Every job counts, whatever its outcome: each has paid HikerAPI and the Google
+  Maps searches. Counted on the session client with
+  `idx_import_jobs_user_kind_created`.
+- **Refusal body (v1.51.0):** `{ error, code }` — `code` ∈ `invalid_url`,
+  `not_configured`, `ai_disabled`, `monthly_limit` (`InstagramRefusalCode`); the
+  dialog offers no Try again for `monthly_limit` and `not_configured`.
 - **DB (session client):** `ensureInstagramTag` — `tags` SELECT (`ilike
   'instagram'`) and, on first use, INSERT `{ name: 'instagram', color: '#E4405F' }`;
   `import_jobs` INSERT `{ kind: 'instagram', file_name: <canonical URL>, total: 0,

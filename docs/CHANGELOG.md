@@ -20,9 +20,16 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
   `ai_place_profile` / `ai_instagram_read` rows are no longer written (the
   SKUs stay for past months) and the per-user PROFILE (1000) / INSTAGRAM
   (300) budgets are removed from `src/lib/ai/track-usage.ts`. The gates need
-  `ANTHROPIC_API_KEY` instead of the Gemini key. That 300-post budget also
-  bounded the import's HikerAPI and Google Maps searches; nothing bounds them
-  by count now (open question to Ozan).
+  `ANTHROPIC_API_KEY` instead of the Gemini key.
+- The 300-post budget also bounded the Instagram import's HikerAPI and Google
+  Maps searches, which the Claude cap doesn't count. Ozan, for now: the start
+  keeps the same number as its own limit — `INSTAGRAM_MONTHLY_POST_LIMIT`,
+  300 new Instagram jobs per user per calendar month, counted from
+  `import_jobs` (a reused job doesn't count); over it
+  `429 { error, code: "monthly_limit" }`, nothing created, no Try again.
+  Every start refusal now carries a code (`InstagramRefusalCode`; the hook
+  throws `InstagramStartError`). The lasting fix, later: one monthly dollar
+  cap over every paid service.
 - The post reader is a required argument (`readPost`, `AnalyzeDeps.reader`):
   no silent default to Gemini.
 - Settings → AI follows the provider each feature needs: the master switch is
@@ -42,9 +49,10 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
   with reviews whose profile it didn't write, re-runnable, `--dry-run`
   (895 today), `--apply-suggestions` optional; it saves the profiles it
   replaces to a git-ignored backup file before the first write.
-- Schema, written and checked in a rolled-back transaction, **not
-  applied**: `20261124180000_assistant_spend_purposes.sql` widens the
-  ledger's `purpose` CHECK to `profile` and `instagram`.
+- Schema, applied with Ozan's OK (24.11.2026, version 20261124225502)
+  after a check in a rolled-back transaction:
+  `20261124225502_assistant_spend_purposes.sql` widens the ledger's
+  `purpose` CHECK to `profile` and `instagram`.
 - Docs: [[04-integrations/claude-agent]], [[04-integrations/gemini]],
   [[04-integrations/hikerapi]], [[04-integrations/_README]],
   [[05-flows/full-profile-flow]], [[05-flows/ai-enrichment-flow]],
@@ -59,7 +67,9 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
   [[00-overview/system-overview]], [[00-overview/glossary]],
   [[01-domain/places]], [[01-domain/categories-and-tags]],
   [[01-domain/users-and-profiles]], [[05-flows/_README]],
-  [[05-flows/place-import-flow]], [[05-flows/lite-profile-flow]].
+  [[05-flows/place-import-flow]], [[05-flows/lite-profile-flow]],
+  [[02-backend/schema/import-jobs]], [[03-frontend/components/places]],
+  [[03-frontend/hooks/use-instagram-import]].
 
 ---
 

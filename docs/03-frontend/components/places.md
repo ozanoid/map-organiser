@@ -2,8 +2,8 @@
 title: Places components
 type: component
 domain: frontend
-version: 1.11.0
-last_updated: 18.11.2026
+version: 1.11.1
+last_updated: 24.11.2026
 status: stable
 sources:
   - src/components/places/add-place-dialog.tsx
@@ -237,7 +237,8 @@ Twenty files under `src/components/places/`. All `"use client"`. The Place-relat
   - **Failed** — error copy per code (`post_unavailable`, `budget_exceeded`,
     `not_configured`, `service_error`, `stalled`, `invalid_url`), a start error's
     message, or "Couldn't load this import." **Try again** re-posts the URL,
-    except for `budget_exceeded` and `not_configured`.
+    except for `budget_exceeded` and `not_configured` — and, for a refused
+    start, its code `monthly_limit` or `not_configured` (v1.51.0).
   - **Remove** — `DELETE /api/places/[id]` (deletes the place), then invalidates
     `["instagram-import", jobId]` and `["places"]` and toasts. The row becomes
     `removed` and disappears.
