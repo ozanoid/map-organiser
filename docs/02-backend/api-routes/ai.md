@@ -2,7 +2,7 @@
 title: AI routes
 type: route-group
 domain: backend
-version: 1.12.0
+version: 1.13.0
 last_updated: 25.11.2026
 status: stable
 sources:
@@ -12,9 +12,6 @@ sources:
   - src/lib/ai/schemas/rank-results.ts
   - src/lib/ai/prompts/parse-query.ts
   - src/lib/ai/prompts/rank-results.ts
-  - src/app/api/ai/day-plan/route.ts
-  - src/lib/ai/schemas/day-plan.ts
-  - src/lib/ai/prompts/day-plan.ts
 related:
   - "[[_README]]"
   - "[[../../01-domain/places]]"
@@ -36,9 +33,7 @@ natural-language filtering feature.
 A separate route group from `places/[id]/enrich?step=profile` (the Phase
 4 chained call) because these are **user-initiated, latency-sensitive**
 calls — they don't fan out into background jobs. Historically all
-read-only; `day-plan` (v1.22.0 as `trip-plan`) is the one writing exception
-(one atomic batch of plan changes — `apply_plan_changes`),
-and `chat`'s approval-gated tools also mutate.
+read-only; `day-plan` (v1.22.0–v1.52.0) was the one writing exception.
 
 ## Routes
 
@@ -47,7 +42,7 @@ and `chat`'s approval-gated tools also mutate.
 | `POST` | `/api/ai/parse-query` | Parse a free-form NL query into structured filters + semantic intent |
 | `POST` | `/api/ai/rank-results` | LLM-as-judge rerank for queries with fuzzy semantic intent |
 | ~~`POST`~~ | ~~`/api/ai/compare`~~ | Removed in v1.52.0 — the compare page asks the assistant (below) |
-| `POST` | `/api/ai/day-plan` | AI Plan (S4 AI-09, v1.22.0 as `/api/ai/trip-plan`; on the plans model since v1.37.0): distribute candidate places across a plan's days — geo/theme grouping, a part of the day per stop, per-day theme + narrative. The group's only WRITING route. |
+| ~~`POST`~~ | ~~`/api/ai/day-plan`~~ | Removed in v1.53.0 — the plan page asks the assistant (below) |
 
 ## Shared gating
 
@@ -56,7 +51,7 @@ Every route in this group enforces four gates in order:
 1. **Auth.** `supabase.auth.getUser()` must return a user. Otherwise 401.
 2. **`profiles.ai_features_enabled = true`.** The master toggle. Otherwise 403.
 3. **`GOOGLE_GENERATIVE_AI_API_KEY` env var set.** Otherwise 503.
-4. **Monthly budget (kind varies per route: `search` for parse-query, `rank_backstop` for rank-results, `compare` for compare until v1.52.0, `chat` for chat until v1.48.0, `trip_plan` for day-plan).** `checkAiBudget("search")`
+4. **Monthly budget (kind varies per route: `search` for parse-query, `rank_backstop` for rank-results, `compare` for compare until v1.52.0, `chat` for chat until v1.48.0, `trip_plan` for day-plan until v1.53.0).** `checkAiBudget("search")`
    (`src/lib/ai/track-usage.ts`) — 500 searches per calendar month, ONE
    budget unit per search: charged at `parse-query` (every search runs
    exactly one parse). `rank-results` is not budgeted separately — it
@@ -200,20 +195,9 @@ Phase 2, decision 6.1: the compare page asks the assistant instead (`CompareWith
 
 The Gemini assistant route of v1.21.0 is gone: the in-app assistant runs on Claude through the agent core — [[assistant]], [[../../05-flows/ai-chat-flow]]. Its tools (`src/lib/ai/chat-tools.ts`), prompt and `chat` budget went with it; the `ai_chat` SKU stays defined for past usage rows.
 
-## `POST /api/ai/day-plan`
+## `POST /api/ai/day-plan` — removed (v1.53.0)
 
-AI Plan on the plan page. Distributes candidate places across a plan's existing days with the LLM: geography-first grouping, a part of the day per stop (+ optional note), a theme and a short narrative per day (written to `plan_days.notes`). **Augments** Auto Plan, does not replace it. Shipped as `/api/ai/trip-plan` in v1.22.0; rewritten onto plans in v1.37.0. End-to-end flow, failure table and provider settings: [[../../05-flows/ai-plan-flow]].
-
-- **Body:** `{ plan_id: uuid, include_pool?: boolean (default false), city?: string }` (Zod; `city` required with `include_pool`).
-- **Gates:** standard 4-gate skeleton (auth → `after(flushLangfuse)` → `ai_features_enabled` → client → **budget `trip_plan`**: SKU `ai_trip_plan`, cap `AI_MONTHLY_TRIP_PLAN_CAP = 50`/month → 429). The names keep "trip" so the usage history is one series.
-- **Candidates:** the plan's stops that are still planned and have a place (one per place), plus (when `include_pool && city`) the user's `want_to_go` pool for that city via `queryPlaces()`. **Capped at 40**; more than 40 places in the plan → 400 before any spend; fewer than 2 candidates → 400; more than 14 days → 400.
-- **Input to the LLM:** a compact projection per candidate (~350 tokens), never full profiles. Open / closed per plan day via `isOpenOnDate`; a plan without dates has no weekdays, so every flag is "unknown".
-- **Output schema:** `DayPlanSchema` (`src/lib/ai/schemas/day-plan.ts`) — candidates referenced by **idx** (LLMs echo indices reliably, hallucinate UUIDs); arrays clamp, idx parses defensively. Not sent as `responseSchema` (see the flow doc).
-- **Write:** one `changePlan` batch — `remove_stop` for in-plan candidates the model left out, `move_stop` + `update_stop` for placed ones, `add_stop` for pool places, `set_day` notes. One transaction: it applies completely or not at all. Stops are moved, not recreated, so cost, currency and an exact time survive.
-- **Errors:** 502 generation / no usable plan (unit spent, plan untouched); 409 the plan changed while the model was working (unit spent, nothing applied); 500 otherwise.
-- **Response:** `{ success: true, plan, days: [{ day_number, theme, place_count }], placed, left_out, tips }` — `plan` is the plan afterwards.
-- **Telemetry:** `propagateAttributes({traceName: "ai-trip-plan"})` + functionId `ai.trip-plan` (planId / candidates / days / includePool metadata); events `ai.trip-plan`, `ai.trip-plan failed`, `ai.trip-plan apply rejected`.
-- **Consumer:** `AiPlanButton` (`src/components/plans/ai-plan-button.tsx`) in the plan header — hidden unless `/api/user/ai-settings` says enabled AND available; deliberate click only.
+Phase 2, decision 6.1: the plan page asks the assistant instead (**Plan with assistant** → the panel opens with the plan as the request's subject); the change comes back as a card showing the plan as it will be, saved on the user's yes and only if the plan would still come out that way ([[../../05-flows/ai-plan-flow]]). Was (v1.22.0 as `/api/ai/trip-plan` – v1.52.0): Gemini distributed up to 40 candidates across the plan's days and the result was applied at once as one batch; budget `trip_plan` (50 a month), SKU `ai_trip_plan` (kept for past rows, `retired`). Used 9 times.
 
 ## Common helpers
 

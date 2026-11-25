@@ -31,6 +31,10 @@ export type WritePreview = {
   more?: number;
   /** Removes something for good. */
   danger?: boolean;
+  /** A proposal shown as its outcome (a plan change, as the plan will be):
+   *  the outcome's fingerprint. The answer sends it back; the change is
+   *  saved only if it would still come out the same. */
+  fingerprint?: string;
 };
 
 /**
@@ -166,7 +170,7 @@ export type ChatRequestBody = {
   conversationId: string;
   input:
     | { kind: "message"; text: string; timeZone: string; subject?: AssistantSubject }
-    | { kind: "approval"; decisions: Record<string, boolean> }
+    | { kind: "approval"; decisions: Record<string, boolean>; seen?: Record<string, string> }
     | { kind: "retry" };
 };
 

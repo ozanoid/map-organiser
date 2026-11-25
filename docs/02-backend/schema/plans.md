@@ -2,8 +2,8 @@
 title: plans, plan_days, plan_stops
 type: table
 domain: backend
-version: 1.3.0
-last_updated: 18.11.2026
+version: 1.4.0
+last_updated: 25.11.2026
 status: draft
 sources:
   - Supabase project hukppmaevcapvbrvxtph (live)
@@ -147,7 +147,16 @@ Tested on 18.11.2026 — first as a dry run in a rolled-back transaction, as a s
 
 **A stop's status follows its visit** (`stop_status_follows_visits`, 18.11.2026 — the third version of `apply_plan_changes`). A stop at a saved place is `done` exactly when a visit fulfils it: `log_visit` marks it done together with the visit, `delete_visit` makes it planned again. So `update_stop` refuses `status: done` for a stop with a place that isn't done yet ("a stop at a saved place is marked done by logging the visit") and any other status for a stop that has a visit ("this stop has a visit; delete the visit to change its status"). A free-text stop is ticked off with `update_stop` as before. See [[visits]].
 
-Callers: `createPlan` / `changePlan` in `src/lib/plans/write.ts` — the only code that calls these functions. `npm run check:assistant -- plans` exercises them through that module against the live database (44 checks on 18.11.2026, including a change by day id, an unknown day id refused, a gap in the order healed, and the 61st day refused).
+**Preview** (`20261125120000_plan_preview.sql`, v1.53.0 — written and checked in a rolled-back transaction on 25.11.2026, **not applied yet**):
+
+| Function | What it does |
+|---|---|
+| `plan_snapshot(p_user_id, p_plan_id) → jsonb` | The plan as one value: name, start date, party size, notes, status, and its days in order with their notes and stops in order (place name or text, time or part of the day, notes, status, cost). |
+| `preview_plan_changes(p_user_id, p_plan_id, p_changes) → jsonb` | `{ before, after }`: the snapshot, then `apply_plan_changes` with the same changes inside a block that always ends in an exception (custom SQLSTATE `P0PRV`), so everything it did is rolled back, and the snapshot taken just before. Unique day numbers are checked inside (`set constraints … immediate`), as the save checks them at commit. A change that can't be applied raises as the save would (e.g. 22023 "stop … does not belong to this plan"). |
+
+What the assistant's card shows for a plan change, and what its yes is checked against ([[../../04-integrations/claude-agent#approval]]). The dry run, on the test account's 4-day, 19-stop plan: moving a stop to day 2, a day note and a rename showed in `after`; the plan read the same before and after the call (nothing persisted); a remove of a stop not in the plan raised 22023; ~15 KB returned; the functions were gone after the rollback.
+
+Callers: `createPlan` / `changePlan` / `previewPlanChanges` in `src/lib/plans/write.ts` — the only code that calls these functions. `npm run check:assistant -- plans` exercises them through that module against the live database (44 checks on 18.11.2026, including a change by day id, an unknown day id refused, a gap in the order healed, and the 61st day refused).
 
 ## Copy from the trip tables
 

@@ -2,8 +2,8 @@
 title: Flows
 type: overview
 domain: overview
-version: 1.8.3
-last_updated: 24.11.2026
+version: 1.8.4
+last_updated: 25.11.2026
 status: stable
 related:
   - "[[auth-flow]]"
@@ -43,7 +43,7 @@ End-to-end user / data flows that span multiple subsystems. Each doc traces the 
 | [[ai-enrichment-flow]] | A place is saved (any entry point) | The `enrich` cascade `info → reviews → profile`, per-entry-point coverage, completeness ladder, cost cap — overview |
 | [[ai-search-flow]] | User submits a NL query in the AI search input (Phase 6) | `/api/ai/parse-query` → `/api/places` (hard + soft features) → optional `/api/ai/rank-results` |
 | [[plan-flow]] | User creates a plan (empty or from a list) and edits it | `POST /api/plans` → `PATCH /api/plans/[id] { set, ops }` → optional `/api/plans/[id]/auto-plan` → per-day route |
-| [[ai-plan-flow]] | User clicks "AI Plan" on a plan | `POST /api/ai/day-plan` → one atomic batch of plan changes |
+| [[ai-plan-flow]] | User clicks "Plan with assistant" on a plan (v1.53.0; "AI Plan" on Gemini before) | the assistant panel with the plan as subject → `update_plan` card showing the plan as it will be (`preview_plan_changes`) → saved on yes if unchanged |
 | [[share-flow]] | User clicks "Share" on a list, plan or place | `/api/shared` (POST) → public `/shared/<slug>` → optional save |
 | [[share-target-flow]] | User shares a URL into the PWA from mobile share sheet | `/api/share-target` → `/map?add=…` → manual-place-create-flow (an Instagram link arriving as `/map?add=` → instagram-import-flow) |
 | [[offline-flow]] | Network drops while the user is in the app | SW, offline banner, `/offline` fallback |

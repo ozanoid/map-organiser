@@ -26,6 +26,7 @@ import { AGENT_MODELS, FALLBACK_BETA, MAX_STEPS, MAX_TOKENS, isAgentModel, type 
 import { costOfMessage, type CallCost } from "@/lib/agent/pricing";
 import { systemPromptFor } from "@/lib/agent/prompt";
 import { subjectBlock } from "@/lib/agent/subject";
+import { verifyProposal } from "@/lib/agent/describe-writes";
 import type { ResolvedSubject } from "@/lib/agent/ui-types";
 import { MONTHLY_CAP_USD, type SpendLedger, type SpendPurpose } from "@/lib/agent/spend";
 import type { Conversation, ConversationStore, Door, NewToolRun, ToolRunDecision, TurnRecord } from "@/lib/agent/store";
@@ -66,7 +67,13 @@ export type TurnInput =
   /** The answers to the cards waiting now: tool-use id → approved — one for
    *  every waiting card, no other (else "conflict": the cards have changed
    *  since the user saw them). */
-  | { kind: "approval"; decisions: Record<string, boolean> }
+  | {
+      kind: "approval";
+      decisions: Record<string, boolean>;
+      /** The fingerprints of the outcomes the cards showed: a change is
+       *  saved only if it would still come out the same (verifyProposal). */
+      seen?: Record<string, string>;
+    }
   /** Carry on a turn that broke off (Try again): from the user's message
    *  or the tool results it ended with, or by running the reads the model
    *  had asked for. Appends no user message. */
@@ -133,6 +140,10 @@ export interface AgentDeps {
    *  (scripts/agent-check) pass a stand-in, so an approved write in a check
    *  touches nothing. */
   executeTool?: typeof executeToolCall;
+  /** At the user's yes: is the proposal still what the card showed? The
+   *  real check by default (describe-writes.ts); the offline checks pass a
+   *  stand-in. */
+  verifyProposal?: typeof verifyProposal;
   now?: () => Date;
   signal?: AbortSignal;
 }
@@ -337,7 +348,13 @@ async function turn(
   } else if (input.kind === "approval") {
     await append(
       "user",
-      await settleCalls(deps, conversationId, pending, { kind: "decided", decisions: input.decisions }, events)
+      await settleCalls(
+        deps,
+        conversationId,
+        pending,
+        { kind: "decided", decisions: input.decisions, seen: input.seen },
+        events
+      )
     );
   } else if (pending.length) {
     // A retry after the turn broke off between the model's calls and their
@@ -482,7 +499,7 @@ async function turn(
 /** How the calls of one assistant message get their answers. */
 type SettleMode =
   | { kind: "auto" } // a tool round of reads: run them
-  | { kind: "decided"; decisions: Record<string, boolean> } // the user's answer to the card
+  | { kind: "decided"; decisions: Record<string, boolean>; seen?: Record<string, string> } // the user's answer to the card
   | { kind: "superseded" } // the user wrote a new message instead
   | { kind: "limit" } // the turn hit its step limit
   | { kind: "cut_off" }; // the message was cut off at max_tokens
@@ -542,6 +559,10 @@ async function settleCalls(
     } else if (needsApproval(call.name)) {
       if (mode.kind === "decided" && mode.decisions[call.id] === true) {
         decision = "approved";
+        // Shown as its outcome: saved only if it still comes out the same.
+        const seen = mode.seen?.[call.id];
+        const changed = seen ? await (deps.verifyProposal ?? verifyProposal)(deps.toolCtx, call, seen) : null;
+        if (changed) outcome = { text: changed, isError: true };
       } else {
         decision = "declined";
         outcome = { text: DECLINED, isError: true };

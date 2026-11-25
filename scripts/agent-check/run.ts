@@ -20,6 +20,8 @@ import { capWithGuaranteedSeats } from "@/lib/assistant/place-filters";
 import { turnStream } from "@/lib/agent/ui-stream";
 import { approvalsAnswered, placeIdsIn, subjectLabel, type AssistantUIMessage, type ResolvedSubject } from "@/lib/agent/ui-types";
 import { SUBJECT_TAG, subjectBlock, subjectIn } from "@/lib/agent/subject";
+import { planChangeLines } from "@/lib/agent/describe-writes";
+import type { PlanSnapshot } from "@/lib/plans/write";
 import type { ToolRun } from "@/lib/agent/store";
 import { openTurn, runTurn, startConversation, type AgentDeps, type TurnEvents, type TurnResult } from "@/lib/agent/run-turn";
 import type { SpendEntry, SpendLedger } from "@/lib/agent/spend";
@@ -269,6 +271,83 @@ async function main() {
 
     const again = await throws(t.turn({ kind: "approval", decisions: { w1: true } }));
     expect("the same answer again → nothing_pending, no second run", again === "nothing_pending" && t.ran.length === 2, again);
+  }
+
+  say("## a plan change shown as its outcome: saved only if it still comes out the same");
+  {
+    const PLAN_CALL = { plan_id: "9a0b8c7d-1e2f-4a3b-9c4d-5e6f7a8b9c0d", ops: [{ op: "move_stop", stop_id: "1b2c3d4e-5f60-4718-8293-a4b5c6d7e8f9", day: 2 }] };
+    const verified: string[] = [];
+    const run = async (verdict: string | null) => {
+      const t = await setup();
+      t.deps.verifyProposal = async (_ctx, call, seen) => {
+        verified.push(`${call.name}:${seen}`);
+        return verdict;
+      };
+      t.client.queue.push({ kind: "message", stop: "tool_use", content: [toolUse("w1", "update_plan", PLAN_CALL)] });
+      await t.turn(t.msg("Bu planı günlere dağıt"));
+      t.client.queue.push({ kind: "message", stop: "end_turn", content: [text("Tamam.")] });
+      await t.turn({ kind: "approval", decisions: { w1: true }, seen: { w1: "fp-shown" } });
+      const h = await t.history();
+      return { t, result: results(h[2])[0] };
+    };
+    const unchanged = await run(null);
+    expect("unchanged since the card → the change is saved", unchanged.t.ran.map((x) => x.name).join() === "update_plan" && !unchanged.result.err, unchanged.result);
+    expect("…checked against the fingerprint the card showed", verified[0] === "update_plan:fp-shown", verified);
+    const changed = await run("The plan changed after this proposal was shown, so nothing was saved. A fresh proposal is needed.");
+    expect("changed since → nothing saved, the reason as the call's result", changed.t.ran.length === 0 && changed.result.err && String(changed.result.text).startsWith("The plan changed"), changed.result);
+    const runs = await changed.t.store.toolRuns(changed.t.conversation.id, ["w1"]);
+    expect("…recorded as the user's yes that couldn't be saved", runs[0]?.decision === "approved" && runs[0]?.outcome?.isError === true, runs);
+    const t = await setup();
+    let asked = 0;
+    t.deps.verifyProposal = async () => {
+      asked++;
+      return "changed";
+    };
+    t.client.queue.push({ kind: "message", stop: "tool_use", content: [toolUse("w1", "update_plan", PLAN_CALL)] });
+    await t.turn(t.msg("x"));
+    t.client.queue.push({ kind: "message", stop: "end_turn", content: [text("Tamam.")] });
+    await t.turn({ kind: "approval", decisions: { w1: true } });
+    expect("a card without a fingerprint isn't checked (the save decides)", asked === 0 && t.ran.length === 1, { asked, ran: t.ran.length });
+
+    const stop = (id: string, name: string, extra: Partial<PlanSnapshot["days"][number]["stops"][number]> = {}) => ({
+      id, place_id: null, name, start_time: null, day_part: null, notes: null, status: "planned", cost_estimate: null, currency: null, ...extra,
+    });
+    const before: PlanSnapshot = {
+      id: "p", name: "Lizbon hafta sonu", start_date: "2026-11-28", party_size: 2, notes: null, status: "planned",
+      days: [
+        { id: "d1", day_number: 1, notes: null, stops: [stop("s1", "Pastéis de Belém"), stop("s2", "LX Factory"), stop("s3", "Café A Brasileira")] },
+        { id: "d2", day_number: 2, notes: null, stops: [stop("s4", "MAAT")] },
+        { id: "d3", day_number: 3, notes: "Free day", stops: [stop("s5", "Oceanário")] },
+      ],
+    };
+    const after: PlanSnapshot = {
+      ...before,
+      days: [
+        { id: "d1", day_number: 1, notes: "Belém", stops: [stop("s1", "Pastéis de Belém", { day_part: "morning" }), stop("s6", "Taberna da Rua", { start_time: "19:30:00", notes: "Book ahead", cost_estimate: 35, currency: "EUR" })] },
+        { id: "d2", day_number: 2, notes: null, stops: [stop("s2", "LX Factory"), stop("s4", "MAAT")] },
+        before.days[2],
+      ],
+    };
+    const lines = planChangeLines(before, after);
+    const texts = lines.map((l) => `${l.heading ? "#" : ""}${l.label ?? ""}|${l.text}${l.note ? `|${l.note}` : ""}`);
+    expect(
+      "the card: each changed day as it will be, the stop removed, the unchanged day left out",
+      JSON.stringify(texts) ===
+        JSON.stringify([
+          "#Day 1|Sat 28 Nov",
+          "Notes|Belém",
+          "Morning|Pastéis de Belém",
+          "19:30|Taberna da Rua|Book ahead · ~€35 pp",
+          "#Day 2|Sun 29 Nov",
+          "|LX Factory",
+          "|MAAT",
+          "Remove|Café A Brasileira",
+        ]),
+      texts
+    );
+    const renamed = planChangeLines(before, { ...before, name: "Lisbon", status: "cancelled" });
+    expect("the plan's own changes come first", renamed.map((l) => `${l.label}|${l.text}`).join() === "Rename|Lisbon,Status|Cancel the plan", renamed);
+    expect("nothing changes → no lines", planChangeLines(before, before).length === 0);
   }
 
   say("## decline");

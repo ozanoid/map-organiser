@@ -2,7 +2,7 @@
 title: "Claude agent (platform side)"
 type: integration
 domain: integrations
-version: 1.7.0
+version: 1.8.0
 last_updated: 25.11.2026
 status: draft
 sources:
@@ -101,6 +101,8 @@ After a refusal fallback mid-answer, the API's rule for sending the turn back is
 | `betas`, `fallbacks` | `server-side-fallback-2026-07-01`, `"default"` | a request the safety classifiers decline is re-run on the recommended fallback model inside the same call |
 
 ## Approval
+
+**A plan change is shown as the plan will be** (v1.53.0). For an `update_plan` call still waiting for its answer, the card's preview comes from the save itself: `previewPlanChanges` (`src/lib/plans/write.ts`) runs `preview_plan_changes`, which applies the change with `apply_plan_changes` inside a block that always ends in an exception — nothing persists — and returns the plan before and after ([[../02-backend/schema/plans]]). The card lists the plan's own changes, every day that changes stop by stop, and what is removed (`planChangeLines`, `describe-writes.ts`), and carries the outcome's fingerprint. The answer sends the fingerprints of the cards approved (`seen`); `settleCalls` asks `verifyProposal` before running such a call, and if the plan would now come out differently — edited meanwhile — nothing runs: the call's result is "The plan changed after this proposal was shown, so nothing was saved. A fresh proposal is needed.", which the card shows and the model acts on. A decided call keeps the words of its operations (the plan has moved on since); without the database function the card falls back to them and nothing is checked.
 
 A tool whose annotation says it writes (`readOnlyHint: false`) runs only after the user approves it: `add_places`, `create_plan`, `update_plan`, `save_list`, `log_visit`, `delete_visit`, `update_places`. The rule is read from the current code (`needsApproval` in `tools.ts`); the card opens only for a call whose input passes the tool's schema (`checkToolCall`). Reads made in the same message wait with the write and run after the answer. The system prompt tells the model the card only asks yes or no and to say what it is saving first; for a single change it does (one sentence), for a plan or a list it doesn't (eval, 23.11.2026) — the door's card has to show the proposal.
 

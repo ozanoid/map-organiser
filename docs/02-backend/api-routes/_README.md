@@ -2,7 +2,7 @@
 title: API Routes
 type: overview
 domain: backend
-version: 1.12.2
+version: 1.12.3
 last_updated: 25.11.2026
 status: stable
 sources:
@@ -31,7 +31,7 @@ All Next.js route handlers grouped by area. Each linked doc is the canonical ref
 | Shared | `/api/shared/*` | **Mixed** — GET `/[slug]` public via service role | [[shared]] |
 | Stats | `/api/stats` | Required | [[stats]] |
 | User | `/api/user/*` — includes `ai-settings` (Phase 1) and `ai-suggestions/*` (Phase 5 moderation queue: list, accept, reject) | Required | [[user]] |
-| AI | `/api/ai/*` — `parse-query`, `rank-results` (Phase 6 NL filtering), `day-plan` (AI Plan — v1.22.0 as `trip-plan`; the group's only writing route). `chat` was removed in v1.48.0, `compare` in v1.52.0 (the compare page asks the assistant) | Required | [[ai]] |
+| AI | `/api/ai/*` — `parse-query`, `rank-results` (Phase 6 NL filtering). `chat` was removed in v1.48.0, `compare` in v1.52.0 and `day-plan` (AI Plan) in v1.53.0 — the compare and plan pages ask the assistant | Required | [[ai]] |
 | Assistant | `/api/assistant/chat` (one turn of the Claude agent, streaming), `/api/assistant/conversation` (latest conversation, New chat) — v1.48.0 | Required | [[assistant]] |
 | Search | `/api/search/*` (Mapbox geocoder proxy) | Required | [[search]] |
 | Instagram | `/api/instagram/import` (POST — start an import from a post URL, work runs in `after()`) + `/api/instagram/import/[id]` (GET — the dialog's progress view) — v1.28.0; `/api/instagram/import/[id]/pick` (POST — add the place picked for a skipped venue) — v1.28.1 | Required | [[instagram]] |
@@ -94,7 +94,7 @@ These are reused across many routes:
 | `createPlan` / `changePlan` / `getPlan` … | `src/lib/plans/write.ts`, `read.ts` | The plan model's shared module — routes and (from slice 3) assistant tools call the same functions. See [[plans]]. |
 | `logVisit` / `editVisit` / `deleteVisit` / `listVisits` | `src/lib/visits/write.ts`, `read.ts` | The visit model's shared module — routes and the `log_visit` / `get_visits` tools. See [[visits]]. |
 | `requestContext` / `unauthorized` / `errorResponse` | `src/lib/api/http.ts` | The signed-in caller as a `UserContext`, and the data modules' errors (`InputError` → 400, `NotFoundError` → 404, else 500) as responses. |
-| `isOpenOnDate` | `src/lib/places/open-now.ts` | Day-granular open flag from `work_timetable` (v1.22.0; AI Plan candidate projection). |
+| `isOpenOnDate` | `src/lib/places/open-now.ts` | Day-granular open flag from `work_timetable` (v1.22.0 for AI Plan; since v1.53.0 the `open_that_day` of `get_plans`' stops). |
 | `encryptApiKey` / `decryptApiKey` / `maskApiKey` | encryption helpers | API key crypto. |
 | `nanoid(10)` | `nanoid` package | Slug generation. |
 | `getAiClient` / `FLASH_MODEL` / `MODEL_VERSION` | `src/lib/ai/client.ts` | Gemini AI SDK v6 factory. Returns null when key is missing — route should short-circuit. |
@@ -103,7 +103,7 @@ These are reused across many routes:
 | `applyProfileSuggestions` | `src/lib/ai/apply-suggestions.ts` | 4-band auto-apply policy for LLM output. |
 | `buildLiteProfile` | `src/lib/ai/extract/lite-profile.ts` | LLM-less rule-based profile inline in `parse-link`. |
 | `dedupProposals` / `isFuzzyMatch` | `src/lib/ai/dedup.ts`, `normalize.ts` | Post-LLM and accept-time fuzzy match. |
-| `trackAiUsage` / `checkAiBudget` | `src/lib/ai/track-usage.ts` | Per-SKU Gemini counter + monthly budget gates (search 500 / trip_plan 50; chat removed in v1.48.0, profile and instagram in v1.51.0, compare in v1.52.0 — the Claude ledger's cap covers those). |
+| `trackAiUsage` / `checkAiBudget` | `src/lib/ai/track-usage.ts` | Per-SKU Gemini counter + monthly budget gates (search 500; chat removed in v1.48.0, profile and instagram in v1.51.0, compare in v1.52.0, trip_plan in v1.53.0 — the Claude ledger's cap covers those). |
 | `findExisting` / `importPlace` | `src/lib/import/process-place.ts` | Duplicate check by place_id / CID without an API call; per-place import used by the drain (`ImportDefaults.source` sets `places.source`). |
 | `kickDrain` | `src/lib/import/kick-drain.ts` | Non-awaited `GET /api/cron/drain-imports` with the `CRON_SECRET` bearer — fired by the Takeout create route and the Instagram job (v1.28.0, moved out of the import-jobs route), and by the Instagram pick route (v1.28.1). |
 | `analyzeInstagramPost` / `runInstagramImportJob` | `src/lib/instagram/analyze.ts`, `import-job.ts` | Instagram post → venues → Google places (writes nothing) / the job that turns that into `import_job_items` (v1.28.0). See [[instagram]]. |

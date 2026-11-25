@@ -67,15 +67,13 @@ export const AI_SKU_CONFIG = {
     freeMonthly: 0,
     retired: true,
   },
-  // v1.22.0 (S4 AI-09): one unit = one AI Plan generation on the plan page.
-  // The key says "trip" because plans were called trips; it stays so the
-  // usage history is one series. Input is a compact projection of up to
-  // ~40 candidates (~350 tok each) + the plan frame ≈ 15-20k tokens ≈
-  // $0.012/plan.
+  // v1.22.0–v1.52.0: one unit = one AI Plan generation on the plan page
+  // (Gemini, ≈ $0.012). The assistant plans since v1.53.0; nothing writes it.
   ai_trip_plan: {
     name: "AI Plan",
     costPer1k: 12.0,
     freeMonthly: 0,
+    retired: true,
   },
   // Instagram import until v1.51.0 (Gemini) — nothing writes it now. One unit
   // was one post read (~1.2k in / ~0.3k out tokens, low thinking ≈ $0.0015).
@@ -130,20 +128,17 @@ export async function trackAiUsage(
  * Place profiles (1000 a month) and Instagram post reads (300 a month) had
  * buckets here until v1.51.0; as Claude calls they are bounded by the
  * ledger's monthly cap instead. Compare (200 a month) went with the
- * Gemini comparison in v1.52.0 — the assistant answers it.
+ * Gemini comparison in v1.52.0, AI Plan (50 a month) in v1.53.0 — the
+ * assistant does both.
  */
 export const AI_MONTHLY_SEARCH_CAP = 500;
 export const AI_MONTHLY_RANK_BACKSTOP = AI_MONTHLY_SEARCH_CAP * 3;
-/** v1.22.0 (S4 AI-09) — one unit per plan generation; deliberate-click
- *  only from the plan page's AI Plan dialog. */
-export const AI_MONTHLY_TRIP_PLAN_CAP = 50;
 
-export type AiBudgetKind = "search" | "rank_backstop" | "trip_plan";
+export type AiBudgetKind = "search" | "rank_backstop";
 
 const BUDGETS: Record<AiBudgetKind, { sku: AiSku; cap: number }> = {
   search: { sku: "ai_parse_query", cap: AI_MONTHLY_SEARCH_CAP },
   rank_backstop: { sku: "ai_rank_results", cap: AI_MONTHLY_RANK_BACKSTOP },
-  trip_plan: { sku: "ai_trip_plan", cap: AI_MONTHLY_TRIP_PLAN_CAP },
 };
 
 export interface AiCapStatus {

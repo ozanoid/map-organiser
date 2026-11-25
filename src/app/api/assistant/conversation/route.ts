@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { describeWrites } from "@/lib/agent/describe-writes";
 import { doorRequest } from "@/lib/agent/door";
-import { toolCallsIn } from "@/lib/agent/history";
+import { pendingToolCalls, toolCallsIn } from "@/lib/agent/history";
 import { DEFAULT_AGENT_MODEL } from "@/lib/agent/models";
 import { startConversation } from "@/lib/agent/run-turn";
 import { checkToolCall, needsApproval } from "@/lib/agent/tools";
@@ -32,7 +32,9 @@ export async function GET(req: Request) {
     // saved or not ("Not saved · Create list: …"), as the live reply showed
     // it. One batch of name lookups for the whole conversation.
     const writes = calls.filter((c) => needsApproval(c.name) && checkToolCall(c.name, c.input).ok);
-    const previews = await describeWrites(door.toolCtx, writes, history).catch((e: unknown) => {
+    // The cards still waiting for an answer: no result, no run yet.
+    const waiting = new Set(pendingToolCalls(history).flatMap((c) => (runs.has(c.id) ? [] : [c.id])));
+    const previews = await describeWrites(door.toolCtx, writes, history, { waiting }).catch((e: unknown) => {
       log.warn("agent.preview_failed", { error: e instanceof Error ? e.message : String(e) });
       return {};
     });

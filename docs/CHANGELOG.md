@@ -6,6 +6,52 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 25.11.2026 — v1.53.0 — Step 4, slice 2: AI Plan goes to the assistant; plan cards show the plan as it will be
+
+- **Plan with assistant** (`PlanWithAssistant`) replaces the Gemini AI Plan
+  button and dialog on the plan page: the panel opens with "spread this
+  plan over its days" (or, with fewer than two places, "fill it from my
+  want-to-go places in <city>") and the plan as the subject. Removed:
+  `AiPlanButton`, `useAiPlan`, `POST /api/ai/day-plan`, its schema and
+  prompt, the `trip_plan` budget; `ai_trip_plan` is `retired`.
+- **The card shows the plan as it will be.** A waiting `update_plan` is
+  previewed by the save itself: `previewPlanChanges` →
+  `preview_plan_changes` runs `apply_plan_changes` in a block that always
+  rolls back and returns before/after; the card lists the plan's changes,
+  each changed day stop by stop, and what is removed (`planChangeLines`),
+  with up to 60 lines. It carries the outcome's fingerprint.
+- **What you approve is what you get.** The panel sends the approved
+  cards' fingerprints (`seen`); before running such a call `settleCalls`
+  asks `verifyProposal` — if the plan would now come out differently,
+  nothing is saved and the result says the plan changed (the model
+  proposes again). Without the database function: the old card, no check.
+- **What AI Plan used to weigh, now in the tools:** `get_plans` gives every
+  stop's place `location` and, for dated plans, `open_that_day`
+  (`isOpenOnDate`, read only by the tool); `get_places` gives `location`.
+  The shared instructions say how to spread a plan (close places together,
+  days they open, exact times kept, a theme per day).
+- `changePlan` and the preview share the preparation of the changes
+  (default costs), so the preview is what the save would do.
+- Schema, written and checked in a rolled-back transaction, **not
+  applied**: `20261125120000_plan_preview.sql` (`plan_snapshot`,
+  `preview_plan_changes`; new functions only).
+- Checks: `check:agent` — the card's lines from two snapshots, a changed
+  plan refused with nothing run, an unchanged one saved, a card without a
+  fingerprint not checked. Not tried in the browser.
+- Docs: [[05-flows/ai-plan-flow]] (rewritten), [[04-integrations/claude-agent]],
+  [[02-backend/api-routes/assistant]], [[02-backend/schema/plans]],
+  [[03-frontend/components/assistant]], [[03-frontend/components/plans]],
+  [[03-frontend/hooks/use-plans]], [[04-integrations/claude-mcp]],
+  [[01-domain/plans]], [[02-backend/api-routes/ai]],
+  [[02-backend/api-routes/_README]], [[02-backend/schema/api_usage]],
+  [[02-backend/schema/places]], [[04-integrations/gemini]],
+  [[04-integrations/_README]], [[05-flows/ai-enrichment-flow]],
+  [[05-flows/observability-flow]], [[05-flows/_README]],
+  [[00-overview/repo-structure]], [[06-ops/deployment]],
+  [[03-frontend/components/settings]], [[_plans/phase-2-assistant]].
+
+---
+
 ## 25.11.2026 — v1.52.0 — Step 4, slice 1: requests with a subject; Compare goes to the assistant
 
 Phase 2, decision 6.1 (design approved by Ozan on 25.11.2026, all six

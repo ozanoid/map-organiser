@@ -41,7 +41,12 @@ const Body = z.object({
       timeZone: z.string().max(64),
       subject: SubjectSchema.optional(),
     }),
-    z.object({ kind: z.literal("approval"), decisions: z.record(z.string(), z.boolean()) }),
+    z.object({
+      kind: z.literal("approval"),
+      decisions: z.record(z.string(), z.boolean()),
+      // The fingerprints of the outcomes the cards showed (WritePreview).
+      seen: z.record(z.string(), z.string().max(64)).optional(),
+    }),
     z.object({ kind: z.literal("retry") }),
   ]),
 });

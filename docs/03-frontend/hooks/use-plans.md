@@ -2,8 +2,8 @@
 title: usePlans
 type: hook
 domain: frontend
-version: 1.0.1
-last_updated: 18.11.2026
+version: 1.0.2
+last_updated: 25.11.2026
 status: stable
 sources:
   - src/lib/hooks/use-plans.ts
@@ -40,14 +40,14 @@ Nine exports. Two queries, one route query per day, and — instead of a mutatio
 | `useChangePlan(planId)` | `PATCH { set?, ops? }`; puts the returned plan into `["plan", id]` and invalidates `["plans"]` |
 | `usePlanBusy(planId)` | true while a change to this plan is on its way |
 | `useAutoPlan(planId)` | `POST …/auto-plan`; puts the returned plan into the cache |
-| `useAiPlan(planId)` | `POST /api/ai/day-plan`; puts the returned plan into the cache |
+| ~~`useAiPlan(planId)`~~ | removed in v1.53.0 with the Gemini AI Plan — the plan page asks the assistant |
 | `usePlanRoutes(plan)` | routes by day id: `undefined` while loading, `null` for none |
 
 ## One mutation, no refetch
 
 `PATCH /api/plans/[id]` answers with the plan as it is afterwards, and that answer replaces the cached plan. So there is no refetch after an edit and no cache to patch by hand (the trips hooks had three hand-written cache patches to avoid re-buying routes).
 
-`useChangePlan`, `useAutoPlan` and `useAiPlan` are the same mutation underneath (`usePlanWrite`):
+`useChangePlan` and `useAutoPlan` are the same mutation underneath (`usePlanWrite`; `useAiPlan` too until v1.53.0):
 
 - **one key and one scope** (`scope: { id: "plan-<id>" }`) — every write to a plan runs after the one before it, so two answers can't arrive out of order and leave the older state in the cache. An edit made while AI Plan is generating waits behind it;
 - **the read is cancelled first** (`cancelQueries(["plan", id])`) — a slower GET that started earlier must not land on top of the newer answer;

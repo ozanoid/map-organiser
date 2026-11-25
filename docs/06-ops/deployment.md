@@ -2,8 +2,8 @@
 title: Deployment
 type: overview
 domain: ops
-version: 1.2.2
-last_updated: 24.11.2026
+version: 1.2.3
+last_updated: 25.11.2026
 status: stable
 sources:
   - next.config.ts
@@ -129,7 +129,7 @@ Routes that export `maxDuration` (checked 19.11.2026; the assistant's route 24.1
 | `/api/cron/drain-imports` | 800 (was 300) | import queue; same reason. A run holds a claim for at most ~6 min, under the queue's 10-minute stale window — keep it so ([[../02-backend/schema/import-jobs]]) |
 | `/api/mcp` | 120 | Claude tool calls (`add_places` with an Instagram post waits up to 45 s) |
 | `/api/assistant/chat` | 800 | one assistant turn: up to 10 Claude calls plus the tools, run to the end after the browser goes (`after()`), then the Langfuse flush (v1.48.0; the Gemini chat route `/api/ai/chat` it replaced had 120) |
-| `/api/ai/day-plan` | 120 | bounded LLM call + one retry on degeneration |
+| ~~`/api/ai/day-plan`~~ | — | removed in v1.53.0 (was 120: a bounded LLM call + one retry) |
 | `/api/instagram/import` | 120 | the post read runs in `after()` and counts against the same invocation (v1.28.0) |
 
 Everything else runs on the platform default. This project takes 800 s: the preview deployment with `maxDuration = 800` succeeded (19.11.2026, v1.46.0) — a value above the plan's ceiling fails the deploy, so a preview build is the check before raising anything further.

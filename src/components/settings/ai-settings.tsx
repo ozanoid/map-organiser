@@ -11,7 +11,7 @@ import { AI_SETTINGS_KEY } from "@/lib/hooks/use-assistant-availability";
 
 interface AiSettingsState {
   enabled: boolean;
-  /** Gemini is set up: AI search, AI Plan, Compare. */
+  /** Gemini is set up: AI search. */
   available: boolean;
   /** Claude is set up: the assistant, place profiles, Instagram imports. */
   assistantAvailable: boolean;
@@ -20,7 +20,7 @@ interface AiSettingsState {
 
 /** One line per AI provider this deployment is missing. */
 const PROVIDERS = [
-  { flag: "available", env: "GOOGLE_GENERATIVE_AI_API_KEY", what: "AI search, AI Plan and Compare are" },
+  { flag: "available", env: "GOOGLE_GENERATIVE_AI_API_KEY", what: "AI search is" },
   { flag: "assistantAvailable", env: "ANTHROPIC_API_KEY", what: "The assistant, place profiles and Instagram imports are" },
 ] as const;
 

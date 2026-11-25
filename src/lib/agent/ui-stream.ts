@@ -152,7 +152,7 @@ export function turnStream(
         const writes = result.pending.filter((p) => p.needsApproval);
         let previews = {};
         try {
-          previews = await describeWrites(opts.toolCtx, writes, opts.history);
+          previews = await describeWrites(opts.toolCtx, writes, opts.history, { waiting: new Set(writes.map((w) => w.id)) });
         } catch (e) {
           // A card without its preview still asks yes or no.
           log.warn("agent.preview_failed", { error: e instanceof Error ? e.message : String(e) });

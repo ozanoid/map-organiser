@@ -2,7 +2,7 @@
 title: Observability Flow (Honeycomb + Vercel/Axiom + Langfuse)
 type: flow
 domain: infra
-version: 3.7.1
+version: 3.7.2
 last_updated: 25.11.2026
 status: stable
 sources:
@@ -134,7 +134,7 @@ Span sources:
   `ai.rank-results`, `ai.generate-profile` (lib — runs under the enrich
   route, the refresh cron and the import drain's `profile` stage),
   `ai.compare` (v1.19.0–v1.51.0), `ai.chat` (v1.21.0) and its `ai.chat.rank` tool
-  (v1.23.0), `ai.trip-plan` (v1.22.0), and `ai.instagram-read-post`
+  (v1.23.0), `ai.trip-plan` (v1.22.0–v1.52.0), and `ai.instagram-read-post`
   (v1.28.0 — `src/lib/instagram/read-post.ts`, userId + shortcode metadata).
   A Claude call through `structuredClaude` (v1.50.0, the 6.2 measurement) is a
   Langfuse generation named by its label (`profile.write`, `instagram.read`)

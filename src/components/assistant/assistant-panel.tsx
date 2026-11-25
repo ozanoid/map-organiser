@@ -18,6 +18,7 @@ import {
   placeIdsIn,
   type AssistantUIMessage,
   type SubjectPart,
+  type ToolMetadata,
   type ChatRequestBody,
   type ConversationResponse,
   type DoorErrorBody,
@@ -131,11 +132,20 @@ function requestBody(conversationId: string, messages: AssistantUIMessage[], int
   const last = messages.at(-1);
   if (intent?.intent === "retry") return { conversationId, input: { kind: "retry" } };
   if (intent?.intent === "approval" && last) {
-    // The answers to the cards of the paused call.
-    const decisions = Object.fromEntries(
-      lastStepToolParts(last).flatMap((p) => (p.state === "approval-responded" ? [[p.toolCallId, p.approval.approved]] : []))
+    // The answers to the cards of the paused call — and, for a card shown as
+    // its outcome, what it showed (the change is saved only if unchanged).
+    const answered = lastStepToolParts(last).filter((p) => p.state === "approval-responded");
+    const decisions = Object.fromEntries(answered.map((p) => [p.toolCallId, p.approval.approved]));
+    const seen = Object.fromEntries(
+      answered.flatMap((p) => {
+        const fingerprint = (p.toolMetadata as ToolMetadata | undefined)?.preview?.fingerprint;
+        return p.approval.approved && fingerprint ? [[p.toolCallId, fingerprint]] : [];
+      })
     );
-    return { conversationId, input: { kind: "approval", decisions } };
+    return {
+      conversationId,
+      input: { kind: "approval", decisions, ...(Object.keys(seen).length ? { seen } : {}) },
+    };
   }
   const text = (last?.parts ?? []).flatMap((p) => (p.type === "text" ? [p.text] : [])).join("\n");
   // A request from a screen: what it is about rides on its subject chip.

@@ -2,7 +2,7 @@
 title: AI Enrichment Flow
 type: flow
 domain: places
-version: 1.9.1
+version: 1.9.2
 last_updated: 25.11.2026
 status: stable
 sources:
@@ -125,12 +125,9 @@ buckets added as those features shipped):
   rows). The Claude assistant that replaced it is capped by the platform's
   own spend ledger — $100 a month for every Claude call
   (`assistant_spend`). See [[ai-chat-flow]].
-- **AI PLAN — `AI_MONTHLY_TRIP_PLAN_CAP = 50` generations** (v1.22.0,
-  S4 AI-09, SKU `ai_trip_plan` — the names keep "trip"). One unit per
-  `/api/ai/day-plan` generation; deliberate-click only from the plan
-  page's AI Plan dialog. A failed/unusable LLM output still burns the
-  unit (compare precedent) but the plan stays untouched: the result is
-  applied as one atomic batch. See [[ai-plan-flow]].
+- **AI PLAN — removed in v1.53.0** with the Gemini AI Plan (it was
+  `AI_MONTHLY_TRIP_PLAN_CAP = 50` generations, SKU `ai_trip_plan`, kept for
+  past rows); the plan page asks the assistant. See [[ai-plan-flow]].
 > **v1.51.0:** the PROFILE and INSTAGRAM budgets below are gone (code and checks) —
 > Claude writes the profiles (Sonnet 5.5) and reads the posts (Haiku 5.5),
 > priced into the Claude ledger under the platform's $100 monthly cap
@@ -188,7 +185,7 @@ Both AI layers are gated. A place skips them silently when a gate fails:
 ## Related code
 
 - `src/app/api/places/[id]/enrich/route.ts` — the cascade (`step=info|reviews|profile`).
-- `src/lib/ai/track-usage.ts` — `trackAiUsage`, `checkAiBudget`, `AI_MONTHLY_SEARCH_CAP` / `AI_MONTHLY_TRIP_PLAN_CAP` (the chat, profile, Instagram and compare caps are gone — v1.48.0, v1.51.0, v1.52.0).
+- `src/lib/ai/track-usage.ts` — `trackAiUsage`, `checkAiBudget`, `AI_MONTHLY_SEARCH_CAP` (the chat, profile, Instagram, compare and AI Plan caps are gone — v1.48.0, v1.51.0, v1.52.0, v1.53.0).
 - `src/lib/agent/spend.ts` — the Claude ledger and its monthly cap (`MONTHLY_CAP_USD`) that bounds profiles and Instagram reads.
 - `src/lib/ai/extract/lite-profile.ts` — `buildLiteProfile` (layer 3). See [[lite-profile-flow]].
 - `src/lib/ai/prompts/place-profile-full.ts`, `src/lib/ai/apply-suggestions.ts` — layer 5. See [[full-profile-flow]].
