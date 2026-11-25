@@ -11,9 +11,11 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 - v1.56.1 merged to main with Ozan's approval (merge e92e9fa; main
   `7df90df` had nothing the branch lacked, the merged tree is the branch's).
   Vercel's production deploy: completed (25.11.2026, 14:12).
-- Not tried again in production: the fix was tried on the dev server (a
-  globe view, ≈ 4,990 km) and production runs the same commit; a check
-  there would be one more paid turn in Ozan's own conversation.
+- Tried in production at Ozan's request: the same view of Europe (≈ 2,614 km
+  to the corner) went through and was answered — about 289 of the 291
+  places, the 2 without a location left out, estimated from the previous
+  turn's results (the conversation predates the prompt's note on wide
+  areas). 1 Claude call, $0.086.
 - Docs: [[04-integrations/claude-agent]], [[_plans/phase-2-assistant]],
   [[_plans/personal-assistant]].
 
