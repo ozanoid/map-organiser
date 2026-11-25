@@ -2,7 +2,7 @@
 title: Repo Structure
 type: overview
 domain: overview
-version: 1.14.4
+version: 1.14.5
 last_updated: 25.11.2026
 status: stable
 sources:
@@ -115,8 +115,8 @@ src/
     │                          place projection, name resolution, time + busyness helpers), place-filters.ts, mcp.ts (MCP server),
     │                          verify-token.ts, oauth.ts (resource paths, redirect allowlist), owner.ts — see [[../04-integrations/claude-mcp]]
     ├── auth/                  safe-next.ts — same-site `next` validation for login and the OAuth callback (17.11.2026)
-    ├── ai/                    AI SDK v6 wiring (Gemini 3 Flash; profiles by Claude since v1.51.0). client.ts, context-builder.ts,
-    │                          dedup.ts, normalize.ts, track-usage.ts (budgets), generate-profile.ts,
+    ├── ai/                    The place-profile pipeline (Claude since v1.51.0; the Gemini client went in v1.55.0). context-builder.ts,
+    │                          dedup.ts, normalize.ts, track-usage.ts (the retired AI SKUs), generate-profile.ts,
     │                          schemas/ (Zod); prompts/ (place-profile-full.ts,
     │                          ); extract/ (lite-profile.ts,
     │                          category-resolver.ts, features-extractor.ts,
@@ -157,7 +157,7 @@ src/
     └── utils.ts               cn() Tailwind class merger
 ```
 
-> The `src/lib/ai/` tree was added across PRs #30–#35 (AI Phases 1–5.5). The structure is documented in detail under [[../04-integrations/gemini]] and consumed by `src/app/api/places/[id]/enrich/route.ts` (step=profile) and the AI suggestion UI.
+> The `src/lib/ai/` tree was added across PRs #30–#35 (AI Phases 1–5.5), for Gemini; since v1.51.0 Claude writes the profiles through it ([[../05-flows/full-profile-flow]]). It is consumed by `src/app/api/places/[id]/enrich/route.ts` (step=profile) and the AI suggestion UI.
 
 ## `public/` — static assets
 

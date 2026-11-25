@@ -6,6 +6,50 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 25.11.2026 — v1.55.0 — Step 5: Gemini is gone; a plan's dates are the user's
+
+- **Gemini removed** (Phase 2, decision 6.5 step 5): `@ai-sdk/google` (and
+  its lockfile entries), `src/lib/ai/client.ts`, the Gemini branch of the
+  profile writer (`writeProfile`) and of the Instagram reader (`readPost`),
+  and the evals' Gemini arms. `ProfileWriter` and `PostReader` are
+  `{ choice, spend }` now — a Claude model and effort, and the ledger that
+  pays; `writeProfile`'s and `readPost`'s `userId` and `AnalyzeDeps.userId`,
+  which only fed the Gemini spans, are gone; `eval:profiles` runs both
+  Claude writers by default and
+  `eval:instagram` reads with `INSTAGRAM_READER` unless `--model` /
+  `--effort` name another. No code reads `GOOGLE_GENERATIVE_AI_API_KEY`;
+  `main` still calls Gemini until the branch merges — after the merge the
+  key goes from Vercel and `.env.local` and is revoked in Google AI Studio
+  (Ozan). `.env.local.example` lists `ANTHROPIC_API_KEY` instead.
+- **Langfuse:** the span processor uses Langfuse's built-in filter; the
+  composed filter that dropped the AI SDK's umbrella span of each Gemini
+  call went with the last AI SDK model call. The `ai` package stays for
+  the assistant panel's stream.
+- **A plan's dates are the user's** (Ozan, after the end-to-end run saw a
+  date moved unasked): the shared instructions (`instructions.ts`, both
+  doors) say to change `start_date` only when the user asks, and when the
+  dates don't work to say so and ask. Not measured yet.
+- Docs: `04-integrations/gemini` archived (superseded by
+  [[04-integrations/claude-agent]]) and every live link to it replaced;
+  [[05-flows/observability-flow]] brought up to date — the Claude calls'
+  Langfuse observations, the flush points and the log events in the code
+  (its event table still listed the Gemini AI search's); and
+  [[00-overview/glossary]], [[00-overview/tech-stack]],
+  [[00-overview/system-overview]], [[00-overview/repo-structure]],
+  [[01-domain/visits]], [[01-domain/places]], [[02-backend/_README]],
+  [[02-backend/api-routes/_README]], [[02-backend/schema/ai_suggestions_queue]],
+  [[02-backend/schema/api_usage]], [[04-integrations/_README]],
+  [[04-integrations/claude-agent]], [[04-integrations/claude-mcp]],
+  [[04-integrations/hikerapi]], [[05-flows/ai-plan-flow]],
+  [[05-flows/ai-enrichment-flow]], [[05-flows/full-profile-flow]],
+  [[05-flows/instagram-import-flow]], [[05-flows/manual-place-create-flow]],
+  [[06-ops/env-vars]], [[06-ops/runbooks/periodic-refresh]],
+  [[06-ops/runbooks/profile-backfill]], [[_plans/phase-2-assistant]],
+  [[_plans/personal-assistant]], [[_archive/_README]]; the profile and
+  Instagram eval READMEs.
+
+---
+
 ## 25.11.2026 — v1.54.1 — Step 4 tried end to end; two display fixes
 
 - Tried in a signed-in browser on the admin test account (the branch's dev

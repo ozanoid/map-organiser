@@ -2,8 +2,8 @@
 title: Place
 type: entity
 domain: places
-version: 1.9.3
-last_updated: 24.11.2026
+version: 1.9.4
+last_updated: 25.11.2026
 status: stable
 sources:
   - src/lib/types/index.ts
@@ -43,7 +43,7 @@ related:
   - "[[../04-integrations/google-places]]"
   - "[[../04-integrations/dataforseo]]"
   - "[[../04-integrations/mapbox]]"
-  - "[[../04-integrations/gemini]]"
+  - "[[../04-integrations/claude-agent]]"
   - "[[../05-flows/lite-profile-flow]]"
   - "[[../05-flows/full-profile-flow]]"
   - "[[../05-flows/instagram-import-flow]]"

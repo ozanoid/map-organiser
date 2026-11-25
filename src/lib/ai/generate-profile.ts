@@ -1,7 +1,5 @@
 import "server-only";
-import { generateText, Output } from "ai";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { getAiClient, FLASH_MODEL, MODEL_VERSION } from "@/lib/ai/client";
 import { buildUserContext, type UserContext } from "@/lib/ai/context-builder";
 import { PlaceProfileSchema, type PlaceProfile } from "@/lib/ai/schemas/place-profile";
 import { buildPlaceProfilePrompt } from "@/lib/ai/prompts/place-profile-full";
@@ -52,11 +50,14 @@ export interface ProfileInputs {
 }
 
 /**
- * Who writes the profile: production passes PROFILE_WRITER (Claude Sonnet 5.5,
- * since v1.51.0), priced into the one ledger; the profile eval can also ask
- * Gemini, the writer until then (docs/_plans/phase-2-assistant.md, 6.2).
+ * Who writes the profile, and whose ledger pays: production passes
+ * PROFILE_WRITER (Claude Sonnet 5.5 — Gemini wrote profiles until v1.51.0);
+ * the profile eval can name another Claude model or effort.
  */
-export type ProfileWriter = { kind: "gemini" } | { kind: "claude"; choice: ClaudeChoice; spend: SpendContext };
+export interface ProfileWriter {
+  choice: ClaudeChoice;
+  spend: SpendContext;
+}
 
 /** How a profile's writing went, for the measurement. */
 export interface WriteInfo {
@@ -65,8 +66,8 @@ export interface WriteInfo {
   inputTokens: number;
   outputTokens: number;
   thinkingTokens: number;
-  /** Claude: the ledger's figure. Gemini: not priced here (the SKU is). */
-  costUsd: number | null;
+  /** The ledger's figure, in US dollars. */
+  costUsd: number;
 }
 
 /**
@@ -143,67 +144,34 @@ export async function profileInputs(
 export async function writeProfile(
   inputs: ProfileInputs,
   writer: ProfileWriter,
-  meta: { userId: string; placeId: string }
+  meta: { placeId: string }
 ): Promise<{ profile: PlaceProfile; info: WriteInfo }> {
-  let profile: PlaceProfile;
-  let info: WriteInfo;
-  const started = Date.now();
-  if (writer.kind === "claude") {
-    const result = await structuredClaude(
-      {
-        choice: writer.choice,
-        system: inputs.systemPrompt,
-        prompt: inputs.userPrompt,
-        schema: PlaceProfileSchema,
-        maxTokens: 20_000,
-        label: "profile.write",
-        metadata: { placeId: meta.placeId },
-      },
-      writer.spend
-    );
-    profile = result.output;
-    info = {
-      model: writer.choice.model,
-      ms: result.ms,
-      inputTokens: result.cost.inputTokens + result.cost.cacheReadTokens + result.cost.cacheWriteTokens,
-      outputTokens: result.cost.outputTokens,
-      thinkingTokens: result.thinkingTokens,
-      costUsd: result.cost.costUsd,
-    };
-  } else {
-    const aiClient = getAiClient();
-    if (!aiClient) throw new Error("ai_not_configured");
-    console.log(`[enrich:profile] Calling Gemini for ${meta.placeId}…`);
-    const result = await generateText({
-      model: aiClient(FLASH_MODEL),
-      output: Output.object({ schema: PlaceProfileSchema }),
+  const result = await structuredClaude(
+    {
+      choice: writer.choice,
       system: inputs.systemPrompt,
       prompt: inputs.userPrompt,
-      // OTel: gen_ai.* spans → Honeycomb + Langfuse (see
-      // instrumentation-node.ts). Runs under both the cookie-authed enrich
-      // route and the refresh cron — the parent span in the trace tells
-      // which. functionId becomes the span name.
-      experimental_telemetry: {
-        isEnabled: true,
-        functionId: "ai.generate-profile",
-        metadata: { userId: meta.userId, placeId: meta.placeId },
-      },
-    });
-    profile = result.output;
-    info = {
-      model: FLASH_MODEL,
-      ms: Date.now() - started,
-      inputTokens: result.usage.inputTokens ?? 0,
-      outputTokens: result.usage.outputTokens ?? 0,
-      thinkingTokens: result.usage.reasoningTokens ?? 0,
-      costUsd: null,
-    };
-  }
+      schema: PlaceProfileSchema,
+      maxTokens: 20_000,
+      label: "profile.write",
+      metadata: { placeId: meta.placeId },
+    },
+    writer.spend
+  );
+  const profile = result.output;
+  const info: WriteInfo = {
+    model: writer.choice.model,
+    ms: result.ms,
+    inputTokens: result.cost.inputTokens + result.cost.cacheReadTokens + result.cost.cacheWriteTokens,
+    outputTokens: result.cost.outputTokens,
+    thinkingTokens: result.thinkingTokens,
+    costUsd: result.cost.costUsd,
+  };
 
   // Force-stamp meta fields the LLM might miss / get wrong.
   profile.completeness = "full";
   profile.generated_at = new Date().toISOString();
-  profile.model_version = writer.kind === "claude" ? writer.choice.model : MODEL_VERSION;
+  profile.model_version = writer.choice.model;
   profile.source_review_count = inputs.usedReviewCount;
 
   // Enforce the prompt's count limits HERE rather than in the Zod schema.
@@ -283,11 +251,10 @@ export async function generatePlaceProfile(
   let profile: PlaceProfile;
   try {
     const writer: ProfileWriter = {
-      kind: "claude",
       choice: PROFILE_WRITER,
       spend: { ledger, userId, purpose: "profile" },
     };
-    profile = (await writeProfile(inputs, writer, { userId, placeId })).profile;
+    profile = (await writeProfile(inputs, writer, { placeId })).profile;
   } catch (e) {
     console.error(`[enrich:profile] LLM call failed for ${placeId}:`, e);
     return { ok: false, reason: "llm_failed" };

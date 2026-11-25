@@ -2,8 +2,8 @@
 title: Full Profile Flow (AI Phase 4)
 type: flow
 domain: places
-version: 1.7.0
-last_updated: 24.11.2026
+version: 1.8.0
+last_updated: 25.11.2026
 status: stable
 sources:
   - src/app/api/places/[id]/enrich/route.ts
@@ -20,7 +20,7 @@ related:
   - "[[../02-backend/schema/ai_suggestions_queue]]"
   - "[[../02-backend/schema/subcategories]]"
   - "[[../02-backend/schema/vocabulary]]"
-  - "[[../04-integrations/gemini]]"
+  - "[[../04-integrations/claude-agent]]"
 ---
 
 # Full Profile Flow (AI Phase 4)
@@ -67,10 +67,10 @@ monthly cap; the model version stamped is `claude-sonnet-5-5`;
 `generatePlaceProfile(…, { applySuggestions: false })` replaces the
 profile alone (the 6.3 rewrite, `npm run regen:profiles`). Since
 v1.50.0 it is three steps: `profileInputs` (the place and its prompts),
-`writeProfile` (the model call, the count limits and the meta stamps —
-Gemini, or a Claude model through `structuredClaude`) and
-`generatePlaceProfile` (gates, save, auto-apply), which writes with
-`PROFILE_WRITER` (Gemini until v1.51.0).
+`writeProfile` (the Claude call through `structuredClaude`, the count
+limits and the meta stamps; until v1.55.0 it could take a Gemini writer
+too, for the eval) and `generatePlaceProfile` (gates, save, auto-apply),
+which writes with `PROFILE_WRITER`.
 
 Measured on 24.11.2026 (Phase 2, 6.2): on 10 places, Gemini 3 Flash wrote 10/10 profiles with 62 of 74 quotes found word for word in the reviews (84%), 30.1 s each; Claude Haiku 5.5 (effort high) 10/10, 84/89 (94%), 40.0 s, $0.006 a profile; Claude Sonnet 5.5 (effort medium) 10/10, 99/102 (97%), 14.7 s, $0.047 a profile. Category and sub-category agreed on 9 of 10 (LX Factory: Gemini Museum & Culture, both Claude models Shopping). Ozan picked Sonnet 5.5 at medium for production (v1.51.0). The 6.3 rewrite (24.11.2026, `npm run regen:profiles`) then wrote 889 profiles: 97.1% of 6,965 evidence quotes found in the reviews (punctuation aside), ≈ $0.032 and ≈ 12 s a profile.
 
@@ -96,31 +96,28 @@ polling.
        │  • fetch /api/places/[id]/enrich?step=profile with same cookies
        │
        ▼
-5. step=profile handler:
+5. step=profile handler (generatePlaceProfile):
        │  a. Re-check ai_features_enabled (defense in depth)
-       │  b. getAiClient() — null if GOOGLE_GENERATIVE_AI_API_KEY missing → 503
-       │     · then checkAiBudget("profile") — over AI_MONTHLY_PROFILE_CAP (1000/mo) → 429 (fails open)
-       │       [v1.51.0: ANTHROPIC_API_KEY, then the Claude ledger's monthly cap ($100) instead]
+       │  b. ANTHROPIC_API_KEY missing → 503; the Claude ledger's month at its
+       │     cap ($100) → 429 (v1.51.0; the Gemini key and a 1000/mo profile
+       │     budget before)
        │  c. Bail if no reviews (defensive — chain only fires when reviews exist,
        │     but a manual call from the AI Summary refresh button might not)
        │  d. SELECT place full row + buildUserContext(user.id)
        │  e. buildPlaceProfilePrompt(place, context, lite_profile)
        │       → systemPrompt + userPrompt (English, strict-JSON instructions,
        │         user entity IDs inline, subcategory dictionary per parent)
-       │  f. generateText({
-       │       model: aiClient(FLASH_MODEL),  // gemini-3-flash-preview
-       │       output: Output.object({ schema: PlaceProfileSchema }),
-       │       system, prompt
-       │     })
-       │     → result.output typed as PlaceProfile
-       │       [v1.51.0: structuredClaude({ choice: PROFILE_WRITER, schema }) —
-       │        Claude Sonnet 5.5 at medium; one ledger row, purpose 'profile']
+       │  f. writeProfile → structuredClaude({ choice: PROFILE_WRITER,
+       │       schema: PlaceProfileSchema, system, prompt })
+       │     → the output typed as PlaceProfile — Claude Sonnet 5.5 at medium;
+       │       one ledger row, purpose 'profile' (v1.51.0; generateText on
+       │       gemini-3-flash-preview before)
        │  g. Force-stamp: completeness='full', generated_at, model_version,
        │     source_review_count
        │  h. Persist into google_data.place_profile
        │  i. applyProfileSuggestions() — 3-band auto-apply (see below)
-       │  j. trackAiUsage('ai_place_profile') → api_usage RPC
-       │     [v1.51.0: none — the Claude call is in assistant_spend, purpose 'profile']
+       │  (until v1.51.0 also trackAiUsage('ai_place_profile') → api_usage;
+       │   the Claude call is in assistant_spend, purpose 'profile')
        │
        ▼ Meanwhile on the client…
 6. /places/[id] page polls every 5s while:

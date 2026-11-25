@@ -90,7 +90,6 @@ export class InstagramImportError extends Error {
 }
 
 export interface AnalyzeDeps {
-  userId: string;
   /** Where places come from; Google Maps through DataForSEO unless given. */
   places?: PlaceLookup;
   /** One call per billed request, for usage tracking. */
@@ -217,7 +216,7 @@ export async function analyzeInstagramPost(url: string, deps: AnalyzeDeps): Prom
         bio: a.profile?.biography ?? "",
       })),
     },
-    { userId: deps.userId, shortcode: ref.shortcode, onAttempt: deps.onAiCall, reader: deps.reader }
+    { shortcode: ref.shortcode, onAttempt: deps.onAiCall, reader: deps.reader }
   );
 
   // Text the model may quote from. Bios vouch for names; only the post itself

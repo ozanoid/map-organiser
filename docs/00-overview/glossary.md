@@ -2,8 +2,8 @@
 title: Glossary
 type: overview
 domain: overview
-version: 1.5.2
-last_updated: 24.11.2026
+version: 1.5.3
+last_updated: 25.11.2026
 status: stable
 related:
   - "[[system-overview]]"
@@ -62,7 +62,7 @@ Single source of truth for every domain term, abbreviation, and acronym used in 
 | **4-band auto-apply** | The policy in `src/lib/ai/apply-suggestions.ts`: silent apply / queue / category-change-queue / ignore — by confidence × existing-entity match × parent-mismatch. See [[../05-flows/full-profile-flow#auto-apply-policy-4-band]]. |
 | **Category change proposal** | A queue entry where the LLM disagrees with the rule-based parent-category assignment from save time (Phase 5.5). Accept atomically moves the place to the new parent (and nulls out the now-invalid subcategory_id). |
 | **AI SKU** | Per-call usage counter in `public.api_usage` under `sku` prefixed `ai_*` (e.g. `ai_place_profile`). Powers the Settings → API & Usage cost tracker for AI calls. |
-| **Gemini Flash** | The default LLM provider — `gemini-3-flash-preview` via `@ai-sdk/google` (was `gemini-flash-latest` until 15.07.2026). Key: `GOOGLE_GENERATIVE_AI_API_KEY`. See [[../04-integrations/gemini]]. |
+| **Gemini Flash** | The app's LLM provider from Phase 1 (`gemini-3-flash-preview` via `@ai-sdk/google` since 15.07.2026) until Phase 2 moved every AI feature to Claude (v1.48.0–v1.54.0); its client, package and key went in v1.55.0. |
 
 ## Geo
 

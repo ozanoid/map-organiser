@@ -34,7 +34,7 @@ database. Exit code 1 means a wrong or spurious place — the contract is
 precision; recall is reported alongside.
 
 Needs `DATAFORSEO_LOGIN` / `DATAFORSEO_PASSWORD`, `HIKERAPI_KEY`,
-`GOOGLE_GENERATIVE_AI_API_KEY` and a Mapbox token in `.env.local`. Each post
+`ANTHROPIC_API_KEY` and a Mapbox token in `.env.local`. Each post
 line shows the time it took and the searches it made.
 
 ### Which model reads the posts (v1.50.0)
@@ -43,10 +43,11 @@ line shows the time it took and the searches it made.
 npm run eval:instagram -- --model=claude-haiku-5-5 --effort=high
 ```
 
-`--model` is `gemini` (the default, as in production), `claude-haiku-5-5` or
-`claude-sonnet-5-5`; `--effort` is `low`, `medium` or `high` (default `high`). A
-Claude read needs `ANTHROPIC_API_KEY` and is written to `assistant_spend`
-(purpose `eval`, the owner's account); its cost is printed in the summary.
+`--model` is `claude-haiku-5-5` (the default, as in production —
+`INSTAGRAM_READER`) or `claude-sonnet-5-5`; `--effort` is `low`, `medium` or
+`high` (default: production's, `high`). Every read is written to
+`assistant_spend` (purpose `eval`, the owner's account); its cost is printed in
+the summary. (`gemini`, the default until v1.51.0, went in v1.55.0.)
 
 Measured 24.11.2026 (35 posts, 1 deleted, 42 places to add):
 
@@ -65,9 +66,9 @@ with `--only=`.
 - HikerAPI 140 requests ≈ $0.14 at $1 / 1,000
 - Google Maps search through DataForSEO ≈ 110 searches ≈ $0.22 at $2 / 1,000 (since v1.42.0; before, Google Text Search Enterprise — ≈ 107 searches, free inside the 1,000 monthly, $35 / 1,000 beyond)
 - Mapbox city lookups ≈ 27 — free up to 100,000 a month
-- Gemini 3 Flash ≈ 35 calls ≈ $0.05
+- Claude Haiku 5.5 (high) ≈ 35 reads ≈ $0.03 (measured 24.11.2026; Gemini 3 Flash ≈ $0.05 before)
 
-About $0.41 a run.
+About $0.39 a run.
 
 ## Known limits (2026-10-16)
 

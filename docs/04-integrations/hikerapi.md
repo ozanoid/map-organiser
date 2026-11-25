@@ -2,8 +2,8 @@
 title: HikerAPI (Instagram data)
 type: integration
 domain: integrations
-version: 1.1.0
-last_updated: 24.11.2026
+version: 1.1.1
+last_updated: 25.11.2026
 status: stable
 sources:
   - src/lib/hikerapi/client.ts
@@ -15,7 +15,7 @@ sources:
 related:
   - "[[_README]]"
   - "[[google-places]]"
-  - "[[gemini]]"
+  - "[[claude-agent]]"
   - "[[../05-flows/instagram-import-flow]]"
   - "[[../02-backend/api-routes/instagram]]"
   - "[[../02-backend/schema/api_usage]]"

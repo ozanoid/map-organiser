@@ -2,7 +2,7 @@
 title: Archive
 type: meta
 domain: meta
-version: 1.3.0
+version: 1.4.0
 last_updated: 25.11.2026
 status: stable
 ---
@@ -36,11 +36,11 @@ The original `docs/*_v1.md` and `*_v2.md` files were moved here on **12.05.2026*
 | `03-frontend/hooks/use-trips.md` | `useTrips` and its 11 mutations. Superseded on 18.11.2026 by `03-frontend/hooks/use-plans`. |
 | `05-flows/trip-planning-flow.md` | Create a trip → auto-plan → day edits. Superseded on 18.11.2026 by `05-flows/plan-flow`. |
 | `05-flows/ai-trip-plan-flow.md` | The AI trip planner on the trips tables. Superseded on 18.11.2026 by `05-flows/ai-plan-flow`. |
-
 | `03-frontend/components/search.md` | `AiSearchInput` and `useAiSearchStore` — the Gemini AI search UI. Superseded on 25.11.2026 (v1.54.0) by `03-frontend/components/assistant`: the search field asks the assistant. |
 | `02-backend/api-routes/ai.md` | The `/api/ai/*` route group (parse-query, rank-results, compare, day-plan, chat). Every route is gone since v1.54.0 (25.11.2026); superseded by `02-backend/api-routes/assistant`. |
+| `04-integrations/gemini.md` | Google Gemini, the LLM behind the AI features from Phase 1 until Phase 2. Superseded on 25.11.2026 (v1.55.0) by `04-integrations/claude-agent`: no code calls Gemini any more. |
 
-The five trip docs keep their folder under `_archive/` because two of them share a filename (`trips.md`). The search and AI route docs keep theirs the same way.
+The five trip docs keep their folder under `_archive/` because two of them share a filename (`trips.md`). The search, AI route and Gemini docs keep theirs the same way.
 
 ## Redistribution checklist
 

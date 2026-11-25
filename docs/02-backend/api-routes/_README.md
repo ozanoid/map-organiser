@@ -2,7 +2,7 @@
 title: API Routes
 type: overview
 domain: backend
-version: 1.13.0
+version: 1.13.1
 last_updated: 25.11.2026
 status: stable
 sources:
@@ -97,7 +97,7 @@ These are reused across many routes:
 | `isOpenOnDate` | `src/lib/places/open-now.ts` | Day-granular open flag from `work_timetable` (v1.22.0 for AI Plan; since v1.53.0 the `open_that_day` of `get_plans`' stops). |
 | `encryptApiKey` / `decryptApiKey` / `maskApiKey` | encryption helpers | API key crypto. |
 | `nanoid(10)` | `nanoid` package | Slug generation. |
-| `getAiClient` / `FLASH_MODEL` / `MODEL_VERSION` | `src/lib/ai/client.ts` | Gemini AI SDK v6 factory. Returns null when key is missing — route should short-circuit. |
+| ~~`getAiClient` / `FLASH_MODEL` / `MODEL_VERSION`~~ | `src/lib/ai/client.ts` | The Gemini client — removed in v1.55.0. Claude calls go through `anthropicClient` (`src/lib/agent/client.ts`) and `structuredClaude` (`src/lib/agent/structured.ts`). |
 | `buildUserContext` | `src/lib/ai/context-builder.ts` | Bundles user's tags/categories/subcategories/lists/cities for any LLM prompt. |
 | `buildPlaceProfilePrompt` | `src/lib/ai/prompts/place-profile-full.ts` | System + user prompt for the full place_profile call. |
 | `applyProfileSuggestions` | `src/lib/ai/apply-suggestions.ts` | 4-band auto-apply policy for LLM output. |

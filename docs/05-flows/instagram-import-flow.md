@@ -2,8 +2,8 @@
 title: Instagram Import Flow
 type: flow
 domain: places
-version: 1.5.0
-last_updated: 24.11.2026
+version: 1.6.0
+last_updated: 25.11.2026
 status: stable
 sources:
   - src/components/map/map-content.tsx
@@ -51,7 +51,7 @@ related:
   - "[[../03-frontend/components/places#instagramimportpanel]]"
   - "[[../04-integrations/hikerapi]]"
   - "[[../04-integrations/google-places]]"
-  - "[[../04-integrations/gemini]]"
+  - "[[../04-integrations/claude-agent]]"
 tags:
   - instagram
   - import
@@ -370,6 +370,8 @@ profile read per account, five in parallel. See [[../04-integrations/hikerapi]].
 
 ### 2. Classify (one model call)
 
+> **v1.55.0:** the Gemini reader is gone: `PostReader` is `{ choice, spend }` — a Claude model and effort, and the ledger that pays — and the eval reads with `INSTAGRAM_READER` unless `--model` / `--effort` name another.
+>
 > **v1.51.0:** production reads posts with Claude Haiku 5.5 at high (`INSTAGRAM_READER`, Ozan's choice after the measurement below); the reader is a required argument now (no default), the import job passes it, gates on `ANTHROPIC_API_KEY` and the Claude ledger's monthly cap, and no longer writes `ai_instagram_read`.
 >
 > **v1.50.0:** `readPost` takes a `reader` (`PostReader`, passed through `AnalyzeDeps.reader`): Gemini by default — production unchanged — or a Claude model through `structuredClaude`, which retries once on an unusable answer and never on a refusal. The eval runs it with `--model=claude-haiku-5-5 --effort=high`. Measured on 24.11.2026 (35 posts, 1 deleted, 42 places to add): Gemini 35 correct, 1 optional, 0 wrong (83.3%); Claude Haiku 5.5 high 36 correct, 1 optional, 0 wrong (85.7%), ~$0.0008 a read against Gemini's ~$0.0014, no unusable answer. The model choice is Ozan's (Phase 2, 6.2).
@@ -641,9 +643,10 @@ planned is a monthly dollar cap over every paid service (see
   decided to verify the drain after the merge.
 - **The read varies between runs** (measured with Gemini, before v1.51.0). The precision guard held in every run;
   recall moves by about one place.
-- **Telemetry.** The read emits `ai.instagram-read-post` spans
-  (`experimental_telemetry`, userId + shortcode); the `after()` run ends with
-  `flushLangfuse` like the other LLM routes — see [[observability-flow]].
+- **Telemetry.** The read is a Langfuse generation (`instagram.read`, with
+  the shortcode and the attempt; v1.51.0 — an AI SDK `ai.instagram-read-post`
+  span on Gemini before) and a `claude.structured` log line; the `after()` run
+  ends with `flushLangfuse` like the other LLM routes — see [[observability-flow]].
 - **A profile read that fails** is retried once and logged
   (`[instagram] profile @… failed`); a missing profile only weakens the evidence.
 
@@ -657,7 +660,7 @@ planned is a monthly dollar cap over every paid service (see
 - `src/lib/instagram/start-import.ts`, `view.ts`, `pick.ts` — the gates and job, the view, the pick; shared by the routes and Claude's `add_places` (v1.41.0, [[../04-integrations/claude-mcp#adding-places]]).
 - `src/lib/instagram/import-job.ts` — `runInstagramImportJob`: the Claude cap check, usage, item rows (options, `near`, `searchName`), finish.
 - `src/lib/instagram/analyze.ts` — `analyzeInstagramPost`: accounts, verification, candidates, area, `near`.
-- `src/lib/instagram/read-post.ts` — the read (Claude since v1.51.0; the Gemini reader stays for the eval) and `PostReadingSchema`.
+- `src/lib/instagram/read-post.ts` — the read (Claude since v1.51.0; the Gemini reader, kept for the eval, went in v1.55.0) and `PostReadingSchema`.
 - `src/lib/instagram/resolve.ts` — evidence, acceptance rules, tie-breaks, query plan, `optionsFor`.
 - `src/lib/instagram/normalize.ts` — Turkish-aware name, phone, website, address and distance helpers.
 - `src/lib/instagram/maps-link.ts` — find and follow a venue's own Maps link.

@@ -2,13 +2,12 @@
 title: "Phase 6.5 — LLM-as-judge pivot (design doc)"
 type: plan
 domain: ai
-version: 1.0.0
-last_updated: 19.05.2026
+version: 1.0.1
+last_updated: 25.11.2026
 status: in-progress
 related:
   - "[[phase-6-nl-filtering]]"
   - "[[../05-flows/ai-search-flow]]"
-  - "[[../04-integrations/gemini]]"
 ---
 
 # Phase 6.5 — LLM-as-judge pivot

@@ -2,9 +2,10 @@
 title: Google Gemini (LLM)
 type: integration
 domain: integrations
-version: 1.15.0
+version: 1.16.0
 last_updated: 25.11.2026
-status: stable
+status: superseded
+superseded_by: "[[04-integrations/claude-agent]]"
 sources:
   - src/lib/ai/client.ts
   - src/lib/ai/prompts/place-profile-full.ts
@@ -24,6 +25,8 @@ related:
 ---
 
 # Google Gemini
+
+> **Archived (v1.55.0, 25.11.2026):** no code calls Gemini any more — every AI feature runs on Claude ([[04-integrations/claude-agent]]). `@ai-sdk/google`, `src/lib/ai/client.ts` and the evals' Gemini arms are gone; nothing reads `GOOGLE_GENERATIVE_AI_API_KEY`.
 
 > **Bug fix (v1.15.1, 15.07.2026):** `.map(compactReview)` was passing the array INDEX as `compactReview`'s `maxChars` param — review *i* was truncated to *i* characters, so every full profile generated since Phase 4 (19.05.2026) was built from near-empty review text (all 451 profiles affected; the LLM leaned on place_topics/attributes/lite-prior and fabricated the rest, including evidence quotes). Fixed to `.map((r) => compactReview(r))`; all affected profiles need regeneration — see v4 PART 4 #8.
 

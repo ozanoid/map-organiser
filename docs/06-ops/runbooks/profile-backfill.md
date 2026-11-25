@@ -2,14 +2,14 @@
 title: AI place_profile backfill (per user)
 type: runbook
 domain: ops
-version: 1.4.1
+version: 1.4.2
 last_updated: 25.11.2026
 status: stable
 related:
   - "[[_README]]"
   - "[[../../03-frontend/components/settings#backfillprofilespanel]]"
   - "[[../../05-flows/full-profile-flow]]"
-  - "[[../../04-integrations/gemini]]"
+  - "[[../../04-integrations/claude-agent]]"
   - "[[../../_plans/backfill-grandfather-reenrich]]"
 ---
 

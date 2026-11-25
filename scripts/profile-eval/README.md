@@ -14,15 +14,15 @@ npm run eval:profiles
 npm run eval:profiles -- --writers=claude-haiku-5-5:high,claude-sonnet-5-5:medium
 ```
 
-Writers: `gemini` (production today), `claude-haiku-5-5:<effort>`,
-`claude-sonnet-5-5:<effort>`. Each runs over every place before the next, so a
-Claude writer reads the shared instructions (~8K tokens) from the cache.
+Writers: `claude-haiku-5-5:<effort>` and `claude-sonnet-5-5:<effort>` (both by
+default; the `gemini` writer went in v1.55.0 — its row below is from
+24.11.2026). Each runs over every place before the next, so a writer reads the
+shared instructions (~8K tokens) from the cache.
 
 Measured per writer: profiles written, quotes found word for word in the
 place's reviews (theme evidence; a quote not found was reworded or made up),
-time, tokens (thinking included), cost. Claude calls go to `assistant_spend`
-(purpose `eval`, the owner's account); Gemini's are priced at the app's SKU
-($0.0095 a profile), not recorded here. Every profile and its measures land in
+time, tokens (thinking included), cost. Every call goes to `assistant_spend`
+(purpose `eval`, the owner's account). Every profile and its measures land in
 `out/<time>.json` (git-ignored: library content).
 
 ## Measured 24.11.2026

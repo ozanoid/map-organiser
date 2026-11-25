@@ -2,7 +2,7 @@
 title: "Claude connector (MCP server)"
 type: integration
 domain: integrations
-version: 1.9.0
+version: 1.9.1
 last_updated: 25.11.2026
 status: draft
 sources:
@@ -52,7 +52,7 @@ related:
   - "[[../05-flows/claude-connector-flow]]"
   - "[[../02-backend/auth]]"
   - "[[supabase]]"
-  - "[[gemini]]"
+  - "[[claude-agent]]"
   - "[[mapbox]]"
 ---
 
@@ -115,7 +115,7 @@ Filters take **names**, not ids (`resolveNames`): exact folded match, then a uni
 
 - **Links.** Plan results carry `url` = `<appUrl>/plans/<id>`. `appUrl` is part of the tool context (`AssistantContext`); the MCP server sets it from the address the client reached it at (`getPublicOrigin` from `mcp-handler`, the same rule as the OAuth resource metadata — parsed once in `verifyAssistantToken`, http(s) only, else the request's own origin), so a link opens the deployment the connector talks to — production, a preview or localhost. Signed out, the link goes through `/login?next=…` and back to the plan (session proxy, v1.39.0).
 - **Strict inputs.** Every tool refuses keys it doesn't know (`defineTool` makes the top-level object strict; the JSON Schema says `additionalProperties: false`), and the plan schemas are strict all the way down. A misnamed field — `date` for `visited_on`, `time` for `start_time` — is an error the model sees, not a value silently dropped. A stop is a place or a text, not both.
-- **Saving.** The server instructions ask Claude to lay a new plan out and save it once the user agrees; `update_plan` does what the user asked, and changes Claude suggests itself need the user's OK first. After a save Claude gives the link. Plans are cancelled, never deleted, through the assistant.
+- **Saving.** The server instructions ask Claude to lay a new plan out and save it once the user agrees; `update_plan` does what the user asked, and changes Claude suggests itself need the user's OK first. A plan's dates are the user's: Claude changes `start_date` only when asked, and when the dates don't work (passed, places closed) it says so and asks (v1.55.0). After a save Claude gives the link. Plans are cancelled, never deleted, through the assistant.
 - **After a write** the tools read the plan back; if that read fails the result still says the plan was saved (with its link), so a retry doesn't save it twice. An unexpected error in a write tool tells Claude the change may have been saved and to check (`get_plans`, `get_visits`, `get_places`) before trying again; read tools still say "try again".
 - **Costs** are per person; a saved place's stop without a cost gets the US-dollar default for its price level — only when its currency is USD or not given (a stop in pounds gets none, rather than "25 GBP" from the dollar table).
 - **One schema.** The tools' inputs are the plan module's own zod schemas (`src/lib/plans/schema.ts`), whose `.describe()` texts are what the model reads — the API routes validate with the same definitions.

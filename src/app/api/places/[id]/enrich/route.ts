@@ -214,7 +214,8 @@ export async function POST(
   if (step === "profile") {
     // Flush the Langfuse span batch once the response is sent (serverless).
     after(flushLangfuse);
-    // Langfuse trace-level fields for the gen_ai spans created inside.
+    // Langfuse trace-level fields for the Claude generation created inside
+    // (profile.write).
     const outcome = await propagateAttributes(
       { traceName: "place-profile", userId: user.id, tags: ["enrichment"] },
       () => generatePlaceProfile(supabase, user.id, id)

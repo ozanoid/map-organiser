@@ -2,8 +2,8 @@
 title: Manual Place Create Flow
 type: flow
 domain: places
-version: 1.3.2
-last_updated: 19.11.2026
+version: 1.3.3
+last_updated: 25.11.2026
 status: stable
 sources:
   - src/components/places/add-place-dialog.tsx
@@ -20,7 +20,7 @@ related:
   - "[[../02-backend/api-routes/places]]"
   - "[[../04-integrations/google-places]]"
   - "[[../04-integrations/dataforseo]]"
-  - "[[../04-integrations/gemini]]"
+  - "[[../04-integrations/claude-agent]]"
 ---
 
 # Manual Place Create Flow

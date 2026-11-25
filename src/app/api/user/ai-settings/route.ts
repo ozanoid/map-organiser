@@ -8,7 +8,7 @@ import { isAssistantConfigured } from "@/lib/agent/door";
  *
  * Returns the user's master AI toggle plus a server-side availability flag
  * (so the UI can disable the toggle gracefully when the deployment has no
- * GOOGLE_GENERATIVE_AI_API_KEY env var).
+ * ANTHROPIC_API_KEY env var — every AI feature runs on Claude).
  */
 export async function GET() {
   const supabase = await createClient();

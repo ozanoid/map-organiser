@@ -130,11 +130,10 @@ export async function runInstagramImportJob(args: {
     let analysis;
     try {
       analysis = await analyzeInstagramPost(postUrl, {
-        userId,
         onBilled: (sku) => {
           billed[sku]++;
         },
-        reader: { kind: "claude", choice: INSTAGRAM_READER, spend: { ledger, userId, purpose: "instagram" } },
+        reader: { choice: INSTAGRAM_READER, spend: { ledger, userId, purpose: "instagram" } },
       });
     } finally {
       // Billed whether or not the read succeeded. The Claude read is in the

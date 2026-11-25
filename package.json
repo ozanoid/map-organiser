@@ -16,7 +16,6 @@
     "check:agent:db": "tsx --env-file=.env.local --tsconfig scripts/agent-check/tsconfig.json scripts/agent-check/db.ts"
   },
   "dependencies": {
-    "@ai-sdk/google": "^3.0.141",
     "@ai-sdk/react": "^3.0.230",
     "@anthropic-ai/sdk": "^1.8.0",
     "@base-ui/react": "^1.6.0",

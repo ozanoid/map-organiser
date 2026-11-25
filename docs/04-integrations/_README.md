@@ -2,7 +2,7 @@
 title: Integrations
 type: overview
 domain: integrations
-version: 1.7.2
+version: 1.7.3
 last_updated: 25.11.2026
 status: stable
 related:
@@ -10,7 +10,7 @@ related:
   - "[[mapbox]]"
   - "[[google-places]]"
   - "[[dataforseo]]"
-  - "[[gemini]]"
+  - "[[claude-agent]]"
   - "[[hikerapi]]"
   - "[[claude-mcp]]"
   - "[[s2-geometry]]"
@@ -31,7 +31,7 @@ Third-party services and runtime libraries that materially shape how this app wo
 | **Mapbox** | Map rendering (GL JS) + Directions API for plan routes | [[mapbox]] |
 | **Google Places API** | Not called since v1.42.0 — every place lookup goes through DataForSEO | [[google-places]] |
 | **DataForSEO** (Business Data + Google Maps SERP) | Every place lookup: link previews, imports, enrichment, the Instagram import's search, Claude's Google Maps search (no per-user key) | [[dataforseo]] |
-| **Google Gemini** (Generative Language API) | AI feature provider — `gemini-3-flash-preview`. **No user-facing feature since v1.54.0** — profiles and Instagram (v1.51.0), Compare (v1.52.0), AI Plan (v1.53.0) and AI search (v1.54.0) went to Claude; only the profile and Instagram evals' comparison arms still call it, until step 5 removes it. Wrote the full place_profile (Phase 4) and read Instagram posts (v1.28.0) until v1.51.0 — both Claude now | [[gemini]] |
+| **Google Gemini** (Generative Language API) | The AI provider from Phase 1 until Phase 2: the full place_profile (Phase 4), the Instagram read (v1.28.0), Compare, AI Plan, AI search and the old chat — all moved to Claude (v1.48.0–v1.54.0). Its client, package and the evals' Gemini arms went in v1.55.0 | — (archived) |
 | **Claude (MCP connector)** | The user's library as an MCP server for claude.ai and Claude Code; Supabase Auth is the OAuth 2.1 server (17.11.2026) | [[claude-mcp]] |
 | **Claude API (platform agent)** | The platform's own Claude: the in-app assistant (v1.48.0) — called by our server with the same tools, conversations kept append-only — and, since v1.51.0, place profiles (Sonnet 5.5) and Instagram reads (Haiku 5.5); every call's dollars in one ledger against a $100 monthly cap. On `feat/personal-assistant` | [[claude-agent]] |
 | **HikerAPI** | Instagram data — the post, its tagged/mentioned accounts and their profiles, for the Instagram import (v1.28.0). System-level key `HIKERAPI_KEY` | [[hikerapi]] |
@@ -43,7 +43,7 @@ Third-party services and runtime libraries that materially shape how this app wo
 | **TanStack React Query** | Server-state cache + mutations | [[react-query]] |
 | **Zustand** | Client-state stores (cross-page) | [[zustand]] |
 | **S2 Geometry** | Decode Google Maps FTids → lat/lng (fallback) | [[s2-geometry]] |
-| **AI SDK v6** (`ai`) + `@ai-sdk/google` | Model-agnostic call layer + Gemini provider — `generateText({ output: Output.object(...) })` for structured JSON | [[gemini]] |
+| **AI SDK v6** (`ai`, `@ai-sdk/react`) | The assistant panel's stream: `createUIMessageStream` on the server, `useChat` in the panel (v1.48.0). No model calls since v1.55.0 (`@ai-sdk/google` removed) | [[../05-flows/ai-chat-flow]] |
 
 Everything else (Tailwind, shadcn, lucide, sonner, …) is documented in [[../00-overview/tech-stack]].
 

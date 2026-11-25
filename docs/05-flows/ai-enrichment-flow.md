@@ -2,7 +2,7 @@
 title: AI Enrichment Flow
 type: flow
 domain: places
-version: 1.9.3
+version: 1.9.4
 last_updated: 25.11.2026
 status: stable
 sources:
@@ -19,7 +19,7 @@ related:
   - "[[instagram-import-flow]]"
   - "[[ai-search-flow]]"
   - "[[../06-ops/runbooks/profile-backfill]]"
-  - "[[../04-integrations/gemini]]"
+  - "[[../04-integrations/claude-agent]]"
   - "[[../04-integrations/dataforseo]]"
 ---
 
@@ -27,7 +27,7 @@ related:
 
 > **Bug fix (v1.15.1, 15.07.2026):** `.map(compactReview)` was passing the array INDEX as `compactReview`'s `maxChars` param — review *i* was truncated to *i* characters, so every full profile generated since Phase 4 (19.05.2026) was built from near-empty review text (all 451 profiles affected; the LLM leaned on place_topics/attributes/lite-prior and fabricated the rest, including evidence quotes). Fixed to `.map((r) => compactReview(r))`; all affected profiles need regeneration — see v4 PART 4 #8.
 
-> **Telemetry (v1.16.0):** `generatePlaceProfile` carries `experimental_telemetry` (span `ai.generate-profile`, userId+placeId metadata); the enrich route stamps Langfuse trace fields (`place-profile`) and flushes via `after(flushLangfuse)`. See [[observability-flow]].
+> **Telemetry:** the profile call is a Langfuse generation (`profile.write`, through `structuredClaude`, v1.51.0; an AI SDK `ai.generate-profile` span on Gemini from v1.16.0 before); the enrich route stamps Langfuse trace fields (`place-profile`) and flushes via `after(flushLangfuse)`. See [[observability-flow]].
 
 > The map of how a saved place accretes AI data. Every place starts as a
 > bare row; enrichment layers extended data, reviews, and AI profiles onto
@@ -165,9 +165,9 @@ Both AI layers are gated. A place skips them silently when a gate fails:
 | Gate | Layer 3 (lite) | Layer 5 (full) |
 |---|---|---|
 | `profiles.ai_features_enabled` | required | required |
-| `GOOGLE_GENERATIVE_AI_API_KEY` set | not needed (no LLM) | required (else 503) |
+| `ANTHROPIC_API_KEY` set (the Gemini key until v1.51.0) | not needed (no LLM) | required (else 503) |
 | Reviews present | not needed | required (else 400 `no_reviews`) |
-| Under the monthly profile budget | not needed | required (else 429) |
+| Under the Claude ledger's monthly cap ($100; the profile budget until v1.51.0) | not needed | required (else 429) |
 
 ## Failure modes
 

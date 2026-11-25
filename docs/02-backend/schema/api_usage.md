@@ -2,7 +2,7 @@
 title: api_usage
 type: table
 domain: backend
-version: 1.8.2
+version: 1.8.3
 last_updated: 25.11.2026
 status: stable
 sources:
@@ -16,7 +16,7 @@ related:
   - "[[../../04-integrations/google-places]]"
   - "[[../../04-integrations/dataforseo]]"
   - "[[../../04-integrations/hikerapi]]"
-  - "[[../../04-integrations/gemini]]"
+  - "[[../../04-integrations/claude-agent]]"
 tags:
   - cost
   - observability

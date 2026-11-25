@@ -2,7 +2,7 @@
 title: Env Vars
 type: overview
 domain: ops
-version: 1.9.2
+version: 1.10.0
 last_updated: 25.11.2026
 status: stable
 sources:
@@ -10,7 +10,7 @@ sources:
   - src/lib/supabase/client.ts
   - src/lib/supabase/server.ts
   - src/lib/supabase/proxy.ts
-  - src/lib/ai/client.ts
+  - src/lib/agent/client.ts
   - src/lib/google/get-user-api-keys.ts
   - src/lib/dataforseo/client.ts
   - src/instrumentation-node.ts
@@ -49,11 +49,11 @@ Every environment variable the app reads, where it lives, and who depends on it.
 | `ENCRYPTION_SECRET` | ❌ server-only | yes | Generated; documented in [[encryption]] | `encryptApiKey` / `decryptApiKey` for `profiles.*_enc` |
 | `DATAFORSEO_LOGIN` | ❌ server-only | yes | DataForSEO account | Default enrichment provider basic auth |
 | `DATAFORSEO_PASSWORD` | ❌ server-only | yes | DataForSEO account | Same |
-| `GOOGLE_GENERATIVE_AI_API_KEY` | ❌ server-only | not needed by the app since v1.54.0 (only the profile and Instagram evals' Gemini arms; removed in step 5) | https://aistudio.google.com/apikey | `src/lib/ai/client.ts#getAiClient` — Gemini Flash for AI-01/AI-03/AI-04/AI-05 (AI search, Compare, AI Plan); the Instagram import's post read until v1.51.0 (Claude since). No user-facing feature reads it since v1.54.0 (AI search, Compare and AI Plan went to the assistant); Settings no longer reports it. |
+| `GOOGLE_GENERATIVE_AI_API_KEY` | ❌ server-only | **unused since v1.55.0** | https://aistudio.google.com/apikey | Read by no code: the Gemini client (`src/lib/ai/client.ts`) went with the evals' Gemini arms — every AI feature runs on Claude. `main` still calls Gemini until the branch merges; after the merge, delete it from Vercel (Production + Preview) and `.env.local`, and revoke it in Google AI Studio. |
 | `CRON_SECRET` | ❌ server-only | **yes** | Generated; set in Vercel | Bearer auth for BOTH cron routes: `refresh-places` (daily) and `drain-imports` (every minute). Absent → both return 500, **and imports silently never start** — `kickDrain`, fired when a Takeout job is created, when an Instagram job has queued places and when a branch picked in the Instagram dialog is queued, no-ops without it. An Instagram import then reads its post but its places sit at "Adding…". Not present in `.env.local` by default, so imports do not drain locally. See [[runbooks/periodic-refresh]], [[../05-flows/place-import-flow]] and [[../05-flows/instagram-import-flow]]. |
 | `HIKERAPI_KEY` | ❌ server-only | optional (required for the Instagram import) | HikerAPI account (hikerapi.com) | `src/lib/hikerapi/client.ts` — header `x-access-key` on every HikerAPI call. `POST /api/instagram/import` checks it before creating a job and answers 503 "Instagram import isn't set up on this server." without it. Read from `.env.local` by `npm run eval:instagram`. See [[../04-integrations/hikerapi]]. v1.28.0. |
 | `ASSISTANT_OWNER_EMAILS` | ❌ server-only | **yes** for the Claude connector | Set by the owner, comma-separated emails | Who may connect Claude to their library: checked on `/oauth/consent` and on every `/api/mcp` call (`src/lib/assistant/owner.ts`). Unset → every connection is refused. Owner: `ozan@maporganiser.com`; `admin@maporganiser.com` for tests. See [[../04-integrations/claude-mcp]]. |
-| `ANTHROPIC_API_KEY` | ❌ server-only | required for every AI feature (the assistant, place profiles, the Instagram import) | Claude Console → API keys | The Claude API (`src/lib/agent/client.ts`): the platform's agent core and the app's assistant (v1.47.x–v1.48.0, on `feat/personal-assistant`) — without it the assistant button stays hidden; one-shot structured calls (`structured.ts`, the 6.2 measurement); `npm run eval:assistant`, `eval:profiles`, `eval:instagram -- --model=claude-…`. Since v1.51.0 also place profiles (Sonnet 5.5) and Instagram post reads (Haiku 5.5) — the Instagram import refuses to start without it, `step=profile` answers 503, and Settings → AI disables the AI switch with a banner and hides the profile backfill and the suggestions queue. Set in Vercel Production + Preview on 17.11.2026. Monthly spend is capped at organization level in the Claude Console and by the platform's own ledger ($100, `assistant_spend`). |
+| `ANTHROPIC_API_KEY` | ❌ server-only | required for every AI feature (the assistant, place profiles, the Instagram import) | Claude Console → API keys | The Claude API (`src/lib/agent/client.ts`): the platform's agent core and the app's assistant (v1.47.x–v1.48.0, on `feat/personal-assistant`) — without it the assistant button stays hidden; one-shot structured calls (`structured.ts`, the 6.2 measurement); `npm run eval:assistant`, `eval:profiles`, `eval:instagram`. Since v1.51.0 also place profiles (Sonnet 5.5) and Instagram post reads (Haiku 5.5) — the Instagram import refuses to start without it, `step=profile` answers 503, and Settings → AI disables the AI switch with a banner and hides the profile backfill and the suggestions queue. Set in Vercel Production + Preview on 17.11.2026. Monthly spend is capped at organization level in the Claude Console and by the platform's own ledger ($100, `assistant_spend`). |
 | `HONEYCOMB_API_KEY` | ❌ server-only | optional (required for the Honeycomb pipe) | Honeycomb → ingest key | `src/instrumentation-node.ts` — OTel trace + log exporters. Absent → Honeycomb pipe dark, console pipe unaffected. |
 | `HONEYCOMB_DATASET` | ❌ server-only | optional | — | Dataset name; defaults to `map-organiser`. |
 | `HONEYCOMB_API_URL` | ❌ server-only | optional | — | Defaults to `https://api.honeycomb.io` (US). |
@@ -115,7 +115,8 @@ Practical rules:
 | `GOOGLE_PLACES_API_KEY` | — (unused since v1.42.0) |
 | `ENCRYPTION_SECRET` | `process.env.ENCRYPTION_SECRET` in the AES-256-GCM helpers |
 | `DATAFORSEO_LOGIN` / `DATAFORSEO_PASSWORD` | `process.env.DATAFORSEO_*` in `src/lib/dataforseo/client.ts` |
-| `GOOGLE_GENERATIVE_AI_API_KEY` | `process.env.GOOGLE_GENERATIVE_AI_API_KEY` in `src/lib/ai/client.ts#getAiClient` |
+| `GOOGLE_GENERATIVE_AI_API_KEY` | — (unused since v1.55.0) |
+| `ANTHROPIC_API_KEY` | `process.env.ANTHROPIC_API_KEY` in `src/lib/agent/client.ts#anthropicClient`, and the presence checks in `src/lib/agent/door.ts`, `src/lib/ai/generate-profile.ts` and `src/lib/instagram/start-import.ts` |
 | `CRON_SECRET` | `process.env.CRON_SECRET` in `src/app/api/cron/refresh-places/route.ts` and `src/app/api/cron/drain-imports/route.ts` (bearer check, and the drain's self-chain), plus `kickDrain` in `src/lib/import/kick-drain.ts` (moved there from the import-jobs route in v1.28.0; called by the Takeout create route, the Instagram import job and, since v1.28.1, the Instagram pick route) |
 | `HIKERAPI_KEY` | `process.env.HIKERAPI_KEY` in `src/lib/hikerapi/client.ts#get` and the presence check in `src/app/api/instagram/import/route.ts` |
 | `HONEYCOMB_API_KEY` / `HONEYCOMB_DATASET` / `HONEYCOMB_API_URL` | `process.env.HONEYCOMB_*` in `src/instrumentation-node.ts` |

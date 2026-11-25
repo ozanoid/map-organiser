@@ -2,7 +2,7 @@
 title: System Overview
 type: overview
 domain: overview
-version: 1.4.5
+version: 1.4.6
 last_updated: 25.11.2026
 status: stable
 sources:
@@ -98,7 +98,7 @@ Typical session:
 | Theme | `src/lib/providers.tsx`, `src/lib/hooks/use-map-style.ts` | next-themes light/dark/system; map style and marker style preferences. |
 | PWA | `src/app/manifest.ts`, `public/sw.js`, `src/components/sw-register.tsx`, `src/app/offline/` | `share_target` POST to `/api/share-target`, offline fallback. |
 | Observability | `src/lib/google/track-usage.ts` + `public.api_usage` table + `increment_api_usage()` RPC | Per-SKU API counter for cost tracking (now includes AI SKUs). |
-| **AI** | `src/lib/ai/` (client, schemas, prompts, extractors, apply-suggestions), `src/app/api/places/[id]/enrich?step=profile`, `src/app/api/user/ai-{settings,suggestions}/`, `src/components/places/ai-summary-card.tsx`, `src/components/settings/ai-{settings,suggestions-queue}.tsx`, `public.ai_suggestions_queue`, `public.subcategories` | Claude for every AI feature since v1.54.0 (the assistant with its entries on the compare page, the plan page and the search field; profiles; Instagram reads) — Gemini Flash + AI SDK v6 before. Two layers: rule-based lite_profile inline in parse-link (no LLM), and full place_profile via background `step=profile` call to Claude Sonnet 5.5 (v1.51.0; Gemini Flash before). 4-band auto-apply (silent / queue / category-change / ignore). Phase 5 moderation UI consumes the queue. See [[../05-flows/lite-profile-flow]], [[../05-flows/full-profile-flow]], [[../04-integrations/gemini]]. |
+| **AI** | `src/lib/ai/` (schemas, prompts, extractors, apply-suggestions, generate-profile), `src/app/api/places/[id]/enrich?step=profile`, `src/app/api/user/ai-{settings,suggestions}/`, `src/components/places/ai-summary-card.tsx`, `src/components/settings/ai-{settings,suggestions-queue}.tsx`, `public.ai_suggestions_queue`, `public.subcategories` | Claude for every AI feature since v1.54.0 (the assistant with its entries on the compare page, the plan page and the search field; profiles; Instagram reads) — Gemini Flash + AI SDK v6 before. Two layers: rule-based lite_profile inline in parse-link (no LLM), and full place_profile via background `step=profile` call to Claude Sonnet 5.5 (v1.51.0; Gemini Flash before). 4-band auto-apply (silent / queue / category-change / ignore). Phase 5 moderation UI consumes the queue. See [[../05-flows/lite-profile-flow]], [[../05-flows/full-profile-flow]], [[../04-integrations/claude-agent]]. |
 
 ## Cross-cutting
 

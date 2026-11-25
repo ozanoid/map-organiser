@@ -2,22 +2,25 @@
 title: Observability Flow (Honeycomb + Vercel/Axiom + Langfuse)
 type: flow
 domain: infra
-version: 3.8.0
+version: 3.9.0
 last_updated: 25.11.2026
 status: stable
 sources:
   - src/instrumentation.ts
   - src/instrumentation-node.ts
   - src/lib/telemetry/logger.ts
-  - src/lib/telemetry/trace-context.ts
   - src/lib/telemetry/langfuse.ts
-  - src/app/api/ai/parse-query/route.ts
-  - src/app/api/ai/rank-results/route.ts
-  - src/app/api/places/route.ts
+  - src/lib/agent/run-turn.ts
+  - src/lib/agent/structured.ts
+  - src/app/api/assistant/chat/route.ts
+  - src/app/api/places/[id]/enrich/route.ts
+  - src/app/api/cron/refresh-places/route.ts
   - src/lib/instagram/read-post.ts
   - src/app/api/instagram/import/route.ts
 related:
   - "[[ai-search-flow]]"
+  - "[[ai-chat-flow]]"
+  - "[[../04-integrations/claude-agent]]"
 ---
 
 # Observability Flow
@@ -50,7 +53,7 @@ fix is the rule the otel-migration skill states outright (Phase 5):
    ┌──────────────────────────┐     ┌──────────────────────────────┐
    │  Vercel dashboard "Logs"  │     │         Honeycomb            │
    │  (stdout/stderr view)     │     │  ── HTTP / fetch spans       │
-   └──────────────────────────┘     │  ── gen_ai.* LLM spans       │
+   └──────────────────────────┘     │  ── LLM observations         │
               ▲                     │  ── OTel log records         │
               │ stdout              │     (trace-correlated)        │
               │                     └──────────────────────────────┘
@@ -71,7 +74,7 @@ fix is the rule the otel-migration skill states outright (Phase 5):
    │   log.info(...)  ─┬─▶ console.log(JSON)  → stdout                        │
    │                   └─▶ logs.getLogger().emit() → OTel pipe                │
    │                                                                          │
-   │   generateText({ experimental_telemetry }) → gen_ai.* spans              │
+   │   Claude calls → Langfuse observations (@langfuse/tracing)               │
    │     (→ Honeycomb AND Langfuse — spanProcessors: ["auto", langfuse])      │
    │   @vercel/otel auto → HTTP + fetch spans (→ Honeycomb only)              │
    └──────────────────────────────────────────────────────────────────────────┘
@@ -110,54 +113,57 @@ never propagates into the request handler.
   `OTLPHttpJsonTraceExporter` → Honeycomb `/v1/traces` (ALL spans).
 - `LangfuseSpanProcessor` (`src/lib/telemetry/langfuse.ts`, singleton,
   only constructed when `LANGFUSE_PUBLIC_KEY`+`LANGFUSE_SECRET_KEY` are
-  set) rides the same pipeline → cloud.langfuse.com. A **composed
-  `shouldExportSpan` filter** (`isDefaultExportSpan && !umbrella`):
-  the default keeps it LLM-only (infra spans — HTTP, Supabase fetch —
-  never reach Langfuse), and on top of that the AI SDK's outer umbrella
-  spans (`…:ai.generateText`) are dropped. WHY: the umbrella span loses
-  its input/output token attrs in emission (AI SDK v6 aggregation bug)
-  but keeps `reasoningTokens`, so Langfuse priced those reasoning tokens
-  a SECOND time (~37% trace-cost inflation, live-verified 15.07.2026).
-  The `…doGenerate` child carries the complete usage + full message IO
-  and is the single source of truth. Honeycomb still receives BOTH
-  levels (its exporter has no such filter).
+  set) rides the same pipeline → cloud.langfuse.com, with Langfuse's
+  built-in filter (`isDefaultExportSpan`): only Langfuse observations and
+  GenAI spans reach it — infra spans (HTTP, Supabase fetch) never do.
+  `@langfuse/tracing` writes its observations through the global tracer
+  provider that `@vercel/otel` registers, so Honeycomb receives them too.
+  (Until v1.55.0 a composed filter also dropped the AI SDK's umbrella
+  span of each Gemini call: `…:ai.generateText` lost its token counts in
+  emission but kept `reasoningTokens`, and Langfuse priced those a second
+  time — ~37% trace-cost inflation, 15.07.2026. No AI SDK model call is
+  left.)
 
 Span sources:
 - HTTP request spans — auto (`@vercel/otel`) → Honeycomb only
-- fetch spans — auto (Supabase, Gemini HTTP) → Honeycomb only
-- `gen_ai.*` LLM spans — AI SDK `generateText({ ...,
-  experimental_telemetry: { isEnabled: true, functionId, metadata } })`.
-  GenAI semantic conventions: model, prompt, completion, input/output
-  tokens, latency, finish_reason. → Honeycomb **and** Langfuse.
-  Every LLM call site carries this: `ai.parse-query`,
-  `ai.rank-results`, `ai.generate-profile` (lib — runs under the enrich
-  route, the refresh cron and the import drain's `profile` stage),
-  `ai.compare` (v1.19.0–v1.51.0), `ai.chat` (v1.21.0) and its `ai.chat.rank` tool
-  (v1.23.0), `ai.trip-plan` (v1.22.0–v1.52.0), and `ai.instagram-read-post`
-  (v1.28.0 — `src/lib/instagram/read-post.ts`, userId + shortcode metadata).
-  A Claude call through `structuredClaude` (v1.50.0, the 6.2 measurement) is a
-  Langfuse generation named by its label (`profile.write`, `instagram.read`)
-  and a JSON log line `claude.structured` (model, effort, tokens, thinking
-  tokens, cost, ms).
+- fetch spans — auto (Supabase and the other outgoing calls) → Honeycomb only
+- Claude calls — Langfuse observations (`@langfuse/tracing`) → Honeycomb
+  **and** Langfuse:
+  - an assistant turn (`src/lib/agent/run-turn.ts`): an `assistant-turn`
+    observation with the user's input and the reply, a `claude` generation
+    per model call and an observation per tool call, named by the tool;
+  - a one-shot structured call (`src/lib/agent/structured.ts`): a
+    generation named by its label — `profile.write` (the enrich route, the
+    refresh cron, the import drain's `profile` stage), `instagram.read` —
+    and a JSON log line `claude.structured` (model, effort, tokens,
+    thinking tokens, cost, ms).
+- Until v1.55.0 the Gemini calls were AI SDK `gen_ai.*` spans
+  (`experimental_telemetry`, one `functionId` per call site:
+  `ai.parse-query`, `ai.rank-results`, `ai.generate-profile`, `ai.compare`,
+  `ai.chat`, `ai.trip-plan`, `ai.instagram-read-post`); each went with its
+  feature (v1.48.0–v1.55.0).
 
 **Langfuse trace-level fields** (name, user, tags) are stamped via
-`propagateAttributes({ traceName, userId, tags }, () => generateText(…))`
-(`@langfuse/tracing`) at each call site: `ai-search` (parse-query +
-rank-results, until v1.54.0),
-`place-profile` (enrich step=profile), `cron-refresh-places` (cron),
-`ai-compare` (compare route, v1.19.0–v1.51.0; the assistant answers it since v1.52.0).
+`propagateAttributes({ traceName, userId, tags }, …)` (`@langfuse/tracing`)
+around each call site: `assistant` (every turn, `run-turn.ts` — with the
+conversation as `sessionId` and the purpose as a tag), `place-profile`
+(enrich step=profile), `cron-refresh-places` (cron). Until they went:
+`ai-search` (parse-query + rank-results, until v1.54.0) and `ai-compare`
+(v1.19.0–v1.51.0).
 
 **Serverless flush:** Langfuse batches span exports; Vercel can suspend
-the function right after the response. Routes that produce LLM spans call
-`after(flushLangfuse)` (`next/server`) so the batch is force-flushed once
-the response is sent — the five `/api/ai/*` routes, the enrich route and
-the refresh cron. `flushLangfuse()` no-ops when the processor is
+the function right after the response. Code that produces LLM spans
+force-flushes the batch once its work is done — `after(flushLangfuse)`
+(`next/server`) in the assistant chat route, the enrich route and the
+refresh cron; `flushLangfuse()` at the end of the Instagram import's
+`after()` job and of `add_places`' Instagram read (the `/api/ai/*` routes
+did too, until they went). `flushLangfuse()` no-ops when the processor is
 unconfigured and swallows its own errors — telemetry never breaks the
-request path. **Two LLM-producing routes do not flush (checked
-16.10.2026):** `/api/cron/drain-imports` (the `profile` stage) and
-`/api/instagram/import` (the read runs inside its own `after()` job). Their
-spans rely on the processor's batching and can be lost when the function
-is suspended; neither sets a `propagateAttributes` trace name either.
+request path. **One LLM-producing route does not flush (checked
+25.11.2026):** `/api/cron/drain-imports` (the `profile` stage). Its spans
+rely on the processor's batching and can be lost when the function is
+suspended. Neither the drain nor the Instagram import sets a
+`propagateAttributes` trace name.
 
 > **File location:** the project uses a `src/` directory, so Next.js
 > looks for `src/instrumentation.ts` — NOT a root-level one. A root
@@ -209,7 +215,7 @@ the runtime. Visible in the Vercel dashboard Logs view on cold start.
 |---|---|---|
 | **Vercel dashboard → Logs** | Raw stdout JSON lines | Quick "is anything happening", 1h retention |
 | **Axiom** (`vercel_parsed` view) | Structured, queryable logs (APL) | Log search/aggregation, 30-day retention |
-| **Honeycomb** | Traces + gen_ai LLM spans + OTel logs | Trace waterfalls across the WHOLE request (HTTP + DB + LLM) |
+| **Honeycomb** | Traces (the Claude calls' observations included) + OTel logs | Trace waterfalls across the WHOLE request (HTTP + DB + LLM) |
 | **Langfuse** (cloud.langfuse.com) | LLM-only traces: prompts, completions, tokens, cost, per-user/per-tag filtering | Prompt debugging, LLM cost/quality analysis, eval workflows (future) |
 
 The Axiom Vercel Log Drain may be left enabled (it costs ~$0.50/GB but
@@ -224,17 +230,29 @@ body) → stable queries on both backends:
 
 | Event | Source | Level |
 |---|---|---|
-| `ai.parse-query` | parse-query route, success | info |
-| `ai.parse-query.llm_failed` | parse-query catch | error |
-| `ai.rank-results` | rank-results route, success | info |
-| `ai.rank-results.full_ranked` | rank-results route, success | debug |
-| `ai.rank-results.llm_failed` | rank-results catch | error |
-| `ai.rank-results.salvaged` | schema-failure recovered | warn |
-| `ai.rank-results.salvage_failed` | salvage also failed | error |
-| `ai.rank-results.out_of_range_idx` | LLM returned idx ≥ N | warn |
-| `ai.rank-results.duplicate_idx` | LLM returned same idx twice | warn |
-| `ai.rank-results.skipped_candidates` | LLM omitted candidates | warn |
-| `api.places` | /api/places GET on AI-search path | info |
+| `assistant.turn` | chat route — how a turn ended: input kind, status, steps, cost | info |
+| `assistant.turn_refused`, `assistant.turn_failed` | chat route | warn |
+| `assistant.turn_open_failed`, `assistant.subject_failed` | chat route | error |
+| `assistant.conversation_load_failed`, `assistant.conversation_create_failed` | conversation route | error |
+| `assistant.tool` | `run-tool.ts` — every tool call, from either door (`door`), with its time | info |
+| `assistant.tool_failed` | `run-tool.ts` | warn |
+| `assistant.plan_read_back_failed`, `assistant.list_read_back_failed` | `get_plans`, `get_lists` | warn |
+| `agent.step` | `run-turn.ts` — one model call: model, stop reason, tokens, cache, web searches, cost, ms | info |
+| `agent.stream_retry`, `agent.refusal`, `agent.unexpected_stop`, `agent.budget_exhausted`, `agent.unpriced_model`, `agent.event_handler_failed`, `agent.record_turn_failed`, `agent.release_turn_failed` | `run-turn.ts` | warn |
+| `agent.spend_write_failed` | `run-turn.ts` | error |
+| `agent.turn_failed` | `ui-stream.ts` | error |
+| `agent.preview_failed` | `ui-stream.ts`, conversation route — an approval card's preview couldn't be built | warn |
+| `agent.verify_failed` | `describe-writes.ts` | warn |
+| `claude.structured` | `structured.ts` — one one-shot call: model, effort, tokens, thinking tokens, cost, ms | info |
+| `claude.spend_record_failed` | `structured.ts` | error |
+| `cron.refresh_places` | refresh cron | info |
+| `cron.refresh_places.scan_failed`, `cron.refresh_places.optin_scan_failed` | refresh cron | error |
+| `places.add_failed`, `places.enrichment_not_queued` | `src/lib/places/add.ts` | warn |
+| `places.create.lists_failed`, `places.create.lists_missing` | `POST /api/places` | warn |
+| `import.lists_failed` | `src/lib/import/process-place.ts` | warn |
+| `usage.assistant_spend_failed` | `GET /api/user/usage` | warn |
+
+Until v1.54.0 the table held the Gemini AI search's events (`ai.parse-query`, `ai.rank-results.*`, `api.places`).
 
 ## Known follow-ups
 
@@ -252,11 +270,6 @@ body) → stable queries on both backends:
   ad-hoc `console.log` — they reach the Vercel dashboard + Axiom but
   unstructured, and never reach Honeycomb. Migrate to `log.*`
   opportunistically.
-- Browser-side root span: AI search now propagates a `traceparent`
-  across its three calls so the pipeline forms one trace (see "Trace
-  propagation — AI search pipeline"), but that root is synthetic. A
-  real exported browser span needs a full browser OpenTelemetry SDK —
-  still a future add.
 
 ## Diagnostic toggles
 
@@ -265,6 +278,5 @@ body) → stable queries on both backends:
 | Server `log.*` → stdout | ON | always |
 | Server `log.*` → OTel/Honeycomb | ON when `HONEYCOMB_API_KEY` set | env var |
 | OTel spans → Honeycomb | ON when `HONEYCOMB_API_KEY` set | env var |
-| gen_ai.* spans → Langfuse | ON when `LANGFUSE_PUBLIC_KEY`+`SECRET_KEY` set (independent of Honeycomb) | env vars |
-| Client `[ai-search/*]` console logs | OFF | `localStorage.setItem("ai-debug","1")` |
-| `window.__aiSearchStore` | OFF | same localStorage flag |
+| LLM observations → Langfuse | ON when `LANGFUSE_PUBLIC_KEY`+`SECRET_KEY` set (independent of Honeycomb) | env vars |
+| `window.__filterPersistStore` | OFF in production (on in dev) | `localStorage.setItem("ai-debug","1")` |

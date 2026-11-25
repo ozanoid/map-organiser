@@ -1,15 +1,17 @@
 /**
  * Instagram import regression run — `npm run eval:instagram [-- --set=dev|holdout|all] [--only=<code>]
- * [--model=gemini|claude-haiku-5-5|claude-sonnet-5-5] [--effort=low|medium|high]`
+ * [--model=claude-haiku-5-5|claude-sonnet-5-5] [--effort=low|medium|high]`
  *
- * The post is read by Gemini unless `--model` names a Claude model (the
- * Phase 2 6.2 measurement); a Claude read is written to assistant_spend with
- * purpose 'eval' under the owner's account, and its cost is printed.
+ * The post is read by the import's own reader (INSTAGRAM_READER) unless
+ * `--model` / `--effort` name another (the Phase 2 6.2 measurement; Gemini,
+ * the reader until v1.51.0, was its third arm). Every read is written to
+ * assistant_spend with purpose 'eval' under the owner's account, and its
+ * cost is printed.
  *
  * Runs the production analyzer (src/lib/instagram/analyze.ts) on labelled
  * posts and compares every place it would add with the ground truth in
- * labels.json. Writes nothing to the database; it does make paid calls
- * (HikerAPI, Google Maps search through DataForSEO, Mapbox geocoding, Gemini)
+ * labels.json. Writes nothing to the library; it does make paid calls
+ * (HikerAPI, Google Maps search through DataForSEO, Mapbox geocoding, Claude)
  * — see README.md for the cost.
  *
  * Exit code 1 when any post gets a wrong or spurious place: precision is the
@@ -18,7 +20,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { createClient } from "@supabase/supabase-js";
-import type { Effort } from "@/lib/agent/models";
+import { INSTAGRAM_READER, type Effort } from "@/lib/agent/models";
 import { supabaseSpendLedger, type SpendLedger } from "@/lib/agent/spend";
 import type { ClaudeChoice } from "@/lib/agent/structured";
 import { analyzeInstagramPost } from "@/lib/instagram/analyze";
@@ -41,12 +43,12 @@ interface LabelPost {
 const args = process.argv.slice(2);
 const setArg = args.find((a) => a.startsWith("--set="))?.split("=")[1] ?? "all";
 const only = args.find((a) => a.startsWith("--only="))?.split("=")[1];
-const modelArg = args.find((a) => a.startsWith("--model="))?.split("=")[1] ?? "gemini";
-const effortArg = (args.find((a) => a.startsWith("--effort="))?.split("=")[1] ?? "high") as Effort;
+const modelArg = args.find((a) => a.startsWith("--model="))?.split("=")[1] ?? INSTAGRAM_READER.model;
+const effortArg = (args.find((a) => a.startsWith("--effort="))?.split("=")[1] ?? INSTAGRAM_READER.effort) as Effort;
 const CLAUDE_MODELS: ClaudeChoice["model"][] = ["claude-haiku-5-5", "claude-sonnet-5-5"];
 const claudeModel = CLAUDE_MODELS.find((m) => m === modelArg);
-if (modelArg !== "gemini" && !claudeModel) {
-  console.error(`--model must be gemini or one of ${CLAUDE_MODELS.join(", ")}`);
+if (!claudeModel) {
+  console.error(`--model must be one of ${CLAUDE_MODELS.join(", ")}`);
   process.exit(2);
 }
 
@@ -57,19 +59,16 @@ if (
   !process.env.DATAFORSEO_LOGIN ||
   !process.env.DATAFORSEO_PASSWORD ||
   !process.env.HIKERAPI_KEY ||
-  !(claudeModel ? process.env.ANTHROPIC_API_KEY : process.env.GOOGLE_GENERATIVE_AI_API_KEY)
+  !process.env.ANTHROPIC_API_KEY
 ) {
-  console.error(
-    `Needs DATAFORSEO_LOGIN/PASSWORD, HIKERAPI_KEY and ${claudeModel ? "ANTHROPIC_API_KEY" : "GOOGLE_GENERATIVE_AI_API_KEY"} (.env.local).`
-  );
+  console.error("Needs DATAFORSEO_LOGIN/PASSWORD, HIKERAPI_KEY and ANTHROPIC_API_KEY (.env.local).");
   process.exit(2);
 }
 
-/** The model that reads the posts; a Claude read's cost is counted here as
- *  it is written to the ledger. */
+/** The model that reads the posts; a read's cost is counted here as it is
+ *  written to the ledger. */
 let claudeUsd = 0;
-async function postReader(): Promise<PostReader> {
-  if (!claudeModel) return { kind: "gemini" };
+async function postReader(model: ClaudeChoice["model"]): Promise<PostReader> {
   const admin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
@@ -85,13 +84,13 @@ async function postReader(): Promise<PostReader> {
     },
     monthToDate: (now) => base.monthToDate(now),
   };
-  return { kind: "claude", choice: { model: claudeModel, effort: effortArg }, spend: { ledger, userId: owner.id, purpose: "eval" } };
+  return { choice: { model, effort: effortArg }, spend: { ledger, userId: owner.id, purpose: "eval" } };
 }
 
 const ids = (v: LabelVenue) => [v.place_id, ...(v.alt_place_ids ?? [])].filter(Boolean) as string[];
 
-async function main() {
-  const reader = await postReader();
+async function main(model: ClaudeChoice["model"]) {
+  const reader = await postReader(model);
   const totals = { include: 0, correct: 0, optional: 0, wrong: 0, spurious: 0, unverifiable: 0, errors: 0 };
   const billed: Record<string, number> = {};
   let aiCalls = 0;
@@ -106,7 +105,6 @@ async function main() {
       .reduce((n, [, c]) => n + c, 0);
     try {
       analysis = await analyzeInstagramPost(post.url, {
-        userId: "eval",
         onBilled: (sku) => {
           billed[sku] = (billed[sku] ?? 0) + 1;
         },
@@ -182,7 +180,7 @@ async function main() {
       `precision ${added ? ((100 * totals.correct) / added).toFixed(1) : "-"}% · recall ${totals.include ? ((100 * totals.correct) / totals.include).toFixed(1) : "-"}%\n` +
       `billed: ${Object.entries(billed)
         .map(([sku, n]) => `${sku} ${n}`)
-        .join(" · ")} · ${claudeModel ? `${claudeModel} (${effortArg}) ${aiCalls} calls, $${claudeUsd.toFixed(4)}` : `Gemini ${aiCalls}`}\n` +
+        .join(" · ")} · ${model} (${effortArg}) ${aiCalls} calls, $${claudeUsd.toFixed(4)}\n` +
       `time per post: mean ${(times.reduce((a, b) => a + b, 0) / Math.max(1, times.length) / 1000).toFixed(1)}s · ` +
       `median ${((times.sort((a, b) => a - b)[Math.floor(times.length / 2)] ?? 0) / 1000).toFixed(1)}s · ` +
       `max ${(Math.max(0, ...times) / 1000).toFixed(1)}s`
@@ -190,7 +188,7 @@ async function main() {
   if (totals.wrong + totals.spurious + totals.unverifiable > 0) process.exit(1);
 }
 
-main().catch((e) => {
+main(claudeModel).catch((e) => {
   console.error(e);
   process.exit(2);
 });

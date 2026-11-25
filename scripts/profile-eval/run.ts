@@ -1,16 +1,15 @@
 /**
- * Who writes place profiles — Gemini (today), Claude Haiku 5.5 or Claude
- * Sonnet 5.5 (Phase 2, 6.2: docs/_plans/phase-2-assistant.md). Every writer
- * gets the same prompts (profileInputs); nothing is saved and no suggestion
- * is applied.
+ * Which Claude model and effort writes place profiles — the measurement
+ * behind PROFILE_WRITER (Phase 2, 6.2: docs/_plans/phase-2-assistant.md;
+ * Gemini, the writer until v1.51.0, was its third arm). Every writer gets the
+ * same prompts (profileInputs); nothing is saved and no suggestion is applied.
  *
- *   npm run eval:profiles                                       the three writers, places.json
+ *   npm run eval:profiles                                       both writers, places.json
  *   npm run eval:profiles -- --writers=claude-haiku-5-5:high    one or more writers, comma-separated
  *
- * Paid. A Claude call is written to assistant_spend (purpose 'eval', the
- * owner's account); a Gemini call isn't recorded here (its SKU price is
- * $0.0095 a profile). The writers run one after another, each over every
- * place, so a Claude writer reads the shared instructions from the cache.
+ * Paid: every call is written to assistant_spend (purpose 'eval', the
+ * owner's account). The writers run one after another, each over every
+ * place, so a writer reads the shared instructions from the cache.
  *
  * Out: scripts/profile-eval/out/<time>.json — every profile and its
  * measures (git-ignored: it holds library content). Progress on stderr.
@@ -25,7 +24,7 @@ import { profileInputs, writeProfile, type ProfileWriter, type WriteInfo } from 
 import type { PlaceProfile } from "@/lib/ai/schemas/place-profile";
 
 const OWNER = "ozan@maporganiser.com";
-const DEFAULT_WRITERS = "gemini,claude-haiku-5-5:high,claude-sonnet-5-5:medium";
+const DEFAULT_WRITERS = "claude-haiku-5-5:high,claude-sonnet-5-5:medium";
 const say = (line = "") => process.stderr.write(`${line}\n`);
 
 const places = JSON.parse(readFileSync(join(__dirname, "places.json"), "utf8")) as { id: string; name: string; why: string }[];
@@ -100,10 +99,9 @@ async function main() {
     monthToDate: (now) => base.monthToDate(now),
   };
   const writerOf = (key: string): ProfileWriter => {
-    if (key === "gemini") return { kind: "gemini" };
     const [model, effort] = key.split(":") as [ClaudeChoice["model"], Effort | undefined];
     if (model !== "claude-haiku-5-5" && model !== "claude-sonnet-5-5") throw new Error(`unknown writer ${key}`);
-    return { kind: "claude", choice: { model, effort: effort ?? "high" }, spend: { ledger, userId: owner, purpose: "eval" } };
+    return { choice: { model, effort: effort ?? "high" }, spend: { ledger, userId: owner, purpose: "eval" } };
   };
 
   say(`# profiles: ${places.length} places × ${writerKeys.join(", ")}`);
@@ -125,7 +123,7 @@ async function main() {
       }
       const started = Date.now();
       try {
-        const { profile, info } = await writeProfile(input, writer, { userId: owner, placeId: p.id });
+        const { profile, info } = await writeProfile(input, writer, { placeId: p.id });
         const reviews = norm(input.reviewTexts.join(" \n "));
         const tagName = (id: string) => input.userContext.tags.find((t) => t.id === id)?.name ?? id;
         const m = measure(profile, reviews, tagName);
@@ -133,8 +131,7 @@ async function main() {
         say(
           `${key.padEnd(26)} ${p.name.padEnd(36)} ${(info.ms / 1000).toFixed(1)}s  quotes ${m.quotesFound}/${m.quotes}  ` +
             `pros ${m.pros} cons ${m.cons} themes ${m.themes}  ${m.category}/${m.subCategory ?? "-"}  ` +
-            `in ${info.inputTokens} out ${info.outputTokens} (thinking ${info.thinkingTokens})` +
-            (info.costUsd !== null ? `  $${info.costUsd.toFixed(4)}` : "")
+            `in ${info.inputTokens} out ${info.outputTokens} (thinking ${info.thinkingTokens})  $${info.costUsd.toFixed(4)}`
         );
       } catch (e) {
         const message = e instanceof Error ? e.message : String(e);
@@ -149,7 +146,7 @@ async function main() {
     say(
       `= ${key}: ${ok.length}/${rows.length} profiles · quotes found in the reviews ${found}/${quotes}` +
         ` · mean ${(ok.reduce((n, r) => n + r.info.ms, 0) / Math.max(1, ok.length) / 1000).toFixed(1)}s` +
-        (key === "gemini" ? ` · ~$${(ok.length * 0.0095).toFixed(3)} (SKU price)` : ` · $${(claudeUsd - usdBefore).toFixed(4)}`) +
+        ` · $${(claudeUsd - usdBefore).toFixed(4)}` +
         "\n"
     );
   }
