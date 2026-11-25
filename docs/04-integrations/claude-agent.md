@@ -2,7 +2,7 @@
 title: "Claude agent (platform side)"
 type: integration
 domain: integrations
-version: 1.10.0
+version: 1.10.1
 last_updated: 25.11.2026
 status: draft
 sources:
@@ -39,7 +39,7 @@ related:
 
 The platform's own assistant: Claude, called by our server through the Claude API, using the same tools claude.ai reaches over MCP ([[claude-mcp]]). One core (`src/lib/agent/`) for every door; the first door is the in-app panel ([[../_plans/phase-2-assistant]] — not wired yet). Added 23.11.2026.
 
-**State (25.11.2026):** on main since the merge 7df90df of 25.11.2026 (Ozan's approval; v1.46.3–v1.56.0); v1.56.1 on the branch. The core ran against the live Claude API and the live database through the eval (below): 209 model calls, $5.03. Its first door — the app's assistant panel — is built (v1.48.0): [[../02-backend/api-routes/assistant]], [[../05-flows/ai-chat-flow]], [[../03-frontend/components/assistant]]; an independent review's findings are fixed, and the third migration (which conversation the door shows, how the last turn ended) is applied (24.11.2026, with Ozan's approval). Tried end to end in a signed-in browser on the admin test account: the panel on 24.11.2026 (13 Claude calls, $0.21), the requests from the compare page, the plan page and the search field on 25.11.2026 (12 calls, $0.29).
+**State (25.11.2026):** on main since the merge 7df90df of 25.11.2026 (Ozan's approval; v1.46.3–v1.56.0); v1.56.1 since the merge e92e9fa (25.11.2026). The core ran against the live Claude API and the live database through the eval (below): 209 model calls, $5.03. Its first door — the app's assistant panel — is built (v1.48.0): [[../02-backend/api-routes/assistant]], [[../05-flows/ai-chat-flow]], [[../03-frontend/components/assistant]]; an independent review's findings are fixed, and the third migration (which conversation the door shows, how the last turn ended) is applied (24.11.2026, with Ozan's approval). Tried end to end in a signed-in browser on the admin test account: the panel on 24.11.2026 (13 Claude calls, $0.21), the requests from the compare page, the plan page and the search field on 25.11.2026 (12 calls, $0.29).
 
 ## How a turn runs
 

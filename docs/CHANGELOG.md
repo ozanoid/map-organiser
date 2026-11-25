@@ -6,6 +6,19 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 25.11.2026 — v1.56.2 — The wide map view fix on main
+
+- v1.56.1 merged to main with Ozan's approval (merge e92e9fa; main
+  `7df90df` had nothing the branch lacked, the merged tree is the branch's).
+  Vercel's production deploy: completed (25.11.2026, 14:12).
+- Not tried again in production: the fix was tried on the dev server (a
+  globe view, ≈ 4,990 km) and production runs the same commit; a check
+  there would be one more paid turn in Ozan's own conversation.
+- Docs: [[04-integrations/claude-agent]], [[_plans/phase-2-assistant]],
+  [[_plans/personal-assistant]].
+
+---
+
 ## 25.11.2026 — v1.56.1 — Phase 2 on main; a wide map view no longer refuses the request
 
 - **On main:** v1.46.3–v1.56.0 merged with Ozan's approval (merge 7df90df; main
