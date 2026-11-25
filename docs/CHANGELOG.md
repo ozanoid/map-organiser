@@ -6,6 +6,20 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 25.11.2026 — v1.57.5 — The test e-mails arrived; DMARC in place
+
+- Ozan: all three test e-mails (confirmation, test, the plan's summary)
+  arrived in his Gmail.
+- `mappy.site` has its DMARC record (TXT `_dmarc` = `v=DMARC1; p=none;`),
+  added by Ozan: seen at 23:41 UTC from Vercel's nameserver, Google and
+  Cloudflare. A check at 23:12 UTC had no answer; when the record was created
+  can't be read here (the Vercel CLI on this machine is scoped to another
+  team).
+- Docs: [[04-integrations/resend]], [[05-flows/notifications-flow]],
+  [[_plans/phase-3-communication]].
+
+---
+
 ## 25.11.2026 — v1.57.4 — E-mail tested end to end
 
 - On the local dev server (branch code), the test account in Chrome,

@@ -2,7 +2,7 @@
 title: "Faz 3 — İletişim: tasarım"
 type: plan
 domain: sharing
-version: 0.3.1
+version: 0.3.2
 last_updated: 25.11.2026
 status: draft
 related:
@@ -218,7 +218,7 @@ Hatırlatmalar plan tablosundan **türetilir**, önceden kuyruğa yazılmaz: pla
 **Açık adımlar (sırayla):**
 1. ~~Migration'ın uygulanması~~ — uygulandı (25.11.2026, sürüm 20261125203540); `npm run check:notify:db` 15/15. Ek: `notifications.plan_id` indeksi (Supabase'in performans uyarısı) — Ozan'ın onayıyla uygulandı (25.11.2026, sürüm 20261125224149); uyarı kalktı.
 2. Ozan'ın dashboard adımları (aşağıda): Resend alanı ve anahtarı → Vercel + worktree `.env.local`; BotFather → Vercel Production.
-3. ~~E-posta uçtan uca~~ — yerelde test hesabıyla, Chrome'da, Ozan'ın Gmail'ine denendi (25.11.2026): onay, test e-postası ve bir planın özeti gitti; üç kayıt `sent`. Gelen kutusu mu spam mi — Ozan bakıyor. Ayrıntı: [[../05-flows/notifications-flow#Checks]].
+3. ~~E-posta uçtan uca~~ — yerelde test hesabıyla, Chrome'da, Ozan'ın Gmail'ine denendi (25.11.2026): onay, test e-postası ve bir planın özeti gitti; üç kayıt `sent`. Üç e-posta da Ozan'ın Gmail'ine geldi. Ayrıntı: [[../05-flows/notifications-flow#Checks]].
 4. Telegram: yalnız production'da (karar 13) — main'e merge'den ve deploy'dan sonra `setWebhook` (Ozan'ın onayıyla), sonra bağlama ve test.
 
 ## Dilimler ve geçiş yolu
@@ -243,7 +243,7 @@ Bütün şema değişiklikleri **eklemeli** (yeni tablolar, `profiles.time_zone`
 
 - **Resend:** hesap; `mail.maporganiser.com` alanını ekle (bölge seçimi kalıcı); Resend'in ürettiği DNS kayıtlarını DNS sağlayıcısına gir (Cloudflare ise proxy kapalı); `_dmarc.maporganiser.com` TXT `v=DMARC1; p=none; rua=mailto:…`; API anahtarı → Vercel `RESEND_API_KEY`.
 - **Telegram:** @BotFather `/newbot` (görünen ad, `…bot` ile biten kullanıcı adı — sonradan değişmez); token → Vercel `TELEGRAM_BOT_TOKEN`, kullanıcı adı → `TELEGRAM_BOT_USERNAME`; webhook sırrı (`openssl rand -hex 32`) → `TELEGRAM_WEBHOOK_SECRET` (üçü de yalnız Production); deploy sonrası `setWebhook` çağrısı (onayınla ben yaparım; komut [[../04-integrations/telegram#Registering the webhook]]).
-- **Resend gönderen:** Vercel `EMAIL_FROM` = `hello@mappy.site` (Production + Preview; uygulama "Map Organiser" adını kendisi ekler). Yerelde ana klasörün ve worktree'nin `.env.local`'ında var (25.11.2026). Önerilen: `mappy.site` için DMARC kaydı — Vercel → Domains → DNS, TXT `_dmarc` = `v=DMARC1; p=none;`.
+- **Resend gönderen:** Vercel `EMAIL_FROM` = `hello@mappy.site` (Production + Preview; uygulama "Map Organiser" adını kendisi ekler). Yerelde ana klasörün ve worktree'nin `.env.local`'ında var (25.11.2026). `mappy.site` DMARC kaydı da var (TXT `_dmarc` = `v=DMARC1; p=none;`).
 - Uygulamada: e-posta onay linkine tıkla, Telegram'ı bağla.
 
 ## Değerlendirilip seçilmeyenler
