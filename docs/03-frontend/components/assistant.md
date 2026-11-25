@@ -2,7 +2,7 @@
 title: Assistant components
 type: component
 domain: frontend
-version: 2.5.2
+version: 2.6.0
 last_updated: 25.11.2026
 status: draft
 sources:
@@ -52,7 +52,7 @@ A screen opens the panel with a request (`AssistantRequest`: `{ text, subject?, 
 ## Parts (`assistant-parts.tsx`)
 
 - `ToolRow` — a read tool or web search: spinner → check with a summary ("12 places"; `rank_places`: "Read place profiles · 30 candidates"); "after your answer" when it waits for a card; **Show N on map** for a search's results (`/map?ids=…`); top web results as links; **Skipped** when it wasn't run (or the turn stopped before it), **didn't work** when it failed. Labels per tool in `READ_TOOLS` (presentation only).
-- `ChangeCard` — a write (a plan change waiting for its answer shows the plan as it will be: each changed day with its stops, then what it removes — v1.53.0): the card with its preview (`toolMetadata.preview`: title, subtitle, lines with a label column, "+ N more"), **Save / Not now** (destructive styling for deleting a visit or cancelling a plan); then *Saving…* (or "Will save — answer the other card" while another card waits), **Saved** with "Open …" link, **Not saved**, or **Couldn't save** with the reason (also "Interrupted before it finished" for a run whose turn is gone). `isWritePart` reads the server's mark (`toolMetadata.write`) — no list of write tools on the client. The "Open …" link into the app closes the panel.
+- `ChangeCard` — a write (a plan change waiting for its answer shows the plan as it will be: each changed day with its stops, then what it removes — v1.53.0): the card with its preview (`toolMetadata.preview`: title, subtitle, lines with a label column, "+ N more"), **Save / Not now** (destructive styling for deleting a visit or cancelling a plan); then *Saving…* (or "Will save — answer the other card" while another card waits), **Saved** with "Open …" link, **Not saved**, or **Couldn't save** with the reason (also "Interrupted before it finished" for a run whose turn is gone). The approve button and the outcome are named per tool (`APPROVE_LABEL`, `SAVED_LABEL`: *Save plan* → *Plan saved*, …); `send_plan` (v1.57.0) speaks of sending throughout — **Send**, *Sending…*, *Not sent*, *Couldn't send*, "Nothing is sent until you choose." (`WORDS`) — and its done card adds where the plan went and what didn't. `isWritePart` reads the server's mark (`toolMetadata.write`) — no list of write tools on the client. The "Open …" link into the app closes the panel.
 - `MapButton` — the one "Show on map" button: on a search row, and under a reply that links saved places — **Show these N on map** for the places the reply links to (`placeIdsIn`: `/places/<id>` links and same-origin URLs, in order, at most 25; v1.49.0). Shown once the reply is written.
 - `SubjectChip` — what a request is about (v1.52.0): an icon by kind (plan, places, map) and the label (`subjectLabel`: "Plan · Lizbon hafta sonu", "3 places · …", "Map · Cafe, London"); in the composer with a ✕ whose hit area is 44 px.
 - `TurnNote` — the turn's outcome when it isn't a plain answer: a turn running elsewhere, an error with **Try again** when the server says it can help (`retry`), a refusal, a cut-off reply.

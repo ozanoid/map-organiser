@@ -2,7 +2,7 @@
 title: Assistant flow (in-app, Claude)
 type: flow
 domain: ai
-version: 2.3.2
+version: 2.3.3
 last_updated: 25.11.2026
 status: draft
 sources:
@@ -25,7 +25,7 @@ related:
 
 # Assistant flow (in-app, Claude)
 
-The app's assistant since v1.48.0 (24.11.2026): Claude, run by our server through the agent core, with the same 16 tools claude.ai uses over MCP, plus web search. It replaced the Gemini chat of v1.21.0 (`/api/ai/chat`, 8 tools of its own, history in the browser) — Phase 2 of [[../_plans/personal-assistant]], design in [[../_plans/phase-2-assistant]].
+The app's assistant since v1.48.0 (24.11.2026): Claude, run by our server through the agent core, with the same tools claude.ai uses over MCP (17 since `send_plan`, v1.57.0), plus web search. It replaced the Gemini chat of v1.21.0 (`/api/ai/chat`, 8 tools of its own, history in the browser) — Phase 2 of [[../_plans/personal-assistant]], design in [[../_plans/phase-2-assistant]].
 
 ## In short
 

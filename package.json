@@ -13,7 +13,9 @@
     "check:assistant": "tsx --env-file=.env.local --tsconfig scripts/assistant-check/tsconfig.json scripts/assistant-check/run.ts",
     "eval:assistant": "tsx --env-file=.env.local --tsconfig scripts/assistant-eval/tsconfig.json scripts/assistant-eval/run.ts",
     "check:agent": "tsx --tsconfig scripts/agent-check/tsconfig.json scripts/agent-check/run.ts",
-    "check:agent:db": "tsx --env-file=.env.local --tsconfig scripts/agent-check/tsconfig.json scripts/agent-check/db.ts"
+    "check:agent:db": "tsx --env-file=.env.local --tsconfig scripts/agent-check/tsconfig.json scripts/agent-check/db.ts",
+    "check:notify": "tsx --tsconfig scripts/notify-check/tsconfig.json scripts/notify-check/run.ts",
+    "check:notify:db": "tsx --env-file=.env.local --tsconfig scripts/notify-check/tsconfig.json scripts/notify-check/db.ts"
   },
   "dependencies": {
     "@ai-sdk/react": "^3.0.230",
@@ -47,6 +49,7 @@
     "react-markdown": "10.1.0",
     "recharts": "^3.9.2",
     "remark-gfm": "4.0.1",
+    "resend": "^6.39.0",
     "s2-geometry": "^1.2.10",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.6.0",

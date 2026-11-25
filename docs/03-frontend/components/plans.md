@@ -2,7 +2,7 @@
 title: Plans components
 type: component
 domain: frontend
-version: 1.3.0
+version: 1.4.0
 last_updated: 25.11.2026
 status: stable
 sources:
@@ -12,6 +12,7 @@ sources:
   - src/components/plans/stop-row.tsx
   - src/components/plans/add-stop-dialog.tsx
   - src/components/plans/plan-menu.tsx
+  - src/components/plans/send-plan-dialog.tsx
   - src/components/plans/plan-with-assistant.tsx
   - src/components/plans/use-plan-editor.ts
   - src/app/(app)/plans/[id]/page.tsx
@@ -20,6 +21,8 @@ related:
   - "[[../hooks/use-plans]]"
   - "[[../routing]]"
   - "[[../../05-flows/plan-flow]]"
+  - "[[../hooks/use-notifications]]"
+  - "[[../../05-flows/notifications-flow]]"
 ---
 
 # Plans components
@@ -33,7 +36,8 @@ Everything under `src/components/plans/` plus the plan page. All client componen
 | `plan-day.tsx` | `PlanDayTimeline` | One day: header (date, route length, day cost, route-mode button, day menu), its stops with the legs between them, "Add stop". Drag to reorder. |
 | `stop-row.tsx` | `StopRow` | One stop: drag handle, name or text, note or address, the visit's rating when done, time, cost, menu (done / skipped, move to another day, remove). |
 | `add-stop-dialog.tsx` | `AddStopDialog` | Search the saved places, or add the typed text as a stop without a place. |
-| `plan-menu.tsx` | `PlanMenu`, `PlanDatesDialog` | Share link, dates, rename, cancel / restore, delete (with a confirmation dialog). |
+| `plan-menu.tsx` | `PlanMenu`, `PlanDatesDialog` | Share link, **Send to me…** (v1.57.0), dates, rename, cancel / restore, delete (with a confirmation dialog). |
+| `send-plan-dialog.tsx` | `SendPlanDialog` | **Send to me** (v1.57.0): the plan's summary — days, stops, times, map links, in Turkish — to the owner's own e-mail and/or Telegram. The connected channels are ticked; one that isn't connected is greyed out "Not connected"; with none, a link to Settings → Notifications. Each channel's result is its own toast; the dialog closes once something went. For an account that isn't the owner's: "Sending is only open to this app's owner." ([[../../05-flows/notifications-flow]]) |
 | `plan-with-assistant.tsx` | `PlanWithAssistant` | **Plan with assistant** (v1.53.0; the Gemini AI Plan dialog before): opens the assistant with "spread this plan over its days" — or, with fewer than two places, "fill it from my want-to-go places in <city>" — and the plan as subject ([[../../05-flows/ai-plan-flow]]). Hidden when the assistant can't be used. |
 
 ## The plan page (`/plans/[id]`)

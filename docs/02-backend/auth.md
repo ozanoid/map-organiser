@@ -2,8 +2,8 @@
 title: Auth
 type: overview
 domain: auth
-version: 1.3.1
-last_updated: 19.11.2026
+version: 1.4.0
+last_updated: 25.11.2026
 status: stable
 sources:
   - src/proxy.ts
@@ -15,6 +15,8 @@ sources:
   - src/app/(auth)/layout.tsx
   - src/app/(auth)/oauth/consent/page.tsx
   - src/app/(auth)/oauth/consent/actions.ts
+  - src/app/(auth)/confirm-email/page.tsx
+  - src/app/(auth)/confirm-email/actions.ts
   - src/lib/auth/safe-next.ts
 related:
   - "[[supabase-clients]]"
@@ -36,7 +38,7 @@ Cookie-based session via `@supabase/ssr`. Provider options: Google OAuth (primar
 | OAuth provider | Google (via Supabase Auth) |
 | OAuth callback | `src/app/auth/callback/route.ts` |
 | Email/password | `src/app/(auth)/login/page.tsx` — sign-in only; sign-ups are closed (see [[#Sign-ups closed]]) |
-| Public routes | `/`, `/auth/callback/*`, `/shared/*`, `/api/shared/*` |
+| Public routes | `/`, `/auth/callback/*`, `/shared/*`, `/api/shared/*`, `/api/cron/*`, `/oauth/*`, `/api/telegram/webhook`, `/confirm-email` — table below |
 | Default landing | `/map` (after login) |
 | Logout | `supabase.auth.signOut()` from header dropdown |
 | Server-side check | `await supabase.auth.getUser()` at top of route handler |
@@ -140,7 +142,10 @@ const isPublicRoute =
   pathname.startsWith("/auth/callback") ||
   pathname.startsWith("/shared/") ||
   pathname.startsWith("/api/shared/") ||
-  pathname.startsWith("/api/cron/");      // cron authenticates itself
+  pathname.startsWith("/api/cron/") ||    // cron authenticates itself
+  pathname.startsWith("/oauth/") ||       // consent page sends signed-out visitors to /login itself
+  pathname === "/api/telegram/webhook" || // Telegram's secret header (v1.57.0)
+  pathname === "/confirm-email";          // the e-mail confirmation's one-time token (v1.57.0)
 
 if (!user && !isAuthRoute && !isPublicRoute) {
   // pages: /login?next=<path + query>; API paths: /login without next
@@ -164,6 +169,8 @@ if (user && isAuthRoute) {
 | `/api/shared/*` | The matching API endpoints for the share view. |
 | `/api/cron/*` | Cron runs with no cookie; each route authenticates itself with `CRON_SECRET`. |
 | `/oauth/*` | The OAuth consent page; it sends signed-out visitors to `/login?next=…` itself. |
+| `/api/telegram/webhook` | v1.57.0. Telegram posts the bot's updates with no cookie; the route checks the `X-Telegram-Bot-Api-Secret-Token` header in constant time ([[api-routes/notifications]]). |
+| `/confirm-email` | v1.57.0. The page the e-mail confirmation links to, in the `(auth)` layout; it may open in a browser that isn't signed in. The one-time token is the proof; opening the page changes nothing, its Confirm button (a server action posting to the same path) confirms the address. |
 | `/api/mcp`, `/.well-known/*` | Not in the proxy at all (matcher): the MCP endpoint checks its own bearer tokens and must answer 401; the metadata documents are public. |
 
 Anything else requires an authenticated user.

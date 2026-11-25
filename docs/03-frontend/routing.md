@@ -2,7 +2,7 @@
 title: Routing
 type: overview
 domain: frontend
-version: 1.6.6
+version: 1.7.0
 last_updated: 25.11.2026
 status: stable
 sources:
@@ -37,11 +37,12 @@ Every route in the app — pages, API handlers, and special routes — in one pl
 | `/plans/[id]` | `src/app/(app)/plans/[id]/page.tsx` | `(app)/layout.tsx` | Required | Plan timeline + map (`?view=map`). `/trips/[id]` redirects here (308, `next.config.ts`). |
 | `/stats` | `src/app/(app)/stats/page.tsx` | `(app)/layout.tsx` | Required | Recharts dashboard. |
 | `/import` | `src/app/(app)/import/page.tsx` | `(app)/layout.tsx` | Required | Batch import with Zustand progress. |
-| `/settings` | `src/app/(app)/settings/page.tsx` | `(app)/layout.tsx` | Required | Categories / Tags / API / Theme tabs. |
+| `/settings` | `src/app/(app)/settings/page.tsx` | `(app)/layout.tsx` | Required | Categories / Tags / API / AI / Notifications / Appearance tabs; the open one in `?tab=` (v1.57.0). |
 | `/login` | `src/app/(auth)/login/page.tsx` | `(auth)/layout.tsx` | **Public** (redirect if signed in) | Google OAuth + email/password. |
 | `/signup` | — (page removed 17.11.2026) | — | Redirect | Sign-ups are closed; the proxy sends it to `/login`. |
 | `/shared/[slug]` | `src/app/shared/[slug]/page.tsx` | `shared/layout.tsx` | **Public** | Public read view of a list, plan, or single place. |
 | `/oauth/consent` | `src/app/(auth)/oauth/consent/page.tsx` | `(auth)/layout.tsx` | **Public** — the page itself sends signed-out visitors to `/login?next=…` | OAuth consent for the Claude connector (17.11.2026). See [[../05-flows/claude-connector-flow]]. |
+| `/confirm-email` | `src/app/(auth)/confirm-email/page.tsx` | `(auth)/layout.tsx` | **Public** — the one-time token is the proof | The page the e-mail confirmation links to (v1.57.0): the address and **Confirm address** (a server action); opening it changes nothing. `noindex`. See [[../05-flows/notifications-flow]]. |
 | `/offline` | `src/app/offline/page.tsx` | root | Public — skips the proxy | PWA offline fallback; the service worker precaches it. |
 
 ## Special routes
@@ -93,6 +94,8 @@ Public routes (no auth required):
   /api/shared/*
   /api/cron/*      (the cron route authenticates itself)
   /oauth/*         (consent page; redirects to /login?next=… itself)
+  /api/telegram/webhook  (Telegram's secret header, v1.57.0)
+  /confirm-email         (the e-mail confirmation's one-time token, v1.57.0)
 
 Auth routes (redirect AWAY if signed in — to a same-site ?next=…, else /map):
   /login
@@ -121,6 +124,8 @@ See [[../02-backend/auth#proxy-gate]] for the implementation.
 
 - `/map?add=<url>` — used by the PWA share-target redirect, on iPhone by the iOS Shortcut "Add to MapOrganiser", and (v1.28.1) by the header's Add Place, which hands a pasted Instagram post link over this way. The map page reads `?add=...` client-side whenever it appears, opens the Add Place dialog pre-populated, then removes only `add` (`router.replace`), keeping the filters; the same link can come in again later. A Google Maps link gets the usual preview; an Instagram post/reel link switches the dialog to the Instagram import (v1.28.0, [[../05-flows/instagram-import-flow]]); any other Instagram link gets an inline "not a post" hint.
 - `/map?ig=<jobId>` — v1.28.0. Set while the Add Place dialog shows an Instagram import, so a refresh reopens the dialog on that job. Only `ig` is added or removed (`router.replace`); the rest of the query string — the filters — is kept. Cleared when the dialog closes.
+- `/settings?tab=<categories|tags|api|ai|notifications|appearance>` — v1.57.0. The open Settings tab; picking one rewrites it (`history.replaceState`), so a refresh or a link keeps it. `&email=confirmed` / `&email=link-invalid` — back from the e-mail confirmation: Settings → Notifications shows a toast and removes the flag.
+- `/confirm-email?token=<43 characters>` — v1.57.0, the confirmation e-mail's link.
 - `/login?error=auth_failed` — auth callback failure state.
 - `/login?next=<path>` — (intended) redirect-back path after login. Verify the page reads it.
 

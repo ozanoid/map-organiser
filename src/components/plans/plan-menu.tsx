@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Ban, CalendarDays, Loader2, MoreHorizontal, Pencil, RotateCcw, Share2, Trash2 } from "lucide-react";
+import { Ban, CalendarDays, Loader2, MoreHorizontal, Pencil, RotateCcw, Send, Share2, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
@@ -19,16 +19,18 @@ import { useCreateSharedLink } from "@/lib/hooks/use-shared-links";
 import { formatDayDate, planEndDate } from "@/lib/plans/dates";
 import type { Plan } from "@/lib/types";
 import { ICON_BUTTON } from "@/components/ui/icon-button";
+import { SendPlanDialog } from "./send-plan-dialog";
 import { UNDO_TOAST_MS, usePlanEditor } from "./use-plan-editor";
 
 export const PLANS_HOME = "/lists?tab=plans";
 
-/** The plan's own actions: share, dates, rename, cancel / restore, delete. */
+/** The plan's own actions: share, send to me, dates, rename, cancel / restore, delete. */
 export function PlanMenu({ plan, onEditDates }: { plan: Plan; onEditDates: () => void }) {
   const { apply } = usePlanEditor(plan.id);
   const createSharedLink = useCreateSharedLink();
   const [renameOpen, setRenameOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [sendOpen, setSendOpen] = useState(false);
   const cancelled = plan.status === "cancelled";
 
   function share() {
@@ -80,6 +82,10 @@ export function PlanMenu({ plan, onEditDates }: { plan: Plan; onEditDates: () =>
             <Share2 />
             Copy share link
           </DropdownMenuItem>
+          <DropdownMenuItem className="cursor-pointer py-2" onClick={() => setSendOpen(true)}>
+            <Send />
+            Send to me…
+          </DropdownMenuItem>
           {!cancelled && (
             <>
               <DropdownMenuItem className="cursor-pointer py-2" onClick={onEditDates}>
@@ -111,6 +117,7 @@ export function PlanMenu({ plan, onEditDates }: { plan: Plan; onEditDates: () =>
         </DropdownMenuContent>
       </DropdownMenu>
 
+      {sendOpen && <SendPlanDialog plan={plan} open={sendOpen} onOpenChange={setSendOpen} />}
       {renameOpen && <RenameDialog plan={plan} open={renameOpen} onOpenChange={setRenameOpen} />}
       {deleteOpen && <DeleteDialog plan={plan} open={deleteOpen} onOpenChange={setDeleteOpen} />}
     </>

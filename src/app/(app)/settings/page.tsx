@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { useCategories, useCreateCategory, useDeleteCategory } from "@/lib/hooks/use-categories";
 import {
   useSubcategories,
@@ -16,7 +16,7 @@ import { Card } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import {
   Plus, Trash2, Loader2, Tag, FolderOpen, Shield, Paintbrush, Sun, Moon, Monitor, Map, Sparkles, ChevronDown, ChevronRight,
-  Utensils, Coffee, Wine, Bed, ShoppingBag, Landmark, Trees, Waves, Dumbbell, HeartPulse, Ticket, MapPin,
+  Utensils, Coffee, Wine, Bed, ShoppingBag, Landmark, Trees, Waves, Dumbbell, HeartPulse, Ticket, MapPin, Bell,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { CATEGORY_DEFAULT_ICONS } from "@/lib/map/category-icons";
@@ -25,6 +25,7 @@ import { useTheme } from "next-themes";
 import { ApiKeysManager } from "@/components/settings/api-keys-manager";
 import { CostTracker } from "@/components/settings/cost-tracker";
 import { AiSettings } from "@/components/settings/ai-settings";
+import { NotificationSettings } from "@/components/settings/notification-settings";
 import { useMapStyle, MAP_STYLE_OPTIONS } from "@/lib/hooks/use-map-style";
 import type { MapStyleKey, MarkerStyle } from "@/lib/hooks/use-map-style";
 
@@ -52,7 +53,26 @@ const PRESET_COLORS = [
   "#A855F7", "#6B7280",
 ];
 
+const SETTINGS_TABS = new Set(["categories", "tags", "api", "ai", "notifications", "appearance"]);
+const noSubscription = () => () => {};
+const tabInAddress = () => new URLSearchParams(window.location.search).get("tab");
+
 export default function SettingsPage() {
+  // The open tab lives in the address (?tab=…): a link can open one — the
+  // e-mail confirmation lands on Notifications — and a refresh keeps it.
+  // The page is prerendered: the server has no address, so it renders the
+  // first tab and the browser switches after hydration (useSyncExternalStore;
+  // useSearchParams would need a Suspense boundary around the page).
+  const fromAddress = useSyncExternalStore(noSubscription, tabInAddress, () => null);
+  const [picked, setPicked] = useState<string | null>(null);
+  const tab = picked ?? (fromAddress && SETTINGS_TABS.has(fromAddress) ? fromAddress : "categories");
+  function openTab(next: string) {
+    setPicked(next);
+    const url = new URL(window.location.href);
+    url.searchParams.set("tab", next);
+    window.history.replaceState(null, "", url);
+  }
+
   return (
     <div className="p-4 lg:p-6 max-w-2xl mx-auto space-y-6 overflow-x-hidden">
       <div>
@@ -62,7 +82,7 @@ export default function SettingsPage() {
         </p>
       </div>
 
-      <Tabs defaultValue="categories">
+      <Tabs value={tab} onValueChange={(value) => openTab(String(value))}>
         <TabsList>
           <TabsTrigger value="categories" className="cursor-pointer shrink-0">
             <FolderOpen className="h-4 w-4 mr-1.5" />
@@ -79,6 +99,10 @@ export default function SettingsPage() {
             <span className="sm:hidden">API</span>
           </TabsTrigger>
           <AiTabTrigger />
+          <TabsTrigger value="notifications" className="cursor-pointer shrink-0" aria-label="Notifications">
+            <Bell className="h-4 w-4 sm:mr-1.5" />
+            <span className="hidden sm:inline">Notifications</span>
+          </TabsTrigger>
           <TabsTrigger value="appearance" className="cursor-pointer shrink-0">
             <Paintbrush className="h-4 w-4 mr-1.5" />
             <span className="hidden sm:inline">Appearance</span>
@@ -99,6 +123,9 @@ export default function SettingsPage() {
         </TabsContent>
         <TabsContent value="ai" className="mt-4">
           <AiSettings />
+        </TabsContent>
+        <TabsContent value="notifications" className="mt-4">
+          <NotificationSettings />
         </TabsContent>
         <TabsContent value="appearance" className="mt-4">
           <AppearanceSettings />

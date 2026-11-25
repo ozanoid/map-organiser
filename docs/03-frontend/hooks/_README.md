@@ -2,7 +2,7 @@
 title: Hooks
 type: overview
 domain: frontend
-version: 1.8.2
+version: 1.9.0
 last_updated: 25.11.2026
 status: stable
 sources:
@@ -37,6 +37,7 @@ Every custom hook lives in `src/lib/hooks/`. Convention: file `use-x.ts` exports
 | `useInstagramImport` + `useStartInstagramImport` (v1.28.0) + `usePickInstagramPlace` (v1.28.1) | react-query poll (1.5 s while reading/adding, 3 s while a photo is pending) + two mutations | `["instagram-import", jobId]` | [[use-instagram-import]] |
 | `usePlans` family (2 queries, 1 change mutation, per-day route queries) | react-query + mutations | `["plans"]`, `["plan", id]`, `["plan-route", dayId, signature]` | [[use-plans]] |
 | `useVisits` + log / edit / delete | react-query + mutations | `["visits", { placeId }]` (writes also refresh `["plan"]`, `["places"]`) | [[use-visits]] |
+| `useNotificationSettings` + set / remove e-mail, Telegram link / unlink, test, `useSendPlan` (v1.57.0) | react-query (3 s poll while waiting for Telegram's Start) + mutations | `["notifications"]` | [[use-notifications]] |
 | `useAiSuggestions` + 2 mutations | react-query + mutations | `["ai-suggestions"]` (staleTime 30 s) | [[use-ai-suggestions]] |
 | `useAssistantAvailability` (v1.52.0) | query | `["ai-settings"]` — whether the assistant's entries show | [[../components/assistant]] |
 

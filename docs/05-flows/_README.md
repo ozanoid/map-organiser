@@ -2,7 +2,7 @@
 title: Flows
 type: overview
 domain: overview
-version: 1.8.5
+version: 1.9.0
 last_updated: 25.11.2026
 status: stable
 related:
@@ -19,6 +19,7 @@ related:
   - "[[plan-flow]]"
   - "[[ai-plan-flow]]"
   - "[[share-flow]]"
+  - "[[notifications-flow]]"
   - "[[share-target-flow]]"
   - "[[offline-flow]]"
 ---
@@ -46,6 +47,7 @@ End-to-end user / data flows that span multiple subsystems. Each doc traces the 
 | [[ai-plan-flow]] | User clicks "Plan with assistant" on a plan (v1.53.0; "AI Plan" on Gemini before) | the assistant panel with the plan as subject → `update_plan` card showing the plan as it will be (`preview_plan_changes`) → saved on yes if unchanged |
 | [[share-flow]] | User clicks "Share" on a list, plan or place | `/api/shared` (POST) → public `/shared/<slug>` → optional save |
 | [[share-target-flow]] | User shares a URL into the PWA from mobile share sheet | `/api/share-target` → `/map?add=…` → manual-place-create-flow (an Instagram link arriving as `/map?add=` → instagram-import-flow) |
+| [[notifications-flow]] | Owner connects e-mail / Telegram in Settings → Notifications, or sends a plan ("Send to me…", the assistant's `send_plan`) — v1.57.0 | `/api/notifications/*`, `/confirm-email`, `/api/telegram/webhook`, `POST /api/plans/[id]/send` → the `notifications` outbox → Resend / Telegram |
 | [[offline-flow]] | Network drops while the user is in the app | SW, offline banner, `/offline` fallback |
 
 ## How to read a flow doc

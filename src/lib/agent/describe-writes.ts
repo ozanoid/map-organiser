@@ -5,6 +5,7 @@ import type { AssistantContext } from "@/lib/assistant/library";
 import { updatePlanChanges, updatePlanInput } from "@/lib/assistant/tools/update-plan";
 import type { StoredMessage, ToolCall } from "@/lib/agent/history";
 import type { PreviewLine, WritePreview } from "@/lib/agent/ui-types";
+import { emailConfigured, telegramConfigured } from "@/lib/notify/config";
 import { addDays, formatDayDate } from "@/lib/plans/dates";
 import { PlanInputError, PlanNotFoundError, previewPlanChanges, type PlanSnapshot } from "@/lib/plans/write";
 import { log } from "@/lib/telemetry/logger";
@@ -214,6 +215,7 @@ export async function describeWrites(
   const listIds = new Set<string>();
   const visitIds = new Set<string>();
   const stopIds = new Set<string>();
+  let wantsChannels = false;
 
   for (const { name, input } of calls) {
     const i = (input ?? {}) as Input;
@@ -249,11 +251,15 @@ export async function describeWrites(
       case "update_places":
         ids(i.place_ids).forEach((id) => placeIds.add(id));
         break;
+      case "send_plan":
+        if (str(i.plan_id)) planIds.add(i.plan_id as string);
+        wantsChannels = true;
+        break;
     }
   }
 
   const sb = ctx.supabase;
-  const [places, plans, lists, visits, stops] = await Promise.all([
+  const [places, plans, lists, visits, stops, channels] = await Promise.all([
     placeIds.size
       ? sb.from("places").select("id, name, city").eq("user_id", ctx.userId).in("id", [...placeIds])
       : Promise.resolve({ data: [] }),
@@ -269,7 +275,32 @@ export async function describeWrites(
     stopIds.size
       ? sb.from("plan_stops").select("id, title, start_time, places(name)").in("id", [...stopIds])
       : Promise.resolve({ data: [] }),
+    wantsChannels
+      ? sb
+          .from("notification_channels")
+          .select("kind, email, telegram_username, verified_at, disabled_at")
+          .eq("user_id", ctx.userId)
+      : Promise.resolve({ data: [] }),
   ]);
+  // The send only uses a channel this server can send through: the same
+  // channels in the database, but a preview deployment has no Telegram bot.
+  const serverHas = (kind: unknown) => (kind === "email" ? emailConfigured() : telegramConfigured());
+  const channelRow = new Map(
+    (channels.data ?? []).map((c) => [
+      c.kind as string,
+      {
+        to: c.kind === "email" ? str(c.email) : str(c.telegram_username) ? `@${c.telegram_username}` : "Telegram",
+        ready: Boolean(c.verified_at) && !c.disabled_at && serverHas(c.kind),
+        why: !c.verified_at
+          ? "not confirmed yet"
+          : c.disabled_at
+            ? "the bot is blocked"
+            : !serverHas(c.kind)
+              ? "not set up on this server"
+              : undefined,
+      },
+    ])
+  );
   const placeName = new Map((places.data ?? []).map((p) => [p.id as string, p.name as string]));
   const planName = new Map((plans.data ?? []).map((p) => [p.id as string, p.name as string]));
   const listName = new Map((lists.data ?? []).map((l) => [l.id as string, l.name as string]));
@@ -472,6 +503,25 @@ export async function describeWrites(
             { text: "A plan stop it ticked off becomes planned again." },
           ],
           danger: true,
+        };
+      }
+      case "send_plan": {
+        const name = str(i.plan_id) ? planName.get(i.plan_id as string) : undefined;
+        const asked = ids(i.channels).filter((c) => c === "email" || c === "telegram");
+        // Left out, every channel that is ready gets it.
+        const targets = asked.length ? asked : (["email", "telegram"] as const).filter((c) => channelRow.get(c)?.ready);
+        const LABEL: Record<string, string> = { email: "E-mail", telegram: "Telegram" };
+        return {
+          title: `Send to you: ${name ?? "a plan"}`,
+          subtitle: "A summary with its days, stops, times and map links, in Turkish",
+          lines: targets.length
+            ? targets.map((c) => {
+                const row = channelRow.get(c);
+                return row?.ready
+                  ? { label: LABEL[c], text: row.to ?? LABEL[c] }
+                  : { label: LABEL[c], text: "Not connected", note: row?.why ?? "Settings → Notifications" };
+              })
+            : [{ text: "No channel connected", note: "Settings → Notifications" }],
         };
       }
       case "update_places": {

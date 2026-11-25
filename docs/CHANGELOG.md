@@ -6,6 +6,63 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 25.11.2026 — v1.57.0 — Phase 3, slice 1: e-mail, Telegram and "Send to me"
+
+- The 14 Phase 3 decisions were taken as recommended (Ozan, 25.11.2026);
+  slice 1 is on the branch. The migration is written and passed a rolled-back
+  dry-run; **it is not applied** — that waits for Ozan's approval. Nothing is
+  sent before it is applied and Resend / the bot are set up.
+- New tables (migration `20261125160000_notifications.sql`):
+  `notification_channels` (one e-mail address and one Telegram chat per user;
+  one chat belongs to one account), `channel_link_tokens` (one-time tokens of
+  the e-mail confirmation and Telegram start links, SHA-256 only) and the
+  `notifications` outbox (unique `dedupe_key`; a claim holds a row for 60
+  seconds, and a row whose sender died is taken over once its hold lapses; a
+  copy of what went out), and
+  `notification_claim()` for the service role only. Users only read their
+  own rows; every write is the server's.
+- New code (`src/lib/notify/`): Resend and Telegram senders, the outbox
+  (`deliver`), channels (set / confirm / remove e-mail, link / unlink /
+  block Telegram), the bot's update handling, Turkish messages (e-mail HTML +
+  text, Telegram HTML within 4,096 characters, notes clipped), the owner gate
+  (`notifyContext` — `ASSISTANT_OWNER_EMAILS`).
+- New routes: `/api/notifications` (+ `/email`, `/telegram`, `/test`),
+  `POST /api/plans/[id]/send`, `POST /api/telegram/webhook` (secret header),
+  and the `/confirm-email` page with a Confirm button (opening the link
+  changes nothing — mail scanners follow links). Both public paths are in the
+  proxy.
+- UI: Settings → Notifications (the open tab now lives in `?tab=`), the plan
+  menu's "Send to me…" dialog. The assistant: `send_plan` (17 shared tools),
+  its approval card (the plan and each channel, or why one can't take it), a
+  card that speaks of sending, and an error result when nothing went.
+- Fixes found in review before commit: the settings tab and the Telegram
+  wait no longer set state in effects; a Turkish date in another year put
+  the year after the weekday ("2 Ocak Cumartesi 2027" → "2 Ocak 2027
+  Cumartesi").
+- Checks: `npm run check:notify` (new, offline, 107) and
+  `npm run check:notify:db` (new, read-only against the live schema — after
+  the migration); `npm run check:agent` 165 passed; `next build`.
+- New docs: [[02-backend/schema/notifications]],
+  [[02-backend/api-routes/notifications]], [[04-integrations/resend]],
+  [[04-integrations/telegram]], [[05-flows/notifications-flow]],
+  [[03-frontend/hooks/use-notifications]].
+- Docs: [[_plans/phase-3-communication]] (slice 1 status and the eight
+  deviations from the design, with reasons), [[_plans/personal-assistant]],
+  [[02-backend/schema/_README]], [[02-backend/api-routes/_README]],
+  [[02-backend/api-routes/plans]], [[02-backend/api-routes/assistant]],
+  [[02-backend/rls-policies]], [[02-backend/auth]],
+  [[03-frontend/proxy]], [[03-frontend/routing]],
+  [[03-frontend/components/settings]], [[03-frontend/components/plans]],
+  [[03-frontend/components/assistant]], [[03-frontend/hooks/_README]],
+  [[04-integrations/_README]], [[04-integrations/claude-mcp]],
+  [[04-integrations/claude-agent]], [[05-flows/_README]],
+  [[05-flows/ai-chat-flow]], [[06-ops/env-vars]] (`RESEND_API_KEY`,
+  `EMAIL_FROM`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME`,
+  `TELEGRAM_WEBHOOK_SECRET`; also in `.env.local.example`, with
+  `ASSISTANT_OWNER_EMAILS`).
+
+---
+
 ## 25.11.2026 — v1.56.3 — Phase 3 design draft: communication
 
 - New: [[_plans/phase-3-communication]] (draft) — Ozan's own notifications

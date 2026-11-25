@@ -2,7 +2,7 @@
 title: "Claude connector (MCP server)"
 type: integration
 domain: integrations
-version: 1.9.2
+version: 1.10.0
 last_updated: 25.11.2026
 status: draft
 sources:
@@ -47,7 +47,9 @@ sources:
   - src/lib/instagram/view.ts
   - src/lib/instagram/pick.ts
   - scripts/assistant-check/add-places.ts
+  - src/lib/assistant/tools/send-plan.ts
 related:
+  - "[[../05-flows/notifications-flow]]"
   - "[[../_plans/personal-assistant]]"
   - "[[../05-flows/claude-connector-flow]]"
   - "[[../02-backend/auth]]"
@@ -108,6 +110,7 @@ Both new paths are skipped by the session proxy (matcher in `src/proxy.ts`): `/a
 | `log_visit` | write | "I went": place, date (default today at the place), rating, notes in the user's words → `log_visit` ([[../01-domain/visits]]): one visit per place per day (the same day again updates it, keeping what is left out), marks the place visited, keeps its rating current, ticks off a planned stop that day. `plan_stop_id` (v1.39.0) names the stop instead: it is ticked off whatever its day, and its day is the default date. `visit_id` corrects a visit (null clears rating / notes). `created_via = assistant`. |
 | `delete_visit` | write, destructive | Removes a visit for good — only when the user asks (they didn't go, or it was logged by mistake; Ozan's decision, 18.11.2026) → `delete_visit` ([[../01-domain/visits]]): a stop it ticked off is planned again, the place's rating is worked out again from the visits left, the place keeps its visited status (Claude can change that with `update_places` once the user confirms). Returns the deleted visit, the reopened stop and the place's status and rating now. |
 | `update_places` | write | 1–25 places: visit status without a visit (stamps `visited_at` / `booked_at` like `PATCH /api/places/[id]`), an overall rating 1–5 or null, a note about the place appended to its notes (no date prefix since v1.38.0 — visit notes go to `log_visit`), tags to add (created if missing) or remove. Its description sends "I went…" to `log_visit`. |
+| `send_plan` | write, open-world | Sends one of the user's plans (`plan_id`) **to the user themself** — their e-mail and/or Telegram, connected in the app under Settings → Notifications — as a Turkish summary of its days, stops, times, notes and map links (v1.57.0, Phase 3 slice 1; [[../05-flows/notifications-flow]]). `channels` left out: every connected one. It reaches no one else. Returns where it went (`sent`: channel and address / `@username`), what isn't connected (`not_connected`) and what failed (`failed`, with the provider's reason); when nothing went at all it is an error result saying why — so it can't be reported as sent. Only owners can reach it (the MCP token check and the in-app door); the routes behind it are owner-only too. |
 
 Filters take **names**, not ids (`resolveNames`): exact folded match, then a unique partial match ("Rooftops" → "Rooftop"); otherwise a `ToolInputError` listing the closest names, which goes back to the model as an error result. The data modules' own refusals (`InputError` / `NotFoundError` from `src/lib/db/errors.ts` — "a visit can't be in the future", "visit not found") go back to the model the same way.
 
@@ -150,7 +153,7 @@ Filters take **names**, not ids (`resolveNames`): exact folded match, then a uni
 - `rank_places` answers in ~0.4 s since v1.49.0 (check script, 24.11.2026). Before, with the Gemini judge, it took 41 s (50 profiles), 64 s and 28 s (30 profiles) from the check script and 36 s through the connector. `/api/mcp` keeps `maxDuration = 120` for `add_places` (an Instagram post waits up to 45 s).
 - The shared `queryPlaces` (places page, in-app assistant) still has the ILIKE folding gap and selects all of `google_data`. Not changed here; see the plan's open items.
 - `ASSISTANT_OWNER_EMAILS` must be set in each environment, or every connection is refused.
-- Tool definitions are sent to the model with every conversation: about 38,700 characters for the 15 tools (measured 18.11.2026; `save_list` 4,600, `get_lists` 1,000), `update_plan` the largest at 9,000 plus a 1,100-character description (one schema branch per op). 5,600 characters across all tools are the uuid and date patterns zod writes next to `format`. Measured again with v1.41.0 counting name, title, description, annotations and the input schema: 44,300 characters for 16 tools, `add_places` 3,200.
+- Tool definitions are sent to the model with every conversation: about 38,700 characters for the 15 tools (measured 18.11.2026; `save_list` 4,600, `get_lists` 1,000), `update_plan` the largest at 9,000 plus a 1,100-character description (one schema branch per op). 5,600 characters across all tools are the uuid and date patterns zod writes next to `format`. Measured again with v1.41.0 counting name, title, description, annotations and the input schema: 44,300 characters for 16 tools, `add_places` 3,200. v1.57.0 adds `send_plan` (17 tools; a short schema — not measured again).
 - `add_places` with an Instagram link can take up to ~45 s plus the read. claude.ai's own time limit for a tool call is untested; the work doesn't depend on it — the import goes on in the queue and `review_url` shows it.
 
 ## Setup

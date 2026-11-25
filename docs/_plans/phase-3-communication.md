@@ -2,7 +2,7 @@
 title: "Faz 3 — İletişim: tasarım"
 type: plan
 domain: sharing
-version: 0.1.0
+version: 0.2.0
 last_updated: 25.11.2026
 status: draft
 related:
@@ -13,11 +13,13 @@ related:
   - "[[../05-flows/share-flow]]"
   - "[[../04-integrations/claude-agent]]"
   - "[[../04-integrations/claude-mcp]]"
+  - "[[../05-flows/notifications-flow]]"
+  - "[[../02-backend/schema/notifications]]"
 ---
 
 # Faz 3 — İletişim: tasarım
 
-> **Taslak (25.11.2026), Ozan'ın onayını bekliyor.** [[personal-assistant]] planının Faz 3'ü. Kod, şema değişikliği ve ücretli çağrı yok; kararlar en alttaki listede. Şema SQL'i ilgili dilim başında `supabase/migrations/` altında yazılır, Ozan'a gösterilir, onayıyla uygulanır.
+> [[personal-assistant]] planının Faz 3'ü. **14 karar onaylandı (25.11.2026, hepsi önerildiği gibi).** **Dilim 1 kodu `feat/personal-assistant` dalında (v1.57.0)**; migration'ı yazıldı ve geri alınan bir deneme çalıştırmasından geçti, **uygulanması Ozan'ın onayını bekliyor** — durum ve tasarımdan sapmalar: [[#Dilim 1 — durum (25.11.2026)]]. Şema SQL'i her dilimin başında `supabase/migrations/` altında yazılır, Ozan'a gösterilir, onayıyla uygulanır.
 
 ## Ne anladım
 
@@ -73,7 +75,7 @@ Ayrıca: takvime ekleme (iCal, v4'ten devralınan F-18 seçeneği) ve asistanın
 - `disabled_at` (ör. bot engellendi: Telegram 403 döner, kanal kendini kapatır)
 - v1'de kullanıcı başına bir e-posta ve bir Telegram (`unique (user_id, kind)`).
 
-**3. `telegram_link_tokens`** — Telegram'ı bağlamak için tek kullanımlık anahtar: `token_hash`, `user_id`, `expires_at` (15 dk), `used_at`. Anahtarın kendisi saklanmaz, yalnız hash'i.
+**3. `telegram_link_tokens`** — Telegram'ı bağlamak için tek kullanımlık anahtar: `token_hash`, `user_id`, `expires_at` (15 dk), `used_at`. Anahtarın kendisi saklanmaz, yalnız hash'i. *(Dilim 1'de `channel_link_tokens` oldu: e-posta onayı da aynı tek kullanımlık linki istiyor; tek tablo, `purpose` ile ayrılır — `email_verify` 24 saat, `telegram_link` 15 dk.)*
 
 **4. `notification_settings`** — kullanıcı başına bir satır, tür başına kanallar ve zamanlar:
 - `reminder_channels` (`{email,telegram}` alt kümesi; boş = kapalı), `reminder_evening_time` (varsayılan 18:00, null = yok), `reminder_morning_time` (08:00, null = yok)
@@ -194,11 +196,34 @@ Hatırlatmalar plan tablosundan **türetilir**, önceden kuyruğa yazılmaz: pla
 | Vercel cron | kısa çağrı | planın dahil kullanımı (bu tasarım için ölçülmedi) | 15 dakikada bir ≈ ayda 2.900 çağrı |
 | Claude | token | yok | Bildirimler şablonla üretilir, Claude çağırmaz; yalnız asistanla yapılan `send_plan` / `invite_to_plan` turları normal sohbet maliyeti |
 
+## Dilim 1 — durum (25.11.2026)
+
+**Yapılan (v1.57.0, dalda; main'de değil):** `notification_channels`, `channel_link_tokens`, `notifications` ve `notification_claim` ([[../02-backend/schema/notifications]]); Resend ve Telegram göndericileri; outbox (`deliver`: önce kayıt, sonra kilit, gönderim, sonuç); Telegram bağlama (webhook, `/start <anahtar>`, engelleme / engel kaldırma); e-posta onayı; Ayarlar → Notifications (sekme adreste, `?tab=`); plan menüsünde *Send to me…*; asistanın `send_plan` aracı, onay kartı ve talimat satırı. Akış: [[../05-flows/notifications-flow]], yollar: [[../02-backend/api-routes/notifications]].
+
+**Tasarımdan sapmalar (gerekçeli):**
+
+1. **Tek anahtar tablosu** (`channel_link_tokens`, yukarıda).
+2. **E-posta onayı bir sayfa + düğme** (`/confirm-email`): linki açmak bir şey değiştirmez, *Confirm address* değiştirir. Posta tarayıcıları (Outlook Safe Links, kurumsal filtreler) linkleri kendiliğinden açar; GET ile onay, kimsenin okumadığı bir adresi onaylayabilirdi. İkinci basış ve aynı adrese ikinci link "onaylandı" der.
+3. **Sahip kapısı:** bütün bildirim yolları `ASSISTANT_OWNER_EMAILS` listesine bakıyor (`notifyContext`) — karar 7'nin ("v1'de yalnız sana") koda dökülmüş hâli. Sahip olmayan bir hesap uygulamaya e-posta ya da Telegram mesajı gönderttiremez; Ayarlar ve gönderim penceresi bunu söyler.
+4. **Kilidi düşmüş gönderim yeniden alınır:** gönderici kilitledikten sonra ölürse satır `sending` kalırdı; artık kilidi (60 sn) dolunca yeniden alınır. Kayıp hatırlatma, nadir bir ikinci kopyadan kötü; e-posta zaten iki kez gidemez (Resend'in idempotency anahtarı, 24 saat).
+5. **React Email yerine tipli metin şablonları:** üç kısa mesaj, deterministik, offline test ediliyor; iki paket ve bir render adımı eklemeye değmedi. Dilim 3'ün davet e-postaları büyürse yeniden bakılır.
+6. **Telegram'ın tekrar gönderdiği güncelleme:** `update_id` saklamak yerine asıl etkisi olan yol idempotent — aynı sohbet aynı linkle tekrar gelirse "Bağlandı" der; engelleme güncellemeleri zaten idempotent, diğer mesajlara giden tek satırlık cevabın tekrarı zararsız.
+7. **`send_plan` hiçbir kanala gidemezse hata sonucu döner:** model "gönderildi" diyemez, kart *Couldn't send* ve nedenini gösterir; kısmi başarıda kart nereye gittiğini ve neyin gitmediğini yazar.
+8. **Telegram mesajında notlar kısaltılır** (plan 500, gün 300, durak 200 karakter): plan notu 5.000 karaktere kadar çıkabiliyor, mesaj sınırı 4.096.
+
+**Doğrulama:** `npm run check:notify` 107 kontrol (Türkçe metinler ve kaçış, Telegram sınırı, bot güncellemeleri, anahtarlar, outbox, iki kanalın bağlanması, gönderim, `send_plan`'ın cevabı ve kartı); `npm run check:agent` 165 kontrol; migration'ın geri alınan deneme çalıştırması (sonuçlar şema dokümanında); `next build`; dev sunucusunda `/confirm-email` oturumsuz açılıyor (telefonda da), webhook bot ayarlı değilken 404. Henüz denenmeyen: gerçek e-posta ve Telegram gönderimi (aşağıdaki adımlardan sonra).
+
+**Açık adımlar (sırayla):**
+1. Migration'ın uygulanması — Ozan'ın onayı; sonra `npm run check:notify:db`.
+2. Ozan'ın dashboard adımları (aşağıda): Resend alanı ve anahtarı → Vercel + worktree `.env.local`; BotFather → Vercel Production.
+3. E-posta uçtan uca: yerelde, test hesabıyla (Ozan isterse).
+4. Telegram: yalnız production'da (karar 13) — main'e merge'den ve deploy'dan sonra `setWebhook` (Ozan'ın onayıyla), sonra bağlama ve test.
+
 ## Dilimler ve geçiş yolu
 
 Bütün şema değişiklikleri **eklemeli** (yeni tablolar, `profiles.time_zone`); çalışan hiçbir kodun bağlı olduğu yapı değişmiyor — geçiş ve sonradan söküm adımı yok.
 
-1. **Kanallar ve "Bana gönder":** `notification_channels`, `telegram_link_tokens`, `notifications`; Resend ve Telegram göndericileri; Telegram bağlama (webhook); e-posta onayı; Ayarlar → Bildirimler; plan sayfasında *Bana gönder*; `send_plan`.
+1. **Kanallar ve "Bana gönder"** *(v1.57.0, dalda — yukarıda)*: `notification_channels`, `channel_link_tokens`, `notifications`; Resend ve Telegram göndericileri; Telegram bağlama (webhook); e-posta onayı; Ayarlar → Bildirimler; plan sayfasında *Bana gönder*; `send_plan`.
 2. **Otomatik gönderimler:** `profiles.time_zone`, `notification_settings`; `/api/cron/notify`; hatırlatmalar ve haftalık özet.
 3. **Davet ve RSVP:** `plan_invitations`, `plan_rsvps`; `/invite/<token>` (sunucuda render, OG görseli, `noindex`); paylaşım; cevap bildirimi; `invite_to_plan`; `get_plans`'e cevaplar.
 4. **Takvim:** `.ics` (sahip ve davet sayfası).
@@ -215,7 +240,8 @@ Bütün şema değişiklikleri **eklemeli** (yeni tablolar, `profiles.time_zone`
 ## Ozan'ın dashboard adımları
 
 - **Resend:** hesap; `mail.maporganiser.com` alanını ekle (bölge seçimi kalıcı); Resend'in ürettiği DNS kayıtlarını DNS sağlayıcısına gir (Cloudflare ise proxy kapalı); `_dmarc.maporganiser.com` TXT `v=DMARC1; p=none; rua=mailto:…`; API anahtarı → Vercel `RESEND_API_KEY`.
-- **Telegram:** @BotFather `/newbot` (görünen ad, `…bot` ile biten kullanıcı adı — sonradan değişmez); token → Vercel `TELEGRAM_BOT_TOKEN`; webhook sırrı (ben üretirim) → `TELEGRAM_WEBHOOK_SECRET`; deploy sonrası `setWebhook` çağrısı (onayınla ben yaparım).
+- **Telegram:** @BotFather `/newbot` (görünen ad, `…bot` ile biten kullanıcı adı — sonradan değişmez); token → Vercel `TELEGRAM_BOT_TOKEN`, kullanıcı adı → `TELEGRAM_BOT_USERNAME`; webhook sırrı (`openssl rand -hex 32`) → `TELEGRAM_WEBHOOK_SECRET` (üçü de yalnız Production); deploy sonrası `setWebhook` çağrısı (onayınla ben yaparım; komut [[../04-integrations/telegram#Registering the webhook]]).
+- **Resend gönderen:** Vercel `EMAIL_FROM` = `Map Organiser <plans@mail.maporganiser.com>` (Production + Preview) ve worktree `.env.local`.
 - Uygulamada: e-posta onay linkine tıkla, Telegram'ı bağla.
 
 ## Değerlendirilip seçilmeyenler
