@@ -2,8 +2,8 @@
 title: Categories, Sub-categories & Tags
 type: entity
 domain: places
-version: 1.4.1
-last_updated: 24.11.2026
+version: 1.4.2
+last_updated: 25.11.2026
 status: stable
 sources:
   - src/lib/types/index.ts
@@ -85,7 +85,7 @@ Concepts split by destination:
 
 | Destination | Families | Effect |
 |---|---|---|
-| `place_profile.features.<axis>` | CUISINE · DIETARY · ATMOSPHERE · OCCASION · SEATING · CROWD · MUSIC | The profile LLM writes the canonical term into the existing field. **The `features` schema is unchanged**, so `rank-results`, `trip-plan` and `compare` are untouched. |
+| `place_profile.features.<axis>` | CUISINE · DIETARY · ATMOSPHERE · OCCASION · SEATING · CROWD · MUSIC | The profile LLM writes the canonical term into the existing field. **The `features` schema is unchanged**, so what reads the profile (the assistant's tools; `rank-results`, `trip-plan` and `compare` are untouched. |
 | Tag system | SCENE · RITUAL · SETTING · ACTIVITY · PREPARATION · PROVENANCE · DRINKS · POLICY · SOCIAL · VALUE | Becomes a row in `tags` (carrying `concept_id`) + `place_tags`. These have no home in any `features` axis — before the dictionary they leaked into `distinctive` as one-off phrases. |
 
 Two fields are deliberately **excluded**:

@@ -2,7 +2,7 @@
 title: Assistant flow (in-app, Claude)
 type: flow
 domain: ai
-version: 2.3.0
+version: 2.3.1
 last_updated: 25.11.2026
 status: draft
 sources:
@@ -46,7 +46,7 @@ Header ✦ (or another screen, with a request written)
 ## Opening
 
 - `AssistantLauncher` shows the ✦ button when `GET /api/user/ai-settings` says AI is on for the user and `assistantAvailable` (the server's Claude key).
-- `useAssistantStore.openAssistant(request?)` opens the panel from anywhere. A screen's request goes into the composer with its **subject** as a chip — the user adds to it and sends; typed by the user (the search field), it goes out at once when the conversation is free (v1.52.0). In use: the compare page (v1.52.0); AI Plan and the search field next (Phase 2, decision 6.1).
+- `useAssistantStore.openAssistant(request?)` opens the panel from anywhere. A screen's request goes into the composer with its **subject** as a chip — the user adds to it and sends; typed by the user (the search field), it goes out at once when the conversation is free (v1.52.0). In use (Phase 2, decision 6.1): the compare page (v1.52.0), the plan page (v1.53.0, [[ai-plan-flow]]) and the search field (v1.54.0, [[ai-search-flow]]).
 - The panel loads the latest conversation; when there is none, it starts one. One `Chat` (AI SDK) per conversation is kept for the app's lifetime, so closing the panel mid-stream keeps the stream.
 
 ## A turn

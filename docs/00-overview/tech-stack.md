@@ -2,7 +2,7 @@
 title: Tech Stack
 type: overview
 domain: overview
-version: 1.8.1
+version: 1.8.2
 last_updated: 25.11.2026
 status: stable
 sources:
@@ -84,7 +84,7 @@ Every runtime, library, and tool the repo currently depends on. Pin sources are 
 | `@opentelemetry/sdk-logs` | `^0.220.0` | OTel log pipeline | `BatchLogRecordProcessor` (≥0.220: options-object ctor). |
 | `@opentelemetry/exporter-logs-otlp-http` | `^0.220.0` | OTLP log exporter | → Honeycomb `/v1/logs`. |
 | `@langfuse/otel` | `^5.9.1` | Langfuse span processor | `src/lib/telemetry/langfuse.ts` — LLM-only span export to cloud.langfuse.com (v1.16.0). |
-| `@langfuse/tracing` | `^5.9.1` | Langfuse trace helpers | `propagateAttributes` (trace name/user/tags) in the four routes that trigger LLM calls (parse-query, rank-results, enrich, refresh cron). |
+| `@langfuse/tracing` | `^5.9.1` | Langfuse trace helpers | `propagateAttributes` (trace name/user/tags) where LLM calls start (enrich, the refresh cron, the Instagram import, the assistant's turn); `startObservation` for Claude's structured calls. |
 
 See [[../05-flows/observability-flow]] for the full architecture.
 

@@ -2,7 +2,7 @@
 title: API Routes
 type: overview
 domain: backend
-version: 1.12.3
+version: 1.13.0
 last_updated: 25.11.2026
 status: stable
 sources:
@@ -31,7 +31,7 @@ All Next.js route handlers grouped by area. Each linked doc is the canonical ref
 | Shared | `/api/shared/*` | **Mixed** — GET `/[slug]` public via service role | [[shared]] |
 | Stats | `/api/stats` | Required | [[stats]] |
 | User | `/api/user/*` — includes `ai-settings` (Phase 1) and `ai-suggestions/*` (Phase 5 moderation queue: list, accept, reject) | Required | [[user]] |
-| AI | `/api/ai/*` — `parse-query`, `rank-results` (Phase 6 NL filtering). `chat` was removed in v1.48.0, `compare` in v1.52.0 and `day-plan` (AI Plan) in v1.53.0 — the compare and plan pages ask the assistant | Required | [[ai]] |
+| ~~AI~~ | `/api/ai/*` — gone since v1.54.0: `chat` (v1.48.0), `compare` (v1.52.0), `day-plan` (v1.53.0), `parse-query` and `rank-results` (v1.54.0). Every AI request goes through the assistant ([[assistant]]) | — | — |
 | Assistant | `/api/assistant/chat` (one turn of the Claude agent, streaming), `/api/assistant/conversation` (latest conversation, New chat) — v1.48.0 | Required | [[assistant]] |
 | Search | `/api/search/*` (Mapbox geocoder proxy) | Required | [[search]] |
 | Instagram | `/api/instagram/import` (POST — start an import from a post URL, work runs in `after()`) + `/api/instagram/import/[id]` (GET — the dialog's progress view) — v1.28.0; `/api/instagram/import/[id]/pick` (POST — add the place picked for a skipped venue) — v1.28.1 | Required | [[instagram]] |
@@ -68,7 +68,7 @@ These hold for every route. See [[../_agent/conventions#api-routes]] for the ful
    - `404` — not found / no ownership.
    - `409` — duplicate (e.g. `google_place_id` collision).
    - `500` — unhandled error.
-5. **Cost-tracked external calls go through `trackUsage`** (`src/lib/google/track-usage.ts`) → `increment_api_usage` RPC. Apply to every Google Places, DataForSEO, HikerAPI (v1.28.0, `hikerapi_request`) and (since v1.22.0) Mapbox Directions call (`mapbox_directions` — both `getRoute` call sites). For Gemini calls, use `trackAiUsage` (`src/lib/ai/track-usage.ts`) which writes the same table under `ai_*` SKUs. Claude calls don't: `structuredClaude` and the agent record their dollars in `assistant_spend` (one ledger, one monthly cap — the assistant since v1.48.0, profiles and Instagram reads since v1.51.0).
+5. **Cost-tracked external calls go through `trackUsage`** (`src/lib/google/track-usage.ts`) → `increment_api_usage` RPC. Apply to every Google Places, DataForSEO, HikerAPI (v1.28.0, `hikerapi_request`) and (since v1.22.0) Mapbox Directions call (`mapbox_directions` — both `getRoute` call sites). AI calls don't (until v1.54.0 Gemini calls wrote `ai_*` SKUs through `trackAiUsage`, now gone): `structuredClaude` and the agent record their dollars in `assistant_spend` (one ledger, one monthly cap — the assistant since v1.48.0, profiles and Instagram reads since v1.51.0).
 6. **Service-role client** (`createServiceClient()`) only where no session can do the job: the public share read (`/api/shared/[slug]`, and the original-content reads in `.../save`), both cron routes (cross-user, no cookie), the `import_job_items` insert in `POST /api/places/import-jobs` (the table has no INSERT policy), the Instagram import's background job in `POST /api/instagram/import` (runs after the response; writes items), and `POST /api/instagram/import/[id]/pick` (moves an item the session client has just read; the table has no UPDATE policy). Every other route uses the cookie-scoped `createClient()`. Service-role paths must filter by `user_id` (see #2). Canonical list: [[../supabase-clients]].
 7. **PostGIS coords are always parsed.** Every route that returns a place coercion `location` to `{ lat, lng }` via `src/lib/geo.ts#parsePostgisPoint` before serializing.
 
@@ -103,7 +103,7 @@ These are reused across many routes:
 | `applyProfileSuggestions` | `src/lib/ai/apply-suggestions.ts` | 4-band auto-apply policy for LLM output. |
 | `buildLiteProfile` | `src/lib/ai/extract/lite-profile.ts` | LLM-less rule-based profile inline in `parse-link`. |
 | `dedupProposals` / `isFuzzyMatch` | `src/lib/ai/dedup.ts`, `normalize.ts` | Post-LLM and accept-time fuzzy match. |
-| `trackAiUsage` / `checkAiBudget` | `src/lib/ai/track-usage.ts` | Per-SKU Gemini counter + monthly budget gates (search 500; chat removed in v1.48.0, profile and instagram in v1.51.0, compare in v1.52.0, trip_plan in v1.53.0 — the Claude ledger's cap covers those). |
+| ~~`trackAiUsage` / `checkAiBudget`~~ | `src/lib/ai/track-usage.ts` | Removed in v1.54.0 with the last Gemini route; the module keeps `AI_SKU_CONFIG` (every SKU `retired`) for past rows. The Claude ledger's monthly cap covers every AI call. |
 | `findExisting` / `importPlace` | `src/lib/import/process-place.ts` | Duplicate check by place_id / CID without an API call; per-place import used by the drain (`ImportDefaults.source` sets `places.source`). |
 | `kickDrain` | `src/lib/import/kick-drain.ts` | Non-awaited `GET /api/cron/drain-imports` with the `CRON_SECRET` bearer — fired by the Takeout create route and the Instagram job (v1.28.0, moved out of the import-jobs route), and by the Instagram pick route (v1.28.1). |
 | `analyzeInstagramPost` / `runInstagramImportJob` | `src/lib/instagram/analyze.ts`, `import-job.ts` | Instagram post → venues → Google places (writes nothing) / the job that turns that into `import_job_items` (v1.28.0). See [[instagram]]. |

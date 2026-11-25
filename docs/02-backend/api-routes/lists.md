@@ -2,8 +2,8 @@
 title: Lists routes
 type: route-group
 domain: backend
-version: 2.0.0
-last_updated: 18.11.2026
+version: 2.0.1
+last_updated: 25.11.2026
 status: stable
 sources:
   - src/app/api/lists/route.ts
@@ -62,4 +62,4 @@ The body is `listChangesSchema` (`src/lib/lists/schema.ts`) — the same definit
 
 ## Other routes that put places on lists
 
-They call the same module, not the tables: `POST /api/places` with `list_ids` (`addPlaceToLists`, at the end of each list; a list that is gone is skipped and logged), `PATCH /api/places/[id]` with `list_ids` (`setPlaceLists` — only the lists that change are written), `POST /api/places/bulk` `add_to_list` (`addPlacesToList`, one transaction; `affected` counts the places newly added), `POST /api/shared/[slug]/save` for a list (`createList` with its places and notes), the import drain (`addPlaceToLists`), the in-app assistant's `add_to_list` / `create_list` ([[ai]]).
+They call the same module, not the tables: `POST /api/places` with `list_ids` (`addPlaceToLists`, at the end of each list; a list that is gone is skipped and logged), `PATCH /api/places/[id]` with `list_ids` (`setPlaceLists` — only the lists that change are written), `POST /api/places/bulk` `add_to_list` (`addPlacesToList`, one transaction; `affected` counts the places newly added), `POST /api/shared/[slug]/save` for a list (`createList` with its places and notes), the import drain (`addPlaceToLists`), the Gemini assistant's `add_to_list` / `create_list` until v1.48.0 (now `save_list`, [[assistant]]).

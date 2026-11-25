@@ -26,19 +26,15 @@ export interface UserContext {
     slug: string;
   }>;
   lists: Array<{ id: string; name: string; normalized: string }>;
-  /** Distinct cities the user has places in — used by parse-query for "Istanbul" disambiguation. */
+  /** Distinct cities the user has places in. */
   cities: string[];
   /** Distinct countries the user has places in. */
   countries: string[];
   /**
-   * Map of city → list of countries it appears under in the user's data.
-   * Drives the "Cities by country" prompt block AND the server-side
-   * country-from-city safety net in /api/ai/parse-query/route.ts.
-   *
-   * Multi-country case: the same city name in two countries (e.g. "London"
-   * in UK and Ontario) produces an array of length 2. The LLM picks one;
-   * server-side fallback picks the most common (sorted by occurrence in
-   * places — see `countriesForCity` in this module).
+   * Map of city → list of countries it appears under in the user's data
+   * (most common first) — the "Cities by country" prompt block. The same
+   * city name in two countries (e.g. "London" in UK and Ontario) produces
+   * an array of length 2.
    */
   cityToCountries: Map<string, string[]>;
 }
@@ -160,30 +156,6 @@ export async function buildUserContext(
     countries: [...countrySet].sort(),
     cityToCountries,
   };
-}
-
-/**
- * Pick the canonical country for a city given the user's data. Returns
- * the most-common country, or undefined if the city isn't in the user's
- * collection. Used by the parse-query sanitizer to fill in hard.country
- * when the LLM set hard.city alone.
- */
-export function countriesForCity(
-  ctx: UserContext,
-  city: string
-): string | undefined {
-  // Try exact match first.
-  const arr = ctx.cityToCountries.get(city);
-  if (arr && arr.length > 0) return arr[0];
-  // Case-insensitive fallback. LLM may emit different casing than what's
-  // in the user's data (e.g. "london" vs stored "London").
-  const lower = city.toLowerCase();
-  for (const [stored, countries] of ctx.cityToCountries) {
-    if (stored.toLowerCase() === lower && countries.length > 0) {
-      return countries[0];
-    }
-  }
-  return undefined;
 }
 
 /**

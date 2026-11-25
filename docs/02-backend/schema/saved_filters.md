@@ -2,8 +2,8 @@
 title: saved_filters
 type: table
 domain: backend
-version: 1.0.0
-last_updated: 15.07.2026
+version: 1.0.1
+last_updated: 25.11.2026
 status: stable
 sources:
   - src/lib/hooks/use-saved-filters.ts
@@ -26,7 +26,7 @@ Created via MCP migration `create_saved_filters_table`.
 | `user_id` | uuid | no | — | FK → `auth.users.id` ON DELETE CASCADE |
 | `name` | text | no | — | Unique per user |
 | `query_string` | text | no | — | URL-shape serialization (`filtersToQueryString`) — same format the filter-persist store uses. Applying = `router.push(?qs)` (full replace, back/forward-safe) |
-| `ai_query` | text | yes | — | Non-null when saved from an AI search: the NL query. The chip re-runs the AI pipeline via `useAiSearch` — rankings are session-only and never stored |
+| `ai_query` | text | yes | — | Until v1.54.0: the NL query of a preset saved from an AI search, which its chip re-ran. No longer written or read — the AI search is gone (no row ever had it). Dropping the column needs its own approval. |
 | `sort_order` | int | no | `0` | Display order (chips row) |
 | `created_at` | timestamptz | yes | `now()` | |
 

@@ -43,7 +43,7 @@ const g = globalThis as GlobalWithLangfuse;
 
 /**
  * AI SDK v6 emits TWO nested spans per LLM call: an outer umbrella
- * (`ai.generateText`, prefixed by functionId → `ai.parse-query:ai.generateText`)
+ * (`ai.generateText`, prefixed by functionId → `ai.generate-profile:ai.generateText`)
  * and the provider call (`…ai.generateText.doGenerate`). The umbrella
  * span's aggregated input/output token attributes get lost in emission
  * (AI SDK v6 `totalUsage` aggregation bug), but `ai.usage.reasoningTokens`

@@ -4,7 +4,8 @@ type: route-group
 domain: backend
 version: 1.13.0
 last_updated: 25.11.2026
-status: stable
+status: superseded
+superseded_by: "[[02-backend/api-routes/assistant]]"
 sources:
   - src/app/api/ai/parse-query/route.ts
   - src/app/api/ai/rank-results/route.ts

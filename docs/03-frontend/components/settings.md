@@ -2,7 +2,7 @@
 title: Settings components
 type: component
 domain: frontend
-version: 1.6.2
+version: 1.7.0
 last_updated: 25.11.2026
 status: stable
 sources:
@@ -67,8 +67,8 @@ Five components powering the Settings page tabs. All `"use client"`.
 - **Props:** none.
 - **Hooks:** `useState`, `useEffect` — loads once on mount; the loader sits inside the effect (React's immutability lint rule rejects a call to a function declared below it, v1.43.0) and drops a late answer after unmount. Optimistic-update + rollback-on-error pattern.
 - **API calls:** `GET` and `PUT` `/api/user/ai-settings`.
-- **State:** `{ enabled: boolean, available: boolean, assistantAvailable: boolean, cronRefreshEnabled: boolean } | null` + `loading` + `saving` — `available` is Gemini (AI search; AI Plan and Compare until v1.52.0–v1.53.0), `assistantAvailable` Claude (the assistant, place profiles, Instagram imports).
-- **Renders:** Master toggle (rounded switch, accessible `role="switch"`/`aria-checked`). Always below it (independent of the AI master — the data half isn't AI): the **"Background data refresh" toggle** (15.07.2026 — opt-in for the whole periodic sweep, default off; see [[../../06-ops/runbooks/periodic-refresh]]). Then, when **enabled** and Claude is set up (`assistantAvailable` — Claude writes the profiles and with them the suggestions; v1.51.0, it was the Gemini flag before): `BackfillProfilesPanel` and `AiSuggestionsQueue`. One amber banner per provider the server is missing, naming what it turns off and its key (`GOOGLE_GENERATIVE_AI_API_KEY`, `ANTHROPIC_API_KEY`; v1.51.0). The master switch is disabled only when both are missing. A change of the switch refreshes `["ai-settings"]`, so the assistant's button and the screens' assistant entries follow without a reload (v1.52.0).
+- **State:** `{ enabled: boolean, assistantAvailable: boolean, cronRefreshEnabled: boolean } | null` + `loading` + `saving` — `assistantAvailable` is Claude, which every AI feature runs on since v1.54.0 (the Gemini flag `available` went with the last Gemini feature).
+- **Renders:** Master toggle (rounded switch, accessible `role="switch"`/`aria-checked`). Always below it (independent of the AI master — the data half isn't AI): the **"Background data refresh" toggle** (15.07.2026 — opt-in for the whole periodic sweep, default off; see [[../../06-ops/runbooks/periodic-refresh]]). Then, when **enabled** and Claude is set up (`assistantAvailable` — Claude writes the profiles and with them the suggestions; v1.51.0, it was the Gemini flag before): `BackfillProfilesPanel` and `AiSuggestionsQueue`. An amber banner when the server has no `ANTHROPIC_API_KEY` ("AI features are not configured…"), and the master switch is disabled then (v1.54.0; v1.51.0–v1.53.0 a banner per provider, the switch disabled only when both were missing). A change of the switch refreshes `["ai-settings"]`, so the assistant's button and the screens' assistant entries follow without a reload (v1.52.0).
 - **Used by:** `/settings` page (AI tab).
 
 ## `AiSuggestionsQueue`
@@ -92,7 +92,7 @@ Five components powering the Settings page tabs. All `"use client"`.
 - **File:** `src/components/settings/backfill-profiles-panel.tsx` (Phase 6 follow-up, v1.7.x)
 - **Props:** none.
 - **Hooks:** [[../hooks/use-backfill-profiles|`useBackfillEligibility`/`useStartBackfill`]].
-- **Why it exists:** Pre-Phase-4 places have no `place_profile` (the AI summary + features payload). Phase 6 NL search soft-features filter and rerank both lean on profile content, so collections with low coverage feel weaker. This panel lets the user opt into bulk generation for their existing places.
+- **Why it exists:** Pre-Phase-4 places have no `place_profile` (the AI summary + features payload). The assistant leans on profile content to judge, rank and compare places, so collections with low coverage get weaker answers. This panel lets the user opt into bulk generation for their existing places.
 - **Renders:** an emerald-tinted card that summarizes coverage and a `Generate (N)` button. Three counts:
   - `has_reviews_no_profile` — the profile only (≈ \$0.032 each in a batch, Claude Sonnet 5.5, v1.51.0).
   - `has_cid_no_reviews` — DataForSEO `step=reviews` then chained `step=profile` (≈ \$0.040 each).

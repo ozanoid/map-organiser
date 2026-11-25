@@ -4,12 +4,8 @@ import type { Place } from "@/lib/types";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { VisitStatusBadge } from "@/components/places/visit-status-toggle";
-import { Star, ExternalLink, Sparkles } from "lucide-react";
+import { Star, ExternalLink } from "lucide-react";
 import Link from "next/link";
-import {
-  useAiSearchStore,
-  HIDE_BELOW_SCORE,
-} from "@/lib/stores/ai-search-store";
 import { googleMapsPlaceUrl } from "@/lib/google/maps-url";
 
 /** The title's link/button, stretched over the whole card (see PlaceCard). */
@@ -19,15 +15,8 @@ const STRETCHED =
 
 /**
  * PlaceCard — the canonical visual representation of a saved place.
- *
- * AI search mode (Phase 6.5):
- *   - When `useAiSearchStore.rankings` contains this place's id:
- *     * If score < HIDE_BELOW_SCORE → the card returns null (hidden,
- *       the user shouldn't see clearly-mismatched results).
- *     * Otherwise → renders normally with `why` line replacing
- *       address (italic emerald).
- *   - When `rankings` is null (normal browsing mode):
- *     * Address line shown, no fading, no hiding.
+ * (Until v1.54.0 an AI search could hide cards and put its "why" in place
+ * of the address; the assistant answers such questions now.)
  *
  * `className` is forwarded to the inner Card so wrapper components
  * (e.g. SelectablePlaceCard) can apply selection rings without
@@ -67,14 +56,6 @@ export function PlaceCard({
   const tags = place.tags ?? [];
   const visibleTags = tags.slice(0, 2);
   const extraTagCount = tags.length - 2;
-
-  // AI mode: when rankings exist and this place scored below the hide
-  // threshold, the LLM has signaled "this should not surface to the
-  // user" — honor that.
-  const aiRanking = useAiSearchStore((s) => s.rankings?.get(place.id));
-  if (aiRanking !== undefined && aiRanking.score < HIDE_BELOW_SCORE) {
-    return null;
-  }
 
   const title = onOpenDetail ? (
     // Mobile grid / map: the detail opens in a bottom sheet on this page.
@@ -119,12 +100,7 @@ export function PlaceCard({
         <div className="p-3 space-y-1.5">
           <h3 className="font-medium text-sm line-clamp-1">{title}</h3>
 
-          {aiRanking ? (
-            <p className="text-[11px] italic text-emerald-700 dark:text-emerald-400 line-clamp-2 flex items-start gap-1">
-              <Sparkles className="h-3 w-3 shrink-0 mt-0.5" />
-              <span>{aiRanking.why}</span>
-            </p>
-          ) : place.address ? (
+          {place.address ? (
             <p className="text-xs text-muted-foreground line-clamp-1">
               {place.address}
             </p>

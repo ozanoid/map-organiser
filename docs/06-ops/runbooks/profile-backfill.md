@@ -2,8 +2,8 @@
 title: AI place_profile backfill (per user)
 type: runbook
 domain: ops
-version: 1.4.0
-last_updated: 24.11.2026
+version: 1.4.1
+last_updated: 25.11.2026
 status: stable
 related:
   - "[[_README]]"
@@ -19,7 +19,7 @@ User-facing in **Settings → AI → "Generate AI profiles for older places"**. 
 
 ## When to run
 
-- A user reports "AI search misses my older places" — likely a coverage gap on `place_profile`.
+- The assistant knows little about some older places ("no profile" in its answers) — likely a coverage gap on `place_profile`.
 - New user who imported a large Takeout file and didn't get profiles auto-generated (Phase 4 only auto-generates for *new* saves; legacy data needs the backfill).
 - After a model upgrade or schema bump if we ever decide to re-profile en masse.
 

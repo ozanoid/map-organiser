@@ -32,12 +32,11 @@ import { trace } from "@opentelemetry/api";
  *   The OTel path is best-effort on top.
  *
  * Usage (unchanged across every revision of this file):
- *   log.info("ai.parse-query", { userId, query, hard });
- *   log.warn("ai.rank-results.skipped_candidates", { count: 2 });
- *   log.error("ai.rank-results.llm_failed", err, { userId });
+ *   log.info("assistant.turn", { userId, conversationId });
+ *   log.warn("agent.preview_failed", { error });
+ *   log.error("assistant.turn_failed", err, { userId });
  *
- * Server-only. Client-side logs use `orchLog` in
- * `lib/hooks/use-ai-search.ts`.
+ * Server-only.
  */
 
 type LogLevel = "debug" | "info" | "warn" | "error";

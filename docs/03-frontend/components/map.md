@@ -2,8 +2,8 @@
 title: Map components
 type: component
 domain: frontend
-version: 1.4.2
-last_updated: 24.11.2026
+version: 1.5.0
+last_updated: 25.11.2026
 status: stable
 sources:
   - src/components/map/map-view.tsx
@@ -52,6 +52,7 @@ Two components. `MapView` is a self-contained Mapbox renderer; `MapContent` is t
   - `flyToCoords({ lng, lat, zoom? })` — pan + zoom to arbitrary coordinates (search results).
   - `fitToCoords(points)` — frame a set of `{ lng, lat }`: one point flies to it at zoom 16, several fit their bounds (`padding: 80`, `maxZoom: 15`); empty is a no-op. Used by the Instagram import's **Show on map** (v1.28.0).
   - `getCenter()` — current viewport center, returns `{ lng, lat } | null`. `MapContent` reads it on every visible-places callback for the search box's proximity bias (v1.28.1).
+  - `getArea()` (v1.54.0) — the part of the map on screen: `{ lat, lng, radiusM }`, the centre and the distance to the north-east corner. `MapContent` writes it to `useMapAreaStore` on every visible-places callback and clears it on unmount, so a request to the assistant from the search field carries the area in view.
 - **Hooks:** `useRef`, `useEffect`, `useState`, `useCallback`, `useImperativeHandle`.
 - **State:** `mapLoaded` (boolean), refs to the map instance and stable callback identities.
 - **Mapbox layers managed:**

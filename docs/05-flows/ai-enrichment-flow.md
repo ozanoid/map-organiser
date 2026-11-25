@@ -2,7 +2,7 @@
 title: AI Enrichment Flow
 type: flow
 domain: places
-version: 1.9.2
+version: 1.9.3
 last_updated: 25.11.2026
 status: stable
 sources:
@@ -50,7 +50,7 @@ precondition for the next:
 Layers **3** and **5** are the AI layers. Layer 3 is rule-based — free and
 instant. Layer 5 is the LLM call, and it needs layer 4 (reviews feed the
 prompt). The full `place_profile` is the pivot data layer every downstream
-AI feature reads — see [[ai-search-flow]].
+AI feature reads — the assistant's tools ([[ai-chat-flow]]).
 
 ## The cascade — `enrich?step=…`
 
@@ -152,7 +152,7 @@ All buckets fail open (a tracking outage must never 429 a legitimate request).
   A tracking-table outage must never 429 a legitimate request.
 - `step=info` / `step=reviews` are **not** capped — they are DataForSEO,
   not AI. The cap sums only the AI SKUs in `api_usage`.
-- **Visibility**: AI search surfaces the 429 as a toast (the route's error
+- **Visibility** (until v1.54.0): AI search surfaced the 429 as a toast (the route's error
   message is the toast text). A capped `step=profile` dispatched
   fire-and-forget by the backfill is swallowed silently — but one backfill
   panel session tops out at ~1250 calls, well under the cap, so this is a
@@ -185,7 +185,7 @@ Both AI layers are gated. A place skips them silently when a gate fails:
 ## Related code
 
 - `src/app/api/places/[id]/enrich/route.ts` — the cascade (`step=info|reviews|profile`).
-- `src/lib/ai/track-usage.ts` — `trackAiUsage`, `checkAiBudget`, `AI_MONTHLY_SEARCH_CAP` (the chat, profile, Instagram, compare and AI Plan caps are gone — v1.48.0, v1.51.0, v1.52.0, v1.53.0).
+- `src/lib/ai/track-usage.ts` — the retired AI SKUs only (`trackAiUsage`, `checkAiBudget` and every cap are gone by v1.54.0).
 - `src/lib/agent/spend.ts` — the Claude ledger and its monthly cap (`MONTHLY_CAP_USD`) that bounds profiles and Instagram reads.
 - `src/lib/ai/extract/lite-profile.ts` — `buildLiteProfile` (layer 3). See [[lite-profile-flow]].
 - `src/lib/ai/prompts/place-profile-full.ts`, `src/lib/ai/apply-suggestions.ts` — layer 5. See [[full-profile-flow]].
@@ -199,5 +199,5 @@ Both AI layers are gated. A place skips them silently when a gate fails:
 - [[manual-place-create-flow]] — the auto-cascade entry point.
 - [[place-import-flow]] — the bulk entry point + the backfill panel.
 - [[instagram-import-flow]] — the Instagram entry point (same queue).
-- [[ai-search-flow]] — consumes the `place_profile` this flow produces.
+- [[ai-chat-flow]] — the assistant reads the `place_profile` this flow produces.
 - [[../06-ops/runbooks/profile-backfill]] — the backfill, ops view.

@@ -6,6 +6,52 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 25.11.2026 — v1.54.0 — Step 4, slice 3: the search field asks the assistant; the Gemini AI search is gone
+
+- **Ask the assistant** under the filter search field (`DebouncedSearchInput`
+  `onAsk`; the map sidebar, the mobile sheet, the `/places` header): the
+  words typed leave the field — the pending keyword filter is cancelled
+  (`useDebouncedCallback().cancel()`) — and go to the assistant at once
+  (`useAskFromSearch`), with the screen as subject: the filters on and, on
+  the map, the area in view (`useMapAreaStore`, written by the map through
+  `MapViewHandle.getArea()`). The panel waits instead when a reply is being
+  written or a card waits.
+- **The Gemini AI search, removed** (its input left the UI in v1.23.0; only
+  saved ✨ chips could still run it, and there were none): `POST
+  /api/ai/parse-query` and `/api/ai/rank-results`, their schemas and
+  prompts, `useAiSearchStore`, `useAiSearch` / `useAiRerankOrchestrator`,
+  `AiSearchInput`, the "AI Ranked" sort lock, the cards' and map list's
+  "why" lines and score hiding, the saved-filter AI re-run and "Save this AI
+  search", the `traceparent` mint (`trace-context.ts`), the `api.places`
+  diagnostic log, `countriesForCity`. With the last Gemini route gone:
+  `trackAiUsage`, `checkAiBudget` and the `search` / `rank_backstop` budgets;
+  every AI SKU is `retired`.
+- **Settings → AI** asks only for `ANTHROPIC_API_KEY` (the Gemini flag
+  `available` left `/api/user/ai-settings`); the switch is disabled when the
+  Claude key is missing. No user-facing feature reads the Gemini key any
+  more — only the profile and Instagram evals' Gemini arms (step 5).
+- `saved_filters.ai_query` is no longer written or read; dropping the column
+  needs its own approval.
+- Docs: [[05-flows/ai-search-flow]] (rewritten), `03-frontend/components/search`
+  and `02-backend/api-routes/ai` archived (superseded), and
+  [[03-frontend/components/filters]], [[03-frontend/components/map]],
+  [[03-frontend/components/assistant]], [[03-frontend/components/settings]],
+  [[03-frontend/components/_README]], [[03-frontend/state-management]],
+  [[03-frontend/hooks/_README]], [[03-frontend/hooks/use-places]],
+  [[02-backend/api-routes/_README]], [[02-backend/api-routes/user]],
+  [[02-backend/api-routes/plans]], [[02-backend/api-routes/lists]],
+  [[02-backend/schema/api_usage]], [[02-backend/schema/saved_filters]],
+  [[04-integrations/gemini]], [[04-integrations/_README]],
+  [[04-integrations/claude-agent]], [[05-flows/ai-chat-flow]],
+  [[05-flows/ai-enrichment-flow]], [[05-flows/observability-flow]],
+  [[05-flows/_README]], [[01-domain/categories-and-tags]],
+  [[06-ops/env-vars]], [[06-ops/runbooks/_README]],
+  [[06-ops/runbooks/profile-backfill]], [[06-ops/runbooks/dedupe-categories]],
+  [[00-overview/repo-structure]], [[00-overview/system-overview]],
+  [[00-overview/tech-stack]], [[_plans/phase-2-assistant]].
+
+---
+
 ## 25.11.2026 — v1.53.0 — Step 4, slice 2: AI Plan goes to the assistant; plan cards show the plan as it will be
 
 - **Plan with assistant** (`PlanWithAssistant`) replaces the Gemini AI Plan

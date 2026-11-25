@@ -4,7 +4,8 @@ type: component
 domain: frontend
 version: 1.3.0
 last_updated: 24.11.2026
-status: stable
+status: superseded
+superseded_by: "[[03-frontend/components/assistant]]"
 sources:
   - src/components/search/ai-search-input.tsx
   - src/lib/hooks/use-ai-search.ts

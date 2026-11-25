@@ -2,7 +2,7 @@
 title: Assistant components
 type: component
 domain: frontend
-version: 2.4.0
+version: 2.5.0
 last_updated: 25.11.2026
 status: draft
 sources:
@@ -60,6 +60,8 @@ A screen opens the panel with a request (`AssistantRequest`: `{ text, subject?, 
 ## `AskAssistantButton` (`ask-assistant.tsx`, v1.52.0)
 
 A screen's door to the assistant (decision 6.1): an outline ✦ button that calls `openAssistant(request())` — `request` runs on click, so it reads the screen as it is then. Renders nothing when the assistant can't be used; a screen that wraps it in more (a row with a title) checks `useAssistantAvailability` itself. Used by the compare page's `CompareWithAssistant` ([[places]]) and the plan page's `PlanWithAssistant` ([[plans]]).
+
+**`useAskFromSearch(page)`** (v1.54.0) — the search field's door: returns `undefined` when the assistant can't be used, else a function that sends the typed words at once (`send: true`) with the screen as the subject — `{ kind: "view", page, filters, area? }`: the filters on, by id, and on the map the area in view (`useMapAreaStore`). The chip is named from the screen's caches (`getQueriesData` of categories, sub-categories, tags, lists) until the server names it. Passed to `DebouncedSearchInput`'s `onAsk` by the filter panel, the mobile sheet and the `/places` header ([[filters]], [[../../05-flows/ai-search-flow]]).
 
 ## `AssistantMarkdown` (`assistant-markdown.tsx`)
 

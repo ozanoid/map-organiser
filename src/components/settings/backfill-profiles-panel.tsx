@@ -130,9 +130,8 @@ export function BackfillProfilesPanel() {
         <p>
           <strong className="font-medium text-foreground">{eligibleNow}</strong>{" "}
           of <strong className="font-medium text-foreground">{data.total_places}</strong>{" "}
-          places don&apos;t have an AI profile yet. Generating profiles
-          improves AI search results (better ranking, accurate atmosphere/
-          occasion matching).
+          places don&apos;t have an AI profile yet. The assistant reads
+          profiles to judge, rank and compare places.
         </p>
 
         <ul className="space-y-0.5 ml-3 list-disc marker:text-muted-foreground/60">

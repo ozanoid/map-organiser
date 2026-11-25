@@ -2,8 +2,8 @@
 title: Hooks
 type: overview
 domain: frontend
-version: 1.8.1
-last_updated: 18.11.2026
+version: 1.8.2
+last_updated: 25.11.2026
 status: stable
 sources:
   - src/lib/hooks/
@@ -38,7 +38,7 @@ Every custom hook lives in `src/lib/hooks/`. Convention: file `use-x.ts` exports
 | `usePlans` family (2 queries, 1 change mutation, per-day route queries) | react-query + mutations | `["plans"]`, `["plan", id]`, `["plan-route", dayId, signature]` | [[use-plans]] |
 | `useVisits` + log / edit / delete | react-query + mutations | `["visits", { placeId }]` (writes also refresh `["plan"]`, `["places"]`) | [[use-visits]] |
 | `useAiSuggestions` + 2 mutations | react-query + mutations | `["ai-suggestions"]` (staleTime 30 s) | [[use-ai-suggestions]] |
-| `useAiSearch` + `useAiRerankOrchestrator` (Phase 6) | mutation + side-effect | no query key — writes to `useAiSearchStore` (Zustand) | [[use-ai-search]] |
+| `useAssistantAvailability` (v1.52.0) | query | `["ai-settings"]` — whether the assistant's entries show | [[../components/assistant]] |
 
 ## Conventions
 

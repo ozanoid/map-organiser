@@ -11,17 +11,15 @@ import { AI_SETTINGS_KEY } from "@/lib/hooks/use-assistant-availability";
 
 interface AiSettingsState {
   enabled: boolean;
-  /** Gemini is set up: AI search. */
-  available: boolean;
-  /** Claude is set up: the assistant, place profiles, Instagram imports. */
+  /** Claude is set up: every AI feature (the assistant, place profiles,
+   *  Instagram imports). */
   assistantAvailable: boolean;
   cronRefreshEnabled: boolean;
 }
 
-/** One line per AI provider this deployment is missing. */
+/** What this deployment needs for AI features. */
 const PROVIDERS = [
-  { flag: "available", env: "GOOGLE_GENERATIVE_AI_API_KEY", what: "AI search is" },
-  { flag: "assistantAvailable", env: "ANTHROPIC_API_KEY", what: "The assistant, place profiles and Instagram imports are" },
+  { flag: "assistantAvailable", env: "ANTHROPIC_API_KEY", what: "AI features are" },
 ] as const;
 
 /**
@@ -126,8 +124,7 @@ export function AiSettings() {
 
   if (!state) return null;
 
-  // The switch governs features on both providers: usable when either is set up.
-  const disabled = (!state.available && !state.assistantAvailable) || saving;
+  const disabled = !state.assistantAvailable || saving;
 
   return (
     <div className="space-y-4">
@@ -139,7 +136,7 @@ export function AiSettings() {
           </div>
           <p className="text-xs text-muted-foreground mt-1">
             When enabled: smart categorization, tag &amp; list suggestions,
-            place profiles, and AI search.
+            place profiles, and the assistant.
           </p>
         </div>
 

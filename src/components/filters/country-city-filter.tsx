@@ -45,10 +45,8 @@ export function CountryCityFilter({
   ].sort();
   // City dropdown is country-scoped when a country is selected, OR shows
   // every distinct city across the user's collection when no country is
-  // chosen. The latter lets AI search render the city filter even when
-  // the LLM only set city (defense-in-depth — the parse-query route also
-  // back-fills country, but this keeps the UI consistent if that ever
-  // misses).
+  // chosen — a URL can carry a city without its country (a saved filter,
+  // an old link; the AI search set them that way until v1.54.0).
   const cities = country
     ? [
         ...new Set(
@@ -104,8 +102,7 @@ export function CountryCityFilter({
       </div>
 
       {/* City — visible when a country is selected OR when a city itself
-          is already set in URL state (e.g. AI search set city without
-          country and the parse-query country backfill missed it). */}
+          is already set in URL state without one. */}
       {(country || city) && cities.length > 0 && (
         <div className="relative">
           <Select

@@ -2,7 +2,7 @@
 title: "Claude agent (platform side)"
 type: integration
 domain: integrations
-version: 1.8.0
+version: 1.8.1
 last_updated: 25.11.2026
 status: draft
 sources:
@@ -158,7 +158,7 @@ The panel ([[../03-frontend/components/assistant]]) speaks the AI SDK's UI messa
 - **One message id scheme** (`replyMessageId`): an assistant message's id is its first model message's position (`a{seq}`). The live stream's reply uses the same id, so a turn that carries a message on — an answer to its cards, Try again — updates it in place.
 - **Place links** (v1.49.0): the app's prompt (`prompt.ts`) has the model link a saved place to its page in the app (`[name](/places/<id>)`) instead of its maps_url; the panel offers "Show these N on map" for the places a reply links (`placeIdsIn`, `ui-types.ts`). claude.ai keeps maps_url links (the shared instructions).
 - **Previews** (`describe-writes.ts`): the card's text from the call's input — ids resolved to names through the user's own rows; a place proposed from a Google Maps search named from that search's result in the conversation. The model doesn't describe plans or lists before calling (eval), so the card has to.
-- **Requests from a screen** (v1.52.0, decision 6.1): a screen opens the panel with a request and what it is about — the plan, the places compared, the map or the places list with its filters. The route checks it against the user's library and names it (`resolveSubject`, `subject.ts`); the user's message keeps it as a `<subject>` block after `<context>`: JSON with the kind, the ids and names, and an `about` line saying what it is, so it reads right in a conversation whose system prompt predates it. The app's prompt says so for new conversations, and asks for a comparison in a few lines — what each place is best for, what to watch out for, which to pick when. The panel shows it as a chip (`subjectLabel`, `ui-types.ts`).
+- **Requests from a screen** (v1.52.0, decision 6.1): a screen opens the panel with a request and what it is about — the plan, the places compared, the map or the places list with its filters. The route checks it against the user's library and names it (`resolveSubject`, `subject.ts`); the user's message keeps it as a `<subject>` block after `<context>`: JSON with the kind, the ids and names, and an `about` line saying what it is, so it reads right in a conversation whose system prompt predates it. The app's prompt says so for new conversations, and asks for a comparison in a few lines — what each place is best for, what to watch out for, which to pick when. The panel shows it as a chip (`subjectLabel`, `ui-types.ts`). In use: the compare page (v1.52.0), the plan page (v1.53.0) and the search field (v1.54.0) — with that, every AI feature of the app runs on Claude.
 - **After the browser:** the chat route waits for the turn with `after()`; the turn lease makes another tab wait instead of starting a second turn.
 
 ## Errors

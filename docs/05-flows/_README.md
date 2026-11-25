@@ -2,7 +2,7 @@
 title: Flows
 type: overview
 domain: overview
-version: 1.8.4
+version: 1.8.5
 last_updated: 25.11.2026
 status: stable
 related:
@@ -41,7 +41,7 @@ End-to-end user / data flows that span multiple subsystems. Each doc traces the 
 | [[lite-profile-flow]] | Rule-based AI suggestions inline in parse-link (Phase 3) | `parse-link` → `buildLiteProfile` → AddPlaceDialog AI chips |
 | [[full-profile-flow]] | Background full place_profile generation (Phase 4 + 5.5; Claude Sonnet 5.5 since v1.51.0) | `step=reviews` chain → `step=profile` → Claude (`PROFILE_WRITER`) → 4-band auto-apply + moderation queue |
 | [[ai-enrichment-flow]] | A place is saved (any entry point) | The `enrich` cascade `info → reviews → profile`, per-entry-point coverage, completeness ladder, cost cap — overview |
-| [[ai-search-flow]] | User submits a NL query in the AI search input (Phase 6) | `/api/ai/parse-query` → `/api/places` (hard + soft features) → optional `/api/ai/rank-results` |
+| [[ai-search-flow]] | User taps "Ask the assistant" under the search field (v1.54.0; the Gemini AI search before) | the assistant panel, the words sent with the screen's filters and map area as subject |
 | [[plan-flow]] | User creates a plan (empty or from a list) and edits it | `POST /api/plans` → `PATCH /api/plans/[id] { set, ops }` → optional `/api/plans/[id]/auto-plan` → per-day route |
 | [[ai-plan-flow]] | User clicks "Plan with assistant" on a plan (v1.53.0; "AI Plan" on Gemini before) | the assistant panel with the plan as subject → `update_plan` card showing the plan as it will be (`preview_plan_changes`) → saved on yes if unchanged |
 | [[share-flow]] | User clicks "Share" on a list, plan or place | `/api/shared` (POST) → public `/shared/<slug>` → optional save |

@@ -1,14 +1,14 @@
 import "server-only";
-import type { SupabaseClient } from "@supabase/supabase-js";
-import { createClient } from "@/lib/supabase/server";
 
 /**
  * AI SKU registry. Pricing in USD per 1k calls (approximate).
  *
- * Gemini calls only. Place profiles and Instagram post reads are Claude calls
- * since v1.51.0 (24.11.2026): each is priced into the agent's ledger
- * (assistant_spend, src/lib/agent/spend.ts) and stops at its monthly cap.
- * Their SKUs below stay for the months that still have rows.
+ * The Gemini features' usage counters — all of them history since v1.54.0:
+ * every AI call is a Claude call now, priced into the agent's ledger
+ * (assistant_spend, src/lib/agent/spend.ts) under one monthly cap. Nothing
+ * writes these SKUs any more (trackAiUsage, checkAiBudget and the per-user
+ * budgets went with the last Gemini route); they stay so the cost tracker
+ * can show the months that have rows (`retired`).
  *
  * Model: gemini-3-flash-preview (since 15.07.2026). Verified rates
  * (ai.google.dev pricing, standard tier):
@@ -27,11 +27,13 @@ export const AI_SKU_CONFIG = {
     name: "AI Parse Query",
     costPer1k: 0.7,
     freeMonthly: 0,
+    retired: true,
   },
   ai_rank_results: {
     name: "AI Rank Results",
     costPer1k: 20.0,
     freeMonthly: 0,
+    retired: true,
   },
   // Gemini profiles until v1.51.0 — nothing writes it now. `retired`: the
   // cost tracker shows it only in a month that still has usage.
@@ -45,6 +47,7 @@ export const AI_SKU_CONFIG = {
     name: "AI Embedding",
     costPer1k: 0,
     freeMonthly: 0,
+    retired: true,
   },
   // v1.19.0–v1.51.0: the compare page's Gemini comparison — the assistant
   // answers it since v1.52.0, nothing writes it now.
@@ -86,113 +89,3 @@ export const AI_SKU_CONFIG = {
 } as const;
 
 export type AiSku = keyof typeof AI_SKU_CONFIG;
-
-/**
- * Increment the per-user/per-SKU/per-day counter in api_usage.
- * Mirrors src/lib/google/track-usage.ts but for AI calls.
- *
- * Failures are swallowed (logged, not thrown) so a tracking outage
- * never breaks a user-facing request.
- */
-export async function trackAiUsage(
-  userId: string,
-  sku: AiSku,
-  client?: SupabaseClient
-): Promise<void> {
-  try {
-    const supabase = client ?? (await createClient());
-    const config = AI_SKU_CONFIG[sku];
-    await supabase.rpc("increment_api_usage", {
-      p_user_id: userId,
-      p_sku: sku,
-      p_cost: config.costPer1k,
-    });
-  } catch (e) {
-    console.error("[AI Usage Tracking] Error:", e);
-  }
-}
-
-/**
- * Per-user MONTHLY AI budgets for the Gemini features (15.07.2026; replaced
- * the single per-call cap after the Gemini 3 price verification showed
- * searches dominate cost).
- *
- * - SEARCH: 500 searches/month. One search burns ONE budget unit no
- *   matter how many LLM calls it makes — counted via the ai_parse_query
- *   SKU (every search runs exactly one parse; rank re-fires from broaden
- *   toggles are free). Ceiling ≈ 500 × ~$0.021 ≈ $10.5/month.
- * - RANK BACKSTOP: rank_results is already budgeted through the search
- *   bucket at parse time; its own 3× ceiling exists ONLY so a client-side
- *   rerank-loop bug can't bypass the parse gate and run up cost.
- *
- * Place profiles (1000 a month) and Instagram post reads (300 a month) had
- * buckets here until v1.51.0; as Claude calls they are bounded by the
- * ledger's monthly cap instead. Compare (200 a month) went with the
- * Gemini comparison in v1.52.0, AI Plan (50 a month) in v1.53.0 — the
- * assistant does both.
- */
-export const AI_MONTHLY_SEARCH_CAP = 500;
-export const AI_MONTHLY_RANK_BACKSTOP = AI_MONTHLY_SEARCH_CAP * 3;
-
-export type AiBudgetKind = "search" | "rank_backstop";
-
-const BUDGETS: Record<AiBudgetKind, { sku: AiSku; cap: number }> = {
-  search: { sku: "ai_parse_query", cap: AI_MONTHLY_SEARCH_CAP },
-  rank_backstop: { sku: "ai_rank_results", cap: AI_MONTHLY_RANK_BACKSTOP },
-};
-
-export interface AiCapStatus {
-  /** True once this month's AI call count has reached the cap. */
-  exceeded: boolean;
-  /** This calendar month's total AI calls for the user across all AI SKUs. */
-  used: number;
-  /** The cap that `used` is measured against. */
-  cap: number;
-}
-
-/**
- * Check one of the user's monthly AI budgets (calendar month, UTC —
- * resets naturally on the 1st).
- *
- * Reads the per-(user, sku, day) counters in api_usage — the same rows
- * trackAiUsage() / increment_api_usage write — summing only the SKU that
- * backs the requested budget (see BUDGETS).
- *
- * Fails OPEN: if the check itself errors (api_usage unreachable), returns
- * exceeded=false. The budget is a spend guard, not a hard billing gate —
- * a transient DB blip must never 429 a legitimate request.
- */
-export async function checkAiBudget(
-  kind: AiBudgetKind,
-  userId: string,
-  client?: SupabaseClient
-): Promise<AiCapStatus> {
-  const budget = BUDGETS[kind];
-  try {
-    const supabase = client ?? (await createClient());
-    // api_usage.created_at is a DATE (UTC) — month window via >= YYYY-MM-01.
-    const now = new Date();
-    const monthStart = `${now.getUTCFullYear()}-${String(
-      now.getUTCMonth() + 1
-    ).padStart(2, "0")}-01`;
-    const { data, error } = await supabase
-      .from("api_usage")
-      .select("count")
-      .eq("user_id", userId)
-      .gte("created_at", monthStart)
-      .eq("sku", budget.sku);
-    if (error) throw error;
-    const used = (data ?? []).reduce(
-      (sum, row) => sum + (row.count ?? 0),
-      0
-    );
-    return {
-      exceeded: used >= budget.cap,
-      used,
-      cap: budget.cap,
-    };
-  } catch (e) {
-    console.error(`[AI Budget:${kind}] check failed — failing open:`, e);
-    return { exceeded: false, used: 0, cap: budget.cap };
-  }
-}

@@ -2,8 +2,8 @@
 title: User routes
 type: route-group
 domain: backend
-version: 1.6.0
-last_updated: 24.11.2026
+version: 1.6.1
+last_updated: 25.11.2026
 status: stable
 sources:
   - src/app/api/user/api-keys/route.ts
@@ -97,7 +97,7 @@ Google key fields (`googleApiKey`, `hasGoogleKey`, `googlePlacesEnabled`) were r
 
 - **Source:** `src/app/api/user/ai-settings/route.ts`
 - **DB:** `profiles` SELECT (`ai_features_enabled, cron_refresh_enabled`).
-- **Response:** `{ enabled: boolean, available: boolean, assistantAvailable: boolean, cronRefreshEnabled: boolean }`. `available` reflects the presence of `GOOGLE_GENERATIVE_AI_API_KEY` on the server (the Gemini features); `assistantAvailable` (v1.48.0) the presence of `ANTHROPIC_API_KEY` (the assistant, and since v1.51.0 place profiles and Instagram reads, run on Claude — Settings → AI keeps its switch usable while either flag is true and shows the profile backfill and the suggestions queue only with this one); `cronRefreshEnabled` is the opt-in for the whole periodic refresh sweep (default false — see [[../../06-ops/runbooks/periodic-refresh]]).
+- **Response:** `{ enabled: boolean, assistantAvailable: boolean, cronRefreshEnabled: boolean }` (`available`, the Gemini key's presence, went in v1.54.0 with the last Gemini feature); `assistantAvailable` (v1.48.0) the presence of `ANTHROPIC_API_KEY` (the assistant, and since v1.51.0 place profiles and Instagram reads, run on Claude — Settings → AI keeps its switch usable while either flag is true and shows the profile backfill and the suggestions queue only with this one); `cronRefreshEnabled` is the opt-in for the whole periodic refresh sweep (default false — see [[../../06-ops/runbooks/periodic-refresh]]).
 
 ### `PUT /api/user/ai-settings`
 

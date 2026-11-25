@@ -2,7 +2,7 @@
 title: Repo Structure
 type: overview
 domain: overview
-version: 1.14.3
+version: 1.14.4
 last_updated: 25.11.2026
 status: stable
 sources:
@@ -86,7 +86,6 @@ src/
 │   ├── offline/page.tsx       PWA offline fallback
 │   └── api/                   Route handlers (see [[../02-backend/api-routes/_README]])
 │       ├── places/            CRUD + bulk + enrich (info/reviews/profile) + refresh-google-data (merge + profile chain) + import-jobs (durable import queue) + parse-link (returns lite_profile) + migrate-photos
-│       ├── ai/                parse-query + rank-results (Phase 6)
 │       ├── cron/              refresh-places — daily periodic-refresh sweep (CRON_SECRET, service-role, opt-in per user);
 │       │                      drain-imports — every minute, the import queue (Takeout + Instagram jobs)
 │       ├── instagram/         import (POST — start from a post URL, work in after()) + import/[id] (GET — dialog progress) — v1.28.0; import/[id]/pick (POST — add the place picked for a skipped venue) — v1.28.1
@@ -119,7 +118,7 @@ src/
     ├── ai/                    AI SDK v6 wiring (Gemini 3 Flash; profiles by Claude since v1.51.0). client.ts, context-builder.ts,
     │                          dedup.ts, normalize.ts, track-usage.ts (budgets), generate-profile.ts,
     │                          schemas/ (Zod); prompts/ (place-profile-full.ts,
-    │                          parse-query.ts, rank-results.ts); extract/ (lite-profile.ts,
+    │                          ); extract/ (lite-profile.ts,
     │                          category-resolver.ts, features-extractor.ts,
     │                          suggestions-from-profile.ts); apply-suggestions.ts.
     ├── text/                  fold.ts — Turkish-aware text folding for matching (17.11.2026; moved from instagram/normalize.ts)
@@ -146,11 +145,11 @@ src/
     │                          resolve.ts (deterministic pinning rules), normalize.ts, maps-link.ts, import-job.ts, provenance.ts
     ├── import/                process-place.ts (resolveIdentity / findExisting / importPlace / ensurePlacePhoto),
     │                          kick-drain.ts (nudge the drain; shared by both imports, v1.28.0)
-    ├── hooks/                 React Query hooks (19 files): useAiSearch, useAiSuggestions, useBackfillProfiles, useCategories, useDebounce, useFilters, useImportJob, useInstagramImport, useIsDesktop, useLists, useMapStyle, usePlaceSearch, usePlaces, useSavedFilters, useSharedLinks, useStats, useSubcategories, useTags, usePlans
+    ├── hooks/                 React Query hooks (19 files): useAiSuggestions, useAssistantAvailability, useBackfillProfiles, useCategories, useDebounce, useFilters, useImportJob, useInstagramImport, useIsDesktop, useLists, useMapStyle, usePlaceSearch, usePlaces, useSavedFilters, useSharedLinks, useStats, useSubcategories, useTags, usePlans
     ├── stores/                Zustand stores (currently just import-store.ts)
     ├── map/                   category-icons.ts (canvas marker rendering)
     ├── supabase/              client.ts (browser), server.ts (+ createServiceClient), proxy.ts (updateSession)
-    ├── telemetry/             logger.ts (dual-write log.*), trace-context.ts (W3C traceparent mint),
+    ├── telemetry/             logger.ts (dual-write log.*), (trace-context.ts went with the AI search, v1.54.0),
     │                          langfuse.ts (LangfuseSpanProcessor singleton + flushLangfuse) — see [[../05-flows/observability-flow]]
     ├── types/                 index.ts — domain types (Place, Plan, Category, Subcategory, Tag, …)
     ├── geo.ts                 Shared PostGIS point parser (EWKB hex / WKT / GeoJSON / plain object)

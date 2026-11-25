@@ -12,7 +12,6 @@ import { BookmarkPlus, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useFilters, filtersToQueryString } from "@/lib/hooks/use-filters";
 import { useCreateSavedFilter } from "@/lib/hooks/use-saved-filters";
-import { useAiSearchStore } from "@/lib/stores/ai-search-store";
 
 /**
  * v1.20.0 (F-03) — "save the current filter set" popover, mounted in the
@@ -20,15 +19,11 @@ import { useAiSearchStore } from "@/lib/stores/ai-search-store";
  * hasActiveFilters gate — saving an empty set is meaningless).
  *
  * Serializes via filtersToQueryString(filters) so the stored string is
- * canonical (same serializer the URL sync uses). When an AI search is
- * active (rankings present), the NL query is stored too, so the
- * resulting chip re-runs the whole AI pipeline.
+ * canonical (same serializer the URL sync uses).
  */
 export function SaveFilterButton() {
   const { filters, hasActiveFilters } = useFilters();
   const createSavedFilter = useCreateSavedFilter();
-  const aiActive = useAiSearchStore((s) => s.rankings !== null);
-  const lastQuery = useAiSearchStore((s) => s.lastQuery);
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
 
@@ -42,7 +37,6 @@ export function SaveFilterButton() {
       {
         name: trimmed,
         query_string: filtersToQueryString(filters),
-        ai_query: aiActive && lastQuery ? lastQuery : null,
       },
       {
         onSuccess: () => {
@@ -63,14 +57,7 @@ export function SaveFilterButton() {
         Save
       </PopoverTrigger>
       <PopoverContent align="end" className="w-64 p-3 space-y-2">
-        <p className="text-xs font-medium">
-          {aiActive && lastQuery ? "Save this AI search" : "Save this filter"}
-        </p>
-        {aiActive && lastQuery && (
-          <p className="text-[11px] text-muted-foreground line-clamp-2">
-            “{lastQuery}” — the chip will re-run the AI search.
-          </p>
-        )}
+        <p className="text-xs font-medium">Save this filter</p>
         <Input
           value={name}
           onChange={(e) => setName(e.target.value)}

@@ -41,11 +41,7 @@ export function useCreateSavedFilter() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (input: {
-      name: string;
-      query_string: string;
-      ai_query?: string | null;
-    }) => {
+    mutationFn: async (input: { name: string; query_string: string }) => {
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -56,7 +52,6 @@ export function useCreateSavedFilter() {
         .insert({
           name: input.name,
           query_string: input.query_string,
-          ai_query: input.ai_query ?? null,
           user_id: user.id,
         })
         .select()

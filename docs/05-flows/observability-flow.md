@@ -2,7 +2,7 @@
 title: Observability Flow (Honeycomb + Vercel/Axiom + Langfuse)
 type: flow
 domain: infra
-version: 3.7.2
+version: 3.8.0
 last_updated: 25.11.2026
 status: stable
 sources:
@@ -18,7 +18,6 @@ sources:
   - src/app/api/instagram/import/route.ts
 related:
   - "[[ai-search-flow]]"
-  - "[[../02-backend/api-routes/ai]]"
 ---
 
 # Observability Flow
@@ -144,7 +143,7 @@ Span sources:
 **Langfuse trace-level fields** (name, user, tags) are stamped via
 `propagateAttributes({ traceName, userId, tags }, () => generateText(…))`
 (`@langfuse/tracing`) at each call site: `ai-search` (parse-query +
-rank-results — one merged trace via the traceparent below),
+rank-results, until v1.54.0),
 `place-profile` (enrich step=profile), `cron-refresh-places` (cron),
 `ai-compare` (compare route, v1.19.0–v1.51.0; the assistant answers it since v1.52.0).
 
@@ -175,34 +174,9 @@ is suspended; neither sets a `propagateAttributes` trace name either.
 > proxy (`src/proxy.ts`, was middleware) is Node and instrumented like the
 > routes — its request and Supabase-auth `fetch` spans reach Honeycomb.
 
-## Trace propagation — AI search pipeline
+## Trace propagation — AI search pipeline (removed in v1.54.0)
 
-AI search fires three sequential server calls from the browser —
-`parse-query` → `/api/places` → `rank-results`. Each is a separate
-Vercel function invocation, so without a shared trace context each
-opens its own trace: three disconnected waterfalls.
-
-`src/lib/telemetry/trace-context.ts` `newTraceparent()` mints one W3C
-`traceparent` (`00-<trace-id>-<span-id>-01`) per AI search.
-`useAiSearch` stores it on `ai-search-store` and sends it as a request
-header on all three fetches (`use-ai-search.ts` → parse-query +
-rank-results; `use-places.ts` → `/api/places`).
-
-`@vercel/otel` extracts the header via its default W3C Trace Context
-propagator, so the three request spans — and their children
-(`ai.generateText`, Supabase + Gemini `fetch` spans) — stitch into ONE
-trace. The whole pipeline becomes a single waterfall.
-
-The parent span the `traceparent` points at is **synthetic** — the
-browser never exports a span for it, so Honeycomb renders the three
-server spans under a generated root. A real, named browser-side root
-span would need a full browser OpenTelemetry SDK + exporter (future
-add).
-
-The context is scoped to one search: minted at search start, dropped on
-completion (`applyRankings` / `failRerank`), on `reset`, and for
-no-rerank queries (parse-query only) — so it never leaks onto later
-unrelated `/api/places` fetches.
+The Gemini AI search fired `parse-query` → `/api/places` → `rank-results` from the browser and stitched them into one trace with a `traceparent` minted per search (`trace-context.ts`, deleted with it). Nothing in the app chains browser calls into one trace any more; the assistant's turn is one request with its own Langfuse trace ([[../04-integrations/claude-agent]]).
 
 ## Required env vars (Vercel — Production + Preview scopes)
 

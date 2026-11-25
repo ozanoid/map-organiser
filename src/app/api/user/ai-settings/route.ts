@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
-import { isAiAvailable } from "@/lib/ai/client";
 import { isAssistantConfigured } from "@/lib/agent/door";
 
 /**
@@ -32,9 +31,9 @@ export async function GET() {
 
   return NextResponse.json({
     enabled: profile?.ai_features_enabled ?? true,
-    // Two providers: AI search runs on Gemini; the assistant — and through
-    // it AI Plan and Compare — place profiles and Instagram reads on Claude.
-    available: isAiAvailable(),
+    // Every AI feature runs on Claude since v1.54.0: the assistant (and
+    // through it AI Plan, Compare and the search field), place profiles,
+    // Instagram reads.
     assistantAvailable: isAssistantConfigured(),
     cronRefreshEnabled: profile?.cron_refresh_enabled ?? false,
   });
