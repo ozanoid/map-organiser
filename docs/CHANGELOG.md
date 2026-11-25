@@ -6,6 +6,18 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 25.11.2026 — v1.57.2 — The notifications plan_id index applied
+
+- Applied with Ozan's approval: migration `notifications_plan_index`,
+  version 20261125224149 (the file renamed from 20261125210000) —
+  `notifications_plan_idx (plan_id)`. Supabase's performance advisor no
+  longer lists `notifications.plan_id` among the unindexed foreign keys
+  (16 → 15; the rest predate Phase 3).
+- Docs: [[02-backend/schema/notifications]],
+  [[_plans/phase-3-communication]], [[_plans/personal-assistant]].
+
+---
+
 ## 25.11.2026 — v1.57.1 — The notifications migration applied
 
 - Applied with Ozan's approval: migration `notifications`, version

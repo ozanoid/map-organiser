@@ -2,7 +2,7 @@
 title: "Kişisel mekan ve gezme asistanı — yön planı"
 type: plan
 domain: overview
-version: 1.10.1
+version: 1.10.2
 last_updated: 25.11.2026
 status: stable
 related:
@@ -36,7 +36,7 @@ related:
 | 0 | Claude'a kapı: MCP server + OAuth | **Tamam (17.11.2026):** main'de, claude.ai'a bağlı. Okuma tool'ları connector üzerinden gerçek token'la doğrulandı; `update_places` henüz gerçek kullanımda denenmedi |
 | 1 | Planlama ve ziyaretler | Tasarım v2 onaylı: [[phase-1-planning]]. Şema uygulandı (18.11.2026); `search_google_maps` main'de. **Dilim 1 (plan modeli dönüşümü) main'de (18.11.2026)** — uygulama artık plan tablolarında çalışıyor; arayüz tarayıcıda uçtan uca denendi. Eski trip tablolarının silinmesi ayrı onay bekliyor. Dilim 2 (ziyaretler) main'de (18.11.2026). Dilim 3 (plan tool'ları: `get_plans`, `create_plan`, `update_plan`; ayrıca `delete_visit`) main'de (18.11.2026). Dilim 4 (listeler: tek yazma yolu, öğe notu, `get_lists` / `save_list`) main'de (18.11.2026). Dilim 5 (`add_places`: Google kimliği, Maps linki ya da Instagram postuyla ekleme; mekan başına tek satır kuralı veritabanında) main'de (18.11.2026). Faz 1'in beş dilimi tamam. Ardından mekan aramaları tamamen DataForSEO'ya geçti — Google Places artık çağrılmıyor (main'de, 19.11.2026; v1.42.0) |
 | 2 | Platform asistanı Claude'a | Tasarım onaylandı (Ozan, 23.11.2026): [[phase-2-assistant]] — sunucu tarafında ortak Claude ajanı, ilk kapı uygulama içi sohbet; sohbetler sunucuda, yalnız sona eklenir; yazma onayı kartla; model eval'le; web araması açık; dolar bazında aylık $100. Şema uygulandı (23.11.2026); ajan çekirdeği yazıldı ve ücretli eval koşuldu (main'de, $5.03); model Sonnet 5.5 high (Ozan, 23.11.2026); ikinci şema adımı uygulandı (23.11.2026); 6. karar (Gemini'nin işleri Claude'a) verildi; uygulama içi kapı yazıldı ve uçtan uca denendi (main'de, v1.48.0; 24.11.2026); `rank_places` asistana verildi (24.11.2026, main'de); profil ve Instagram okuması Claude'a geçti (6.2, v1.51.0, main'de) ve bütün profiller yeniden yazıldı (6.3, 889 profil, $28.28); düğmelerin asistana devri yapıldı ve uçtan uca denendi (adım 4, v1.52.0–v1.54.1, main'de, 25.11.2026); Gemini kodu, paketi ve eval kolları kaldırıldı (adım 5, v1.55.0, main'de); merge etüdünün iki kararı (asistan yalnız sahiplere, arka plan işleri limitin %80'inde) v1.56.0'da; **main'e geçti (25.11.2026, merge 7df90df)**; production duman testinde bulunan geniş harita alanı hatası düzeltildi (v1.56.1, main'de — merge e92e9fa) |
-| 3 | İletişim (e-posta, Telegram, WhatsApp linki, davet sayfası) | Tasarım: [[phase-3-communication]] — 14 karar onaylandı (Ozan, 25.11.2026, hepsi önerildiği gibi). **Dilim 1 (kanallar ve "Bana gönder": e-posta ve Telegram bağlama, plan özeti, `send_plan`) dalda (v1.57.0)**; migration'ı uygulandı (Ozan'ın onayıyla, 25.11.2026); `plan_id` indeksi için küçük ek migration onay bekliyor; gerçek gönderim Resend ve BotFather adımlarından sonra denenecek |
+| 3 | İletişim (e-posta, Telegram, WhatsApp linki, davet sayfası) | Tasarım: [[phase-3-communication]] — 14 karar onaylandı (Ozan, 25.11.2026, hepsi önerildiği gibi). **Dilim 1 (kanallar ve "Bana gönder": e-posta ve Telegram bağlama, plan özeti, `send_plan`) dalda (v1.57.0)**; migration'ı ve `plan_id` indeksi uygulandı (Ozan'ın onayıyla, 25.11.2026); gerçek gönderim Resend ve BotFather adımlarından sonra denenecek |
 | 4 | Geri bildirim döngüsü | Sırada |
 | 5 | Instagram saved koleksiyonu + görsel/video anlama | Sırada (export Ozan'dan gelecek) |
 | 6 | Haftalık Londra keşfi | Sırada |
