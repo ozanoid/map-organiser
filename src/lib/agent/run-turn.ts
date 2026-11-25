@@ -28,7 +28,7 @@ import { systemPromptFor } from "@/lib/agent/prompt";
 import { subjectBlock } from "@/lib/agent/subject";
 import { verifyProposal } from "@/lib/agent/describe-writes";
 import type { ResolvedSubject } from "@/lib/agent/ui-types";
-import { MONTHLY_CAP_USD, type SpendLedger, type SpendPurpose } from "@/lib/agent/spend";
+import { capFor, type SpendLedger, type SpendPurpose } from "@/lib/agent/spend";
 import type { Conversation, ConversationStore, Door, NewToolRun, ToolRunDecision, TurnRecord } from "@/lib/agent/store";
 import { agentToolDefinitions, checkToolCall, executeToolCall, needsApproval } from "@/lib/agent/tools";
 import { log } from "@/lib/telemetry/logger";
@@ -218,9 +218,10 @@ export async function openTurn(deps: AgentDeps, conversationId: string, input: T
       }
     }
 
-    // The budget gates the whole turn, before anything is written or run.
+    // The budget gates the whole turn, before anything is written or run —
+    // the whole cap: background work stops at its share (capFor).
     const spent = await deps.ledger.monthToDate(now());
-    if (spent >= MONTHLY_CAP_USD) {
+    if (spent >= capFor(deps.purpose)) {
       log.warn("agent.budget_exhausted", { userId: deps.toolCtx.userId, spentUsd: spent });
       throw new AgentError("budget_exhausted");
     }

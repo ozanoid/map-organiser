@@ -11,11 +11,12 @@ interface AiSettingsAnswer {
 export const AI_SETTINGS_KEY = ["ai-settings"] as const;
 
 /**
- * Whether the assistant can be used here: the user has AI features on and
- * the server has its Claude key. One answer for the header button and every
- * screen that opens the assistant with a request (decision 6.1); Settings
- * refreshes it when the switch changes. While it loads, or if it can't be
- * read, the entries stay hidden.
+ * Whether the assistant can be used here: the user has AI features on, the
+ * server has its Claude key and the account is an owner (`assistantOpenTo`,
+ * v1.56.0). One answer for the header button and every screen that opens the
+ * assistant with a request (decision 6.1); Settings refreshes it when the
+ * switch changes. While it loads, or if it can't be read, the entries stay
+ * hidden.
  */
 export function useAssistantAvailability(): boolean {
   const { data } = useQuery({

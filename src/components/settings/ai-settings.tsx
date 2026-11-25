@@ -11,15 +11,17 @@ import { AI_SETTINGS_KEY } from "@/lib/hooks/use-assistant-availability";
 
 interface AiSettingsState {
   enabled: boolean;
-  /** Claude is set up: every AI feature (the assistant, place profiles,
-   *  Instagram imports). */
+  /** Claude is set up: every AI feature (place profiles, Instagram imports,
+   *  the assistant). */
+  aiAvailable: boolean;
+  /** This account may use the assistant (an owner). */
   assistantAvailable: boolean;
   cronRefreshEnabled: boolean;
 }
 
 /** What this deployment needs for AI features. */
 const PROVIDERS = [
-  { flag: "assistantAvailable", env: "ANTHROPIC_API_KEY", what: "AI features are" },
+  { flag: "aiAvailable", env: "ANTHROPIC_API_KEY", what: "AI features are" },
 ] as const;
 
 /**
@@ -124,7 +126,7 @@ export function AiSettings() {
 
   if (!state) return null;
 
-  const disabled = !state.assistantAvailable || saving;
+  const disabled = !state.aiAvailable || saving;
 
   return (
     <div className="space-y-4">
@@ -136,7 +138,7 @@ export function AiSettings() {
           </div>
           <p className="text-xs text-muted-foreground mt-1">
             When enabled: smart categorization, tag &amp; list suggestions,
-            place profiles, and the assistant.
+            {state.assistantAvailable ? " place profiles, and the assistant." : " and place profiles."}
           </p>
         </div>
 
@@ -217,7 +219,7 @@ export function AiSettings() {
       {/* Phase 5: moderation queue + Phase 6 follow-up: profile backfill.
           Both gated on the master AI toggle and on Claude, which writes the
           profiles and with them the suggestions (v1.51.0). */}
-      {state.enabled && state.assistantAvailable && (
+      {state.enabled && state.aiAvailable && (
         <>
           <Separator />
           <BackfillProfilesPanel />

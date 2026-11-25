@@ -2,7 +2,7 @@
 title: Assistant routes
 type: route-group
 domain: backend
-version: 1.4.0
+version: 1.5.0
 last_updated: 25.11.2026
 status: draft
 sources:
@@ -35,7 +35,8 @@ The app door of the platform's Claude agent ([[../../04-integrations/claude-agen
 
 1. Signed in (cookie session) — else **401**.
 2. The server has `ANTHROPIC_API_KEY` — else **503** "The assistant isn't set up on this server."
-3. `profiles.ai_features_enabled` isn't false — else **403**.
+3. The account is an owner (`assistantOpenTo`: `ASSISTANT_OWNER_EMAILS`, the list the claude.ai connector checks — v1.56.0, Ozan: the assistant spends the platform's one budget) — else **403** `{ error: "The assistant is only open to this app's owner.", code: "not_owner" }`, nothing written.
+4. `profiles.ai_features_enabled` isn't false — else **403**.
 
 Tools run with the user's own session (RLS). The agent's tables and the spend ledger are written with the service role, every query scoped to the user in code (`supabaseConversationStore(admin, userId)`).
 

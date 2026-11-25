@@ -2,7 +2,7 @@
 title: Instagram Import Flow
 type: flow
 domain: places
-version: 1.6.0
+version: 1.6.1
 last_updated: 25.11.2026
 status: stable
 sources:
@@ -191,7 +191,8 @@ code (`InstagramRefusalCode`, v1.51.0).
 
 ### C. Background job — `runInstagramImportJob` (`src/lib/instagram/import-job.ts`)
 
-8. The platform's monthly Claude cap ($100, `assistant_spend`; v1.51.0 — before,
+8. The background share of the platform's monthly Claude cap ($80 of the $100,
+   `capFor("instagram")`, v1.56.0; the whole cap v1.51.0–v1.55.x; before,
    `checkAiBudget("instagram")`, 300 posts per user per calendar month).
    Over it, the job fails with `budget_exceeded` before any paid call.
 9. `analyzeInstagramPost` (`src/lib/instagram/analyze.ts`), detailed in
@@ -611,7 +612,7 @@ planned is a monthly dollar cap over every paid service (see
 | B | 429 "You've imported 300 Instagram posts this month, the monthly limit. Imports resume on the 1st." | `monthly_limit` (v1.51.0): 300 new imports this calendar month (UTC). No Try again. |
 | B | Until v1.42.0: 400 "…needs a Google Places API key. Add one in Settings." | No per-user key and not an admin. The `google_places_enabled` toggle (it scopes Maps-link lookups) is deliberately not consulted — see Decisions. |
 | B | 500 with the database error text | The tag or the job insert failed. |
-| C | "This month's AI budget is used up. Instagram imports resume on the 1st." (v1.51.0; before: "You've used this month's Instagram imports.") | `budget_exceeded`; no Try again. |
+| C | "This month's AI budget for imports is used up. Instagram imports resume on the 1st." (v1.56.0; "…AI budget is used up…" from v1.51.0; before: "You've used this month's Instagram imports.") | `budget_exceeded`; no Try again. |
 | C | "Couldn't open this post. It may be private or deleted." | `post_unavailable` (HikerAPI 404). |
 | C | "Something went wrong while reading this post." | `service_error`: HikerAPI still failing after its retries, a Google Maps search (DataForSEO) failing twice, the read failing twice (an answer with no usable object gets one more call — v1.28.2; a Claude refusal none), or the item insert failing. Try again starts a new job. |
 | C | "This took too long and stopped." | `stalled`: still `reading` after 3 min — the `after()` run died (e.g. hit `maxDuration`). Try again starts a new job (the reuse check skips stalled jobs). |

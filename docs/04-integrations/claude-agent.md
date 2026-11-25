@@ -2,7 +2,7 @@
 title: "Claude agent (platform side)"
 type: integration
 domain: integrations
-version: 1.8.4
+version: 1.9.0
 last_updated: 25.11.2026
 status: draft
 sources:
@@ -50,7 +50,7 @@ Two steps in `run-turn.ts`: `openTurn(deps, conversationId, input)` checks, `run
 1. Takes the conversation's **turn lease** — one turn at a time per conversation; another request gets `turn_in_progress` at once, before anything is paid for. The lease runs out after 15 minutes (a route runs at most 800 s), so a crashed turn frees it. Every refusal below gives it back.
 2. Loads the conversation (model, system prompt, tools — fixed when it started) and its messages.
 3. Checks the input against the conversation as it is now. An approval must answer exactly the cards waiting (`cardsWaiting`: valid writes no request has decided — a decision leaves a run record): none waiting → `nothing_pending`; answers for other calls, or not for all of them → `conflict` (a tab showing an older card must not decide one the user hasn't seen). A retry needs something to carry on (`canRetry`): the conversation ends with a user message — the turn broke off before the model answered — or with the model's calls and no card among them — it broke off before their results were stored; otherwise `conflict`.
-4. Checks the month's spend against the cap ($100, `assistant_spend`, platform-wide). Over it, the turn doesn't start.
+4. Checks the month's spend against the cap ($100, `assistant_spend`, platform-wide; `capFor`). Over it, the turn doesn't start. Background work — place profiles, Instagram reads — stops earlier, at 80% (`BACKGROUND_CAP_SHARE`, v1.56.0, Ozan), so a big import can't leave the assistant without budget for the rest of the month.
 
 `run`:
 
@@ -157,6 +157,7 @@ The panel ([[../03-frontend/components/assistant]]) speaks the AI SDK's UI messa
 - **Stored:** `toUIMessages` (`ui.ts`) turns the append-only history (and the tool runs, and the recorded last turn) into the same UI messages, so a reload shows what the live stream showed: a card already answered shows "Saving…" while its turn runs, a run the turn never finished shows as interrupted, the last turn's outcome note comes back.
 - **One message id scheme** (`replyMessageId`): an assistant message's id is its first model message's position (`a{seq}`). The live stream's reply uses the same id, so a turn that carries a message on — an answer to its cards, Try again — updates it in place.
 - **Place links** (v1.49.0): the app's prompt (`prompt.ts`) has the model link a saved place to its page in the app (`[name](/places/<id>)`) instead of its maps_url; the panel offers "Show these N on map" for the places a reply links (`placeIdsIn`, `ui-types.ts`). claude.ai keeps maps_url links (the shared instructions).
+- **Who can use it** (v1.56.0, Ozan): the in-app door is the owners' alone — `assistantOpenTo` (`door.ts`), the `ASSISTANT_OWNER_EMAILS` list the connector checks; anyone else gets 403 `not_owner` and sees no button or entry (`GET /api/user/ai-settings` → `assistantAvailable`). The assistant spends the platform's one budget.
 - **A plan's dates** (v1.55.0): the shared instructions (`instructions.ts`, both doors) keep a plan's dates — `start_date` changes only when the user asks; when the dates don't work (passed, places closed) the model says so and asks. The end-to-end run of 25.11.2026 saw it move a plan's date unasked while spreading the plan over its days (the card showed it). Measured on 25.11.2026 with the eval case `spread-plan-keeps-dates` (the test account's plan, the plan page's request with the plan as subject, Sonnet 5.5 high, 3 runs, $0.208): 3/3 kept the dates — each said the plan's days (20–22.07.2026) had passed, went through the stops on those days and asked for a new start date; none opened a card.
 - **Previews** (`describe-writes.ts`): the card's text from the call's input — ids resolved to names through the user's own rows; a place proposed from a Google Maps search named from that search's result in the conversation. The model doesn't describe plans or lists before calling (eval), so the card has to.
 - **Requests from a screen** (v1.52.0, decision 6.1): a screen opens the panel with a request and what it is about — the plan, the places compared, the map or the places list with its filters. The route checks it against the user's library and names it (`resolveSubject`, `subject.ts`); the user's message keeps it as a `<subject>` block after `<context>`: JSON with the kind, the ids and names, and an `about` line saying what it is, so it reads right in a conversation whose system prompt predates it. The app's prompt says so for new conversations, and asks for a comparison in a few lines — what each place is best for, what to watch out for, which to pick when. The panel shows it as a chip (`subjectLabel`, `ui-types.ts`). In use: the compare page (v1.52.0), the plan page (v1.53.0) and the search field (v1.54.0) — with that, every AI feature of the app runs on Claude.

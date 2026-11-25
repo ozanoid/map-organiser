@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getMonthlyUsage } from "@/lib/google/track-usage";
-import { MONTHLY_CAP_USD, monthSpendByPurpose, SPEND_PURPOSES } from "@/lib/agent/spend";
+import { capFor, MONTHLY_CAP_USD, monthSpendByPurpose, SPEND_PURPOSES } from "@/lib/agent/spend";
 import { createServiceClient } from "@/lib/supabase/server";
 import { log } from "@/lib/telemetry/logger";
 
@@ -16,7 +16,8 @@ export async function GET() {
   const usage = await getMonthlyUsage(user.id);
   // Every Claude call this month, in dollars, against the platform-wide cap
   // (assistant_spend: the assistant, place profiles, Instagram reads, evals —
-  // one ledger, one cap), and what each purpose took.
+  // one ledger, one cap), what each purpose took, and where background work
+  // (profiles, Instagram reads) stops: the rest of the cap is the assistant's.
   let byPurpose = Object.fromEntries(SPEND_PURPOSES.map((p) => [p, 0])) as Awaited<
     ReturnType<typeof monthSpendByPurpose>
   >;
@@ -31,7 +32,7 @@ export async function GET() {
   return NextResponse.json({
     month: new Date().toISOString().substring(0, 7), // "2026-04"
     usage,
-    assistant: { spentUsd: claudeSpentUsd, capUsd: MONTHLY_CAP_USD, byPurpose },
+    assistant: { spentUsd: claudeSpentUsd, capUsd: MONTHLY_CAP_USD, backgroundCapUsd: capFor("profile"), byPurpose },
     totalEstimatedCost,
   });
 }

@@ -1,9 +1,11 @@
 import "server-only";
 
 /**
- * Accounts allowed to connect an assistant (claude.ai, Claude Code) to their
- * library: comma-separated emails in ASSISTANT_OWNER_EMAILS. Unset means
- * nobody — the connector fails closed until the owner is configured.
+ * Accounts allowed to use an assistant on their library — to connect
+ * claude.ai or Claude Code, and (since v1.56.0) the in-app assistant
+ * (`assistantOpenTo`, agent/door.ts): comma-separated emails in
+ * ASSISTANT_OWNER_EMAILS. Unset means nobody — both fail closed until the
+ * owner is configured.
  */
 export function isAssistantOwner(email: string | null | undefined): boolean {
   const wanted = (email ?? "").trim().toLowerCase();

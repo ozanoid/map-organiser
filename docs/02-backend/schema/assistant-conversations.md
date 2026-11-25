@@ -2,8 +2,8 @@
 title: assistant_conversations, assistant_messages, assistant_spend, assistant_tool_runs
 type: table
 domain: backend
-version: 2.2.0
-last_updated: 24.11.2026
+version: 2.2.1
+last_updated: 25.11.2026
 status: draft
 sources:
   - Supabase project hukppmaevcapvbrvxtph (live)
@@ -60,7 +60,7 @@ Primary key `(conversation_id, seq)`: two requests appending to the same convers
 
 ## `assistant_spend`
 
-One row per Claude API call. The dollar amount is computed with the price at the time and stored, so a later price change doesn't rewrite history. The monthly cap ($100, platform-wide) is the sum of this table.
+One row per Claude API call. The dollar amount is computed with the price at the time and stored, so a later price change doesn't rewrite history. The monthly cap ($100, platform-wide) is the sum of this table; profiles and Instagram reads stop at 80% of it (`capFor`, v1.56.0), so the last part is the assistant's.
 
 | Column | Type | Nullable | Default | Notes |
 |---|---|---|---|---|

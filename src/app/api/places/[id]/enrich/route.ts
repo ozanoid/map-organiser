@@ -237,7 +237,7 @@ export async function POST(
       case "cap_exceeded":
         return NextResponse.json(
           {
-            error: `This month's AI budget ($${outcome.capLimit}) is used up. Profiles resume on the 1st.`,
+            error: `This month's AI budget for profiles ($${outcome.capLimit}) is used up — the rest is kept for the assistant. Profiles resume on the 1st.`,
             used: outcome.capUsed,
             cap: outcome.capLimit,
           },

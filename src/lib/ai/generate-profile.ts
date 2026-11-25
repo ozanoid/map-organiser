@@ -5,7 +5,7 @@ import { PlaceProfileSchema, type PlaceProfile } from "@/lib/ai/schemas/place-pr
 import { buildPlaceProfilePrompt } from "@/lib/ai/prompts/place-profile-full";
 import { applyProfileSuggestions } from "@/lib/ai/apply-suggestions";
 import { PROFILE_WRITER } from "@/lib/agent/models";
-import { MONTHLY_CAP_USD, supabaseSpendLedger } from "@/lib/agent/spend";
+import { capFor, supabaseSpendLedger } from "@/lib/agent/spend";
 import { structuredClaude, type ClaudeChoice, type SpendContext } from "@/lib/agent/structured";
 import { createServiceClient } from "@/lib/supabase/server";
 import { loadVocabulary, type Vocabulary } from "@/lib/vocabulary/read";
@@ -30,7 +30,8 @@ export type GenerateProfileOutcome =
         | "not_found"
         | "no_reviews"
         | "llm_failed";
-      /** cap_exceeded: this month's Claude spend and the cap, in US dollars. */
+      /** cap_exceeded: this month's Claude spend and where profiles stop —
+       *  the background share of the cap (capFor) — in US dollars. */
       capUsed?: number;
       capLimit?: number;
     };
@@ -213,8 +214,9 @@ export async function writeProfile(
  *
  * Written by Claude (PROFILE_WRITER — Sonnet 5.5 at medium, Ozan's choice
  * after the 6.2 measurement); Gemini wrote profiles until 24.11.2026. The
- * call is priced into the one ledger (purpose 'profile') and stops at its
- * monthly cap: over it, the place keeps its data and the profile waits.
+ * call is priced into the one ledger (purpose 'profile') and stops at the
+ * background share of the monthly cap (capFor — the rest is the
+ * assistant's): over it, the place keeps its data and the profile waits.
  * `applySuggestions: false` replaces the profile alone — the bulk rewrite of
  * existing profiles (6.3) can leave tags and categories as they are.
  */
@@ -224,7 +226,7 @@ export async function generatePlaceProfile(
   placeId: string,
   options: { applySuggestions?: boolean } = {}
 ): Promise<GenerateProfileOutcome> {
-  // Gates: the user's AI switch → the Claude key → the month's cap.
+  // Gates: the user's AI switch → the Claude key → the month's background budget.
   const { data: profileRow } = await supabase
     .from("profiles")
     .select("ai_features_enabled")
@@ -241,8 +243,9 @@ export async function generatePlaceProfile(
   // The ledger is written with the service role, whatever client the caller has.
   const ledger = supabaseSpendLedger(createServiceClient());
   const spent = await ledger.monthToDate();
-  if (spent >= MONTHLY_CAP_USD) {
-    return { ok: false, reason: "cap_exceeded", capUsed: spent, capLimit: MONTHLY_CAP_USD };
+  const cap = capFor("profile");
+  if (spent >= cap) {
+    return { ok: false, reason: "cap_exceeded", capUsed: spent, capLimit: cap };
   }
 
   const inputs = await profileInputs(supabase, userId, placeId);

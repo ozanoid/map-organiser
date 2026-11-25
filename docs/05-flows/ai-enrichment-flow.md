@@ -2,7 +2,7 @@
 title: AI Enrichment Flow
 type: flow
 domain: places
-version: 1.9.4
+version: 1.9.5
 last_updated: 25.11.2026
 status: stable
 sources:
@@ -130,7 +130,8 @@ buckets added as those features shipped):
   past rows); the plan page asks the assistant. See [[ai-plan-flow]].
 > **v1.51.0:** the PROFILE and INSTAGRAM budgets below are gone (code and checks) —
 > Claude writes the profiles (Sonnet 5.5) and reads the posts (Haiku 5.5),
-> priced into the Claude ledger under the platform's $100 monthly cap
+> priced into the Claude ledger under the platform's $100 monthly cap, of
+> which profiles and Instagram reads may take 80% (v1.56.0)
 > ([[../04-integrations/claude-agent]]). Kept here as the history of the
 > Gemini era.
 
@@ -167,7 +168,7 @@ Both AI layers are gated. A place skips them silently when a gate fails:
 | `profiles.ai_features_enabled` | required | required |
 | `ANTHROPIC_API_KEY` set (the Gemini key until v1.51.0) | not needed (no LLM) | required (else 503) |
 | Reviews present | not needed | required (else 400 `no_reviews`) |
-| Under the Claude ledger's monthly cap ($100; the profile budget until v1.51.0) | not needed | required (else 429) |
+| Under the background share of the Claude cap ($80 of the $100, `capFor` — v1.56.0; the whole cap v1.51.0–v1.55.x, the profile budget before) | not needed | required (else 429) |
 
 ## Failure modes
 
@@ -186,7 +187,7 @@ Both AI layers are gated. A place skips them silently when a gate fails:
 
 - `src/app/api/places/[id]/enrich/route.ts` — the cascade (`step=info|reviews|profile`).
 - `src/lib/ai/track-usage.ts` — the retired AI SKUs only (`trackAiUsage`, `checkAiBudget` and every cap are gone by v1.54.0).
-- `src/lib/agent/spend.ts` — the Claude ledger and its monthly cap (`MONTHLY_CAP_USD`) that bounds profiles and Instagram reads.
+- `src/lib/agent/spend.ts` — the Claude ledger and its monthly cap (`MONTHLY_CAP_USD`); `capFor` stops profiles and Instagram reads at its background share (80%, v1.56.0).
 - `src/lib/ai/extract/lite-profile.ts` — `buildLiteProfile` (layer 3). See [[lite-profile-flow]].
 - `src/lib/ai/prompts/place-profile-full.ts`, `src/lib/ai/apply-suggestions.ts` — layer 5. See [[full-profile-flow]].
 - `src/app/api/cron/drain-imports/route.ts`, `src/lib/import/process-place.ts` — bulk import path.

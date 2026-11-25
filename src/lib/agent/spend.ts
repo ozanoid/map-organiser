@@ -16,6 +16,23 @@ export const MONTHLY_CAP_USD = 100;
  *  place profile, an Instagram post's reading (decision 6.4: one ledger). */
 export type SpendPurpose = "chat" | "eval" | "profile" | "instagram";
 
+/** The share of the cap background work may spend — place profiles (imports,
+ *  the queue, the refresh sweep, the backfill) and Instagram reads. A big
+ *  import stops there, so the last part of the month's budget is always the
+ *  conversation's (Ozan, 25.11.2026). */
+export const BACKGROUND_CAP_SHARE = 0.8;
+
+const BACKGROUND_PURPOSES: ReadonlySet<SpendPurpose> = new Set(["profile", "instagram"]);
+
+/** The month's spend, in US dollars, at which a call for this purpose stops:
+ *  the whole cap for the assistant and the evals, its background share for
+ *  profiles and Instagram reads. Every gate asks here. */
+export function capFor(purpose: SpendPurpose): number {
+  return BACKGROUND_PURPOSES.has(purpose)
+    ? Math.round(MONTHLY_CAP_USD * BACKGROUND_CAP_SHARE * 100) / 100
+    : MONTHLY_CAP_USD;
+}
+
 export interface SpendEntry {
   userId: string;
   conversationId: string | null;

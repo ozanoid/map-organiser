@@ -2,7 +2,7 @@
 title: AI place_profile backfill (per user)
 type: runbook
 domain: ops
-version: 1.4.2
+version: 1.4.3
 last_updated: 25.11.2026
 status: stable
 related:
@@ -57,7 +57,8 @@ Worst case per place (reviews + profile): ≈ \$0.040 (v1.51.0; ~\$0.011 at Gemi
 >
 > **Since v1.51.0:** profiles are written by Claude Sonnet 5.5 (≈ $0.032 a
 > profile in a run of many, measured over the 6.3 rewrite) into the Claude ledger, under the platform's
-> $100 monthly cap; the PROFILE budget is no longer checked. Rewriting the
+> $100 monthly cap — profiles stop at its background share, $80 (v1.56.0); the
+> PROFILE budget is no longer checked. Rewriting the
 > existing profiles with the current writer is `npm run regen:profiles`
 > (Phase 2, 6.3): every place with reviews whose profile it didn't write,
 > re-runnable, `--dry-run` to count, `--apply-suggestions` to re-run the

@@ -2,7 +2,7 @@
 title: Assistant components
 type: component
 domain: frontend
-version: 2.5.1
+version: 2.5.2
 last_updated: 25.11.2026
 status: draft
 sources:
@@ -26,7 +26,7 @@ The in-app assistant's UI (v1.48.0, 24.11.2026 — rebuilt for the Claude agent;
 
 ## `AssistantLauncher` (`assistant-launcher.tsx`)
 
-The header's ✦ button (`app-header.tsx`). Shown when `useAssistantAvailability()` says so — React Query `["ai-settings"]` → `GET /api/user/ai-settings`, `enabled && assistantAvailable`; Settings refreshes it when the AI switch changes, so the button follows without a reload (v1.52.0). Opens the panel through `useAssistantStore` and renders `AssistantPanel` once.
+The header's ✦ button (`app-header.tsx`). Shown when `useAssistantAvailability()` says so — React Query `["ai-settings"]` → `GET /api/user/ai-settings`, `enabled && assistantAvailable` (the Claude key and, since v1.56.0, an owner account — `assistantOpenTo`); Settings refreshes it when the AI switch changes, so the button follows without a reload (v1.52.0). Opens the panel through `useAssistantStore` and renders `AssistantPanel` once.
 
 ## `useAssistantStore` (`src/lib/stores/assistant-store.ts`)
 

@@ -2,7 +2,7 @@
 title: "Claude connector (MCP server)"
 type: integration
 domain: integrations
-version: 1.9.1
+version: 1.9.2
 last_updated: 25.11.2026
 status: draft
 sources:
@@ -84,7 +84,7 @@ Both new paths are skipped by the session proxy (matcher in `src/proxy.ts`): `/a
 
 ## Who may connect
 
-- **Owner gate:** `ASSISTANT_OWNER_EMAILS` (comma-separated). Unset = nobody. Checked on the consent page and on every MCP request (the token's `email` claim); a valid token for anyone else gets 403.
+- **Owner gate:** `ASSISTANT_OWNER_EMAILS` (comma-separated). Unset = nobody. Checked on the consent page and on every MCP request (the token's `email` claim); a valid token for anyone else gets 403. The in-app assistant checks the same list since v1.56.0 ([[claude-agent]]).
 - **Redirect allowlist** (`isAllowedOAuthRedirect`): dynamic client registration lets any app register any redirect URI, so the consent page approves only `https://claude.ai|claude.com/api/mcp/auth_callback` and loopback `http://localhost|127.0.0.1` (Claude Code, RFC 8252). An unknown app sees "Unknown app" with a Cancel button only; its callback is never followed.
 - **Token check** (`verifyAssistantToken`): `supabase.auth.getClaims(token)` — local signature check against the JWKS (the project signs with ES256, verified 17.11.2026); then `role = authenticated` and `iss` = the Supabase issuer. Tools run with a Supabase client carrying that token, so RLS applies; every query also filters `user_id`.
 

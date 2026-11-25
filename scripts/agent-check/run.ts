@@ -24,7 +24,8 @@ import { planChangeLines } from "@/lib/agent/describe-writes";
 import type { PlanSnapshot } from "@/lib/plans/write";
 import type { ToolRun } from "@/lib/agent/store";
 import { openTurn, runTurn, startConversation, type AgentDeps, type TurnEvents, type TurnResult } from "@/lib/agent/run-turn";
-import type { SpendEntry, SpendLedger } from "@/lib/agent/spend";
+import { capFor, MONTHLY_CAP_USD, type SpendEntry, type SpendLedger } from "@/lib/agent/spend";
+import { isAssistantOwner } from "@/lib/assistant/owner";
 import { memoryConversationStore, type ConversationStore } from "@/lib/agent/store";
 
 const say = (line = "") => process.stderr.write(`${line}\n`);
@@ -592,6 +593,33 @@ async function main() {
     t.ledger.spent = 100;
     const err = await throws(t.turn(t.msg("Selam")));
     expect("budget_exhausted before anything is written", err === "budget_exhausted" && (await t.history()).length === 0 && t.client.requests.length === 0, err);
+  }
+
+  say("## background work stops at its share; the assistant goes on");
+  {
+    expect("the assistant and the evals get the whole cap", capFor("chat") === MONTHLY_CAP_USD && capFor("eval") === MONTHLY_CAP_USD);
+    expect(
+      "profiles and Instagram reads stop at 80% of it",
+      capFor("profile") === MONTHLY_CAP_USD * 0.8 && capFor("instagram") === MONTHLY_CAP_USD * 0.8,
+      { profile: capFor("profile"), instagram: capFor("instagram") }
+    );
+    const t = await setup();
+    t.ledger.spent = 85;
+    t.client.queue.push({ kind: "message", stop: "end_turn", content: [text("Buradayım")] });
+    const r = await t.turn(t.msg("Selam"));
+    expect("a turn runs past the background share", r.status === "done", r);
+  }
+
+  say("## the assistant's owners");
+  {
+    const before = process.env.ASSISTANT_OWNER_EMAILS;
+    process.env.ASSISTANT_OWNER_EMAILS = " Owner@Example.com , second@example.com,";
+    expect("an owner, whatever the case and spacing", isAssistantOwner("owner@example.com") && isAssistantOwner(" SECOND@example.com "));
+    expect("anyone else isn't", !isAssistantOwner("other@example.com") && !isAssistantOwner(null) && !isAssistantOwner(""));
+    delete process.env.ASSISTANT_OWNER_EMAILS;
+    expect("no list, no owner (fails closed)", !isAssistantOwner("owner@example.com"));
+    if (before === undefined) delete process.env.ASSISTANT_OWNER_EMAILS;
+    else process.env.ASSISTANT_OWNER_EMAILS = before;
   }
 
   say("## a door handler that throws");

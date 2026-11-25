@@ -65,7 +65,7 @@ function InstagramGlyph({ className }: { className?: string }) {
 const ERROR_COPY: Record<InstagramJobError, string> = {
   invalid_url: "That isn't an Instagram post or reel link.",
   post_unavailable: "Couldn't open this post. It may be private or deleted.",
-  budget_exceeded: "This month's AI budget is used up. Instagram imports resume on the 1st.",
+  budget_exceeded: "This month's AI budget for imports is used up. Instagram imports resume on the 1st.",
   not_configured: "Instagram import isn't set up on this server.",
   service_error: "Something went wrong while reading this post.",
   stalled: "This took too long and stopped.",

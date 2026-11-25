@@ -3,7 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { HikerApiError } from "@/lib/hikerapi/client";
 import { AgentError } from "@/lib/agent/errors";
 import { INSTAGRAM_READER } from "@/lib/agent/models";
-import { MONTHLY_CAP_USD, supabaseSpendLedger } from "@/lib/agent/spend";
+import { capFor, supabaseSpendLedger } from "@/lib/agent/spend";
 import { trackUsage } from "@/lib/google/track-usage";
 import { findExisting } from "@/lib/import/process-place";
 import { kickDrain } from "@/lib/import/kick-drain";
@@ -118,10 +118,11 @@ export async function runInstagramImportJob(args: {
 
   try {
     // The read is a Claude call: one ledger, one monthly cap for every
-    // Claude call (Phase 2, decision 6.4). Over it, the import waits for
-    // next month.
+    // Claude call (Phase 2, decision 6.4), of which background work — this
+    // read included — may spend its share (capFor). Over it, the import waits
+    // for next month.
     const ledger = supabaseSpendLedger(admin);
-    if ((await ledger.monthToDate()) >= MONTHLY_CAP_USD) {
+    if ((await ledger.monthToDate()) >= capFor("instagram")) {
       await finish({ phase: "failed", shortcode, error: "budget_exceeded" });
       return;
     }

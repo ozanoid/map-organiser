@@ -2,8 +2,8 @@
 title: Instagram routes
 type: route-group
 domain: backend
-version: 1.4.0
-last_updated: 24.11.2026
+version: 1.4.1
+last_updated: 25.11.2026
 status: stable
 sources:
   - src/app/api/instagram/import/route.ts
@@ -107,7 +107,7 @@ import queue (`/api/cron/drain-imports`). Full sequence:
 - **Response:** **`202 { jobId }`**. `500` with the error text when the tag or the
   job insert fails.
 - **Side effects (after the response):** `after(async () => { await runInstagramImportJob(...); await flushLangfuse(); })`
-  on `createServiceClient()` — the monthly Claude cap check, HikerAPI + the Claude read + Google
+  on `createServiceClient()` — the Claude cap check (its background share, `capFor`, v1.56.0), HikerAPI + the Claude read + Google
   Maps search (DataForSEO; v1.42.0, was Google Text Search) and Mapbox city
   lookups through `analyzeInstagramPost`, `trackUsage` (the read itself goes to the Claude ledger, v1.51.0),
   `import_job_items` INSERT, tag + note on already-saved places
@@ -230,8 +230,9 @@ import queue (`/api/cron/drain-imports`). Full sequence:
   what limits a session to the transition the import offered.
 - **Not an `/api/ai/*` route.** It spends one Claude call (Haiku 5.5, v1.51.0; a
   Gemini call before), gated by the server's `ANTHROPIC_API_KEY`,
-  `profiles.ai_features_enabled` and the platform's monthly Claude cap ($100, the
-  one ledger; until v1.51.0 the `instagram` budget, 300 posts per user). See
+  `profiles.ai_features_enabled` and the background share of the platform's
+  monthly Claude cap ($80 of the $100, `capFor`, v1.56.0 — the one ledger; until
+  v1.51.0 the `instagram` budget, 300 posts per user). See
   [[../../04-integrations/claude-agent]].
 - **Places are not created here.** New places come out of the drain with
   `source = 'instagram'` — a picked place too; this group only writes jobs,

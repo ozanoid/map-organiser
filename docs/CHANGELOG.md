@@ -6,6 +6,47 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 25.11.2026 — v1.56.0 — The assistant is the owners'; background work keeps the last 20% free
+
+Ozan's decisions from the merge study:
+
+- **The in-app assistant is the owners' alone** (`assistantOpenTo`,
+  `src/lib/agent/door.ts`): the server's Claude key and an account on
+  `ASSISTANT_OWNER_EMAILS` — the list the claude.ai connector checks. Anyone
+  else gets 403 `{ code: "not_owner" }` from `/api/assistant/chat` and
+  `/api/assistant/conversation`, nothing written, and sees no button or entry.
+  `GET /api/user/ai-settings` answers both questions apart: `aiAvailable` (the
+  key — Settings' switch, the backfill, the suggestions queue) and
+  `assistantAvailable` (this account may use the assistant — the header
+  button and every entry). Settings → AI names the assistant in its
+  description only for an owner.
+- **Background work stops at 80% of the cap** (`capFor`,
+  `BACKGROUND_CAP_SHARE`, `src/lib/agent/spend.ts`): place profiles (imports,
+  the queue, the refresh sweep, the backfill) and Instagram reads stop at
+  $80; the assistant and the evals have the whole $100. A big import can no
+  longer use up the month and leave the assistant without budget. The
+  profile route's 429 and the Instagram dialog say it is the budget for
+  profiles / imports; Settings → usage shows where background work stops
+  (`assistant.backgroundCapUsd`), in amber once it has.
+- Checks: `npm run check:agent` (the background share, a turn past it, the
+  owner list — case, spacing, an empty list fails closed); types, lint. Tried
+  on the dev server with the test account: as an owner — the assistant, the
+  usage note; with the account left off the list — no button, no "Ask the
+  assistant" under the search field, 403 `not_owner` from the three
+  assistant calls, Settings' AI switch usable with the backfill and the
+  queue, the description without the assistant.
+- Docs: [[02-backend/api-routes/assistant]], [[02-backend/api-routes/user]],
+  [[02-backend/api-routes/instagram]], [[02-backend/schema/assistant-conversations]],
+  [[04-integrations/claude-agent]], [[04-integrations/claude-mcp]],
+  [[05-flows/ai-chat-flow]], [[05-flows/ai-enrichment-flow]],
+  [[05-flows/full-profile-flow]], [[05-flows/instagram-import-flow]],
+  [[05-flows/place-import-flow]], [[03-frontend/components/assistant]],
+  [[03-frontend/components/settings]], [[01-domain/users-and-profiles]],
+  [[06-ops/env-vars]], [[06-ops/runbooks/profile-backfill]],
+  [[_plans/phase-2-assistant]], [[_plans/personal-assistant]].
+
+---
+
 ## 25.11.2026 — v1.55.1 — The plan-date rule, measured
 
 - **`eval:assistant`** runs a case on the test account's library

@@ -2,7 +2,7 @@
 title: Full Profile Flow (AI Phase 4)
 type: flow
 domain: places
-version: 1.8.0
+version: 1.8.1
 last_updated: 25.11.2026
 status: stable
 sources:
@@ -63,7 +63,7 @@ client); `enrich?step=profile` is now a thin HTTP shell over it. **Since
 v1.51.0 production writes profiles with Claude Sonnet 5.5 at medium
 (`PROFILE_WRITER`, Ozan's choice after the 6.2 measurement):** the gates
 are the user's AI switch, `ANTHROPIC_API_KEY` and the Claude ledger's
-monthly cap; the model version stamped is `claude-sonnet-5-5`;
+monthly cap — for profiles its background share, $80 of the $100 (v1.56.0); the model version stamped is `claude-sonnet-5-5`;
 `generatePlaceProfile(…, { applySuggestions: false })` replaces the
 profile alone (the 6.3 rewrite, `npm run regen:profiles`). Since
 v1.50.0 it is three steps: `profileInputs` (the place and its prompts),
@@ -98,9 +98,9 @@ polling.
        ▼
 5. step=profile handler (generatePlaceProfile):
        │  a. Re-check ai_features_enabled (defense in depth)
-       │  b. ANTHROPIC_API_KEY missing → 503; the Claude ledger's month at its
-       │     cap ($100) → 429 (v1.51.0; the Gemini key and a 1000/mo profile
-       │     budget before)
+       │  b. ANTHROPIC_API_KEY missing → 503; the Claude ledger's month at the
+       │     background share of its cap ($80 of $100, capFor — v1.56.0) → 429
+       │     (the Gemini key and a 1000/mo profile budget before v1.51.0)
        │  c. Bail if no reviews (defensive — chain only fires when reviews exist,
        │     but a manual call from the AI Summary refresh button might not)
        │  d. SELECT place full row + buildUserContext(user.id)
@@ -220,7 +220,7 @@ match is found, the route reuses that entity — no duplicate row.
 
 - **AI features disabled** → step=profile returns 403; UI never renders the card (skeleton hidden because `reviewsAvailable` check is independent of the toggle, but the chain from reviews skips, so no card materializes).
 - **`ANTHROPIC_API_KEY` missing** (v1.51.0; the Gemini key before) → 503 from step=profile. AiSummaryCard skeleton lingers until polling cap (2 min) then stops; user sees the placeholder. Acceptable in dev environments.
-- **Monthly Claude cap reached** ($100 for every Claude call, the `assistant_spend` ledger; v1.51.0 — before, the per-user PROFILE budget of 1000) → step=profile returns 429 before the model call. A backfill dispatch swallows it (fire-and-forget); the import queue ends the item `done` without a profile (`cap_exceeded`), and the refresh sweep skips the place and writes the profile on a later run; a manual refresh surfaces it. Resets on the 1st (UTC). See [[ai-enrichment-flow#cost-cap]].
+- **The background budget reached** ($80 — 80% of the $100 Claude cap, `capFor`, v1.56.0; the whole cap v1.51.0–v1.55.x; before, the per-user PROFILE budget of 1000) → step=profile returns 429 ("This month's AI budget for profiles ($80) is used up — the rest is kept for the assistant. Profiles resume on the 1st.") before the model call. A backfill dispatch swallows it (fire-and-forget); the import queue ends the item `done` without a profile (`cap_exceeded`), and the refresh sweep skips the place and writes the profile on a later run; a manual refresh surfaces it. Resets on the 1st (UTC). See [[ai-enrichment-flow#cost-cap]].
 - **LLM throws or returns invalid JSON** → caught; 500 returned. `places.google_data.place_profile` stays `lite` (or null). Polling caps at 2 min. User can hit the Refresh button on the (lite or absent) card to retry.
 - **A malformed or unknown tag / list id in the answer** → that id is dropped, the profile kept (`writeProfile` keeps only the ids that name the user's tags and lists; v1.51.0). Before, the schema's UUID check threw the whole profile away — 4 of 893 calls in the 6.3 rewrite.
 - **No reviews on the place** → 400 `no_reviews`. Card stays in pending-with-message state.
