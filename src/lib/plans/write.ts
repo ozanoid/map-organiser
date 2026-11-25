@@ -141,7 +141,7 @@ export interface PlanSnapshot {
 /**
  * The plan before and after `changes`, worked out by the save itself
  * (apply_plan_changes) in a transaction that is rolled back — nothing is
- * written (preview_plan_changes, migration 20261125…_plan_preview). A
+ * written (preview_plan_changes, migration 20261125010309_plan_preview). A
  * change that can't be applied throws as the save would. null when the
  * database has no preview function (the migration isn't applied).
  */

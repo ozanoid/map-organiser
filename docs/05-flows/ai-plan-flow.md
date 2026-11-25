@@ -16,7 +16,7 @@ sources:
   - src/lib/assistant/instructions.ts
   - src/lib/places/open-now.ts
   - src/lib/plans/write.ts
-  - supabase/migrations/20261125120000_plan_preview.sql
+  - supabase/migrations/20261125010309_plan_preview.sql
 related:
   - "[[plan-flow]]"
   - "[[ai-chat-flow]]"
@@ -47,7 +47,7 @@ and the plan as its subject ("Plan · <name>"). The user can add to it ("two day
 5. The user answers. A yes sends the fingerprint back (`seen`); before running the change, `verifyProposal` previews it again — if the plan would now come out differently (it was edited meanwhile, in another tab or by the app), nothing is saved and the call's result says "The plan changed after this proposal was shown, so nothing was saved. A fresh proposal is needed." — the card shows "Couldn't save" with it, and the model proposes again. Same outcome → the change is saved, in one transaction.
 6. After the save the panel refreshes every screen's data, the open plan page included ([[../03-frontend/components/assistant]]).
 
-Without the preview function (the migration not applied), the card falls back to the list of the call's operations and the yes isn't checked: the save itself decides.
+Without the preview function the card falls back to the list of the call's operations and the yes isn't checked — the save itself decides. (The function is applied since 25.11.2026.)
 
 ## What survives
 

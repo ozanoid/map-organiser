@@ -78,8 +78,9 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
   days they open, exact times kept, a theme per day).
 - `changePlan` and the preview share the preparation of the changes
   (default costs), so the preview is what the save would do.
-- Schema, written and checked in a rolled-back transaction, **not
-  applied**: `20261125120000_plan_preview.sql` (`plan_snapshot`,
+- Schema, checked in a rolled-back transaction, then applied with Ozan's
+  OK (25.11.2026, version 20261125010309):
+  `20261125010309_plan_preview.sql` (`plan_snapshot`,
   `preview_plan_changes`; new functions only).
 - Checks: `check:agent` — the card's lines from two snapshots, a changed
   plan refused with nothing run, an unchanged one saved, a card without a

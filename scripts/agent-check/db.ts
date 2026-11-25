@@ -14,6 +14,7 @@ import { AgentError } from "@/lib/agent/errors";
 import { monthSpendByPurpose, SPEND_PURPOSES, supabaseSpendLedger } from "@/lib/agent/spend";
 import { supabaseConversationStore } from "@/lib/agent/store";
 import { resolveSubject, SubjectError } from "@/lib/agent/subject";
+import { previewPlanChanges } from "@/lib/plans/write";
 
 const OWNER = "ozan@maporganiser.com";
 const say = (line = "") => process.stderr.write(`${line}\n`);
@@ -124,6 +125,32 @@ async function main() {
         r.kind === "view" && r.filters.categories?.join() === cat.name && r.filters.city === "London" && r.area?.lat === 51.52346 && r.area?.radius_m === 2400,
         r
       );
+    }
+  }
+
+  say("## a plan change previewed by the save itself — nothing persists");
+  {
+    const { data: day } = await admin
+      .from("plan_days")
+      .select("plan_id, day_number, notes, plans!inner(user_id)")
+      .eq("day_number", 1)
+      .limit(1)
+      .maybeSingle();
+    if (day) {
+      const owner = (Array.isArray(day.plans) ? day.plans[0] : day.plans) as { user_id: string };
+      const ctx = { supabase: admin, userId: owner.user_id, appUrl: "http://localhost" };
+      const note = `check ${randomUUID().slice(0, 8)}`;
+      const preview = await previewPlanChanges(ctx, day.plan_id as string, { ops: [{ op: "set_day", day: 1, notes: note }] });
+      expect("before and after come back", !!preview?.before && !!preview?.after, preview);
+      expect("the change shows in after", preview?.after.days[0]?.notes === note, preview?.after.days[0]);
+      expect("before is the plan as it is", (preview?.before.days[0]?.notes ?? null) === ((day.notes as string | null) ?? null));
+      const { data: still } = await admin.from("plan_days").select("notes").eq("plan_id", day.plan_id).eq("day_number", 1).single();
+      expect("nothing persisted", (still?.notes ?? null) === ((day.notes as string | null) ?? null), still);
+      const refused = await previewPlanChanges(ctx, day.plan_id as string, { ops: [{ op: "remove_stop", stop_id: randomUUID() }] }).then(
+        () => "previewed",
+        (e) => (e instanceof Error ? e.constructor.name : String(e))
+      );
+      expect("a change that can't apply is refused as the save would", refused === "PlanInputError", refused);
     }
   }
 

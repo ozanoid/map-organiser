@@ -147,7 +147,7 @@ Tested on 18.11.2026 — first as a dry run in a rolled-back transaction, as a s
 
 **A stop's status follows its visit** (`stop_status_follows_visits`, 18.11.2026 — the third version of `apply_plan_changes`). A stop at a saved place is `done` exactly when a visit fulfils it: `log_visit` marks it done together with the visit, `delete_visit` makes it planned again. So `update_stop` refuses `status: done` for a stop with a place that isn't done yet ("a stop at a saved place is marked done by logging the visit") and any other status for a stop that has a visit ("this stop has a visit; delete the visit to change its status"). A free-text stop is ticked off with `update_stop` as before. See [[visits]].
 
-**Preview** (`20261125120000_plan_preview.sql`, v1.53.0 — written and checked in a rolled-back transaction on 25.11.2026, **not applied yet**):
+**Preview** (`20261125010309_plan_preview.sql`, v1.53.0 — checked in a rolled-back transaction, then **applied with Ozan's OK on 25.11.2026**, version 20261125010309; `EXECUTE` for `authenticated` and `service_role`, not `anon`):
 
 | Function | What it does |
 |---|---|
