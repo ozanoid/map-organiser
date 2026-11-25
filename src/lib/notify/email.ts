@@ -4,9 +4,9 @@ import { NotifyError } from "@/lib/notify/errors";
 
 /**
  * E-mail through Resend (docs/04-integrations/resend.md): RESEND_API_KEY and
- * the From address in EMAIL_FROM ("Map Organiser <plans@mail.maporganiser.com>").
- * Open and click tracking stay off (they're per domain in Resend; we never
- * turn them on).
+ * the sender in EMAIL_FROM — an address on the domain verified in Resend
+ * (hello@mappy.site), or "Name <address>". Open and click tracking stay off
+ * (they're per domain in Resend; we never turn them on).
  */
 let client: Resend | null = null;
 
@@ -15,6 +15,17 @@ function resend(): Resend {
   if (!key) throw new NotifyError("E-mail isn't set up on this server (RESEND_API_KEY).", false);
   client ??= new Resend(key);
   return client;
+}
+
+/** The sender name e-mails carry when EMAIL_FROM is a bare address (Phase 3,
+ *  decision 7). */
+const SENDER_NAME = "Map Organiser";
+
+/** The From header: EMAIL_FROM as it is when it names the sender
+ *  ("Name <address>"), else the bare address under the app's name. */
+export function fromHeader(raw: string): string {
+  const value = raw.trim();
+  return value.includes("<") ? value : `${SENDER_NAME} <${value}>`;
 }
 
 /** Resend's codes a later attempt may get past. */
@@ -29,8 +40,9 @@ export async function sendEmail(
   message: { to: string; subject: string; html: string; text: string },
   idempotencyKey: string
 ): Promise<string> {
-  const from = process.env.EMAIL_FROM;
-  if (!from) throw new NotifyError("E-mail isn't set up on this server (EMAIL_FROM).", false);
+  const sender = process.env.EMAIL_FROM?.trim();
+  if (!sender) throw new NotifyError("E-mail isn't set up on this server (EMAIL_FROM).", false);
+  const from = fromHeader(sender);
   let result;
   try {
     result = await resend().emails.send(

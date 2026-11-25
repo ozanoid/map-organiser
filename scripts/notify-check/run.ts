@@ -28,6 +28,7 @@ import {
   telegramStartLink,
   unlinkTelegram,
 } from "@/lib/notify/channels";
+import { fromHeader } from "@/lib/notify/email";
 import { NotifyError, TelegramChatGone } from "@/lib/notify/errors";
 import { deliver, setSenders, type Delivery } from "@/lib/notify/outbox";
 import {
@@ -342,6 +343,10 @@ async function main() {
     !looksLikeToken("abc") && !looksLikeToken("x".repeat(65)) && !looksLikeToken(`${tok.slice(0, 40)}+/=`) && !looksLikeToken(42)
   );
 
+  say("## the sender");
+  expect("a bare address gets the app's name", fromHeader(" hello@mappy.site ") === "Map Organiser <hello@mappy.site>", fromHeader(" hello@mappy.site "));
+  expect("a named sender stays as set", fromHeader("Mappy <hello@mappy.site>") === "Mappy <hello@mappy.site>");
+
   say("## e-mail addresses");
   expect("trimmed and lower-cased", emailAddress.safeParse("  Ozan@Example.COM ").data === "ozan@example.com");
   expect("not an address", !emailAddress.safeParse("ozan@").success && !emailAddress.safeParse("x".repeat(250) + "@a.co").success);
@@ -405,6 +410,12 @@ async function main() {
     expect("set: a confirmation link to the page", set.status === "sent" && sent[0]?.to === "ozan@example.com" && Boolean(link), sent[0]);
     expect("set: the address waits for confirmation", (await readChannels(admin, USER)).email?.verified_at === null);
     expect("set: only the token's hash is kept", db.tables.channel_link_tokens[0]?.token_hash === hashToken(token));
+    const kept = db.tables.notifications[0]?.content?.text ?? "";
+    expect(
+      "set: the record's copy of the e-mail masks the token",
+      kept.includes("/confirm-email?token=•••") && !kept.includes(token),
+      kept.slice(0, 200)
+    );
     const view1 = await settingsView(admin, USER);
     expect("settings: open, address, not confirmed", view1.open && view1.email.address === "ozan@example.com" && !view1.email.confirmed, view1);
 

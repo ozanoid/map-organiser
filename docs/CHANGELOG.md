@@ -6,6 +6,29 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 25.11.2026 — v1.57.3 — mappy.site; the stored copy of a confirmation e-mail masks its token
+
+- E-mail goes out from Ozan's new domain `mappy.site` (bought for it,
+  25.11.2026; DNS on Vercel) as `hello@mappy.site` instead of the
+  `mail.maporganiser.com` the design proposed. DNS checked: DKIM and the
+  `send.mappy.site` CNAME to Resend's sending service are in place; no DMARC
+  record yet (recommended: TXT `_dmarc` = `v=DMARC1; p=none;`). The API key
+  is sending-only.
+- Fix (found while preparing the e-mail test): the `notifications` record
+  kept the confirmation e-mail's text with its link, so the one-time token
+  sat in the database in plain text — against the rule that only its hash is
+  kept. `Delivery.secrets` now masks it in the stored copy
+  (`…/confirm-email?token=•••`); the e-mail itself goes out whole.
+- `EMAIL_FROM` may be a bare address: it goes out under the app's name,
+  `Map Organiser <hello@mappy.site>` (`fromHeader`).
+- Checks: `npm run check:notify` 110 (+3).
+- Docs: [[04-integrations/resend]], [[04-integrations/_README]],
+  [[06-ops/env-vars]], [[02-backend/schema/notifications]],
+  [[_plans/phase-3-communication]] (decision 7 as built, deviations 9–10);
+  `.env.local.example`.
+
+---
+
 ## 25.11.2026 — v1.57.2 — The notifications plan_id index applied
 
 - Applied with Ozan's approval: migration `notifications_plan_index`,

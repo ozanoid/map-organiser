@@ -2,7 +2,7 @@
 title: "Faz 3 — İletişim: tasarım"
 type: plan
 domain: sharing
-version: 0.2.2
+version: 0.3.0
 last_updated: 25.11.2026
 status: draft
 related:
@@ -141,7 +141,7 @@ Hatırlatmalar plan tablosundan **türetilir**, önceden kuyruğa yazılmaz: pla
 
 - **Neden Resend:** çift gönderim koruması (`Idempotency-Key`, 24 saat), imzalı webhook, React ile şablon, Node SDK (`resend`) [R8][R9][R16]. Postmark'ta idempotency ve imzalı webhook yok, ücretsiz kotası ayda 100 [P1][P4][P6]; Amazon SES'te sandbox, IAM ve SNS kurulumu tek kişilik uygulama için ağır [S2].
 - **Kota:** Free — ayda 3.000, günde 100 e-posta, 3 alan adı; aşılınca 429 döner, kuyruğa almaz [R1][R2]. Pro $20/ay, 50.000.
-- **Alan adı:** ayrı bir gönderim alt alanı, öneri `mail.maporganiser.com` (`send` olmaz: Resend dönüş adresi için `send.<alan>` kullanıyor) [R5][R6]. Kayıtları Resend üretir (MX + SPF TXT + DKIM; Ağustos 2026'dan sonra açılan alanlarda CNAME olabilir) [R4]. DMARC `p=none` ile başlar [R7].
+- **Alan adı:** *(uygulamada `mappy.site` — Ozan bunun için aldı, DNS'i Vercel'de; [[../04-integrations/resend]])* ayrı bir gönderim alt alanı, öneri `mail.maporganiser.com` (`send` olmaz: Resend dönüş adresi için `send.<alan>` kullanıyor) [R5][R6]. Kayıtları Resend üretir (MX + SPF TXT + DKIM; Ağustos 2026'dan sonra açılan alanlarda CNAME olabilir) [R4]. DMARC `p=none` ile başlar [R7].
 - **Bölge:** gönderim bölgesi alan adı başına seçilir ve sonradan değişmez (eu-west-1 öneri). **Bütün hesap verisi ve kayıtlar bölgeden bağımsız ABD'de tutulur** [R22]; DPA'da SCC ve EU-US DPF var, Türkiye KVKK standart sözleşmesi yok [R24]. Yalnız Ozan'a giden e-postalarda bu bir sorun değil; arkadaş adresleri işe girerse karar konusu (karar 7).
 - **Şablon:** React Email ile sunucuda `html` + düz metin; açılma / tıklama takibi kapalı.
 - **Yeni alan adı:** ilk e-postalar Gmail'de spam'e düşebilir; Ozan "Spam değil" işaretler [R18].
@@ -210,6 +210,8 @@ Hatırlatmalar plan tablosundan **türetilir**, önceden kuyruğa yazılmaz: pla
 6. **Telegram'ın tekrar gönderdiği güncelleme:** `update_id` saklamak yerine asıl etkisi olan yol idempotent — aynı sohbet aynı linkle tekrar gelirse "Bağlandı" der; engelleme güncellemeleri zaten idempotent, diğer mesajlara giden tek satırlık cevabın tekrarı zararsız.
 7. **`send_plan` hiçbir kanala gidemezse hata sonucu döner:** model "gönderildi" diyemez, kart *Couldn't send* ve nedenini gösterir; kısmi başarıda kart nereye gittiğini ve neyin gitmediğini yazar.
 8. **Telegram mesajında notlar kısaltılır** (plan 500, gün 300, durak 200 karakter): plan notu 5.000 karaktere kadar çıkabiliyor, mesaj sınırı 4.096.
+9. **Kayıttaki e-posta kopyasında onay anahtarı gizlenir** (e-posta testine hazırlanırken bulundu, v1.57.3): gönderim kaydı onay e-postasının metnini linkiyle saklıyordu — anahtar yalnız hash'iyle saklanır ilkesini delen bir hataydı. Artık kopyada `token=•••` yazıyor; e-postanın kendisi tam gider.
+10. **Gönderen adı koddan:** `EMAIL_FROM` yalnız adres olduğunda (`hello@mappy.site`) e-posta "Map Organiser" adıyla gider.
 
 **Doğrulama:** `npm run check:notify` 107 kontrol (Türkçe metinler ve kaçış, Telegram sınırı, bot güncellemeleri, anahtarlar, outbox, iki kanalın bağlanması, gönderim, `send_plan`'ın cevabı ve kartı); `npm run check:agent` 165 kontrol; migration'ın geri alınan deneme çalıştırması (sonuçlar şema dokümanında); `next build`; dev sunucusunda `/confirm-email` oturumsuz açılıyor (telefonda da), webhook bot ayarlı değilken 404. Henüz denenmeyen: gerçek e-posta ve Telegram gönderimi (aşağıdaki adımlardan sonra).
 
@@ -241,7 +243,7 @@ Bütün şema değişiklikleri **eklemeli** (yeni tablolar, `profiles.time_zone`
 
 - **Resend:** hesap; `mail.maporganiser.com` alanını ekle (bölge seçimi kalıcı); Resend'in ürettiği DNS kayıtlarını DNS sağlayıcısına gir (Cloudflare ise proxy kapalı); `_dmarc.maporganiser.com` TXT `v=DMARC1; p=none; rua=mailto:…`; API anahtarı → Vercel `RESEND_API_KEY`.
 - **Telegram:** @BotFather `/newbot` (görünen ad, `…bot` ile biten kullanıcı adı — sonradan değişmez); token → Vercel `TELEGRAM_BOT_TOKEN`, kullanıcı adı → `TELEGRAM_BOT_USERNAME`; webhook sırrı (`openssl rand -hex 32`) → `TELEGRAM_WEBHOOK_SECRET` (üçü de yalnız Production); deploy sonrası `setWebhook` çağrısı (onayınla ben yaparım; komut [[../04-integrations/telegram#Registering the webhook]]).
-- **Resend gönderen:** Vercel `EMAIL_FROM` = `Map Organiser <plans@mail.maporganiser.com>` (Production + Preview) ve worktree `.env.local`.
+- **Resend gönderen:** Vercel `EMAIL_FROM` = `hello@mappy.site` (Production + Preview; uygulama "Map Organiser" adını kendisi ekler). Yerelde ana klasörün ve worktree'nin `.env.local`'ında var (25.11.2026). Önerilen: `mappy.site` için DMARC kaydı — Vercel → Domains → DNS, TXT `_dmarc` = `v=DMARC1; p=none;`.
 - Uygulamada: e-posta onay linkine tıkla, Telegram'ı bağla.
 
 ## Değerlendirilip seçilmeyenler
@@ -269,7 +271,7 @@ Bütün şema değişiklikleri **eklemeli** (yeni tablolar, `profiles.time_zone`
 | 4 | Rehber ve gruplar (açık soru 4) | v1'de yok; grup WhatsApp'ta |
 | 5 | Davet sayfasında adres ve harita | Mekan adı ve semt her zaman; tam adres ve pinler cevaptan sonra |
 | 6 | Cevap seçenekleri ve liste | Geliyorum / Belki / Gelmiyorum, +N en çok 3, not; katılanlar listesi cevap verince görünür |
-| 7 | E-posta | `mail.maporganiser.com`, gönderen "Map Organiser"; bölge eu-west-1 (veri yine ABD'de); v1'de yalnız sana, arkadaşlara e-posta yok |
+| 7 | E-posta | `mail.maporganiser.com`, gönderen "Map Organiser"; bölge eu-west-1 (veri yine ABD'de); v1'de yalnız sana, arkadaşlara e-posta yok. **Uygulamada (Ozan, 25.11.2026):** bunun için alınan `mappy.site` alanı, gönderen adresi `hello@mappy.site` ("Map Organiser" adıyla) |
 | 8 | Hatırlatma ve özet varsayılanları | Önceki akşam 18:00 + plan sabahı 08:00 (planın yerel saati); haftalık özet pazartesi 08:00; ikisi de e-posta + Telegram |
 | 9 | Davete cevap gelince | Telegram (anında); e-posta yalnız haftalık özette |
 | 10 | Takvim | Gün başına `.ics`; Google linki yok |

@@ -22,6 +22,9 @@ export interface Delivery {
   dedupeKey: string;
   message: Message;
   target: { channel: "email"; email: string } | { channel: "telegram"; chatId: number; username: string | null };
+  /** Values the record's copy must not keep — a one-time token in a link.
+   *  The message goes out whole; the stored copy shows "•••" instead. */
+  secrets?: readonly string[];
 }
 
 export type DeliveryOutcome =
@@ -82,8 +85,10 @@ export async function deliver(admin: SupabaseClient, d: Delivery): Promise<Deliv
   if (claimError) throw new Error(claimError.message);
   if (!Array.isArray(claimed) || claimed.length === 0) return { status: "busy" };
 
-  // 3. Send, and record how it went.
-  const content = { to: recipient(d.target), subject: d.message.subject, text: d.message.text };
+  // 3. Send, and record how it went — with a copy of what went out, its
+  //    secrets masked (a confirmation link's token is a credential).
+  const hide = (t: string) => (d.secrets ?? []).reduce((out, secret) => (secret ? out.split(secret).join("•••") : out), t);
+  const content = { to: recipient(d.target), subject: hide(d.message.subject), text: hide(d.message.text) };
   try {
     const providerId =
       d.target.channel === "email"

@@ -2,7 +2,7 @@
 title: Integrations
 type: overview
 domain: integrations
-version: 1.8.0
+version: 1.8.1
 last_updated: 25.11.2026
 status: stable
 related:
@@ -37,7 +37,7 @@ Third-party services and runtime libraries that materially shape how this app wo
 | **Claude (MCP connector)** | The user's library as an MCP server for claude.ai and Claude Code; Supabase Auth is the OAuth 2.1 server (17.11.2026) | [[claude-mcp]] |
 | **Claude API (platform agent)** | The platform's own Claude: the in-app assistant (v1.48.0) — called by our server with the same tools, conversations kept append-only — and, since v1.51.0, place profiles (Sonnet 5.5) and Instagram reads (Haiku 5.5); every call's dollars in one ledger against a $100 monthly cap. On main since 25.11.2026 (merge 7df90df) | [[claude-agent]] |
 | **HikerAPI** | Instagram data — the post, its tagged/mentioned accounts and their profiles, for the Instagram import (v1.28.0). System-level key `HIKERAPI_KEY` | [[hikerapi]] |
-| **Resend** | The app's e-mail (v1.57.0): the address confirmation, Settings' test, a plan's summary — only to the owner's confirmed address in v1. `RESEND_API_KEY`, `EMAIL_FROM`; domain `mail.maporganiser.com` | [[resend]] |
+| **Resend** | The app's e-mail (v1.57.0): the address confirmation, Settings' test, a plan's summary — only to the owner's confirmed address in v1. `RESEND_API_KEY`, `EMAIL_FROM`; domain `mappy.site`, sender `hello@mappy.site` | [[resend]] |
 | **Telegram Bot API** | A notification bot (v1.57.0): plan summaries and tests to the owner's linked chat; linking by `/start` through a webhook. Production only | [[telegram]] |
 
 ## Runtime libraries (architecturally significant)

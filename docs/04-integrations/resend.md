@@ -2,7 +2,7 @@
 title: Resend (e-mail)
 type: integration
 domain: integrations
-version: 1.0.0
+version: 1.1.0
 last_updated: 25.11.2026
 status: draft
 sources:
@@ -31,9 +31,9 @@ tags:
 
 - **Provider:** [Resend](https://resend.com). Chosen for its idempotency key (24 hours), signed webhooks and Node SDK; Postmark and Amazon SES were weighed in [[../_plans/phase-3-communication]].
 - **Account owner:** Ozan — the account, the domain and its DNS records, and the API key are set up by him in the Resend dashboard (steps in the Phase 3 doc).
-- **Sending domain:** `mail.maporganiser.com`, region eu-west-1 (Ireland). The region is chosen per domain and can't change later; account data and logs are kept in the US whatever the region. DMARC starts at `p=none`.
-- **Sender:** `EMAIL_FROM` — `Map Organiser <plans@mail.maporganiser.com>`.
-- **Auth:** `RESEND_API_KEY`, server-only.
+- **Sending domain:** `mappy.site` — a domain Ozan bought for it (25.11.2026), its DNS on Vercel (`ns1.vercel-dns.com`), instead of the `mail.maporganiser.com` the design proposed. DNS checked on 25.11.2026: the DKIM key `resend._domainkey.mappy.site` and `send.mappy.site` (a CNAME to Resend's own sending service, `send.forge.rmta.net`, which carries the SPF and the bounce MX — the newer style of Resend domain) are in place; **no DMARC record yet** (`_dmarc.mappy.site`) — recommended, see below. Account data and logs are kept in the US whatever the sending region; the region can't be read with a sending-only key.
+- **Sender:** `EMAIL_FROM` = `hello@mappy.site`. A bare address is sent under the app's name — `Map Organiser <hello@mappy.site>` (`fromHeader`, decision 7); a value that names its sender ("Name <address>") is used as it is.
+- **Auth:** `RESEND_API_KEY`, server-only — a **sending-only** key (Resend's "Sending access": it can send and nothing else; reading domains or sent e-mails answers 401 `restricted_api_key`). That is all the app needs.
 - **Tracking:** open and click tracking stay off (a per-domain setting in Resend; never turned on).
 
 ## NPM packages
@@ -51,7 +51,7 @@ Without both, `emailConfigured()` is false: Settings says "E-mail isn't set up o
 
 ## Where it's used
 
-`sendEmail({ to, subject, html, text }, idempotencyKey)` → Resend's message id. Called only by `deliver` (`outbox.ts`), after the `notifications` row is written and claimed; the key is `notification-<row id>`, so a retry of the same record within 24 hours can't send it twice. Every e-mail carries an HTML part and a plain-text part, both rendered in Turkish by `render.ts` (inline styles, one 560 px column, the app's emerald accent, a footer link to Settings → Notifications). The templates are typed string builders rather than React Email: three short messages, deterministic, checked offline (`npm run check:notify`); React Email can come when the invitation e-mails of slice 3 need it.
+`sendEmail({ to, subject, html, text }, idempotencyKey)` → Resend's message id; the From is `fromHeader(EMAIL_FROM)`. Called only by `deliver` (`outbox.ts`), after the `notifications` row is written and claimed; the key is `notification-<row id>`, so a retry of the same record within 24 hours can't send it twice. Every e-mail carries an HTML part and a plain-text part, both rendered in Turkish by `render.ts` (inline styles, one 560 px column, the app's emerald accent, a footer link to Settings → Notifications). The templates are typed string builders rather than React Email: three short messages, deterministic, checked offline (`npm run check:notify`); React Email can come when the invitation e-mails of slice 3 need it.
 
 ## Cost & limits
 
@@ -60,6 +60,7 @@ Without both, `emailConfigured()` is false: Settings says "E-mail isn't set up o
 - **Measured usage:** none yet — nothing sent before v1.57.0 is deployed and the key is set.
 - **Expected:** a handful a week in slice 1 (confirmations, tests, "Send to me"); slice 2's reminders and weekly summary add about 10 a week. Well inside the free allowance.
 - A new domain's first e-mails may land in Gmail's spam: mark them "Not spam".
+- **DMARC** (recommended, not required at this volume): in Vercel → Domains → `mappy.site` → DNS, a TXT record named `_dmarc` with `v=DMARC1; p=none;` — it tells receiving servers the domain has a policy, which helps inbox placement; `p=none` changes no delivery.
 
 ## Failure modes
 

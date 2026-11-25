@@ -103,6 +103,8 @@ export async function setEmail(
     dedupeKey: `email_verify:${hashToken(token)}`,
     message: emailVerifyMessage(link, appUrl),
     target: { channel: "email", email: address },
+    // The record keeps a copy of the e-mail; the token stays only in the link.
+    secrets: [token],
   });
   if (outcome.status === "failed") return { status: "failed", error: outcome.error };
   return { status: "sent" };

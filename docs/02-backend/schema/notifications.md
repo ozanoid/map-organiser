@@ -2,7 +2,7 @@
 title: notification_channels, channel_link_tokens, notifications
 type: table
 domain: backend
-version: 1.2.0
+version: 1.3.0
 last_updated: 25.11.2026
 status: draft
 sources:
@@ -80,7 +80,7 @@ The outbox: every message sent or to be sent is a row, written before it is sent
 | `claimed_until` | timestamptz | yes | — | The sender's hold. CHECK: set exactly while `status = 'sending'`. |
 | `last_error` | text | yes | — | The provider's answer, ≤ 500 characters. |
 | `provider_message_id` | text | yes | — | Resend's message id, or Telegram's `message_id`. |
-| `content` | jsonb | yes | — | What went out: `{ to, subject, text }` — the plan may change later; what was sent can't be rebuilt. |
+| `content` | jsonb | yes | — | What went out: `{ to, subject, text }` — the plan may change later; what was sent can't be rebuilt. A message's secrets are masked in it (`Delivery.secrets`): the confirmation e-mail's copy reads `…/confirm-email?token=•••` — the token lives only in the e-mail (v1.57.3; before, the copy kept the whole link). |
 | `created_at` | timestamptz | no | `now()` | — |
 | `sent_at` | timestamptz | yes | — | — |
 
