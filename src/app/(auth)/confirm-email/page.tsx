@@ -80,7 +80,7 @@ export default async function ConfirmEmailPage({ searchParams }: { searchParams:
     return (
       <Card icon={CircleCheck} tone="ok" title="Address confirmed">
         <p className="text-sm text-muted-foreground">
-          <span className="break-all font-medium text-foreground">{link.email}</span> gets your plans.
+          <span className="break-words font-medium text-foreground">{link.email}</span> gets your plans.
         </p>
         <SettingsLink label="Open notification settings" />
       </Card>
@@ -103,7 +103,7 @@ export default async function ConfirmEmailPage({ searchParams }: { searchParams:
     <Card icon={MailCheck} tone="ok" title="Confirm your e-mail address">
       <p className="text-sm text-muted-foreground">
         Map Organiser will send your plans to{" "}
-        <span className="break-all font-medium text-foreground">{link.email}</span>.
+        <span className="break-words font-medium text-foreground">{link.email}</span>.
       </p>
       <div className="pt-3">
         <ConfirmForm token={token} />

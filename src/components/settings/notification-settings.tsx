@@ -167,7 +167,7 @@ function EmailChannel({ view }: { view: ChannelsView["email"] }) {
         </form>
       ) : (
         <div className="space-y-2">
-          <p className="text-sm break-all">{view.address}</p>
+          <p className="text-sm break-words">{view.address}</p>
           {!view.confirmed && (
             <p className="text-xs text-muted-foreground">
               Open the link we sent to start getting e-mails. It&apos;s valid for 24 hours.

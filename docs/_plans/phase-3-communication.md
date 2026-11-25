@@ -2,7 +2,7 @@
 title: "Faz 3 — İletişim: tasarım"
 type: plan
 domain: sharing
-version: 0.3.0
+version: 0.3.1
 last_updated: 25.11.2026
 status: draft
 related:
@@ -218,7 +218,7 @@ Hatırlatmalar plan tablosundan **türetilir**, önceden kuyruğa yazılmaz: pla
 **Açık adımlar (sırayla):**
 1. ~~Migration'ın uygulanması~~ — uygulandı (25.11.2026, sürüm 20261125203540); `npm run check:notify:db` 15/15. Ek: `notifications.plan_id` indeksi (Supabase'in performans uyarısı) — Ozan'ın onayıyla uygulandı (25.11.2026, sürüm 20261125224149); uyarı kalktı.
 2. Ozan'ın dashboard adımları (aşağıda): Resend alanı ve anahtarı → Vercel + worktree `.env.local`; BotFather → Vercel Production.
-3. E-posta uçtan uca: yerelde, test hesabıyla (Ozan isterse).
+3. ~~E-posta uçtan uca~~ — yerelde test hesabıyla, Chrome'da, Ozan'ın Gmail'ine denendi (25.11.2026): onay, test e-postası ve bir planın özeti gitti; üç kayıt `sent`. Gelen kutusu mu spam mi — Ozan bakıyor. Ayrıntı: [[../05-flows/notifications-flow#Checks]].
 4. Telegram: yalnız production'da (karar 13) — main'e merge'den ve deploy'dan sonra `setWebhook` (Ozan'ın onayıyla), sonra bağlama ve test.
 
 ## Dilimler ve geçiş yolu

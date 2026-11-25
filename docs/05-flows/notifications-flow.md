@@ -2,7 +2,7 @@
 title: Notifications flow (channels and "Send to me")
 type: flow
 domain: sharing
-version: 1.0.1
+version: 1.1.0
 last_updated: 25.11.2026
 status: draft
 sources:
@@ -83,3 +83,4 @@ The owner (an account in `ASSISTANT_OWNER_EMAILS`) in Settings → Notifications
 
 - `npm run check:notify` — offline: the Turkish messages and their escaping, Telegram's 4,096 characters, the bot's updates, tokens, the outbox, connecting both channels, sending, `send_plan`'s answer and card (107 checks, in-memory tables, stand-in providers).
 - `npm run check:notify:db` — the same queries against the live schema, writing nothing (15 of 15 on 25.11.2026, after the migration was applied).
+- **End to end, e-mail (25.11.2026, local dev server on the branch, the test account `admin@maporganiser.com` in Chrome, Resend with `hello@mappy.site`, to Ozan's own Gmail with his OK):** Settings → Notifications → address saved → "Confirmation link sent" and a `sent` record (the token masked in its copy) → the confirmation page showed the address and **Confirm address**; pressed → back on Settings, "E-mail address confirmed", *Confirmed* → **Send test** → "Test e-mail sent" → the plan *Summer in Amsterdam* (4 days, 19 stops) → **Send to me…** (e-mail ticked, Telegram "Not connected") → "Sent to E-mail". Three records, each `sent` on its first attempt with Resend's id, no error; the requests took 0.4–1.6 s; no console or server errors. The confirmation link was made for the test with `createLinkToken` (the key is sending-only, so the sent e-mail can't be read back); the used link opened again shows "Address confirmed". The plan e-mail, rendered again from the same plan, looked right (Turkish dates and parts of the day, notes, map links, **Planı aç**). In a local run the e-mail's links point at `localhost:3001`. Whether the e-mails land in the inbox or spam is Ozan's to check.

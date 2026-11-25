@@ -6,6 +6,23 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 25.11.2026 — v1.57.4 — E-mail tested end to end
+
+- On the local dev server (branch code), the test account in Chrome,
+  Resend from `hello@mappy.site`, to Ozan's Gmail with his OK: the address
+  saved and its confirmation sent, the confirmation page and its button, a
+  test e-mail, and a plan's summary (*Summer in Amsterdam*, 4 days, 19
+  stops). Three `notifications` records, each `sent` on the first attempt
+  with Resend's id; the stored copy of the confirmation masks its token; no
+  console or server errors. The confirmation link was made with
+  `createLinkToken` (a sending-only key can't read the sent e-mail).
+- Fix: the confirmation page and Settings broke the address mid-word
+  ("ozankete / nci@gmail.com", `break-all`); it now moves to the next line
+  whole and breaks only if it is longer than the line (`break-words`).
+- Docs: [[05-flows/notifications-flow]], [[_plans/phase-3-communication]].
+
+---
+
 ## 25.11.2026 — v1.57.3 — mappy.site; the stored copy of a confirmation e-mail masks its token
 
 - E-mail goes out from Ozan's new domain `mappy.site` (bought for it,
