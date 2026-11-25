@@ -1,17 +1,28 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Sparkles, Loader2, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Separator } from "@/components/ui/separator";
 import { AiSuggestionsQueue } from "@/components/settings/ai-suggestions-queue";
 import { BackfillProfilesPanel } from "@/components/settings/backfill-profiles-panel";
+import { AI_SETTINGS_KEY } from "@/lib/hooks/use-assistant-availability";
 
 interface AiSettingsState {
   enabled: boolean;
-  available: boolean;
+  /** Claude is set up: every AI feature (place profiles, Instagram imports,
+   *  the assistant). */
+  aiAvailable: boolean;
+  /** This account may use the assistant (an owner). */
+  assistantAvailable: boolean;
   cronRefreshEnabled: boolean;
 }
+
+/** What this deployment needs for AI features. */
+const PROVIDERS = [
+  { flag: "aiAvailable", env: "ANTHROPIC_API_KEY", what: "AI features are" },
+] as const;
 
 /**
  * Settings → AI tab.
@@ -25,6 +36,7 @@ export function AiSettings() {
   const [state, setState] = useState<AiSettingsState | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const queryClient = useQueryClient();
 
   // Load once on mount. The loader lives inside the effect: declared below
   // it, React's immutability lint rule (eslint-config-next 16.4) rejects the
@@ -65,6 +77,8 @@ export function AiSettings() {
         throw new Error(body.error ?? "Failed to update AI settings");
       }
       toast.success(next ? "AI features enabled" : "AI features disabled");
+      // The assistant's button and the screens' entries follow the switch.
+      void queryClient.invalidateQueries({ queryKey: AI_SETTINGS_KEY });
     } catch (e) {
       // Rollback
       setState({ ...state, enabled: !next });
@@ -112,7 +126,7 @@ export function AiSettings() {
 
   if (!state) return null;
 
-  const disabled = !state.available || saving;
+  const disabled = !state.aiAvailable || saving;
 
   return (
     <div className="space-y-4">
@@ -124,7 +138,7 @@ export function AiSettings() {
           </div>
           <p className="text-xs text-muted-foreground mt-1">
             When enabled: smart categorization, tag &amp; list suggestions,
-            place profiles, and AI search.
+            {state.assistantAvailable ? " place profiles, and the assistant." : " and place profiles."}
           </p>
         </div>
 
@@ -148,18 +162,21 @@ export function AiSettings() {
         </button>
       </div>
 
-      {!state.available && (
-        <div className="flex items-start gap-2 text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 p-3 rounded-md">
+      {PROVIDERS.filter((p) => !state[p.flag]).map((p) => (
+        <div
+          key={p.env}
+          className="flex items-start gap-2 text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 p-3 rounded-md"
+        >
           <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
           <div>
-            AI features are not configured on this deployment. The
+            {p.what} not configured on this deployment: the
             <code className="font-mono mx-1 text-[10px] bg-amber-100 dark:bg-amber-900/60 px-1 rounded">
-              GOOGLE_GENERATIVE_AI_API_KEY
+              {p.env}
             </code>
             environment variable is missing.
           </div>
         </div>
-      )}
+      ))}
 
       <Separator />
 
@@ -200,8 +217,9 @@ export function AiSettings() {
       </div>
 
       {/* Phase 5: moderation queue + Phase 6 follow-up: profile backfill.
-          Both gated on master AI toggle + provider availability. */}
-      {state.enabled && state.available && (
+          Both gated on the master AI toggle and on Claude, which writes the
+          profiles and with them the suggestions (v1.51.0). */}
+      {state.enabled && state.aiAvailable && (
         <>
           <Separator />
           <BackfillProfilesPanel />

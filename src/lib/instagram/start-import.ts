@@ -1,13 +1,13 @@
 import "server-only";
 import { createServiceClient } from "@/lib/supabase/server";
+import { monthStartUtc } from "@/lib/agent/spend";
 import type { UserContext } from "@/lib/db/context";
 import { InputError } from "@/lib/db/errors";
-import { isAiAvailable } from "@/lib/ai/client";
 import { dataForSeoClientFromEnv } from "@/lib/dataforseo/client";
 import { parseInstagramPostUrl } from "@/lib/instagram/url";
 import { ensureInstagramTag } from "@/lib/instagram/provenance";
 import { runInstagramImportJob } from "@/lib/instagram/import-job";
-import type { InstagramJobMeta } from "@/lib/instagram/types";
+import type { InstagramJobMeta, InstagramRefusalCode } from "@/lib/instagram/types";
 
 /**
  * Starting an Instagram import — one function for the app's route
@@ -24,15 +24,28 @@ import type { InstagramJobMeta } from "@/lib/instagram/types";
  * no list).
  */
 
-/** Why an import can't start; the message is for the person or the model. */
+/** Why an import can't start; the message is for the person or the model,
+ *  the code for the dialog (whether asking again can help). */
 export class InstagramImportRefused extends InputError {
   constructor(
     message: string,
-    readonly status: 400 | 503
+    readonly status: 400 | 429 | 503,
+    readonly code: InstagramRefusalCode
   ) {
     super(message);
   }
 }
+
+/**
+ * Instagram posts a user can import in a calendar month (UTC). Every import
+ * counts — from the app or from Claude's add_places, whatever its outcome:
+ * each one has already paid HikerAPI and the Google Maps searches. Ozan's
+ * interim guard (24.11.2026), after the Gemini-era budget of the same size
+ * went with the move of the read to Claude, whose cap counts only the read's
+ * dollars. The lasting answer planned: one monthly dollar cap over every
+ * paid service (docs/_plans/phase-2-assistant.md).
+ */
+export const INSTAGRAM_MONTHLY_POST_LIMIT = 300;
 
 const REUSE_WINDOW_MS = 10 * 60 * 1000;
 /** Matches the status view: a job still "reading" after this lost its run. */
@@ -56,12 +69,12 @@ export async function startInstagramImport(
   opts: InstagramImportOptions = {}
 ): Promise<InstagramImportStart> {
   const ref = parseInstagramPostUrl(url);
-  if (!ref) throw new InstagramImportRefused("That isn't an Instagram post or reel link.", 400);
+  if (!ref) throw new InstagramImportRefused("That isn't an Instagram post or reel link.", 400, "invalid_url");
 
-  // HikerAPI reads the post, Gemini reads it, Google Maps (through
-  // DataForSEO, the server's own account) finds the places.
-  if (!process.env.HIKERAPI_KEY || !isAiAvailable() || !dataForSeoClientFromEnv()) {
-    throw new InstagramImportRefused("Instagram import isn't set up on this server.", 503);
+  // HikerAPI fetches the post, Claude reads it (INSTAGRAM_READER), Google
+  // Maps (through DataForSEO, the server's own account) finds the places.
+  if (!process.env.HIKERAPI_KEY || !process.env.ANTHROPIC_API_KEY || !dataForSeoClientFromEnv()) {
+    throw new InstagramImportRefused("Instagram import isn't set up on this server.", 503, "not_configured");
   }
   const { data: profile } = await ctx.supabase
     .from("profiles")
@@ -71,7 +84,8 @@ export async function startInstagramImport(
   if (!profile?.ai_features_enabled) {
     throw new InstagramImportRefused(
       "Instagram import reads the post with AI. Turn on AI features in Settings.",
-      400
+      400,
+      "ai_disabled"
     );
   }
 
@@ -90,6 +104,23 @@ export async function startInstagramImport(
     recentPhase === "reading" && Date.now() - new Date(recent?.created_at as string).getTime() > STALL_MS;
   if (recent && recentPhase !== "failed" && !stalled) {
     return { jobId: recent.id as string, reused: true };
+  }
+
+  // A reused job costs nothing; a new one counts against the month. Over the
+  // limit nothing is created, fetched or paid.
+  const { count, error: countError } = await ctx.supabase
+    .from("import_jobs")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", ctx.userId)
+    .eq("kind", "instagram")
+    .gte("created_at", monthStartUtc(new Date()));
+  if (countError) throw new Error(countError.message);
+  if ((count ?? 0) >= INSTAGRAM_MONTHLY_POST_LIMIT) {
+    throw new InstagramImportRefused(
+      `You've imported ${INSTAGRAM_MONTHLY_POST_LIMIT} Instagram posts this month, the monthly limit. Imports resume on the 1st.`,
+      429,
+      "monthly_limit"
+    );
   }
 
   const tagId = await ensureInstagramTag(ctx.supabase, ctx.userId);

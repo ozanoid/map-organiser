@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { InstagramImportView } from "@/lib/instagram/types";
+import type { InstagramImportView, InstagramRefusalCode } from "@/lib/instagram/types";
 
 /**
  * Instagram import — start a job for a post URL, then poll its progress.
@@ -9,6 +9,17 @@ import type { InstagramImportView } from "@/lib/instagram/types";
  * The job lives on the server (import_jobs, kind "instagram"), so polling is a
  * read, not a driver: closing the dialog or refreshing the page loses nothing.
  */
+
+/** A start the server refused: its message for the person, and its code
+ *  (null when the answer carried none — a network or server error). */
+export class InstagramStartError extends Error {
+  constructor(
+    message: string,
+    readonly code: InstagramRefusalCode | null
+  ) {
+    super(message);
+  }
+}
 
 /** `onStarted` sits on the mutation, not on `mutate()`: TanStack drops
  *  mutate's callbacks once the dialog unmounts, and a job started just before
@@ -21,8 +32,15 @@ export function useStartInstagramImport(onStarted?: (jobId: string) => void) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url }),
       });
-      const data = (await res.json().catch(() => ({}))) as { jobId?: string; reused?: boolean; error?: string };
-      if (!res.ok || !data.jobId) throw new Error(data.error ?? "Couldn't start the Instagram import");
+      const data = (await res.json().catch(() => ({}))) as {
+        jobId?: string;
+        reused?: boolean;
+        error?: string;
+        code?: InstagramRefusalCode;
+      };
+      if (!res.ok || !data.jobId) {
+        throw new InstagramStartError(data.error ?? "Couldn't start the Instagram import", data.code ?? null);
+      }
       return { jobId: data.jobId, reused: data.reused };
     },
     onSuccess: (data) => onStarted?.(data.jobId),

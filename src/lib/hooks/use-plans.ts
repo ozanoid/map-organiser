@@ -16,7 +16,7 @@ import type { Plan, PlanRoute } from "@/lib/types";
  * answers with the plan as it is afterwards; that answer replaces the
  * cached plan, so there is no refetch and nothing to patch by hand.
  *
- * Everything that writes to one plan — a change, Auto Plan, AI Plan — shares
+ * Everything that writes to one plan — a change, Auto Plan — shares
  * a mutation key and a scope: they run one after another, so their answers
  * can't arrive out of order and leave an older state in the cache.
  *
@@ -149,31 +149,6 @@ export function useAutoPlan(planId: string) {
     if (!res.ok) throw await readError(res, "Failed to auto-plan");
     return res.json();
   });
-}
-
-export interface AiPlanResult {
-  plan: Plan | null;
-  days: { day_number: number; theme: string; place_count: number }[];
-  placed: number;
-  left_out: number;
-  tips: string[];
-}
-
-/** AI Plan (POST /api/ai/day-plan). Takes seconds; other changes to the
- *  plan wait behind it. */
-export function useAiPlan(planId: string) {
-  return usePlanWrite(
-    planId,
-    async (input: { include_pool: boolean; city?: string }): Promise<AiPlanResult> => {
-      const res = await fetch("/api/ai/day-plan", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ plan_id: planId, ...input }),
-      });
-      if (!res.ok) throw await readError(res, "AI plan failed");
-      return res.json();
-    }
-  );
 }
 
 /**

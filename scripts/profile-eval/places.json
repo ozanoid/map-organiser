@@ -1,0 +1,12 @@
+[
+  { "id": "e65cc24e-a41f-49bd-98e2-620d224ca690", "name": "St. JOHN Restaurant", "why": "London restaurant, English reviews" },
+  { "id": "c3638ce4-a0d1-4557-bff4-d94f818bad7b", "name": "Ozone Coffee Roasters, Shoreditch", "why": "London café" },
+  { "id": "e4d69035-d5aa-412b-8fcb-85be2f3e40de", "name": "The Bar with No Name", "why": "London cocktail bar" },
+  { "id": "80198f62-030e-4fbf-95fb-001283232a67", "name": "Screen on the Canal", "why": "London, not food or drink (a cinema): category signals" },
+  { "id": "c54a7ffc-b5e4-44e8-a817-dc6c582f102f", "name": "Kineba Ocakbaşı", "why": "Istanbul (Kadıköy), Turkish reviews" },
+  { "id": "3d3f27a0-fec7-4f50-ae58-cacb937002ce", "name": "Siirt Şeref Buryan1892", "why": "Istanbul (Fatih), Turkish reviews" },
+  { "id": "56b13349-74c6-454b-b4ee-d382a37d2bfe", "name": "Mahir Lokantası", "why": "Istanbul (Şişli), Turkish reviews" },
+  { "id": "5f8dc4aa-0e24-4b86-a419-bf433cac8fd4", "name": "Cervejaria Ramiro", "why": "Lisbon seafood restaurant, mixed languages" },
+  { "id": "ba77e4ef-9df9-4917-8953-3911490ffcde", "name": "LX Factory", "why": "Lisbon, a culture complex: category signals" },
+  { "id": "4aabb5db-681f-4c8c-9f76-ba1ce4bb2716", "name": "Mikkeller at Morebeer", "why": "Amsterdam taproom, another city and type" }
+]

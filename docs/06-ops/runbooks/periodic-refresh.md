@@ -2,8 +2,8 @@
 title: Periodic place refresh (cron)
 type: runbook
 domain: ops
-version: 1.1.5
-last_updated: 20.11.2026
+version: 1.2.1
+last_updated: 25.11.2026
 status: stable
 sources:
   - src/app/api/cron/refresh-places/route.ts
@@ -51,8 +51,10 @@ no profile regeneration. Each run:
 3. **Re-profiling is thresholded.** Only when the refresh discovered
    **more than 15 new reviews** (`CRON_REPROFILE_MIN_NEW_REVIEWS`; places
    with reviews but no profile regenerate regardless) AND the owner has
-   `ai_features_enabled` → `generatePlaceProfile`. The per-user monthly
-   PROFILE budget (1000) applies as everywhere else.
+   `ai_features_enabled` → `generatePlaceProfile`. Since v1.51.0 the profile
+   is written by Claude Sonnet 5.5 and stops at the platform's monthly Claude
+   cap ($100, `assistant_spend`); before, the per-user PROFILE budget (1000)
+   applied.
 4. **Backbone refresh cycles:** during January and July (UTC,
    `BACKBONE_REFRESH_MONTHS`) the sweep fetches `sort_by: "relevant"`
    instead of `"newest"`, so twice a year Google's current relevance
@@ -74,14 +76,17 @@ the next run). A ~500-place library cycles in roughly 5-8 weeks.
 | `CRON_SECRET` | **must be added** (Vercel → Settings → Env) | Any long random string. Vercel automatically sends it as `Authorization: Bearer …` on cron invocations. Route returns 500 until set. |
 | Per-user opt-in | Settings → AI → "Background data refresh" | Default off — until at least one user enables it, every run exits with `scanned: 0, message: "no users opted into background refresh"`. |
 | `SUPABASE_SERVICE_ROLE_KEY` | already set (sharing uses it) | Service client for the cross-user scan. |
-| `DATAFORSEO_*`, `GOOGLE_GENERATIVE_AI_API_KEY` | already set | Same as the interactive flows. |
+| `DATAFORSEO_*`, `ANTHROPIC_API_KEY` | already set | Same as the interactive flows (the profile pass needs the Claude key since v1.51.0). |
 
 ## Cost envelope
 
-- DataForSEO: biz-info (~$0.0054) + reviews (~$0.004) ≈ **$0.01/place** →
-  full monthly cycle over ~450 places ≈ **$4-5/month**.
-- Gemini (only when new reviews): ~$0.01/profile at Gemini 3 Flash rates.
-  Typical month (a fraction of places actually change) ≈ **$1-3**.
+- DataForSEO: biz-info ($0.0054) + reviews ($0.0075 a task, measured
+  19.11.2026) ≈ **$0.013/place** → full monthly cycle over ~450 places ≈
+  **$6/month**.
+- The profile (only when new reviews): Claude Sonnet 5.5 ≈ $0.03 a profile
+  when the sweep writes several for one user (the 6.3 rewrite's average,
+  $0.032), ≈ $0.05–0.08 for a lone one (v1.51.0; Gemini ≈ $0.01 before) — a
+  month that re-profiles 100 places ≈ **$3–8**.
 
 ## Manual trigger / verification
 

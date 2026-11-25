@@ -1,0 +1,185 @@
+---
+title: Google Gemini (LLM)
+type: integration
+domain: integrations
+version: 1.16.0
+last_updated: 25.11.2026
+status: superseded
+superseded_by: "[[04-integrations/claude-agent]]"
+sources:
+  - src/lib/ai/client.ts
+  - src/lib/ai/prompts/place-profile-full.ts
+  - src/lib/ai/schemas/place-profile.ts
+  - src/lib/ai/apply-suggestions.ts
+  - src/app/api/places/[id]/enrich/route.ts
+  - src/lib/instagram/read-post.ts
+  - src/lib/ai/track-usage.ts
+related:
+  - "[[_README]]"
+  - "[[../00-overview/tech-stack#ai]]"
+  - "[[../02-backend/schema/ai_suggestions_queue]]"
+  - "[[../05-flows/full-profile-flow]]"
+  - "[[../05-flows/lite-profile-flow]]"
+  - "[[../06-ops/env-vars]]"
+  - "[[../05-flows/instagram-import-flow]]"
+---
+
+# Google Gemini
+
+> **Archived (v1.55.0, 25.11.2026):** no code calls Gemini any more — every AI feature runs on Claude ([[04-integrations/claude-agent]]). `@ai-sdk/google`, `src/lib/ai/client.ts` and the evals' Gemini arms are gone; nothing reads `GOOGLE_GENERATIVE_AI_API_KEY`.
+
+> **Bug fix (v1.15.1, 15.07.2026):** `.map(compactReview)` was passing the array INDEX as `compactReview`'s `maxChars` param — review *i* was truncated to *i* characters, so every full profile generated since Phase 4 (19.05.2026) was built from near-empty review text (all 451 profiles affected; the LLM leaned on place_topics/attributes/lite-prior and fabricated the rest, including evidence quotes). Fixed to `.map((r) => compactReview(r))`; all affected profiles need regeneration — see v4 PART 4 #8.
+
+> **Telemetry (v1.16.0):** every Gemini call now exports gen_ai spans to Honeycomb **and** Langfuse (LLM-only view: prompts, completions, tokens, cost). See [[../05-flows/observability-flow]].
+
+The LLM provider behind the AI features added across PRs #30–#35 (Phases 1–5.5) — **no user-facing feature since v1.54.0**: AI search, Compare and AI Plan went to the assistant (v1.52.0–v1.54.0); the full place profile and the Instagram read moved to Claude in v1.51.0 ([[claude-agent]]). Model: **`gemini-3-flash-preview`** (Gemini 3 Flash — upgraded from `gemini-flash-latest` / 2.5 family on 15.07.2026; old profiles remain distinguishable via `model_version`). Note the id namespace: this is the **Generative Language API** id (what our direct provider hits); the Vercel AI Gateway catalog normalizes the same model as `google/gemini-3-flash`. Accessed through Vercel's AI SDK v6 with the Google provider — **direct provider wiring**, not via the Vercel AI Gateway (deliberate; see "Why direct, not Gateway?" below).
+
+## Account & access
+
+- **Provider:** Google AI Studio (Generative Language API).
+- **Auth:** API key. Server-only. Env var: `GOOGLE_GENERATIVE_AI_API_KEY`.
+- **Key rotation:** Studio → Keys → revoke + reissue → update Vercel env + local `.env.local`. See [[../06-ops/env-vars]].
+
+## NPM packages
+
+| Package | Version | Role |
+|---|---|---|
+| `ai` | `^6.0.228` | AI SDK v6 — provider-agnostic call layer. Structured JSON calls use `generateText` + `Output.object`. **v1.21.0 amendment:** the chat assistant (`/api/ai/chat`) used `streamText` + tools — the one deliberate exception to the old "never streamText" rule. **v1.48.0:** that route is gone; the assistant runs on Claude ([[claude-agent]]). Every remaining Gemini call is generateText. |
+| `@ai-sdk/react` | `3.0.230` | `useChat` for the assistant panel (v1.21.0; since v1.48.0 the panel talks to the Claude agent's routes in the same UI message format). ⚠️ VERSION LOCKSTEP: the 3.x line pairs with ai@6 via an EXACT pin (3.0.230 → ai@6.0.228). Plain `npm i @ai-sdk/react` installs 4.x which drags in ai@7 as a nested duplicate and splits UIMessage type identity — always bump the two together. |
+| `@ai-sdk/google` | `^3.0.141` | Google provider plugin. Exports `createGoogleGenerativeAI`. (3.0.75 until v1.43.0; same major — `rank_places` and the Instagram read were run on it.) |
+
+> **Check `node_modules` before blaming the code (16.10.2026).** A local install had drifted to `ai@7.0.31` / `@ai-sdk/google@4.0.18` while `package-lock.json` pins `6.0.228` / `3.0.75`; `npm install` re-synced it. The 7 `experimental_telemetry.metadata` type errors seen locally — attributed in v1.25.0 to an "AI SDK v7 bump" on `main` — came from that drift, not from the code: `package.json` has never left the 6.x line. See [[../00-overview/tech-stack#lockfile--install]].
+
+## Env vars
+
+| Variable | Scope | Used in |
+|---|---|---|
+| `GOOGLE_GENERATIVE_AI_API_KEY` | **server-only** | `src/lib/ai/client.ts#getAiClient()` (lazy singleton). When missing, every AI route short-circuits with a 503-style fail-soft response and the Settings AI toggle shows the "not configured" banner. |
+
+## Wiring (one place)
+
+```ts
+// src/lib/ai/client.ts
+import { createGoogleGenerativeAI } from "@ai-sdk/google";
+
+let _google: ReturnType<typeof createGoogleGenerativeAI> | null = null;
+
+export function getAiClient() {
+  if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) return null;
+  if (!_google) {
+    _google = createGoogleGenerativeAI({
+      apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY,
+    });
+  }
+  return _google;
+}
+
+export const FLASH_MODEL = "gemini-3-flash-preview";
+export const MODEL_VERSION = "gemini-3-flash-preview";
+```
+
+Every consumer goes through `getAiClient()` so the env check and singleton creation live in one place. `MODEL_VERSION` is stamped onto `places.google_data.place_profile.model_version` for cache-invalidation reasoning.
+
+## How we call it (canonical pattern)
+
+```ts
+import { generateText, Output } from "ai";
+import { getAiClient, FLASH_MODEL } from "@/lib/ai/client";
+import { PlaceProfileSchema } from "@/lib/ai/schemas/place-profile";
+
+const client = getAiClient();
+if (!client) {
+  return NextResponse.json(
+    { ok: false, reason: "ai_disabled" },
+    { status: 503 }
+  );
+}
+
+const { output } = await generateText({
+  model: client(FLASH_MODEL),
+  output: Output.object({ schema: PlaceProfileSchema }),
+  system: systemPrompt,
+  prompt: userPrompt,
+});
+// `output` is now typed as `PlaceProfile` via Zod inference.
+```
+
+The output is Zod-validated at the SDK boundary, so route code can treat it as a typed object. We then **force-stamp** meta fields the LLM might fabricate (`completeness`, `model_version`, `source_review_count`) before persisting.
+
+## Where it's called
+
+| Caller | Purpose | Frequency | Avg latency | SKU |
+|---|---|---|---|---|
+| `POST /api/places/[id]/enrich?step=profile` — **moved to Claude Sonnet 5.5 in v1.51.0** (`PROFILE_WRITER`) | Full place_profile generation. Triggered by the `step=reviews` fire-and-forget chain (Phase 4) or the manual refresh/generate button in `AiSummaryCard`. | Once per place, plus opt-in refresh | ~4–6 s | `ai_place_profile` |
+| ~~`POST /api/ai/parse-query`~~ (Phase 6) — **removed in v1.54.0**: the search field asks the assistant | Parse NL search query into structured filters + semantic intent. | Per user-submitted query | ~700 ms – 1.5 s | `ai_parse_query` |
+| ~~`POST /api/ai/compare`~~ (S2 F-04, v1.19.0) — **handed to the assistant in v1.52.0** | Was: per-theme winners + occasion picks for 2-4 places from stored profiles. Now the compare page opens the assistant with the places as its subject. | — | was ~2-5 s | was `ai_compare` |
+| ~~`POST /api/ai/rank-results`~~ (Phase 6) — **removed in v1.54.0** | LLM-as-judge rerank against `place_profile.searchable_summary` when `requires_semantic_ranking` is set. | Conditional — only when the query has fuzzy intent | ~1–2 s | `ai_rank_results` |
+| ~~`rank_places` assistant tool~~ — **moved to Claude in v1.49.0 (24.11.2026)** | Was: the rank-results prompt/schema run server-side via `rank-engine.ts` (deleted). Now the tool returns candidates with profiles and the conversing Claude judges them — no Gemini call ([[claude-mcp]]). | — | was 7–39 s (23 calls in the 23.11.2026 eval, median 16.7 s) | was `ai_rank_results` |
+| ~~`POST /api/ai/day-plan`~~ (AI Plan; S4 AI-09, v1.22.0 as `/api/ai/trip-plan`) — **handed to the assistant in v1.53.0** | Distributes ≤40 candidate places across a plan's days (idx-referenced `DayPlanSchema`; applied as one atomic batch of plan changes). Input ≈ 15-20k tokens (compact ~350-tok/candidate projection + plan frame). | Deliberate click on the plan page's AI Plan dialog | ~3-8 s | `ai_trip_plan` (1 unit per generation, spent even when generation fails — the plan stays untouched) |
+| `readPost` (`src/lib/instagram/read-post.ts`, v1.28.0) — **moved to Claude Haiku 5.5 in v1.51.0** (`INSTAGRAM_READER`) — inside the `after()` job of `POST /api/instagram/import` | Instagram import: classifies every account a post points at (venue / venue_brand_multi / person / media_or_creator / brand_or_product / other), marks featured venues, quotes branch hints, addresses, plain-text venues and the area. `Output.object(PostReadingSchema)` with `thinkingLevel: "low"`; caption ≤ 3,000 chars, bios ≤ 200. It never picks a Google place — `resolve.ts` does that deterministically, and every quote is checked against the post text first. `functionId: ai.instagram-read-post`. A Claude reader exists for the Phase 2 6.2 measurement (v1.50.0; production still Gemini) — [[../05-flows/instagram-import-flow]]. | One per shared post (a repeat share within 10 min reuses the job); one retry when the answer has no usable object (`NoOutputGeneratedError` / `NoObjectGeneratedError` — 1 of 35 eval reads, v1.28.2) | not measured | `ai_instagram_read` (1 unit per call, retries and failed reads included) |
+
+Phase 6 splits AI calls into two groups by behaviour: **background** (`enrich?step=profile` — fire-and-forget, latency-tolerant; since v1.28.0 also the Instagram read, which runs in `after()` while the dialog polls; both Claude calls since v1.51.0) and **interactive** (`/api/ai/*` — user is waiting). All share `getAiClient()` / `FLASH_MODEL`; structured calls use Output.object, the chat route streams. They differ only in error handling and observability expectations.
+
+## Cost & limits
+
+Gemini 3 Flash Preview pricing (verified 15.07.2026, ai.google.dev, standard tier):
+
+- Input: **\$0.50 / 1M tokens** (text)
+- Output: **\$3.00 / 1M tokens**
+
+~7-10× the 2.5-era rates the app launched on. Per `step=profile` call:
+
+- Input: ~7–14K tokens (user context + ≤50 reviews × ≤1000 chars + system prompt) → ~\$0.004–0.007
+- Output: ~1–2K tokens (PlaceProfile JSON) → ~\$0.003–0.006
+- **Total: ~\$0.008–0.012 per place_profile.** `AI_SKU_CONFIG` values updated accordingly (profile \$9.5/1k, rank \$20/1k, parse \$0.70/1k, compare \$9.5/1k, chat \$15/1k — a fixed average-turn estimate since increment_api_usage freezes cost_per_1k at the first daily insert — and trip_plan \$12/1k, v1.22.0: ~15-20k input tokens ≈ \$0.012/plan; instagram_read \$1.5/1k, v1.28.0: ~1.2k input + ~0.3k output tokens with low thinking ≈ \$0.0015/post).
+
+Free tier: 15 RPM / 1M TPM (verify in AI Studio). Beyond that, paid quota. At our usage scale (a few hundred profiles + occasional regenerations), the monthly cost stays under \$2.
+
+**Per-user monthly budgets — all removed by v1.54.0** (`checkAiBudget` with them; the history below). (`checkAiBudget`, `src/lib/ai/track-usage.ts`): **search** = 500 searches/month (one unit per search, charged at `parse-query`; `rank-results` rides free behind a 3× runaway backstop; v1.23.0: the assistant's rank_places tool is the backstop's SECOND consumer — worst-case legitimate use ≈ chat cap 200 + search cap 500 = 700 ≪ 1500, and chat ranks track ai_rank_results per ATTEMPT so a failing loop still trips it) ≈ \$10.5/month ceiling; **compare** = 200 runs/month (v1.19.0, one unit per /api/ai/compare); (the **chat** budget of v1.21.0 was removed in v1.48.0 with the Gemini chat; the Claude assistant has a dollar cap instead — [[claude-agent]]); **trip_plan** = 50 generations/month (v1.22.0, `AI_MONTHLY_TRIP_PLAN_CAP` — one unit per plan, deliberate-click only from the trip page's AI Plan dialog; a failed generation still burns the unit but never touches the trip) ≈ \$0.6/month ceiling; **profile** = 1000 generations/month across the add-chain, refresh, backfill, and cron ≈ \$9.5/month ceiling (a full ~470-place backfill fits in one month); **instagram** = 300 post reads/month (v1.28.0, `AI_MONTHLY_INSTAGRAM_CAP`, SKU `ai_instagram_read` — the unit also bounds the import's HikerAPI and Google Text Search calls; checked inside the background job, so going over it fails the job with `budget_exceeded` instead of a 429). Over budget the route returns **429** before calling Gemini; resets on the 1st (UTC). Fails open; unrelated to Gemini's own RPM quota. **Since v1.51.0** the **profile** and **instagram** budgets are gone from the code: Claude writes the profiles and reads the posts, under the platform's monthly Claude cap — [[claude-agent]].
+
+> **⚠️ Thinking-mode pathology (16.07.2026, empirically verified):** on
+> `gemini-3-flash-preview`, the trip-plan call degenerated with DEFAULT
+> settings — responseSchema + thinking produced repetition loops (60k-token
+> runaways); schema-less + thinking produced broken JSON on 2/3 runs.
+> `structuredOutputs: false` + `thinkingConfig: { thinkingBudget: 0 }`
+> yields 4/4 clean runs at ~4s / ~640 output tokens (prompt carries a JSON
+> template; zod validates server-side). If another nested-schema call
+> misbehaves, run the same 4-variant matrix before blaming the schema —
+> the day-plan route's TRIP_PLAN_PROVIDER_OPTIONS (removed in v1.53.0; in git history). See [[../05-flows/ai-enrichment-flow#cost-cap]].
+
+## Prompt strategy
+
+`buildPlaceProfilePrompt` in `src/lib/ai/prompts/place-profile-full.ts` builds the call:
+
+- **System prompt** bakes the user's full taxonomy inline — every existing category (name), every sub-category slug grouped by parent, every existing tag (ID + name), every list (ID + name), and the user's cities/countries. The LLM is told to **prefer existing IDs** and only propose new vocabulary when nothing fits.
+- **User prompt** ships place metadata (name, address, current_category_name, Google types, DataForSEO attributes, place_topics, rating distribution, price level) + up to 50 reviews, each capped at 1000 chars (raised from 400 on 15.07.2026). When the stored corpus exceeds 50, the prompt blends **35 relevance-backbone + 15 freshest** (`selectReviewsForPrompt`) — never newest-50 alone; see [[../05-flows/full-profile-flow]].
+- The LLM is also instructed to push back if the current category is wrong: that's how Phase 5.5's category-mismatch detection works without an extra schema field.
+
+The output schema is Zod-strict (`PlaceProfileSchema` in `src/lib/ai/schemas/place-profile.ts`) — any field type mismatch trips the SDK before we touch the DB.
+
+## Why direct, not Gateway?
+
+We hard-wire `@ai-sdk/google` rather than routing through the Vercel AI Gateway (`"google/gemini-3-flash"` string format) for three reasons specific to this app:
+
+1. **Single provider, single key.** We only call Gemini. The Gateway's killer features — model fallbacks, multi-provider routing, observability across providers — don't pay off when there's exactly one provider.
+2. **Cost transparency.** The Gateway adds a flat fee on top of provider pricing. At our \$1-2/month scale that's a meaningful percentage.
+3. **Existing observability.** We already track per-call cost in `api_usage` under `ai_*` SKUs, which the Cost Tracker UI surfaces. The Gateway dashboard would be a duplicate signal.
+
+If we ever add a second provider (Claude/OpenAI for ranking, vision, etc.), revisit. The migration is a one-line change — replace `client(FLASH_MODEL)` with the Gateway string format and drop `@ai-sdk/google`.
+
+## Failure modes
+
+| Symptom | Cause | Recovery |
+|---|---|---|
+| Route returns `{ ok: false, reason: "ai_disabled" }` 503 | `GOOGLE_GENERATIVE_AI_API_KEY` not set | Add the env var in Vercel → redeploy. Settings AI tab also shows the "not configured" banner. |
+| Route returns 429 | A route returned 429 for a monthly AI budget (until v1.54.0: search 500; compare 200 until v1.52.0, trip_plan 50 until v1.53.0) | Expected — resets on the 1st (UTC). An app-level guard, not a Gemini rate limit. |
+| Instagram dialog: "This month's AI budget is used up. Instagram imports resume on the 1st." | The platform's monthly Claude cap is spent (since v1.51.0; before: the `instagram` budget, 300 reads/month) | Resets on the 1st. |
+| Route returns 500 with "LLM generation failed" | Provider 5xx, rate limit, or schema validation failure | Retry from `AiSummaryCard` refresh button. Persistent failure → check Vercel logs for the underlying error. |
+| AI Summary card stays in skeleton state | Reviews not yet present OR profile hasn't been generated (pre-Phase-4 place) | If reviews exist, click "Generate" in the skeleton header. If not, wait for `step=reviews` to finish (~30 s on a fresh paste). |
+| Profile generated but tags/sub-cats not applied | `ai_features_enabled = false` on the profile, OR LLM proposed entities outside the 4-band threshold | Toggle AI on in Settings → AI; pending proposals queue up. |
+
+## Open questions
+
+- **Model snapshots.** `gemini-3-flash-preview` is a *preview* id — when Google GAs the model the id will likely change (drop the `-preview` suffix) and this pin must be updated. `model_version` stamps make selective re-profiling possible; the old `gemini-flash-latest` profiles are the natural first re-profile cohort.
+- **Phase 6 model choice.** NL filtering may benefit from the larger `gemini-pro` for ambiguous queries. Leave the routing decision to that PR.
+- **Rate-limit telemetry.** No alerting on 429s yet — they'd just show up as failed `step=profile` runs in Vercel logs.

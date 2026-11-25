@@ -2,8 +2,8 @@
 title: Deployment
 type: overview
 domain: ops
-version: 1.2.1
-last_updated: 19.11.2026
+version: 1.2.3
+last_updated: 25.11.2026
 status: stable
 sources:
   - next.config.ts
@@ -121,15 +121,15 @@ Vercel Function default timeout is **60 seconds** (verify current plan default).
 - `POST /api/places/[id]/enrich?step=reviews` — DataForSEO reviews can take ~30 s.
 - `GET /api/shared/[slug]` for a plan — Mapbox Directions per day in one request; a plan with many days can stack. (The app itself asks one day per request: `GET /api/plans/[id]/days/[dayId]/route`.)
 
-Routes that export `maxDuration` (checked 19.11.2026):
+Routes that export `maxDuration` (checked 19.11.2026; the assistant's route 24.11.2026):
 
 | Route | `maxDuration` | Why |
 |---|---|---|
 | `/api/cron/refresh-places` | 800 (was 300) | daily sweep; the 240 s soft deadline stays — 800 is headroom for a place started just before it (reviews poll up to ~110 s), which crossed 300 s and got the run killed |
 | `/api/cron/drain-imports` | 800 (was 300) | import queue; same reason. A run holds a claim for at most ~6 min, under the queue's 10-minute stale window — keep it so ([[../02-backend/schema/import-jobs]]) |
 | `/api/mcp` | 120 | Claude tool calls (`add_places` with an Instagram post waits up to 45 s) |
-| `/api/ai/chat` | 120 | multi-step agent turns (+ the Langfuse flush) |
-| `/api/ai/day-plan` | 120 | bounded LLM call + one retry on degeneration |
+| `/api/assistant/chat` | 800 | one assistant turn: up to 10 Claude calls plus the tools, run to the end after the browser goes (`after()`), then the Langfuse flush (v1.48.0; the Gemini chat route `/api/ai/chat` it replaced had 120) |
+| ~~`/api/ai/day-plan`~~ | — | removed in v1.53.0 (was 120: a bounded LLM call + one retry) |
 | `/api/instagram/import` | 120 | the post read runs in `after()` and counts against the same invocation (v1.28.0) |
 
 Everything else runs on the platform default. This project takes 800 s: the preview deployment with `maxDuration = 800` succeeded (19.11.2026, v1.46.0) — a value above the plan's ceiling fails the deploy, so a preview build is the check before raising anything further.

@@ -5,7 +5,8 @@ import {
   reviewsRecentlyRequested,
   stampReviewsRequested,
 } from "@/lib/places/reviews-checked";
-import { AI_SKU_CONFIG } from "@/lib/ai/track-usage";
+import { PROFILE_WRITER_AVG_USD } from "@/lib/agent/models";
+import { SKU_CONFIG } from "@/lib/google/track-usage";
 
 /**
  * Backfill AI place_profile for the current user's older places.
@@ -24,14 +25,10 @@ import { AI_SKU_CONFIG } from "@/lib/ai/track-usage";
  * enrich routes the backfill chains into would reject otherwise.
  */
 
-// DataForSEO reviews price per 1k calls (per src/lib/google/track-usage.ts).
-// Hard-coded here to avoid pulling Google's track-usage to the AI module.
-const DATAFORSEO_REVIEWS_COST_PER_1K = 1.0; // $1 / 1000 calls (approx)
-
 /** Hard cap on places per POST request. The route dispatches each as a
  *  fire-and-forget fetch — they run in parallel and survive past the parent
  *  response under Vercel Fluid Compute. The cap is for quota friendliness
- *  (Gemini Flash has burst limits), not request duration. The client
+ *  (Claude and DataForSEO rate limits), not request duration. The client
  *  iterates POST calls if there's more, watching the eligibility count
  *  come down. */
 const MAX_PER_REQUEST = 25;
@@ -146,8 +143,8 @@ export async function POST(request: NextRequest) {
   // automatically when ai_features_enabled is true.
   //
   // Why no batching / inter-batch delay: in Node, void-fetch calls run
-  // in parallel regardless of dispatch order. The downstream Gemini and
-  // DataForSEO routes have their own quota / rate guards; adding artificial
+  // in parallel regardless of dispatch order. The downstream Claude and
+  // DataForSEO calls have their own rate limits and retries; adding artificial
   // delay in this handler just stretches its wall clock without any
   // real-world throttling effect.
   const origin = request.nextUrl.origin;
@@ -242,13 +239,10 @@ async function buildEligibilityReport(
     }
   }
 
-  // Cost = (places needing reviews × DFS_reviews/1k) + (all places needing profile × ai_place_profile/1k)
-  const profile_cost =
-    ((has_reviews_no_profile + has_cid_no_reviews) *
-      AI_SKU_CONFIG.ai_place_profile.costPer1k) /
-    1000;
-  const reviews_cost =
-    (has_cid_no_reviews * DATAFORSEO_REVIEWS_COST_PER_1K) / 1000;
+  // Cost = every place needing a profile × the writer's measured average
+  // + every place needing reviews first × one DataForSEO reviews task.
+  const profile_cost = (has_reviews_no_profile + has_cid_no_reviews) * PROFILE_WRITER_AVG_USD;
+  const reviews_cost = (has_cid_no_reviews * SKU_CONFIG.dataforseo_reviews.costPer1k) / 1000;
   const estimated_cost_usd = +(profile_cost + reviews_cost).toFixed(4);
 
   return {

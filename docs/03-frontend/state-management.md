@@ -2,8 +2,8 @@
 title: State Management
 type: overview
 domain: frontend
-version: 1.5.0
-last_updated: 18.11.2026
+version: 1.7.0
+last_updated: 25.11.2026
 status: stable
 sources:
   - src/lib/providers.tsx
@@ -67,7 +67,7 @@ const [queryClient] = useState(
 | Stats | `["stats"]` | `useStats()` (staleTime override 5 min) |
 | Shared link | `["shared-link", resourceType, resourceId]` | `useSharedLink(...)` (disabled by default) |
 | AI suggestions | `["ai-suggestions"]` | `useAiSuggestions()` (Phase 5; pre-aggregated server-side; staleTime 30 s) |
-| AI search (Phase 6) | n/a — Zustand `useAiSearchStore`, not React Query | session-scoped; cleared on filter Clear or new NL query |
+| The map's area in view | n/a — Zustand `useMapAreaStore` (v1.54.0) | written by the map as it moves, cleared when it goes; a request from the search field carries it |
 
 **Pattern:** array starting with a stable string identifier (the entity name), then optional sub-arguments (filters, IDs).
 
@@ -85,7 +85,7 @@ const [queryClient] = useState(
 
 **Phase 6 — `soft_features` filter slot.** `PlaceFilters` also carries an optional `soft_features` object (atmosphere, dietary, occasions, seating, cuisine_types — all `string[]?`). It fans out to URL params one per axis (`?f_atmosphere=cozy&f_occasions=working`) and is matched server-side against `places.google_data.place_profile.features.*`. Set by the AI search input via `useAiSearch`; can also be edited by the user removing chips (future) or hand-editing the URL.
 
-**`useAiSearchStore`** (Zustand, `src/lib/stores/ai-search-store.ts`) holds the transient session for an active NL search: the last query string, the semantic intent passed to rerank, the in-flight rerank status, and the resulting `Map<placeId, { score, why }>`. PlaceCard and MapContent subscribe to this map; the FilterPanel's `Clear` button resets it alongside `clearFilters()`.
+**Until v1.54.0, `useAiSearchStore`** (Zustand, `src/lib/stores/ai-search-store.ts`, deleted with the Gemini AI search) held the transient session for an active NL search: the last query string, the semantic intent passed to rerank, the in-flight rerank status, and the resulting `Map<placeId, { score, why }>`. PlaceCard and MapContent subscribe to this map; the FilterPanel's `Clear` button resets it alongside `clearFilters()`.
 
 ## Server-state rules
 
@@ -96,7 +96,7 @@ const [queryClient] = useState(
 
 ## Zustand setup
 
-There's exactly **one** Zustand store today: `src/lib/stores/import-store.ts`.
+Zustand stores: `src/lib/stores/import-store.ts` (below), `map-area-store.ts` (v1.54.0, above) and, since v1.48.0, `assistant-store.ts` — the assistant panel's open state and its composer: what the user writes, or a request a screen wrote with its subject (`openAssistant(request)`; kept outside the panel since v1.52.0 so it survives New chat; [[components/assistant]]).
 
 Pattern:
 

@@ -17,9 +17,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { usePathname } from "next/navigation";
+import { useAskFromSearch } from "@/components/assistant/ask-assistant";
 import { useFilters } from "@/lib/hooks/use-filters";
-import { useAiSearchStore } from "@/lib/stores/ai-search-store";
-import { X, Sparkles } from "lucide-react";
+import { X } from "lucide-react";
 
 interface FilterSheetProps {
   open: boolean;
@@ -37,17 +38,14 @@ const SORT_OPTIONS = [
 
 export function FilterSheet({ open, onOpenChange }: FilterSheetProps) {
   const { filters, setFilters, clearFilters, hasActiveFilters } = useFilters();
-  const resetAiSearch = useAiSearchStore((s) => s.reset);
-  // AI mode (assistant push or saved ✨ chip): rankings drive the order.
-  const aiSearchActive = useAiSearchStore((s) => s.rankings !== null);
-
-  // Clear must ALSO reset the AI store (desktop FilterPanel parity):
-  // clearFilters alone leaves pushed rankings alive, and the grid keeps
-  // hiding/sorting by stale scores — the mobile "clear doesn't clear" bug.
-  function handleClearAll() {
-    clearFilters();
-    resetAiSearch();
-  }
+  const askFromSearch = useAskFromSearch(usePathname() === "/map" ? "map" : "places");
+  // The sheet closes: the panel opens over it with the question.
+  const askAssistant = askFromSearch
+    ? (text: string) => {
+        onOpenChange(false);
+        askFromSearch(text);
+      }
+    : undefined;
 
   return (
     <BottomSheet
@@ -57,11 +55,11 @@ export function FilterSheet({ open, onOpenChange }: FilterSheetProps) {
       headerActions={
         <>
           <SaveFilterButton />
-          {(hasActiveFilters || aiSearchActive) && (
+          {hasActiveFilters && (
             <Button
               variant="ghost"
               size="sm"
-              onClick={handleClearAll}
+              onClick={clearFilters}
               className="cursor-pointer text-xs"
             >
               <X className="h-3 w-3 mr-1" />
@@ -73,36 +71,27 @@ export function FilterSheet({ open, onOpenChange }: FilterSheetProps) {
       bodyClassName="px-5"
     >
       <div>
-          {/* Sort — replaced by a static badge while AI rankings drive
-              the order (desktop FilterPanel parity: changing sort would
-              be a confusing no-op against the semantic ordering). */}
+          {/* Sort */}
           <div className="pt-2 pb-4">
             <label className="text-sm font-medium mb-2 block">Sort by</label>
-            {aiSearchActive ? (
-              <div className="flex items-center gap-1.5 h-10 px-3 text-sm rounded-md border border-emerald-200 dark:border-emerald-900 bg-emerald-50/50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400">
-                <Sparkles className="h-3.5 w-3.5" />
-                AI Ranked
-              </div>
-            ) : (
-              <Select
-                items={SORT_OPTIONS}
-                value={filters.sort || "newest"}
-                onValueChange={(v) =>
-                  setFilters({ sort: v === "newest" ? undefined : (v as string) })
-                }
-              >
-                <SelectTrigger className="w-full h-10">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {SORT_OPTIONS.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
+            <Select
+              items={SORT_OPTIONS}
+              value={filters.sort || "newest"}
+              onValueChange={(v) =>
+                setFilters({ sort: v === "newest" ? undefined : (v as string) })
+              }
+            >
+              <SelectTrigger className="w-full h-10">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {SORT_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="border-t" />
@@ -129,6 +118,7 @@ export function FilterSheet({ open, onOpenChange }: FilterSheetProps) {
             <DebouncedSearchInput
               value={filters.search}
               onSearch={(search) => setFilters({ search })}
+              onAsk={askAssistant}
             />
           </div>
 

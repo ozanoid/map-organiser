@@ -12,6 +12,7 @@ import { useIsDesktop } from "@/lib/hooks/use-is-desktop";
 import type { RetrievedPlaceData } from "@/lib/hooks/use-place-search";
 import { FilterSheet } from "@/components/filters/filter-sheet";
 import { ClearFiltersChip } from "@/components/filters/clear-filters-chip";
+import { AssistantPicksChip } from "@/components/filters/assistant-picks-chip";
 import { googleMapsPlaceUrl } from "@/lib/google/maps-url";
 import { FilterPanel } from "@/components/filters/filter-panel";
 import { VisitStatusToggle, VisitStatusBadge } from "@/components/places/visit-status-toggle";
@@ -23,12 +24,8 @@ import { usePlaces } from "@/lib/hooks/use-places";
 import { useCategories } from "@/lib/hooks/use-categories";
 import { useFilters } from "@/lib/hooks/use-filters";
 import { useMapStyle } from "@/lib/hooks/use-map-style";
-import { useAiRerankOrchestrator } from "@/lib/hooks/use-ai-search";
-import {
-  useAiSearchStore,
-  HIDE_BELOW_SCORE,
-} from "@/lib/stores/ai-search-store";
 import { useFilterPersistStore } from "@/lib/stores/filter-persist-store";
+import { useMapAreaStore } from "@/lib/stores/map-area-store";
 import { useInstagramImport } from "@/lib/hooks/use-instagram-import";
 import type { InstagramJobPhase } from "@/lib/instagram/types";
 import { useQueryClient } from "@tanstack/react-query";
@@ -52,20 +49,6 @@ export function MapContent({ mapboxToken }: { mapboxToken: string }) {
   const { filters, hasActiveFilters } = useFilters();
   const { data: places = [], isLoading } = usePlaces(filters);
 
-  // Phase 6: fire rerank when parse-query asked for it and the new filter
-  // result set has settled.
-  useAiRerankOrchestrator(filters);
-  const aiRankings = useAiSearchStore((s) => s.rankings);
-
-  // AI mode marker filter: when rankings exist, hide markers whose
-  // score is below the threshold. The LLM has decided these shouldn't
-  // surface to the user; the map respects that decision.
-  const placesForMap = aiRankings
-    ? places.filter((p) => {
-        const ranking = aiRankings.get(p.id);
-        return ranking === undefined || ranking.score >= HIDE_BELOW_SCORE;
-      })
-    : places;
   const { data: categories = [] } = useCategories();
   const { mapStyleUrl, markerStyle } = useMapStyle();
   const [addOpen, setAddOpen] = useState(false);
@@ -75,6 +58,24 @@ export function MapContent({ mapboxToken }: { mapboxToken: string }) {
   const [placeListOpen, setPlaceListOpen] = useState(false);
   const mapRef = useRef<MapViewHandle>(null);
   const searchParams = useSearchParams();
+
+  // The assistant's "Show on map" (?ids=…) is a deliberate "show me these":
+  // when the named places change, bring them into view once they're loaded.
+  // (Other filter changes keep the camera still, by design — map-view.tsx.)
+  const idsKey = filters.ids?.join(",") ?? "";
+  const fittedIds = useRef("");
+  useEffect(() => {
+    if (!idsKey) {
+      fittedIds.current = "";
+      return;
+    }
+    if (fittedIds.current === idsKey) return;
+    const wanted = new Set(idsKey.split(","));
+    const named = places.filter((p) => wanted.has(p.id) && p.location);
+    if (named.length === 0) return; // not loaded yet
+    fittedIds.current = idsKey;
+    mapRef.current?.fitToCoords(named.map((p) => p.location));
+  }, [idsKey, places]);
   const router = useRouter();
   const sharedHandled = useRef<string | null>(null);
 
@@ -207,15 +208,19 @@ export function MapContent({ mapboxToken }: { mapboxToken: string }) {
     [setIgParam]
   );
 
-  // Visible places and the search bias both follow the viewport.
+  // Visible places, the search bias and the area a request to the
+  // assistant carries all follow the viewport.
+  const setMapArea = useMapAreaStore((s) => s.setArea);
+  useEffect(() => () => setMapArea(null), [setMapArea]);
   const handleVisiblePlacesChange = useCallback((ids: string[]) => {
     setVisiblePlaceIds(ids);
+    setMapArea(mapRef.current?.getArea() ?? null);
     const c = mapRef.current?.getCenter();
     if (!c) return;
     // ~1 km steps: plenty for a search bias, and small pans don't refetch suggestions.
     const next = { lng: Math.round(c.lng * 100) / 100, lat: Math.round(c.lat * 100) / 100 };
     setMapCenter((prev) => (prev && prev.lng === next.lng && prev.lat === next.lat ? prev : next));
-  }, []);
+  }, [setMapArea]);
 
   // Pick a search result. If it resolves to a place the user ALREADY
   // saved (matched by google_place_id — the same dedupe key POST
@@ -326,7 +331,7 @@ export function MapContent({ mapboxToken }: { mapboxToken: string }) {
       <div className="relative flex-1">
         <MapView
           ref={mapRef}
-          places={placesForMap}
+          places={places}
           categories={categories}
           onPlaceClick={handlePlaceClick}
           onVisiblePlacesChange={handleVisiblePlacesChange}
@@ -363,6 +368,7 @@ export function MapContent({ mapboxToken }: { mapboxToken: string }) {
           </Button>
           {/* One-tap clear next to Filters (v1.23.0 mobile UX). */}
           <ClearFiltersChip className="lg:hidden shadow-md" />
+          <AssistantPicksChip className="shadow-md" />
         </div>
 
         {/* FAB — hidden when detail or search panel is open */}
@@ -380,15 +386,7 @@ export function MapContent({ mapboxToken }: { mapboxToken: string }) {
 
         {/* Visible place count + list */}
         {!isLoading && places.length > 0 && !selectedPlace && !searchResult && (() => {
-          // AI active: badge count reflects the post-threshold visible
-          // set, matching what's actually on the map and in the list.
-          const visibleCount = aiRankings
-            ? visiblePlaceIds.filter((id) => {
-                const score = aiRankings.get(id)?.score;
-                return score === undefined || score >= HIDE_BELOW_SCORE;
-              }).length
-            : visiblePlaceIds.length;
-          if (visibleCount === 0 && aiRankings) return null;
+          const visibleCount = visiblePlaceIds.length;
           return (
           <div className="absolute top-4 right-16 z-10 lg:right-4">
             <button
@@ -403,25 +401,9 @@ export function MapContent({ mapboxToken }: { mapboxToken: string }) {
             {placeListOpen && visiblePlaceIds.length > 0 && (
               <div className="mt-2 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm rounded-xl shadow-xl border max-h-[50dvh] overflow-y-auto w-64">
                 {(() => {
-                  // AI active mode: hide entries below threshold AND sort
-                  // remaining by score descending. Normal mode: original
-                  // (map-derived) order.
-                  const ordered = aiRankings
-                    ? [...visiblePlaceIds]
-                        .filter((id) => {
-                          const score = aiRankings.get(id)?.score;
-                          return score === undefined || score >= HIDE_BELOW_SCORE;
-                        })
-                        .sort((a, b) => {
-                          const sa = aiRankings.get(a)?.score ?? -1;
-                          const sb = aiRankings.get(b)?.score ?? -1;
-                          return sb - sa;
-                        })
-                    : visiblePlaceIds;
-                  return ordered.map((id) => {
+                  return visiblePlaceIds.map((id) => {
                     const place = places.find((p) => p.id === id);
                     if (!place) return null;
-                    const ranking = aiRankings?.get(id);
                     return (
                       <button
                         key={id}
@@ -438,11 +420,7 @@ export function MapContent({ mapboxToken }: { mapboxToken: string }) {
                         />
                         <div className="min-w-0 flex-1">
                           <p className="text-sm font-medium truncate">{place.name}</p>
-                          {ranking ? (
-                            <p className="text-[10px] text-emerald-700 dark:text-emerald-400 italic truncate">
-                              {ranking.why}
-                            </p>
-                          ) : place.address ? (
+                          {place.address ? (
                             <p className="text-[10px] text-muted-foreground truncate">{place.address}</p>
                           ) : null}
                         </div>

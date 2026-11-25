@@ -2,8 +2,8 @@
 title: Visit
 type: entity
 domain: visits
-version: 1.0.2
-last_updated: 18.11.2026
+version: 1.0.3
+last_updated: 25.11.2026
 status: stable
 sources:
   - src/lib/types/index.ts
@@ -69,4 +69,3 @@ Reads (`src/lib/visits/read.ts`): `listVisits` (by places, date range, minimum r
 
 - Photos and companions of a visit (Phase 3 / 4 attach here).
 - A history page of all visits in the app (Claude's `get_visits` covers it for now).
-- The in-app assistant (Gemini) still only sets the visit status; it moves onto these tools in Phase 2.

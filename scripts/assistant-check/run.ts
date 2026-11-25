@@ -2,8 +2,8 @@
 /**
  * Runs the assistant tools against the live database, the way the MCP
  * server would, and prints what the model would see. Read-only checks use
- * the owner's library; the write check and the paid calls (geocoding, AI
- * ranking) use the admin test account and undo the write afterwards.
+ * the owner's library; the write check and the paid calls (geocoding) use
+ * the admin test account and undo the write afterwards.
  *
  *   npm run check:assistant                 everything
  *   npm run check:assistant -- plans        only the plan checks (no paid calls)
@@ -11,6 +11,7 @@
  *   npm run check:assistant -- plan-tools   only the plan tool checks (no paid calls)
  *   npm run check:assistant -- lists        only the list checks (no paid calls)
  *   npm run check:assistant -- add-places   only the add_places checks (paid, ≈ $0.03)
+ *   npm run check:assistant -- rank         only rank_places and the shared profile (no paid calls)
  *
  * Uses the service-role key: RLS is bypassed, so this relies on every tool
  * query also filtering by user_id (which they do).
@@ -103,6 +104,49 @@ function checkPureHelpers() {
   }
 }
 
+/**
+ * rank_places and the profile it shares with get_places — free: no model
+ * call since 24.11.2026, only reads (the admin test account).
+ *   npm run check:assistant -- rank
+ */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- every subset takes the same arguments
+async function checkRank(_admin: unknown, _expect: unknown, tester: string, _owner: string) {
+  const ranked = await call(
+    "rank_places romantic dinner (candidates with profiles)",
+    tester,
+    "rank_places",
+    { intent: "romantic, intimate dinner spot, not loud", city: "London", limit: 3 },
+    900
+  );
+  const first = ranked?.places?.[0];
+  expect(
+    "rank_places: the intent comes back, at most `limit` candidates",
+    ranked?.intent?.startsWith("romantic") && ranked.places.length <= 3 && ranked.candidates === ranked.places.length
+  );
+  expect(
+    "rank_places: a candidate carries its row and a short profile (no quotes, no score)",
+    typeof first?.id === "string" &&
+      Array.isArray(first?.profile?.themes) &&
+      first.profile.themes.length <= 4 &&
+      first.profile.themes.every((t: any) => t.quote === undefined) &&
+      first.profile.summary === undefined &&
+      first.score === undefined
+  );
+  const pool = await call("rank_places London, the default pool", tester, "rank_places", { city: "London" }, 300);
+  const size = JSON.stringify(pool ?? {}).length;
+  expect("rank_places: 30 candidates by default", pool?.places?.length === Math.min(30, pool?.total_matches ?? 0));
+  console.log(`   (the default pool: ${pool?.places?.length} candidates, ${Math.round(size / 1024)} KB, ~${Math.round(size / 4 / 1000)}k tokens at ~4 characters a token)`);
+  const tagged = await call("rank_places with a boost tag", tester, "rank_places", { city: "London", boost_tags: ["test-tag"], limit: 5 }, 200);
+  expect("rank_places: a boost tag that matches nothing still answers", Array.isArray(tagged?.places));
+
+  const detail = await call("get_places: the full profile view", tester, "get_places", { place_ids: [first?.id ?? pool?.places?.[0]?.id] }, 600);
+  const profile = detail?.places?.[0]?.profile;
+  expect(
+    "get_places: summary, pros, cons, up to 6 themes with a quote, what it's good for",
+    profile && "good_for" in profile && Array.isArray(profile.themes) && profile.themes.length <= 6 && (profile.themes.length === 0 || "quote" in profile.themes[0])
+  );
+}
+
 async function main() {
   const owner = await userIdOf(OWNER);
   const tester = await userIdOf(TESTER);
@@ -113,6 +157,7 @@ async function main() {
     "plan-tools": checkPlanTools,
     lists: checkLists,
     "add-places": checkAddPlaces,
+    rank: checkRank,
   }[process.argv[2] ?? ""];
   if (only) {
     await only(admin, expect, tester, owner);
@@ -204,7 +249,7 @@ async function main() {
     );
   }
 
-  await call("rank_places romantic dinner (Gemini)", tester, "rank_places", { intent: "romantic, intimate dinner spot, not loud", city: "London", limit: 3 }, 900);
+  await checkRank(admin, expect, tester, owner);
 
   const { data: target } = await admin
     .from("places")

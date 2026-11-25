@@ -257,3 +257,37 @@ export async function filterLibrary(ctx: AssistantContext, f: PlaceFilters): Pro
 export function byRating(a: LibraryRow, b: LibraryRow): number {
   return (b.g_rating ?? 0) - (a.g_rating ?? 0) || (b.g_count ?? 0) - (a.g_count ?? 0);
 }
+
+/**
+ * The best-rated `size` of a rating-sorted list, with guaranteed seats:
+ * places in `guaranteedIds` (e.g. carrying a tag that fits the question,
+ * like "Date Spot") stay in even when they'd fall below the rating cut.
+ * A guarantee only ever adds recall; whoever judges the pool has the final
+ * say. Guaranteed places replace the lowest-rated others — at most half
+ * the pool, so an over-applied tag can't evict the best-rated majority.
+ */
+export function capWithGuaranteedSeats<T extends { id: string }>(
+  places: T[],
+  guaranteedIds: Set<string>,
+  size: number
+): T[] {
+  if (places.length <= size) return places;
+  const seats = places.slice(0, size);
+  const overflow = places.slice(size).filter((p) => guaranteedIds.has(p.id));
+  const maxSwaps = Math.floor(size / 2);
+  let swaps = 0;
+  for (const g of overflow) {
+    if (swaps >= maxSwaps) break;
+    let swapIdx = -1;
+    for (let i = seats.length - 1; i >= 0; i--) {
+      if (!guaranteedIds.has(seats[i].id)) {
+        swapIdx = i;
+        break;
+      }
+    }
+    if (swapIdx < 0) break; // every seat is guaranteed already
+    seats[swapIdx] = g;
+    swaps++;
+  }
+  return seats;
+}

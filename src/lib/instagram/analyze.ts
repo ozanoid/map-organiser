@@ -19,7 +19,7 @@ import {
 } from "@/lib/instagram/places";
 import { findMapsLink, resolveMapsLink, type MapsLink } from "@/lib/instagram/maps-link";
 import { cleanName, deslug, distanceM, fold, isCoord, nameScore } from "@/lib/instagram/normalize";
-import { readPost, type AccountRole, type PostReading } from "@/lib/instagram/read-post";
+import { readPost, type AccountRole, type PostReading, type PostReader } from "@/lib/instagram/read-post";
 import {
   resolveCandidate,
   type Area,
@@ -35,7 +35,7 @@ import { parseInstagramPostUrl } from "@/lib/instagram/url";
  *
  * 1. HikerAPI: the post, the usertags of a reel, and the profile of every
  *    account the post points at — tagged, coauthor, @mentioned, and the owner.
- * 2. Gemini (one call, read-post.ts): which accounts are venues, whether the
+ * 2. One model call (read-post.ts; Claude Haiku 5.5 in production): which accounts are venues, whether the
  *    post features them, branch/address quotes, plain-text venue names, area.
  *    Every quote is checked against the post text before it is used.
  * 3. Google Maps search (through DataForSEO, places.ts) + resolve.ts: pick
@@ -90,13 +90,14 @@ export class InstagramImportError extends Error {
 }
 
 export interface AnalyzeDeps {
-  userId: string;
   /** Where places come from; Google Maps through DataForSEO unless given. */
   places?: PlaceLookup;
   /** One call per billed request, for usage tracking. */
   onBilled?: (sku: "hikerapi_request" | PlacesSku) => void;
-  /** One call per Gemini request (a post read can take two — see read-post.ts). */
+  /** One call per model request (a post read can take two — see read-post.ts). */
   onAiCall?: () => void;
+  /** Who reads the post (see read-post.ts). */
+  reader: PostReader;
 }
 
 type Source = "tagged" | "coauthor" | "mention" | "owner";
@@ -215,7 +216,7 @@ export async function analyzeInstagramPost(url: string, deps: AnalyzeDeps): Prom
         bio: a.profile?.biography ?? "",
       })),
     },
-    { userId: deps.userId, shortcode: ref.shortcode, onAttempt: deps.onAiCall }
+    { shortcode: ref.shortcode, onAttempt: deps.onAiCall, reader: deps.reader }
   );
 
   // Text the model may quote from. Bios vouch for names; only the post itself

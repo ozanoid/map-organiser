@@ -2,8 +2,8 @@
 title: ai_suggestions_queue
 type: table
 domain: backend
-version: 1.0.0
-last_updated: 14.05.2026
+version: 1.0.1
+last_updated: 25.11.2026
 status: stable
 sources:
   - Supabase project hukppmaevcapvbrvxtph (live)
@@ -41,7 +41,7 @@ review before they pollute the user's tag/sub-category vocabulary.
 | `confidence` | numeric | no | — | LLM confidence 0..1 (CHECK `>= 0 AND <= 1`). |
 | `status` | text | no | `'pending'` | CHECK: `'pending'` / `'accepted'` / `'rejected'`. |
 | `resolved_at` | timestamptz | yes | — | Set when status leaves pending. |
-| `source_model` | text | yes | — | e.g. `gemini-3-flash-preview` (older rows carry `gemini-flash-latest`). For traceability when models change. |
+| `source_model` | text | yes | — | The model that proposed it: `claude-sonnet-5-5` since v1.51.0 (`PROFILE_WRITER`); older rows carry `gemini-3-flash-preview` or `gemini-flash-latest`. For traceability when models change. |
 | `created_at` | timestamptz | no | `now()` | — |
 
 ## Indexes

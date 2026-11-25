@@ -2,14 +2,14 @@
 title: AI place_profile backfill (per user)
 type: runbook
 domain: ops
-version: 1.3.2
-last_updated: 19.11.2026
+version: 1.4.3
+last_updated: 25.11.2026
 status: stable
 related:
   - "[[_README]]"
   - "[[../../03-frontend/components/settings#backfillprofilespanel]]"
   - "[[../../05-flows/full-profile-flow]]"
-  - "[[../../04-integrations/gemini]]"
+  - "[[../../04-integrations/claude-agent]]"
   - "[[../../_plans/backfill-grandfather-reenrich]]"
 ---
 
@@ -19,14 +19,14 @@ User-facing in **Settings → AI → "Generate AI profiles for older places"**. 
 
 ## When to run
 
-- A user reports "AI search misses my older places" — likely a coverage gap on `place_profile`.
+- The assistant knows little about some older places ("no profile" in its answers) — likely a coverage gap on `place_profile`.
 - New user who imported a large Takeout file and didn't get profiles auto-generated (Phase 4 only auto-generates for *new* saves; legacy data needs the backfill).
 - After a model upgrade or schema bump if we ever decide to re-profile en masse.
 
 ## Preconditions
 
 - `profiles.ai_features_enabled = true` for the target user. Routes 403 otherwise.
-- `GOOGLE_GENERATIVE_AI_API_KEY` set on the deployment.
+- `ANTHROPIC_API_KEY` set on the deployment (v1.51.0; the Gemini key before) — Settings → AI shows the panel only then.
 - DataForSEO env credentials set (`DATAFORSEO_LOGIN`, `DATAFORSEO_PASSWORD`) for the reviews-fetch leg.
 - User has at least one place without a `place_profile` AND with either reviews already fetched OR a Google CID available for the reviews fetch.
 
@@ -43,24 +43,48 @@ Eligibility split:
 
 ### Cost
 
-| SKU | Per-1k cost | Per-place |
+| Call | Per-1k cost | Per-place |
 |---|---|---|
-| `ai_place_profile` | \$1.00 | \$0.001 |
-| `dataforseo_reviews` | \$1.00 (approx) | \$0.001 |
+| The profile — Claude Sonnet 5.5 (v1.51.0), Claude ledger purpose `profile` | ≈ \$32 (measured over the 6.3 rewrite) | ≈ \$0.032 |
+| `dataforseo_reviews` | \$7.50 (one task, measured 19.11.2026) | \$0.0075 |
 
-Worst case per place (reviews + profile): ~\$0.011 at Gemini 3 Flash rates (15.07.2026). A user with 300 reviewless places: ~\$3.30. Tracked in the cost tracker like any other AI call.
+Worst case per place (reviews + profile): ≈ \$0.040 (v1.51.0; ~\$0.011 at Gemini 3 Flash rates before). A user with 300 reviewless places: ≈ \$12. A lone profile costs more than the batch average (≈ \$0.05–0.08: its system prompt is written to the prompt cache). The panel's estimate uses the same figures (`PROFILE_WRITER_AVG_USD`, the DataForSEO reviews SKU); what was really spent shows in the cost tracker.
 
 > **Monthly budget interaction (15.07.2026):** profile calls count against
 > the per-user PROFILE budget (`AI_MONTHLY_PROFILE_CAP`, 1000/month) — a
 > full backfill of a ~470-place library fits within a single month
 > alongside normal usage. Searches have their own separate budget.
+>
+> **Since v1.51.0:** profiles are written by Claude Sonnet 5.5 (≈ $0.032 a
+> profile in a run of many, measured over the 6.3 rewrite) into the Claude ledger, under the platform's
+> $100 monthly cap — profiles stop at its background share, $80 (v1.56.0); the
+> PROFILE budget is no longer checked. Rewriting the
+> existing profiles with the current writer is `npm run regen:profiles`
+> (Phase 2, 6.3): every place with reviews whose profile it didn't write,
+> re-runnable, `--dry-run` to count, `--apply-suggestions` to re-run the
+> tag / sub-category auto-apply too.
+> Before its first write it saves the profiles it is about to replace to
+> `scripts/profile-regen/out/backup-<time>.json` (git-ignored) — the
+> database keeps no copy of an overwritten profile. Places whose review list
+> is empty are left out (no profile can be written from them).
+>
+> **Run on 24.11.2026** (Ozan: profile only, every account): 889 profiles
+> rewritten — every place with a stored review — $28.28 for 893 calls
+> (≈ $0.032 each; the first calls of each run ≈ $0.05–0.08 while the prompt
+> cache was written), ≈ 12 s a call at four at a time, 97.1% of the 6,965
+> evidence quotes found in the reviews (punctuation aside). Four calls failed
+> on a malformed tag id, which then threw the whole profile away; ids are now
+> checked one by one (`writeProfile`) and the four were rewritten. The backups
+> are in `scripts/profile-regen/out/` on Ozan's machine. Until the branch is
+> merged, production (main) keeps writing new and refreshed profiles with
+> Gemini: run it once more after the merge.
 
 ### Rate limiting
 
 - `MAX_PER_REQUEST = 25` places dispatched per POST. Fire-and-forget — the parent request returns once the chunk is queued (sub-second).
 - Client auto-iterates: when `has_more = true`, it re-POSTs every 12 s with a 50-iteration safety ceiling.
-- Each `step=profile` synchronous Gemini Flash call is ~5 s; `step=reviews` chained to `step=profile` is ~30 s + 5 s.
-- No artificial server-side rate limit. Both providers' own quotas (Gemini RPM, DataForSEO concurrency) cap real throughput.
+- Each `step=profile` call is ~15 s with Claude Sonnet 5.5 (14.7 s on average in the 6.2 measurement); `step=reviews` chained to `step=profile` is ~30 s + 15 s.
+- No artificial server-side rate limit. Both providers' own limits (Claude's rate limits, DataForSEO concurrency) cap real throughput.
 
 ## Procedure (UI)
 
@@ -119,8 +143,8 @@ FROM gd;
 | Symptom | Likely cause | Fix |
 |---|---|---|
 | All POSTs return 403 | `ai_features_enabled = false` | Toggle on in Settings → AI |
-| All POSTs return 503 | `GOOGLE_GENERATIVE_AI_API_KEY` missing on env | Set in Vercel env → redeploy |
-| Count plateaus mid-way | Gemini quota exceeded OR DataForSEO concurrency cap | Wait, retry; quotas reset daily |
+| All POSTs return 503 | `ANTHROPIC_API_KEY` missing on env (v1.51.0; the Gemini key before) | Set in Vercel env → redeploy |
+| Count plateaus mid-way | Claude rate limit, the monthly Claude cap ($100 — `step=profile` answers 429) OR DataForSEO concurrency cap | Wait and retry; the cap resets on the 1st |
 | `cannot_enrich` is large | Places saved without Google CID (manual entries, old import) | Out of scope. Defer or surface a UI to fetch CID by name lookup. |
 | Some places re-fire even though they have profile | Race — UI eligibility query stale | Idempotent. The POST checks `has_profile` server-side before queuing. |
 

@@ -2,8 +2,8 @@
 title: System Overview
 type: overview
 domain: overview
-version: 1.4.3
-last_updated: 19.11.2026
+version: 1.4.6
+last_updated: 25.11.2026
 status: stable
 sources:
   - AGENTS.md
@@ -93,12 +93,12 @@ Typical session:
 | Stats | `src/app/api/stats/`, `src/app/(app)/stats/` | Recharts dashboard backed by aggregate queries. |
 | Import | `src/app/api/places/import-jobs/`, `src/app/api/cron/drain-imports/`, `src/lib/import/`, `src/app/(app)/import/` | Server-drained queue (`import_jobs` / `import_job_items`); the page only polls. See [[../05-flows/place-import-flow]]. |
 | Claude connector (MCP) | `src/app/api/mcp/`, `src/lib/assistant/`, `src/app/(auth)/oauth/consent/`, `src/app/.well-known/` | Tools over the user's library (and Google Maps search) for claude.ai and Claude Code; Supabase Auth as OAuth 2.1 server (17.11.2026). [[../04-integrations/claude-mcp]] |
-| Instagram import | `src/app/api/instagram/`, `src/lib/instagram/`, `src/lib/hikerapi/`, `src/components/places/instagram-import-panel.tsx` | Post → HikerAPI + one Gemini read + Google Maps search through DataForSEO (v1.42.0; was Google Text Search) → deterministic pinning → the same import queue (v1.28.0; DB migration applied 16.10.2026). See [[../05-flows/instagram-import-flow]]. |
+| Instagram import | `src/app/api/instagram/`, `src/lib/instagram/`, `src/lib/hikerapi/`, `src/components/places/instagram-import-panel.tsx` | Post → HikerAPI + one Claude read (Haiku 5.5, v1.51.0; Gemini before) + Google Maps search through DataForSEO (v1.42.0; was Google Text Search) → deterministic pinning → the same import queue (v1.28.0; DB migration applied 16.10.2026). See [[../05-flows/instagram-import-flow]]. |
 | Settings | `src/app/(app)/settings/`, `src/components/settings/` | Categories, sub-categories (per parent), tags, encrypted API keys, theme, AI master toggle, AI moderation queue. |
 | Theme | `src/lib/providers.tsx`, `src/lib/hooks/use-map-style.ts` | next-themes light/dark/system; map style and marker style preferences. |
 | PWA | `src/app/manifest.ts`, `public/sw.js`, `src/components/sw-register.tsx`, `src/app/offline/` | `share_target` POST to `/api/share-target`, offline fallback. |
 | Observability | `src/lib/google/track-usage.ts` + `public.api_usage` table + `increment_api_usage()` RPC | Per-SKU API counter for cost tracking (now includes AI SKUs). |
-| **AI** | `src/lib/ai/` (client, schemas, prompts, extractors, apply-suggestions), `src/app/api/places/[id]/enrich?step=profile`, `src/app/api/user/ai-{settings,suggestions}/`, `src/components/places/ai-summary-card.tsx`, `src/components/settings/ai-{settings,suggestions-queue}.tsx`, `public.ai_suggestions_queue`, `public.subcategories` | Gemini Flash + AI SDK v6. Two layers: rule-based lite_profile inline in parse-link (no LLM), and full place_profile via background `step=profile` LLM call. 4-band auto-apply (silent / queue / category-change / ignore). Phase 5 moderation UI consumes the queue. See [[../05-flows/lite-profile-flow]], [[../05-flows/full-profile-flow]], [[../04-integrations/gemini]]. |
+| **AI** | `src/lib/ai/` (schemas, prompts, extractors, apply-suggestions, generate-profile), `src/app/api/places/[id]/enrich?step=profile`, `src/app/api/user/ai-{settings,suggestions}/`, `src/components/places/ai-summary-card.tsx`, `src/components/settings/ai-{settings,suggestions-queue}.tsx`, `public.ai_suggestions_queue`, `public.subcategories` | Claude for every AI feature since v1.54.0 (the assistant with its entries on the compare page, the plan page and the search field; profiles; Instagram reads) — Gemini Flash + AI SDK v6 before. Two layers: rule-based lite_profile inline in parse-link (no LLM), and full place_profile via background `step=profile` call to Claude Sonnet 5.5 (v1.51.0; Gemini Flash before). 4-band auto-apply (silent / queue / category-change / ignore). Phase 5 moderation UI consumes the queue. See [[../05-flows/lite-profile-flow]], [[../05-flows/full-profile-flow]], [[../04-integrations/claude-agent]]. |
 
 ## Cross-cutting
 

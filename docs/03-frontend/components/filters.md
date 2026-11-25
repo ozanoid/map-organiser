@@ -2,8 +2,8 @@
 title: Filters
 type: component
 domain: frontend
-version: 1.4.0
-last_updated: 17.07.2026
+version: 1.5.1
+last_updated: 25.11.2026
 status: stable
 sources:
   - src/components/filters/clear-filters-chip.tsx
@@ -28,7 +28,7 @@ related:
 
 # Filters
 
-> **v1.20.0 (F-03/NF-20/21):** `SaveFilterButton` (panel + sheet başlıklarında, Clear'ın yanında; aktif filtre setini — AI araması aktifse NL sorgusuyla birlikte — `saved_filters`'a kaydeder) ve `SavedFilterChips` (/places'te arama satırının altında; tıkla → `router.push(?query_string)` tam-replace; ✨'li chip AI pipeline'ını `useAiSearch` ile yeniden koşturur; X → sil).
+> **v1.20.0 (F-03/NF-20/21):** `SaveFilterButton` (panel + sheet başlıklarında, Clear'ın yanında; aktif filtre setini `saved_filters`'a kaydeder — v1.54.0'a kadar AI araması aktifse NL sorgusunu da) ve `SavedFilterChips` (/places'te arama satırının altında; tıkla → `router.push(?query_string)` tam-replace; ✨'li chip AI pipeline'ını `useAiSearch` ile yeniden koşturur; X → sil).
 
 > **v1.18.0:** new `OpenNowFilter` chip (panel + mobile sheet, "Hours" section) — toggles `PlaceFilters.open_now`; evaluation happens server-side at request time from stored timetable+tz in the place's local timezone. `sources:` += src/components/filters/open-now-filter.tsx.
 
@@ -57,10 +57,13 @@ Components under `src/components/filters/`. All `"use client"`. Two top-level co
 
 ### `DebouncedSearchInput`
 
+> **v1.54.0 — the search field's door to the assistant.** `onAsk?: (text) => void`: while the field holds text (2+ characters), a row under it — **Ask the assistant** — hands the words over: the pending keyword filter is cancelled (`useDebouncedCallback` gained `.cancel()`), the field clears, and `onAsk` runs. The filter panel, the mobile sheet (which closes first) and the `/places` header pass `useAskFromSearch(page)` — undefined, so no row, when the assistant can't be used ([[assistant]], [[../../05-flows/ai-search-flow]]).
+
 - **File:** `src/components/filters/debounced-search-input.tsx`
-- **Props:** `{ value: string | undefined; onSearch: (value: string | undefined) => void; placeholder?: string; className?: string }`.
+- **Props:** `{ value: string | undefined; onSearch: (value: string | undefined) => void; placeholder?: string; className?: string; onAsk?: (text: string) => void }`.
 - **Hooks:** `useState` for local input, `useEffect` to sync from prop, [[../hooks/use-debounce|`useDebouncedCallback`]] (400 ms).
 - **Pattern:** local state decouples typing speed from API calls. External prop wins on URL navigation (back/forward).
+- **Layout:** `className` goes on the outer box; the search icon and the field sit in a `relative` box of their own, so the icon centres on the field alone — not on the field and the Ask row under it (v1.54.1, found in the end-to-end run).
 
 ### `FilterPanel` (desktop)
 

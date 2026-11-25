@@ -2,8 +2,8 @@
 title: User routes
 type: route-group
 domain: backend
-version: 1.4.0
-last_updated: 19.11.2026
+version: 1.7.0
+last_updated: 25.11.2026
 status: stable
 sources:
   - src/app/api/user/api-keys/route.ts
@@ -39,7 +39,7 @@ Two endpoints under `/api/user/*` — both about the **caller's own** profile.
 | `GET` | `/api/user/ai-suggestions` | List pending AI proposals (Phase 5 moderation queue), pre-grouped by `(type, slug, parent)`. |
 | `POST` | `/api/user/ai-suggestions/[id]/accept` | Create the proposed tag / sub-category and apply it to every queued place. |
 | `POST` | `/api/user/ai-suggestions/[id]/reject` | Mark proposal (and siblings) as `rejected`. Vocabulary untouched. |
-| `GET` | `/api/user/backfill-profiles` | Eligibility report: how many places need an AI profile + estimated cost. |
+| `GET` | `/api/user/backfill-profiles` | Eligibility report: how many places need an AI profile + estimated cost (the writer's measured cost a profile, `PROFILE_WRITER_AVG_USD`, plus the DataForSEO reviews price; v1.51.0). |
 | `POST` | `/api/user/backfill-profiles` | Dispatch up to 25 fire-and-forget enrich calls for profile-less places. Client iterates until done. |
 
 All require auth.
@@ -86,17 +86,18 @@ Google key fields (`googleApiKey`, `hasGoogleKey`, `googlePlacesEnabled`) were r
 {
   month: "YYYY-MM",
   usage: Array<{ sku: string, count: number, cost: number }>,
+  assistant: { spentUsd: number, capUsd: number, backgroundCapUsd: number, byPurpose: Record<"chat" | "profile" | "instagram" | "eval", number> },   // v1.48.0; byPurpose v1.51.0; backgroundCapUsd v1.56.0
   totalEstimatedCost: number,
 }
 ```
 
-- **Notes:** Estimated cost = `(count / 1000) * cost_per_1k` per row; summed for the total. Month string is current month.
+- **Notes:** Estimated cost = `(count / 1000) * cost_per_1k` per row; summed for the total. Month string is current month. `assistant` (v1.48.0): every Claude call's dollars this month from `assistant_spend` — platform-wide: the assistant, place profiles and Instagram reads (v1.51.0), evals — and the $100 cap; added to the total. `assistant.byPurpose` (v1.51.0): the same split by purpose (`chat`, `profile`, `instagram`, `eval`; `monthSpendByPurpose`). `assistant.backgroundCapUsd` (v1.56.0): where profiles and Instagram reads stop — `capFor`, 80% of the cap; the rest is the assistant's. A failed read of the ledger shows $0 and is logged.
 
 ### `GET /api/user/ai-settings`
 
 - **Source:** `src/app/api/user/ai-settings/route.ts`
 - **DB:** `profiles` SELECT (`ai_features_enabled, cron_refresh_enabled`).
-- **Response:** `{ enabled: boolean, available: boolean, cronRefreshEnabled: boolean }`. `available` reflects the presence of `GOOGLE_GENERATIVE_AI_API_KEY` on the server; `cronRefreshEnabled` is the opt-in for the whole periodic refresh sweep (default false — see [[../../06-ops/runbooks/periodic-refresh]]).
+- **Response:** `{ enabled: boolean, aiAvailable: boolean, assistantAvailable: boolean, cronRefreshEnabled: boolean }` (`available`, the Gemini key's presence, went in v1.54.0 with the last Gemini feature); `aiAvailable` (v1.56.0) the presence of `ANTHROPIC_API_KEY` — every AI feature runs on Claude: Settings → AI disables its switch without it and shows the profile backfill and the suggestions queue only with it; `assistantAvailable` (v1.48.0; per account since v1.56.0) — `aiAvailable` and the account is an owner (`assistantOpenTo`, `ASSISTANT_OWNER_EMAILS`): the assistant's button and every entry that opens it follow this one (until v1.56.0 it was the key alone and Settings read it too); `cronRefreshEnabled` is the opt-in for the whole periodic refresh sweep (default false — see [[../../06-ops/runbooks/periodic-refresh]]).
 
 ### `PUT /api/user/ai-settings`
 

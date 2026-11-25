@@ -1,152 +1,74 @@
 ---
-title: AI Chat Flow
+title: Assistant flow (in-app, Claude)
 type: flow
 domain: ai
-version: 1.1.1
-last_updated: 18.11.2026
-status: stable
+version: 2.3.2
+last_updated: 25.11.2026
+status: draft
 sources:
-  - src/app/api/ai/chat/route.ts
-  - src/lib/ai/chat-tools.ts
-  - src/lib/ai/rank-engine.ts
-  - src/lib/ai/prompts/chat.ts
   - src/components/assistant/assistant-panel.tsx
+  - src/components/assistant/assistant-parts.tsx
   - src/components/assistant/assistant-launcher.tsx
+  - src/lib/stores/assistant-store.ts
+  - src/app/api/assistant/chat/route.ts
+  - src/app/api/assistant/conversation/route.ts
+  - src/lib/agent/run-turn.ts
+  - src/lib/agent/ui-stream.ts
+  - src/lib/agent/ui.ts
 related:
-  - "[[../02-backend/api-routes/ai]]"
-  - "[[../04-integrations/gemini]]"
-  - "[[ai-search-flow]]"
-  - "[[observability-flow]]"
+  - "[[../04-integrations/claude-agent]]"
+  - "[[../02-backend/api-routes/assistant]]"
+  - "[[../03-frontend/components/assistant]]"
+  - "[[../_plans/phase-2-assistant]]"
+  - "[[claude-connector-flow]]"
 ---
 
-# AI Chat Flow
+# Assistant flow (in-app, Claude)
 
-S3 AI-02 v1 (v1.21.0): the assistant — chat-based discovery and action
-over the user's saved places. Agent loop with 8 tools; session-only
-memory; approval-gated mutations.
+The app's assistant since v1.48.0 (24.11.2026): Claude, run by our server through the agent core, with the same 16 tools claude.ai uses over MCP, plus web search. It replaced the Gemini chat of v1.21.0 (`/api/ai/chat`, 8 tools of its own, history in the browser) — Phase 2 of [[../_plans/personal-assistant]], design in [[../_plans/phase-2-assistant]].
 
-## Trigger
-
-✨ button in the AppHeader (desktop + mobile) — rendered only when
-`GET /api/user/ai-settings` reports `enabled && available` (same gate as
-AiSearchInput). Opens a right Sheet (max-w-md on desktop, full-width on
-mobile).
-
-## Steps
+## In short
 
 ```
-1. User opens panel, types a message
-       │  • useChat({ chat: sharedChat }) — module-scope Chat instance:
-       │    closing/reopening the panel keeps the conversation;
-       │    "New chat" swaps in a fresh instance + sessionId
-       │
-       ▼
-2. POST /api/ai/chat { messages: UIMessage[], sessionId }
-       │  • Gates BEFORE streaming: auth 401 → after(flushLangfuse) →
-       │    ai_features_enabled 403 → getAiClient 503 →
-       │    checkAiBudget("chat") 429 → validate 400
-       │  • History trimmed to last 30 messages server-side
-       │  • isNewTurn = last message role === "user"
-       │
-       ▼
-3. streamText agent loop (stopWhen: stepCountIs(6))
-       │  • system = buildChatSystemPrompt(buildUserContext(), today) —
-       │    real taxonomy ids injected; "never invent ids" rule; today =
-       │    the user's date in the browser's zone (body.timeZone, v1.39.0)
-       │  • tools (cookie client, RLS = ownership boundary):
-       │      search_places      → shared queryPlaces() engine
-       │      rank_places        → v1.23.0 parity: queryPlaces + LLM-as-judge
-       │                           via rank-engine.ts (server twin of the AI
-       │                           search rerank; agent calls it ONLY for
-       │                           soft/subjective criteria; boost_tag_ids =
-       │                           taxonomy tags → guaranteed pool seats;
-       │                           rank_backstop gate + ai_rank_results SKU)
-       │      get_place_details  → place + tags + lists + profile
-       │      compare_places     → data-only side-by-side (model verbalises)
-       │      get_stats          → shared computeUserStats()
-       │      add_to_list        ┐ (lists through src/lib/lists →
-       │      create_list        ├  save_list, v1.40.0)
-       │      set_visit_status   ┘ needsApproval: true
-       │  • outputs are COMPACT projections — full google_data never
-       │    enters the loop (token cost)
-       │
-       ▼
-4. UIMessage stream renders progressively in the panel
-       │  • tool states: input-streaming/available → spinner line;
-       │    output-available → result card (search hits link to
-       │    /places/[id]); output-error → red line
-       │
-       ▼ (mutation proposed)
-5. approval-requested → confirm card (Approve / Cancel)
-       │  • addToolApprovalResponse({ id, approved }) +
-       │    sendAutomaticallyWhen: lastAssistantMessageIsComplete-
-       │    WithApprovalResponses → auto-resubmit
-       │  • The continuation POST's last message is the ASSISTANT's →
-       │    isNewTurn=false → NO second budget unit
-       │  • Approved → tool executes server-side → success line;
-       │    denied → output-denied → "Action cancelled."
-       │
-       ▼
-6. onFinish: trackAiUsage("ai_chat") if isNewTurn (1 unit/turn) + log
-       │
-       ▼
-7. Client cache sync: panel watches mutation tool outputs and
-   invalidates ["lists"] / ["places"] / ["stats"] — chat-driven
-   mutations bypass the TanStack mutation hooks, so open views would
-   otherwise go stale.
+Header ✦ (or another screen, with a request written)
+   → panel opens → GET /api/assistant/conversation   (latest; the first time POST creates one)
+   → user writes → POST /api/assistant/chat {conversationId, input: message}
+        server: checks (lease, budget) — refused? HTTP error, the text comes back
+                → append the message → model ⇄ tools … → stream
+        panel: tool rows as they run, text as it streams, cards when it pauses
+   → every card answered: Save / Not now → POST … {input: approval}
+        server: the answers fit the cards waiting? → record → run → carry on the same message
+   → broke off (Claude busy, …): Try again → POST … {input: retry} → carry on
+   → turn ends → panel takes the server's copy (unless older than what it streamed);
+     saved changes refresh the views
 ```
 
-## Budget & cost
+## Opening
 
-- SKU `ai_chat`, cap `AI_MONTHLY_CHAT_CAP = 200` turns/month (code
-  constant, not env). One unit per TURN regardless of step count;
-  `stopWhen: stepCountIs(6)` bounds in-turn fan-out.
-- costPer1k = $15 — fixed average-turn estimate (~2-3 Flash steps);
-  `increment_api_usage` freezes cost_per_1k at the first daily insert,
-  so per-turn variable cost cannot be recorded.
-- CostTracker picks the SKU up automatically via the AI_SKU_CONFIG
-  spread.
+- `AssistantLauncher` shows the ✦ button when `GET /api/user/ai-settings` says AI is on for the user and `assistantAvailable` (the server's Claude key and — since v1.56.0 — an owner account, `ASSISTANT_OWNER_EMAILS`).
+- `useAssistantStore.openAssistant(request?)` opens the panel from anywhere. A screen's request goes into the composer with its **subject** as a chip — the user adds to it and sends; typed by the user (the search field), it goes out at once when the conversation is free (v1.52.0). In use (Phase 2, decision 6.1): the compare page (v1.52.0), the plan page (v1.53.0, [[ai-plan-flow]]) and the search field (v1.54.0, [[ai-search-flow]]).
+- The panel loads the latest conversation; when there is none, it starts one. One `Chat` (AI SDK) per conversation is kept for the app's lifetime, so closing the panel mid-stream keeps the stream.
 
-## Session memory (v1 scope)
+## A turn
 
-Client-side only: the UIMessage array lives in the module-scope Chat
-instance and round-trips on every POST. Survives client-side navigation
-and panel close; gone on hard refresh/sign-out. Persistent
-`chat_memories` / summarization is deliberately v2 (v4 plan, Tema 3).
+1. The panel sends only the new message and the conversation id (`prepareSendMessagesRequest`); the history lives on the server.
+2. The route checks the user and the gates, then runs `runTurn`: the turn lease (one turn per conversation), the monthly budget, the user message with its `<context>` line (date and time in the user's zone, yesterday, the next six days) and, for a request from a screen, its `<subject>` block — the plan, the places or the map's view, checked against the user's library and named on the server before the turn opens (`resolveSubject`, v1.52.0; gone since → 400 `subject_unavailable`), then model calls and tool rounds — at most 10.
+3. The panel sees each step: a row per tool ("Searching your places…" → "Searched your places · 12 places"), the reply streaming in Markdown, web searches with their query and top results. Search rows offer **Show on map** (`/map?ids=…`: the panel closes, the map brings those places into view and shows an "N from the assistant" chip that clears it). The reply links the saved places it recommends to their pages (`/places/<id>`), and under it **Show these N on map** puts exactly those on the map (v1.49.0). For a subjective question `rank_places` hands the model the candidates with their profiles ("Read place profiles · 30 candidates") and the model ranks them. Any link into the app closes the panel too.
+4. A call that saves something stops the turn. The panel shows a **card** with the proposal in words (the plan's stops and times, the list's places and notes, the visit, the changes) — built on the server from the call's input (`describeWrites`), because the model doesn't describe plans or lists before calling. **Save** / **Not now**: once every card of the paused call has an answer (`approvalsAnswered`), the panel sends them — once, explicitly. The server checks they are the answers to the cards waiting now (an older tab can't decide a card the user hasn't seen), records them, runs approved writes and the reads that waited, and the model goes on in the same message. The card turns into **Saving…**, then **Saved** (with a link to what was saved), **Not saved** or **Couldn't save**. With two cards, the first answered says it will (or won't) be saved and waits for the other.
+5. Writing a new message while a card waits closes the card as not saved (in the panel, and on the server as "not run") and sends the message; reads that waited with it show as skipped.
+6. A turn that broke off says why at the end of the reply (Claude busy, failing or unreachable, the month's budget, the Console limit, a refusal, a cut-off reply). Where it helps, **Try again** carries the turn on from where it stopped — the user's message isn't sent twice, a call that already ran isn't run again.
 
-## Failure modes
+## Reliability
 
-- **Budget spent:** 429 before the stream; panel shows "Monthly AI chat
-  limit reached".
-- **LLM/stream error mid-turn:** onError logs; the client renders the
-  error and the user can retry. The turn's unit is only charged in
-  onFinish (unlike compare's burn-on-failure — a turn that never
-  finishes doesn't count).
-- **Hallucinated ids in tool args:** RLS-scoped queries return
-  not-found; the model gets an honest `{error}` and recovers. No
-  cross-user leak is possible through tools.
+- **History append-only, on the server** — the panel takes the server's copy whenever it isn't streaming (after each request, on reopening, when a turn elsewhere ends), unless it is older than what the panel has streamed (`version`: a fetch that started before a turn ended). Reload, another tab and another device show the same conversation.
+- **A turn runs to the end on the server** (`after()`), browser or not. On load, a running turn (`turnInProgress`) shows "A reply is still being written…", sending, cards and Try again wait, and the panel checks every 3 s.
+- **A refusal before the turn writes nothing**: a turn already running, the budget used up, answers for cards that changed — the server answers with a plain HTTP error, the panel puts the user's text back in the composer and reloads the conversation.
+- **One turn at a time**: a second request is refused without spending anything.
+- **A write never runs twice**: decisions are recorded before anything runs (`assistant_tool_runs`); a second answer to the same card stops at the database. A card answered before a reload shows "Saving…" while its turn runs; a run whose turn is gone (a crash) shows as interrupted, and Try again tells the model to check.
+- **The outcome survives a reload**: how the last turn ended is recorded on the conversation, so its note (and Try again) comes back after a reload.
+- **"New chat" sticks**: the panel shows the conversation opened last, not the one written to last.
+- **Sign-out** clears the panel's conversations and cache (`resetAssistantChat`).
 
-- **Stale profile content:** tool outputs surface `place_profile`
-  summaries — until the Tema 6 re-profile runs, those derive from the
-  v1.15.1-era truncated-review inputs (v4 PART 4 #8).
-## Push to map/list (v1.23.0 parity)
+## Not in the first version (Ozan, 24.11.2026)
 
-`search_places`/`rank_places` outputs echo `applied_filters`
-(PlaceFilters-shaped); the panel renders "Show all on map (N) / Show as
-list (N)" under the result card. Push writes through the SAME
-`ai-search-store` the AI search bar uses — `applyParse` with
-`requires_semantic_ranking: false` (rankings come from the tool; the
-orchestrator must NOT re-fire) + `applyRankings(all_ranked)` — so the
-banner (query + clear ✕), card sort/hide, why-lines and SaveFilterButton
-(`ai_query`) all work unchanged. Hard-filter pushes (search_places)
-reset the store instead. `router.push(/map|/places?qs)` + panel closes.
-Retirement criteria for the AI-01 bar live in the v4 plan (Tema 3 note).
-
-
-## Open questions
-
-- Langfuse multi-step stream traces: the umbrella-span filter drops the
-  root ai.streamText span; verify no cost double-count on the first
-  production traces (chat is the first multi-doStream feature).
-- Suggestion chips are static English samples — localize or derive from
-  the user's taxonomy later.
+No Stop button (a turn is bounded and finishes on the server); only the latest conversation and "New chat" — a list of past conversations and deleting one come later.

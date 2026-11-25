@@ -2,8 +2,8 @@
 title: Runbooks
 type: overview
 domain: ops
-version: 1.1.0
-last_updated: 19.05.2026
+version: 1.1.1
+last_updated: 25.11.2026
 status: stable
 related:
   - "[[../_README]]"
@@ -24,7 +24,7 @@ Step-by-step procedures for repeatable ops tasks. Each runbook has:
 |---|---|
 | [[dedupe-categories]] | A user has ≥ 2 categories with the same name (e.g. trigger regression seeded defaults twice) |
 | [[city-backfill]] | `places.city` populated with an administrative region (e.g. UK "England") instead of the real locality |
-| [[profile-backfill]] | A user has places without `place_profile` (pre-Phase-4 saves) and AI search feels weak for them |
+| [[profile-backfill]] | A user has places without `place_profile` (pre-Phase-4 saves) and the assistant knows little about them |
 
 ## Candidates (worth writing when needed)
 

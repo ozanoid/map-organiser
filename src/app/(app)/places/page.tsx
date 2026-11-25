@@ -5,15 +5,16 @@ import { useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { usePlaces } from "@/lib/hooks/use-places";
 import { useFilters } from "@/lib/hooks/use-filters";
-import { useAiRerankOrchestrator } from "@/lib/hooks/use-ai-search";
 import { useFilterPersistStore } from "@/lib/stores/filter-persist-store";
 import { BulkActionBar } from "@/components/places/bulk-action-bar";
 import { FilterSheet } from "@/components/filters/filter-sheet";
 import { ClearFiltersChip } from "@/components/filters/clear-filters-chip";
+import { AssistantPicksChip } from "@/components/filters/assistant-picks-chip";
 import { SavedFilterChips } from "@/components/filters/saved-filter-chips";
 import { FilterPanel } from "@/components/filters/filter-panel";
 import { Button } from "@/components/ui/button";
 import { DebouncedSearchInput } from "@/components/filters/debounced-search-input";
+import { useAskFromSearch } from "@/components/assistant/ask-assistant";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
@@ -33,20 +34,12 @@ import {
 import { PlaceCard } from "@/components/places/place-card";
 import { PlaceDetailSheet } from "@/components/places/place-detail-sheet";
 import { useIsDesktop } from "@/lib/hooks/use-is-desktop";
-import {
-  useAiSearchStore,
-  HIDE_BELOW_SCORE,
-} from "@/lib/stores/ai-search-store";
 import type { Place } from "@/lib/types";
 
 /**
  * Wrapper that overlays a selection checkbox + ring on the canonical
  * PlaceCard. The visual representation of a place stays in PlaceCard;
  * selection state is layered on top.
- *
- * AI mode hide: PlaceCard returns null when its score is below the
- * hide threshold. We mirror that here so the wrapper div doesn't
- * remain as an empty slot in the grid.
  */
 function SelectablePlaceCard({
   place,
@@ -59,11 +52,6 @@ function SelectablePlaceCard({
   onToggle: () => void;
   onOpenDetail?: (place: Place) => void;
 }) {
-  const aiRanking = useAiSearchStore((s) => s.rankings?.get(place.id));
-  if (aiRanking !== undefined && aiRanking.score < HIDE_BELOW_SCORE) {
-    return null;
-  }
-
   return (
     <div className="relative">
       {/* Selection checkbox — absolute overlay, click stops bubbling to Link */}
@@ -127,13 +115,7 @@ function PlacesContent() {
   const isDesktop = useIsDesktop();
   const [detailPlace, setDetailPlace] = useState<Place | null>(null);
 
-  // Drive the AI rerank pipeline from this page too. AISearchInput lives
-  // in FilterPanel and is mounted on BOTH /map and /places — without the
-  // orchestrator mounted here, submitting a search on /places sets
-  // rerankStatus="pending" and then gets stuck because nothing fires
-  // the rank-results call. (Until v1.8.7 the orchestrator was only
-  // mounted in MapContent, so AI search on /places hung forever.)
-  useAiRerankOrchestrator(filters);
+  const askAssistant = useAskFromSearch("places");
 
   // Mirror current URL query string into the cross-page filter-persist
   // store so nav links from non-filter-context pages can restore it on
@@ -147,28 +129,8 @@ function PlacesContent() {
     setLastMapPlacesQuery(searchParams.toString());
   }, [searchParams, setLastMapPlacesQuery]);
 
-  // AI mode awareness: when rankings exist, the grid is sorted by score
-  // (desc) and the sort dropdown is disabled. SelectablePlaceCard
-  // already hides individual cards below the threshold.
-  const aiRankings = useAiSearchStore((s) => s.rankings);
-  const aiActive = aiRankings !== null;
-  const sortedPlaces = aiActive
-    ? [...places].sort((a, b) => {
-        const sa = aiRankings.get(a.id)?.score ?? -1;
-        const sb = aiRankings.get(b.id)?.score ?? -1;
-        return sb - sa;
-      })
-    : places;
-
-  // Header count = cards actually rendered. In AI mode the grid hides
-  // cards scored below the threshold (SelectablePlaceCard returns null),
-  // so mirror that hide rule rather than showing the raw filtered total.
-  const visibleCount = aiActive
-    ? places.filter((p) => {
-        const r = aiRankings.get(p.id);
-        return r === undefined || r.score >= HIDE_BELOW_SCORE;
-      }).length
-    : places.length;
+  const sortedPlaces = places;
+  const visibleCount = places.length;
 
   const toggleSelect = useCallback((id: string) => {
     setSelectedIds((prev) => {
@@ -245,6 +207,7 @@ function PlacesContent() {
           {/* One-tap clear next to Filters (v1.23.0 mobile UX) —
               clearing shouldn't require opening the sheet. */}
           <ClearFiltersChip className="lg:hidden" />
+          <AssistantPicksChip />
           <Button
             variant="outline"
             size="sm"
@@ -260,49 +223,38 @@ function PlacesContent() {
         </div>
       </div>
 
-      {/* Search + Sort */}
-      <div className="flex items-center gap-2">
+      {/* Search + Sort — top-aligned: the search field's "Ask the
+          assistant" row may sit under it. */}
+      <div className="flex items-start gap-2">
         <div className="flex-1 max-w-sm">
           <DebouncedSearchInput
             value={filters.search}
             onSearch={(search) => setFilters({ search })}
+            onAsk={askAssistant}
           />
         </div>
         <div className="relative shrink-0">
           <ArrowUpDown className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-          {aiActive ? (
-            // AI search active: sort is dictated by rerank score. The
-            // dropdown is replaced with a static badge so the user
-            // sees why their sort choice is suspended.
-            <div
-              className="h-9 pl-8 pr-3 text-sm border border-input rounded-md bg-muted/40 inline-flex items-center text-muted-foreground cursor-not-allowed select-none"
-              title="Sorting is controlled by AI ranking while AI search is active"
-              aria-label="Sort: AI ranked (disabled)"
-            >
-              AI Ranked
-            </div>
-          ) : (
-            <Select
-              items={SORT_OPTIONS}
-              value={filters.sort || "newest"}
-              onValueChange={(v) =>
-                setFilters({
-                  sort: v === "newest" ? undefined : (v as string),
-                })
-              }
-            >
-              <SelectTrigger className="h-9 pl-8" aria-label="Sort places">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {SORT_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
+          <Select
+            items={SORT_OPTIONS}
+            value={filters.sort || "newest"}
+            onValueChange={(v) =>
+              setFilters({
+                sort: v === "newest" ? undefined : (v as string),
+              })
+            }
+          >
+            <SelectTrigger className="h-9 pl-8" aria-label="Sort places">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {SORT_OPTIONS.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </div>
 

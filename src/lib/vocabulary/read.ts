@@ -20,7 +20,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  * Two destinations, decided per concept by `bucket`:
  *   features.<axis>  the LLM writes the canonical value into the existing
  *                    place_profile.features field — schema unchanged, so
- *                    rank-results / trip-plan / compare keep working untouched
+ *                    what reads the profile (the assistant's tools) keeps working
  *   tag              the concept is applied to the place as a user tag
  */
 

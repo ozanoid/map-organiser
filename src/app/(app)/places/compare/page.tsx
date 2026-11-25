@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RatingDistributionBar } from "@/components/places/rating-distribution-bar";
 import { PlaceStatusBadges } from "@/components/places/place-status-badges";
-import { AiCompareCard } from "@/components/places/ai-compare-card";
+import { CompareWithAssistant } from "@/components/places/compare-with-assistant";
 import { haversineDistance } from "@/lib/geo";
 import { ArrowLeft, MapPin, Star } from "lucide-react";
 import type { Place } from "@/lib/types";
@@ -19,13 +19,14 @@ import type { PlaceProfile } from "@/lib/ai/schemas/place-profile";
  *
  * Side-by-side comparison of 2-4 places: rating + distribution, price,
  * open-now, distance (from the FIRST selected place), theme_insights
- * rows aligned across columns, pros/cons — plus the deliberate-click
- * AI analysis card (AiCompareCard). Entry: multi-select on /places →
- * BulkActionBar "Compare".
+ * rows aligned across columns, pros/cons — plus the question for the
+ * assistant, "which one, when?" (CompareWithAssistant, v1.52.0; a Gemini
+ * card until then). Entry: multi-select on /places → BulkActionBar
+ * "Compare".
  *
  * Data: ONE round-trip via GET /api/places?ids=… (the list route — it
  * has the EWKB-safe location parser and the subcategory join). Column
- * order = ids param order (matches the AI route's idx order).
+ * order = ids param order.
  */
 
 const THEME_LABEL: Record<string, string> = {
@@ -149,8 +150,8 @@ function ComparePageInner() {
         </h1>
       </div>
 
-      {/* AI analysis — deliberate click, one budget unit per run */}
-      <AiCompareCard places={places} />
+      {/* Which one, when? — asked in the assistant's panel */}
+      <CompareWithAssistant places={places} />
 
       {/* Columns — min 220px each; on phones 3-4 columns would squeeze
           to ~80px, so the container scrolls horizontally instead. */}

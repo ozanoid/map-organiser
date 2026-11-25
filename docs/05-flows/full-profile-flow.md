@@ -2,8 +2,8 @@
 title: Full Profile Flow (AI Phase 4)
 type: flow
 domain: places
-version: 1.5.0
-last_updated: 05.08.2026
+version: 1.8.1
+last_updated: 25.11.2026
 status: stable
 sources:
   - src/app/api/places/[id]/enrich/route.ts
@@ -20,7 +20,7 @@ related:
   - "[[../02-backend/schema/ai_suggestions_queue]]"
   - "[[../02-backend/schema/subcategories]]"
   - "[[../02-backend/schema/vocabulary]]"
-  - "[[../04-integrations/gemini]]"
+  - "[[../04-integrations/claude-agent]]"
 ---
 
 # Full Profile Flow (AI Phase 4)
@@ -30,7 +30,7 @@ related:
 > **Telemetry (v1.16.0):** the profile LLM call now emits gen_ai spans to Honeycomb + Langfuse (`ai.generate-profile`). See [[observability-flow]].
 
 The **first real LLM call** in the app. After reviews land for a place, a
-background pipeline triggers Gemini Flash to produce a structured
+background pipeline asks Claude (`PROFILE_WRITER`, Sonnet 5.5 since v1.51.0; Gemini Flash before) to produce a structured
 `place_profile` (TLDR, pros, cons, theme insights, refined features). The
 profile is the pivot data layer for all downstream AI features (Phase 5
 moderation, Phase 6 NL filtering, future ranking/discovery).
@@ -59,7 +59,20 @@ signal quality.
 
 The profile logic itself lives in `src/lib/ai/generate-profile.ts`
 (extracted from the route so the cron can run it with the service
-client); `enrich?step=profile` is now a thin HTTP shell over it.
+client); `enrich?step=profile` is now a thin HTTP shell over it. **Since
+v1.51.0 production writes profiles with Claude Sonnet 5.5 at medium
+(`PROFILE_WRITER`, Ozan's choice after the 6.2 measurement):** the gates
+are the user's AI switch, `ANTHROPIC_API_KEY` and the Claude ledger's
+monthly cap — for profiles its background share, $80 of the $100 (v1.56.0); the model version stamped is `claude-sonnet-5-5`;
+`generatePlaceProfile(…, { applySuggestions: false })` replaces the
+profile alone (the 6.3 rewrite, `npm run regen:profiles`). Since
+v1.50.0 it is three steps: `profileInputs` (the place and its prompts),
+`writeProfile` (the Claude call through `structuredClaude`, the count
+limits and the meta stamps; until v1.55.0 it could take a Gemini writer
+too, for the eval) and `generatePlaceProfile` (gates, save, auto-apply),
+which writes with `PROFILE_WRITER`.
+
+Measured on 24.11.2026 (Phase 2, 6.2): on 10 places, Gemini 3 Flash wrote 10/10 profiles with 62 of 74 quotes found word for word in the reviews (84%), 30.1 s each; Claude Haiku 5.5 (effort high) 10/10, 84/89 (94%), 40.0 s, $0.006 a profile; Claude Sonnet 5.5 (effort medium) 10/10, 99/102 (97%), 14.7 s, $0.047 a profile. Category and sub-category agreed on 9 of 10 (LX Factory: Gemini Museum & Culture, both Claude models Shopping). Ozan picked Sonnet 5.5 at medium for production (v1.51.0). The 6.3 rewrite (24.11.2026, `npm run regen:profiles`) then wrote 889 profiles: 97.1% of 6,965 evidence quotes found in the reviews (punctuation aside), ≈ $0.032 and ≈ 12 s a profile.
 
 The user never waits for this — they save the place, see the lite profile
 chips, and the full profile materializes later on the place detail page via
@@ -83,27 +96,28 @@ polling.
        │  • fetch /api/places/[id]/enrich?step=profile with same cookies
        │
        ▼
-5. step=profile handler:
+5. step=profile handler (generatePlaceProfile):
        │  a. Re-check ai_features_enabled (defense in depth)
-       │  b. getAiClient() — null if GOOGLE_GENERATIVE_AI_API_KEY missing → 503
-       │     · then checkAiBudget("profile") — over AI_MONTHLY_PROFILE_CAP (1000/mo) → 429 (fails open)
+       │  b. ANTHROPIC_API_KEY missing → 503; the Claude ledger's month at the
+       │     background share of its cap ($80 of $100, capFor — v1.56.0) → 429
+       │     (the Gemini key and a 1000/mo profile budget before v1.51.0)
        │  c. Bail if no reviews (defensive — chain only fires when reviews exist,
        │     but a manual call from the AI Summary refresh button might not)
        │  d. SELECT place full row + buildUserContext(user.id)
        │  e. buildPlaceProfilePrompt(place, context, lite_profile)
        │       → systemPrompt + userPrompt (English, strict-JSON instructions,
        │         user entity IDs inline, subcategory dictionary per parent)
-       │  f. generateText({
-       │       model: aiClient(FLASH_MODEL),  // gemini-3-flash-preview
-       │       output: Output.object({ schema: PlaceProfileSchema }),
-       │       system, prompt
-       │     })
-       │     → result.output typed as PlaceProfile
+       │  f. writeProfile → structuredClaude({ choice: PROFILE_WRITER,
+       │       schema: PlaceProfileSchema, system, prompt })
+       │     → the output typed as PlaceProfile — Claude Sonnet 5.5 at medium;
+       │       one ledger row, purpose 'profile' (v1.51.0; generateText on
+       │       gemini-3-flash-preview before)
        │  g. Force-stamp: completeness='full', generated_at, model_version,
        │     source_review_count
        │  h. Persist into google_data.place_profile
        │  i. applyProfileSuggestions() — 3-band auto-apply (see below)
-       │  j. trackAiUsage('ai_place_profile') → api_usage RPC
+       │  (until v1.51.0 also trackAiUsage('ai_place_profile') → api_usage;
+       │   the Claude call is in assistant_spend, purpose 'profile')
        │
        ▼ Meanwhile on the client…
 6. /places/[id] page polls every 5s while:
@@ -148,7 +162,7 @@ under the wrong parent.
 | Sub-cat conf < 0.85 AND primary matches | — | MATCH | **Ignore** — too uncertain. |
 
 The dedup helper from Phase 1 (`src/lib/ai/dedup.ts`) is the safety net under
-the LLM: even if Gemini emits `"japanese-food"` and the user has `"japanese"`,
+the LLM: even if the model emits `"japanese-food"` and the user has `"japanese"`,
 the proposal reroutes to the existing tag instead of cluttering the queue.
 
 ### Why no list silent apply
@@ -187,8 +201,8 @@ match is found, the route reuses that entity — no duplicate row.
 
 | Step | Input | Output |
 |---|---|---|
-| 5e | place + userContext + lite_profile (optional prior) | strict-JSON Gemini prompt (~5-7K input tokens) |
-| 5f | Gemini call | `PlaceProfile` typed object (completeness='full') |
+| 5e | place + userContext + lite_profile (optional prior) | strict-JSON prompt (~7-14K input tokens) |
+| 5f | the model call (Claude Sonnet 5.5 since v1.51.0, structured output) | `PlaceProfile` typed object (completeness='full') |
 | 5h | profile | `places.google_data.place_profile` written |
 | 5i | profile + userContext | place_tags / list_places / places.subcategory_id mutations + ai_suggestions_queue rows |
 | 6 | poll on /api/places/[id] | UI re-renders when completeness flips |
@@ -200,14 +214,15 @@ match is found, the route reuses that entity — no duplicate row.
 - Subcategory dictionary varies by user; ~500 tokens for 62 default subs.
 - Total input: ~7-14K tokens depending on review lengths.
 - Output: ~1-2K tokens (Zod schema is generous but most fields are short).
-- Gemini Flash has ample window; cost ≈ ~$0.008-0.012 per profile call at Gemini 3 Flash Preview rates ($0.50/$3.00 per 1M in/out, verified 15.07.2026).
+- Well inside the model's window. Claude Sonnet 5.5 at medium: $2 / $10 per 1M in/out, $2.50 to write the prompt cache and $0.10 to read it — ≈ $0.032 a profile in a run of many and ≈ $0.05–0.08 for a lone one, whose 13–17k-token system prompt is written to the cache (measured 24.11.2026); Gemini 3 Flash was ≈ $0.008-0.012 ($0.50 / $3.00, verified 15.07.2026).
 
 ## Failure modes
 
 - **AI features disabled** → step=profile returns 403; UI never renders the card (skeleton hidden because `reviewsAvailable` check is independent of the toggle, but the chain from reviews skips, so no card materializes).
-- **`GOOGLE_GENERATIVE_AI_API_KEY` missing** → 503 from step=profile. AiSummaryCard skeleton lingers until polling cap (2 min) then stops; user sees the placeholder. Acceptable in dev environments.
-- **Monthly profile budget exceeded** → step=profile returns 429 before the Gemini call (`AI_MONTHLY_PROFILE_CAP`, 1000/month). A backfill/cron dispatch swallows it (fire-and-forget); a manual refresh surfaces it. Resets on the 1st (UTC). See [[ai-enrichment-flow#cost-cap]].
+- **`ANTHROPIC_API_KEY` missing** (v1.51.0; the Gemini key before) → 503 from step=profile. AiSummaryCard skeleton lingers until polling cap (2 min) then stops; user sees the placeholder. Acceptable in dev environments.
+- **The background budget reached** ($80 — 80% of the $100 Claude cap, `capFor`, v1.56.0; the whole cap v1.51.0–v1.55.x; before, the per-user PROFILE budget of 1000) → step=profile returns 429 ("This month's AI budget for profiles ($80) is used up — the rest is kept for the assistant. Profiles resume on the 1st.") before the model call. A backfill dispatch swallows it (fire-and-forget); the import queue ends the item `done` without a profile (`cap_exceeded`), and the refresh sweep skips the place and writes the profile on a later run; a manual refresh surfaces it. Resets on the 1st (UTC). See [[ai-enrichment-flow#cost-cap]].
 - **LLM throws or returns invalid JSON** → caught; 500 returned. `places.google_data.place_profile` stays `lite` (or null). Polling caps at 2 min. User can hit the Refresh button on the (lite or absent) card to retry.
+- **A malformed or unknown tag / list id in the answer** → that id is dropped, the profile kept (`writeProfile` keeps only the ids that name the user's tags and lists; v1.51.0). Before, the schema's UUID check threw the whole profile away — 4 of 893 calls in the 6.3 rewrite.
 - **No reviews on the place** → 400 `no_reviews`. Card stays in pending-with-message state.
 - **Apply-suggestions throws mid-flight** → profile is already persisted (step 5h finished). Some suggestions may apply, some may not. Re-running step=profile is safe; junction rows are deduped by check-then-insert.
 - **Same proposal queued twice** → UNIQUE INDEX `idx_ai_suggestions_unique_pending` rejects with a Postgres error, which the JS client surfaces as a thrown exception. Apply-suggestions catches it implicitly (the counter still increments — we don't distinguish "queued this run" from "already queued").
@@ -215,9 +230,9 @@ match is found, the route reuses that entity — no duplicate row.
 
 ## Cost & throughput
 
-- Per profile: ~$0.001-0.002 (Gemini Flash pricing as of May 2026).
-- 500 places backfill: ~$0.50-1.00 total. Cheap.
-- Tracked in `api_usage` table under SKU `ai_place_profile` (~$1.00 / 1k calls baseline).
+- Per profile: ≈ $0.032 in a run of many, ≈ $0.05–0.08 alone (Claude Sonnet 5.5 at medium, measured 24.11.2026; Gemini Flash was ~$0.001-0.002 in May 2026).
+- 500 places backfill: ≈ $16.
+- Tracked in `api_usage` table under SKU `ai_place_profile` (~$1.00 / 1k calls baseline) — until v1.51.0. Since then the profile is a Claude call (Sonnet 5.5, measured above) in the Claude ledger.
 
 ## Manual refresh
 
@@ -245,6 +260,6 @@ foreground (~5s spinner) and re-renders on completion.
 
 ## Open questions
 
-- **Model upgrades**: when Gemini Flash changes name (e.g. `gemini-flash-2.7`), profiles tagged with the old `model_version` won't auto-refresh. A future cron + selective re-run by `model_version != current` would handle this.
+- **Model upgrades**: answered in v1.51.0 — `npm run regen:profiles` rewrites every profile whose `model_version` isn't `PROFILE_WRITER`'s; it can stop and be run again ([[../06-ops/runbooks/profile-backfill]]).
 - **Multilingual reviews**: the system prompt instructs the LLM to translate to English. Quality of translation isn't measured. A future eval set could catch regressions.
 - **Realtime vs polling**: documented above. Switch only if multi-tab consistency becomes important.

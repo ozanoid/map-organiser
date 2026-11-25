@@ -10,8 +10,7 @@
  * Configures `@vercel/otel` with:
  *   1. Trace pipeline → Honeycomb /v1/traces
  *        - HTTP request spans (auto)
- *        - fetch spans (Supabase, Gemini)
- *        - gen_ai.* spans from AI SDK `experimental_telemetry`
+ *        - fetch spans (Supabase and the other outgoing calls)
  *   2. Log pipeline → Honeycomb /v1/logs
  *        - `log.{debug,info,warn,error}` records, trace-correlated
  *   3. Langfuse span processor → cloud.langfuse.com (LLM observability)
@@ -19,6 +18,8 @@
  *          ["auto", …]` keeps the default Honeycomb export processor and
  *          adds Langfuse alongside. Langfuse's built-in filter exports
  *          ONLY GenAI/Langfuse spans — infra spans never leave for it.
+ *        - The Langfuse spans are the observations of the Claude calls
+ *          (src/lib/agent/run-turn.ts, src/lib/agent/structured.ts).
  *        - See src/lib/telemetry/langfuse.ts.
  *
  * Required env vars (Vercel):

@@ -2,15 +2,15 @@
 title: "Kişisel mekan ve gezme asistanı — yön planı"
 type: plan
 domain: overview
-version: 1.7.2
-last_updated: 19.11.2026
+version: 1.8.3
+last_updated: 25.11.2026
 status: stable
 related:
   - "[[../00-overview/system-overview]]"
   - "[[../02-backend/auth]]"
   - "[[../05-flows/instagram-import-flow]]"
   - "[[../04-integrations/hikerapi]]"
-  - "[[../04-integrations/gemini]]"
+  - "[[../04-integrations/claude-agent]]"
   - "[[backfill-grandfather-reenrich]]"
 ---
 
@@ -34,7 +34,7 @@ related:
 | — | Public sign-up'ı kapat | Tamam: kod `feat/personal-assistant` dalında; Supabase'de kayıt kapalı (`disable_signup: true`, doğrulandı 17.11.2026) |
 | 0 | Claude'a kapı: MCP server + OAuth | **Tamam (17.11.2026):** main'de, claude.ai'a bağlı. Okuma tool'ları connector üzerinden gerçek token'la doğrulandı; `update_places` henüz gerçek kullanımda denenmedi |
 | 1 | Planlama ve ziyaretler | Tasarım v2 onaylı: [[phase-1-planning]]. Şema uygulandı (18.11.2026); `search_google_maps` main'de. **Dilim 1 (plan modeli dönüşümü) main'de (18.11.2026)** — uygulama artık plan tablolarında çalışıyor; arayüz tarayıcıda uçtan uca denendi. Eski trip tablolarının silinmesi ayrı onay bekliyor. Dilim 2 (ziyaretler) main'de (18.11.2026). Dilim 3 (plan tool'ları: `get_plans`, `create_plan`, `update_plan`; ayrıca `delete_visit`) main'de (18.11.2026). Dilim 4 (listeler: tek yazma yolu, öğe notu, `get_lists` / `save_list`) main'de (18.11.2026). Dilim 5 (`add_places`: Google kimliği, Maps linki ya da Instagram postuyla ekleme; mekan başına tek satır kuralı veritabanında) main'de (18.11.2026). Faz 1'in beş dilimi tamam. Ardından mekan aramaları tamamen DataForSEO'ya geçti — Google Places artık çağrılmıyor (main'de, 19.11.2026; v1.42.0) |
-| 2 | Platform asistanı Claude'a | Sırada |
+| 2 | Platform asistanı Claude'a | Tasarım onaylandı (Ozan, 23.11.2026): [[phase-2-assistant]] — sunucu tarafında ortak Claude ajanı, ilk kapı uygulama içi sohbet; sohbetler sunucuda, yalnız sona eklenir; yazma onayı kartla; model eval'le; web araması açık; dolar bazında aylık $100. Şema uygulandı (23.11.2026); ajan çekirdeği yazıldı ve ücretli eval koşuldu (dalda, $5.03); model Sonnet 5.5 high (Ozan, 23.11.2026); ikinci şema adımı uygulandı (23.11.2026); 6. karar (Gemini'nin işleri Claude'a) verildi; uygulama içi kapı yazıldı ve uçtan uca denendi (dalda, v1.48.0; 24.11.2026) — main'e geçiş bekliyor; `rank_places` asistana verildi (24.11.2026, dalda); profil ve Instagram okuması Claude'a geçti (6.2, v1.51.0, dalda) ve bütün profiller yeniden yazıldı (6.3, 889 profil, $28.28); düğmelerin asistana devri yapıldı ve uçtan uca denendi (adım 4, v1.52.0–v1.54.1, dalda, 25.11.2026); Gemini kodu, paketi ve eval kolları kaldırıldı (adım 5, v1.55.0, dalda); merge etüdünün iki kararı (asistan yalnız sahiplere, arka plan işleri limitin %80'inde) v1.56.0'da; sıradaki iş main'e geçiş (Ozan'ın onayıyla) |
 | 3 | İletişim (e-posta, Telegram, WhatsApp linki, davet sayfası) | Sırada |
 | 4 | Geri bildirim döngüsü | Sırada |
 | 5 | Instagram saved koleksiyonu + görsel/video anlama | Sırada (export Ozan'dan gelecek) |
@@ -247,7 +247,7 @@ v4'ün açık backlog'u çok kullanıcılı ürün içindi. Bu yönle:
 5. Keşif kaynak listesi: hangi hesaplar ve bloglar (Faz 6; saved koleksiyondan aday çıkarılacak).
 6. Instagram export'unun içeriği (koleksiyon adı ve post linkleri) dosya gelince doğrulanacak.
 7. ~~`update_places` Faz 0'a alınsın mı?~~ Evet (Ozan, 17.11.2026).
-8. `rank_places` testte 41–64 sn sürdü (Gemini). claude.ai'da Claude'un kendisinin değerlendirmesi — `search_places`'e kısa profil özetleri ekleyip Gemini'yi atlamak — daha hızlı ve muhtemelen daha isabetli. Onay olursa tool değişir.
+8. `rank_places` testte 41–64 sn sürdü (Gemini; Faz 2 eval'inde 23 çağrı, ortanca 16,7 sn, 6,7–39 sn). claude.ai'da Claude'un kendisinin değerlendirmesi — `search_places`'e kısa profil özetleri ekleyip Gemini'yi atlamak — daha hızlı ve muhtemelen daha isabetli. **Karar (Ozan, 23.11.2026):** `rank_places` asistana verilir — araç kısa profilleri döndürür, sıralamayı konuşan Claude yapar. Gemini'nin diğer işleri de Claude'a geçer (arama, AI Plan ve karşılaştırma asistana devredilir; profil yazma ve Instagram okumada model değişir, hangi Claude ölçümle): [[phase-2-assistant#6. karar — Gemini'nin işleri Claude'a (Ozan, 23.11.2026)]].
 9. Ortak `queryPlaces`: "İ" katlama ve ~20 MB payload. Kalıcı çözüm SQL tarafında (katlanmış metin kolonu + index, liste görünümü için hafif projeksiyon) — şema değişikliği, ayrı iş.
 
 ## Bu dokümanın bakımı

@@ -2,8 +2,8 @@
 title: Glossary
 type: overview
 domain: overview
-version: 1.5.1
-last_updated: 19.11.2026
+version: 1.5.3
+last_updated: 25.11.2026
 status: stable
 related:
   - "[[system-overview]]"
@@ -46,7 +46,7 @@ Single source of truth for every domain term, abbreviation, and acronym used in 
 | **Auto-plan** | Distributes a plan's stops over its days: K-means++ clustering by lat/lng → category ordering → nearest-neighbor routing. Lives in `src/lib/plans/auto-plan.ts`. |
 | **Enrichment** | Fetching rich data (rating, photos, opening hours, reviews) for a Place from Google Places API or DataForSEO. Stored in `places.google_data` (jsonb). |
 | **Batch import** | The server-driven flow that parses a Google Takeout file into `import_job_items`, then advances each row through insert → reviews → profile in `/api/cron/drain-imports`. Survives a closed tab. See [[../05-flows/place-import-flow]]. |
-| **Instagram import** | v1.28.0. Shares of an Instagram post or reel (iOS Shortcut → `/map?add=`, or a pasted link) become an `import_jobs` row of `kind = 'instagram'`. The server reads the post through HikerAPI, classifies its accounts with one Gemini call, and pins each featured venue to a Google place only on evidence (same phone or website, its own Maps link, a matching address, close to its own coordinates or the location tag, or the only same-name place in an area the post itself names); the places then go through the same queue as a batch import, tagged `instagram`, `want_to_go`, the post URL as the note. See [[../05-flows/instagram-import-flow]]. |
+| **Instagram import** | v1.28.0. Shares of an Instagram post or reel (iOS Shortcut → `/map?add=`, or a pasted link) become an `import_jobs` row of `kind = 'instagram'`. The server reads the post through HikerAPI, classifies its accounts with one Claude call (Haiku 5.5, v1.51.0; Gemini before), and pins each featured venue to a Google place only on evidence (same phone or website, its own Maps link, a matching address, close to its own coordinates or the location tag, or the only same-name place in an area the post itself names); the places then go through the same queue as a batch import, tagged `instagram`, `want_to_go`, the post URL as the note. See [[../05-flows/instagram-import-flow]]. |
 | **HikerAPI** | Hosted Instagram data API the Instagram import reads posts and profiles through. Server key `HIKERAPI_KEY`; SKU `hikerapi_request`. See [[../04-integrations/hikerapi]]. |
 | **Share target** | The PWA `share_target` declaration in `src/app/manifest.ts` that lets mobile browsers send `url`/`text`/`title` to `/api/share-target`. |
 
@@ -54,15 +54,15 @@ Single source of truth for every domain term, abbreviation, and acronym used in 
 
 | Term | Meaning |
 |---|---|
-| **Place Profile** | The pivot AI data layer attached to each place at `places.google_data.place_profile` (jsonb). Two completeness levels: **lite** (rule-based, produced inline by `parse-link` — no LLM) and **full** (Gemini Flash output produced by `step=profile` background pipeline). Schema: `src/lib/ai/schemas/place-profile.ts`. See [[../05-flows/lite-profile-flow]], [[../05-flows/full-profile-flow]]. |
+| **Place Profile** | The pivot AI data layer attached to each place at `places.google_data.place_profile` (jsonb). Two completeness levels: **lite** (rule-based, produced inline by `parse-link` — no LLM) and **full** (written by Claude Sonnet 5.5 since v1.51.0 — Gemini Flash before — in the `step=profile` background pipeline). Schema: `src/lib/ai/schemas/place-profile.ts`. See [[../05-flows/lite-profile-flow]], [[../05-flows/full-profile-flow]]. |
 | **Lite path** | The synchronous, LLM-less branch of AI features. Runs in `parse-link` route via `buildLiteProfile()`. Used to surface AI chips in the Add Place dialog. |
-| **Full path** | The Gemini-powered branch. Runs in background after place save via `enrich?step=profile`. Writes the full place_profile + applies suggestions via the moderation queue. |
+| **Full path** | The LLM branch (Claude since v1.51.0, Gemini before). Runs in background after place save via `enrich?step=profile`. Writes the full place_profile + applies suggestions via the moderation queue. |
 | **AI master toggle** | `profiles.ai_features_enabled boolean` — per-user kill switch. When false, every AI route short-circuits and AI UI is hidden. Surfaced as Settings → AI tab toggle. |
 | **AI Suggestions queue** | `public.ai_suggestions_queue` table. Holds pending tag / sub-category / category-change proposals the LLM produced but couldn't auto-apply silently. Phase 5 moderation UI consumes it. |
 | **4-band auto-apply** | The policy in `src/lib/ai/apply-suggestions.ts`: silent apply / queue / category-change-queue / ignore — by confidence × existing-entity match × parent-mismatch. See [[../05-flows/full-profile-flow#auto-apply-policy-4-band]]. |
 | **Category change proposal** | A queue entry where the LLM disagrees with the rule-based parent-category assignment from save time (Phase 5.5). Accept atomically moves the place to the new parent (and nulls out the now-invalid subcategory_id). |
 | **AI SKU** | Per-call usage counter in `public.api_usage` under `sku` prefixed `ai_*` (e.g. `ai_place_profile`). Powers the Settings → API & Usage cost tracker for AI calls. |
-| **Gemini Flash** | The default LLM provider — `gemini-3-flash-preview` via `@ai-sdk/google` (was `gemini-flash-latest` until 15.07.2026). Key: `GOOGLE_GENERATIVE_AI_API_KEY`. See [[../04-integrations/gemini]]. |
+| **Gemini Flash** | The app's LLM provider from Phase 1 (`gemini-3-flash-preview` via `@ai-sdk/google` since 15.07.2026) until Phase 2 moved every AI feature to Claude (v1.48.0–v1.54.0); its client, package and key went in v1.55.0. |
 
 ## Geo
 

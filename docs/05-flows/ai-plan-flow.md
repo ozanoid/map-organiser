@@ -2,84 +2,61 @@
 title: AI Plan Flow
 type: flow
 domain: ai
-version: 1.0.1
-last_updated: 18.11.2026
-status: stable
+version: 2.0.2
+last_updated: 25.11.2026
+status: draft
 sources:
-  - src/app/api/ai/day-plan/route.ts
-  - src/lib/ai/schemas/day-plan.ts
-  - src/lib/ai/prompts/day-plan.ts
+  - src/components/plans/plan-with-assistant.tsx
+  - src/components/assistant/ask-assistant.tsx
+  - src/lib/agent/subject.ts
+  - src/lib/agent/describe-writes.ts
+  - src/lib/agent/run-turn.ts
+  - src/lib/assistant/tools/get-plans.ts
+  - src/lib/assistant/tools/update-plan.ts
+  - src/lib/assistant/instructions.ts
   - src/lib/places/open-now.ts
   - src/lib/plans/write.ts
-  - src/components/plans/ai-plan-button.tsx
-  - src/lib/hooks/use-plans.ts
+  - supabase/migrations/20261125010309_plan_preview.sql
 related:
   - "[[plan-flow]]"
-  - "[[ai-enrichment-flow]]"
-  - "[[../04-integrations/gemini]]"
-  - "[[../02-backend/api-routes/ai]]"
+  - "[[ai-chat-flow]]"
+  - "[[../04-integrations/claude-agent]]"
+  - "[[../02-backend/schema/plans]]"
   - "[[../01-domain/plans]]"
 ---
 
 # AI Plan Flow
 
-The LLM distributes candidate places across a plan's existing days — geography and theme, a part of the day per stop, a theme and a short narrative per day. It **augments** Auto Plan (k-means by distance, never reads the want-to-go pool); it does not replace it.
-
-Shipped as the AI trip planner in v1.22.0 (S4 AI-09); moved onto the plans model in v1.37.0 — the route is now `POST /api/ai/day-plan`. The usage SKU (`ai_trip_plan`), the budget kind (`trip_plan`) and the telemetry ids (`ai.trip-plan`, trace `ai-trip-plan`) keep their names so the history is one series.
+Since v1.53.0 (Phase 2, decision 6.1) the plan page hands planning to the assistant: **Plan with assistant** opens the panel with the request written and the plan attached; the assistant reads the plan, proposes the change, and the card shows the plan as it will be — saved on the user's yes, and only if the plan would still come out that way. Until v1.52.0 this was a separate Gemini call (below). Auto Plan (k-means by distance, no model) stays next to it.
 
 ## Trigger
 
-Plan page → **AI Plan** (`AiPlanButton`, shown only when `GET /api/user/ai-settings` says enabled and available) → dialog:
+Plan page header (not on a cancelled plan) → **Plan with assistant** (`PlanWithAssistant`, `AskAssistantButton` — shown only when the assistant can be used: AI on and the Claude key set). The panel opens with, in the composer:
 
-- Source: the places already in the plan, plus — opt-in — the **want-to-go pool** for a city (`include_pool` + `city`; the city is prefilled with the most common one among the plan's places).
-- The dialog states the cost (1 unit of 50 a month) and what happens to places the model leaves out.
-- While it generates the dialog can't be dismissed, and other edits to the plan wait behind it (`useAiPlan` shares the plan's write queue — [[../03-frontend/hooks/use-plans]]).
+- a plan with two or more places at saved places: "Bu planı günlere dağıt: yakın yerleri aynı güne koy, kapalı oldukları günlere koyma.";
+- fewer: "Bu planı <the city most of its places are in> için istek listemdeki yerlerle doldur." (the old dialog's want-to-go pool and city, as words);
+
+and the plan as its subject ("Plan · <name>"). The user can add to it ("two days, a slow pace, lunch in Kadıköy") and sends.
 
 ## Steps
 
-1. `POST /api/ai/day-plan { plan_id, include_pool?, city? }` — the standard gates: auth → `ai_features_enabled` → client → budget (`trip_plan`, 429).
-2. `getPlan`. More than 14 days → 400 (the output schema holds 14).
-3. Candidates, at most 40, the plan's own first. An in-plan candidate is a **stop**: one per place. A second stop of the same place, a stop without a place and a stop already done or skipped are not shown to the model and stay where they are. More than 40 places in the plan → 400 before any spend. Fewer than 2 candidates → 400.
-4. Compact projection per candidate (~350 tokens): name, category, coordinates (3 dp), rating, price level, tldr, occasion / atmosphere tags — never full profiles or raw `popular_times`. Open flags per plan day via `isOpenOnDate`; **a plan without dates has no weekdays, so every flag is "unknown"** and the dialog says so.
-5. `generateText` + `Output.object(DayPlanSchema)`, bounded output (5,000 tokens), up to 2 attempts — both together are one unit.
-6. Sanitize: unknown day numbers and out-of-range indexes dropped, a place used once (first occurrence wins), a day listed once.
-7. **Apply as one batch** (`changePlan` → `apply_plan_changes`):
-   - `remove_stop` for each in-plan candidate the model left out;
-   - days are named by **number** here, on purpose: the model planned "day 2, the Saturday" against that date's opening hours;
-   - per day, in the model's order: `move_stop` (+ `update_stop` with the part of the day and the note) for a stop that was in the plan, `add_stop` for a place from the pool;
-   - `set_day { notes: "<theme> — <narrative>" }` for planned days, `notes: null` for days that got nothing.
-8. `trackAiUsage("ai_trip_plan")`; the response carries the plan afterwards plus day summaries, `placed`, `left_out`, `tips`.
+1. The chat route checks the subject against the user's plans and names it; the user's message carries it as a `<subject>` block ([[ai-chat-flow]]).
+2. The assistant reads the plan with `get_plans` (plan_id): every stop with its place's **location** and, for a dated plan, whether the place opens on that day's date (**open_that_day**, from `isOpenOnDate`) — what AI Plan used to weigh. Places to add come from `search_places` (want_to_go, the city). The shared instructions: keep close places on one day, put each on a day it opens, leave stops with an exact time as they are, give each day a short theme in its notes — and keep the plan's dates: `start_date` changes only when the user asks; when the dates don't work (passed, places closed) the assistant says so and asks (v1.55.0, after the end-to-end run saw a date moved unasked; the eval case `spread-plan-keeps-dates` passed 3/3 on 25.11.2026 — each time the assistant said the days had passed and asked for a new date).
+3. It proposes the change with `update_plan` (ops naming days by number or id) and writes it out in its reply.
+4. **The card shows the plan as it will be** (`describeWrites` for a call still waiting): `previewPlanChanges` runs `preview_plan_changes`, which runs the save itself (`apply_plan_changes`) in a block that always ends in an exception — everything is rolled back — and returns the plan before and after. The card lists the plan's own changes, then every day that changes, stop by stop with its time or part of the day and note, then what is removed; unchanged days don't show (`planChangeLines`). A change that can't be applied says so under the title. The card carries the outcome's **fingerprint** (a hash of the after-plan).
+5. The user answers. A yes sends the fingerprint back (`seen`); before running the change, `verifyProposal` previews it again — if the plan would now come out differently (it was edited meanwhile, in another tab or by the app), nothing is saved and the call's result says "The plan changed after this proposal was shown, so nothing was saved. A fresh proposal is needed." — the card shows "Couldn't save" with it, and the model proposes again. Same outcome → the change is saved, in one transaction.
+6. After the save the panel refreshes every screen's data, the open plan page included ([[../03-frontend/components/assistant]]).
+
+Without the preview function the card falls back to the list of the call's operations and the yes isn't checked — the save itself decides. (The function is applied since 25.11.2026.)
 
 ## What survives
 
-Stops are moved, not recreated: **cost, currency and an exact time survive by construction** (the trips version deleted the rows and carried the costs over by hand). A stop with an exact time keeps it — the model's part of the day is not written over it. The stop's note is replaced by the model's (or cleared).
-
-Full-rewrite semantics, as before and as the dialog says: **a place the model leaves out is removed from the plan.**
-
-## Failure semantics
-
-| What fails | Unit | Plan |
-|---|---|---|
-| Generation or parsing (after 2 attempts) | spent | untouched — 502 |
-| No usable day after sanitizing | spent | untouched — 502 |
-| The batch is refused because the plan changed meanwhile (a stop removed in another tab) | spent | untouched — 409, "nothing was applied, try again" |
-
-There is no partial write any more: the batch is one transaction. (The trips version deleted first and inserted day by day, and reported a partial write when an insert failed.)
-
-## Provider settings
-
-Empirical, from the 16.07.2026 matrix on a failing real input (kept as they were):
-
-- no `responseSchema` (constrained decoding looped — 60k output tokens), `structuredOutputs: false`;
-- `thinkingBudget: 0` (thinking produced broken JSON on this task);
-- the prompt carries the JSON template; zod validates server-side with clamps.
-
-**The prompt wording is unchanged for a plan with dates** ("trip", "IN-TRIP") — those settings were tuned against it. Don't reword it without re-running the matrix. Only the day lines differ for a plan without dates.
+Stops are moved, not recreated: cost, currency and an exact time survive. Unlike the Gemini version, notes are not replaced wholesale: the assistant changes what it proposes, and the card shows it.
 
 ## Cost
 
-Input ≈ 15–20k tokens at 40 candidates → about $0.012 a plan (SKU `ai_trip_plan`, 12.0 per 1,000). Cap: `AI_MONTHLY_TRIP_PLAN_CAP = 50` a month (a code constant).
+A turn on Claude Sonnet 5.5 (the eval's plan-making turn: ≈ $0.09, 16–18 s — [[../04-integrations/claude-agent]]), under the platform's $100 monthly cap. The preview makes no model call. Gemini's AI Plan cost ≈ $0.012 and a few seconds; used 9 times in all (July 8, November 1).
 
-## Verified
+## Until v1.52.0: the Gemini AI Plan
 
-18.11.2026, in a browser on the test account, one real generation through the new route on a two-day plan (two places, one free-text stop): 3.6 s; both days got a theme and a narrative that used the weekdays of the plan's dates; the stop with an exact time (21:00) kept it while the other got its part of the day; the cost survived; the free-text stop stayed in its day, after the planned stop; the dialog could not be dismissed while generating. Not exercised: the want-to-go pool option.
+`POST /api/ai/day-plan` (v1.22.0 as `/api/ai/trip-plan`; on the plans model since v1.37.0), from an **AI Plan** dialog: up to 40 candidates (the plan's places, optionally the want-to-go pool for a city) projected compactly with coordinates and per-day open flags, one Gemini call (`DayPlanSchema`, places by index), applied at once as one batch — places left out removed, stop notes replaced, day notes set to "theme — narrative"; no preview, no undo. Budget `trip_plan` (50 a month), SKU `ai_trip_plan` (kept for past rows, `retired`). Removed with its schema, prompt, dialog and `useAiPlan` in v1.53.0.

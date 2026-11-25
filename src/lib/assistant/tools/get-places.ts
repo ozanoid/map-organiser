@@ -10,14 +10,16 @@ import {
 } from "@/lib/assistant/library";
 import { localDateTime, placeId } from "@/lib/assistant/place-filters";
 import { defineTool } from "@/lib/assistant/tools/types";
+import { profileForModel, type StoredProfile } from "@/lib/assistant/profile";
 import type { UserContext } from "@/lib/db/context";
+import { parsePostgisPoint } from "@/lib/geo";
 import type { Timetable } from "@/lib/places/open-now";
 import { dayDate, todayAt } from "@/lib/plans/dates";
 import { listsOfPlaces } from "@/lib/lists/read";
 import { listVisits } from "@/lib/visits/read";
 
 const DETAIL_SELECT = [
-  "id,name,city,country,address,visit_status,rating,notes,source,created_at",
+  "id,name,city,country,address,location,visit_status,rating,notes,source,created_at",
   "category:categories(name),subcategory:subcategories(name)",
   "g_rating:google_data->rating,g_count:google_data->user_ratings_total,g_price:google_data->price_level",
   "g_status:google_data->>current_status,g_url:google_data->>url,g_website:google_data->>website",
@@ -33,6 +35,7 @@ interface DetailRow {
   city: string | null;
   country: string | null;
   address: string | null;
+  location: unknown;
   visit_status: string | null;
   rating: number | null;
   notes: string | null;
@@ -52,19 +55,7 @@ interface DetailRow {
   g_timetable: Timetable | null;
   g_hours: { weekday_text?: string[] } | null;
   g_popular: Parameters<typeof busyness>[0];
-  g_profile: {
-    tldr?: string;
-    pros?: string[];
-    cons?: string[];
-    features?: Record<string, unknown>;
-    theme_insights?: Array<{
-      theme?: string;
-      sentiment?: string;
-      salience?: number;
-      mention_count?: number;
-      evidence_quotes?: string[];
-    }>;
-  } | null;
+  g_profile: StoredProfile | null;
   g_description: string | null;
   g_similar: Array<{ cid?: string; title?: string; rating?: number; votes_count?: number }> | null;
 }
@@ -131,6 +122,11 @@ async function upcomingPlansOf(
   return out;
 }
 
+const roundPoint = (p: { lat: number; lng: number }) => ({
+  lat: Math.round(p.lat * 1e5) / 1e5,
+  lng: Math.round(p.lng * 1e5) / 1e5,
+});
+
 export const getPlaces = defineTool({
   name: "get_places",
   title: "Get place details",
@@ -180,17 +176,6 @@ export const getPlaces = defineTool({
     }
 
     const places = rows.map((r) => {
-      const profile = r.g_profile ?? {};
-      const features = profile.features ?? {};
-      const themes = [...(profile.theme_insights ?? [])]
-        .sort((a, b) => (b.salience ?? 0) - (a.salience ?? 0))
-        .slice(0, 6)
-        .map((t) => ({
-          theme: t.theme,
-          sentiment: t.sentiment,
-          mentions: t.mention_count,
-          quote: clip(t.evidence_quotes?.[0], 220),
-        }));
       const instagram = r.notes?.match(INSTAGRAM_POST)?.[0];
       const open = at ? openAt(r, at) : null;
       return {
@@ -199,6 +184,8 @@ export const getPlaces = defineTool({
         address: r.address ?? undefined,
         area: r.city ?? undefined,
         country: r.country ?? undefined,
+        // About 1 m: enough to tell which places are close together.
+        location: r.location ? roundPoint(parsePostgisPoint(r.location)) : undefined,
         category: r.category?.name ?? undefined,
         subcategory: r.subcategory?.name ?? undefined,
         closed: closedState(r.g_status) ?? undefined,
@@ -251,13 +238,7 @@ export const getPlaces = defineTool({
               ...(busyness(r.g_popular, at) ?? {}),
             }
           : undefined,
-        profile: {
-          summary: profile.tldr,
-          pros: profile.pros?.slice(0, 5),
-          cons: profile.cons?.slice(0, 5),
-          themes,
-          good_for: features,
-        },
+        profile: profileForModel(r.g_profile ?? {}, "full"),
         description: clip(r.g_description, 300),
         similar_not_saved: (r.g_similar ?? [])
           .filter(worthSuggesting)

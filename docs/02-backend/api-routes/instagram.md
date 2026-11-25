@@ -2,8 +2,8 @@
 title: Instagram routes
 type: route-group
 domain: backend
-version: 1.3.0
-last_updated: 19.11.2026
+version: 1.4.1
+last_updated: 25.11.2026
 status: stable
 sources:
   - src/app/api/instagram/import/route.ts
@@ -41,7 +41,7 @@ import queue (`/api/cron/drain-imports`). Full sequence:
 > `pickInstagramOption` (`pick.ts`) — the same code Claude's `add_places` tool
 > calls ([[../../04-integrations/claude-mcp#adding-places]]). Requests,
 > responses and status codes are unchanged; a refusal from the start is
-> `InstagramImportRefused` with its 400 / 503, a pick's not-found is 404 and its
+> `InstagramImportRefused` with its 400 / 429 / 503 and a code (v1.51.0), a pick's not-found is 404 and its
 > refusal 409.
 >
 > **Database:** relies on the Instagram migration in
@@ -75,8 +75,9 @@ import queue (`/api/cron/drain-imports`). Full sequence:
   1. 400 `Invalid body`.
   2. 400 "That isn't an Instagram post or reel link."
   3. 503 "Instagram import isn't set up on this server." — `HIKERAPI_KEY`,
-     `GOOGLE_GENERATIVE_AI_API_KEY` (via `isAiAvailable`) or the DataForSEO
-     credentials (`dataForSeoClientFromEnv`, v1.42.0) missing.
+     `ANTHROPIC_API_KEY` (the post is read by Claude Haiku 5.5 since v1.51.0;
+     `GOOGLE_GENERATIVE_AI_API_KEY` before) or the DataForSEO credentials
+     (`dataForSeoClientFromEnv`, v1.42.0) missing.
   4. 400 "Instagram import reads the post with AI. Turn on AI features in
      Settings." — `profiles.ai_features_enabled` is off.
   (Until v1.42.0 a fifth gate refused users without a Google Places key: the
@@ -88,6 +89,16 @@ import queue (`/api/cron/drain-imports`). Full sequence:
   stored `meta.phase` is `failed` or it is still `reading` after 3 min
   (`STALL_MS`, a lost background run) — so **Try again** gets a fresh job. The iOS Shortcut can fire twice and React
   re-mounts the dialog in development.
+- **Monthly limit (v1.51.0):** after the reuse — a reused job doesn't count — a
+  user's 300 new `kind = 'instagram'` jobs this calendar month (UTC),
+  `INSTAGRAM_MONTHLY_POST_LIMIT`, refuse the next: 429 "You've imported 300
+  Instagram posts this month, the monthly limit. Imports resume on the 1st."
+  Every job counts, whatever its outcome: each has paid HikerAPI and the Google
+  Maps searches. Counted on the session client with
+  `idx_import_jobs_user_kind_created`.
+- **Refusal body (v1.51.0):** `{ error, code }` — `code` ∈ `invalid_url`,
+  `not_configured`, `ai_disabled`, `monthly_limit` (`InstagramRefusalCode`); the
+  dialog offers no Try again for `monthly_limit` and `not_configured`.
 - **DB (session client):** `ensureInstagramTag` — `tags` SELECT (`ilike
   'instagram'`) and, on first use, INSERT `{ name: 'instagram', color: '#E4405F' }`;
   `import_jobs` INSERT `{ kind: 'instagram', file_name: <canonical URL>, total: 0,
@@ -96,9 +107,9 @@ import queue (`/api/cron/drain-imports`). Full sequence:
 - **Response:** **`202 { jobId }`**. `500` with the error text when the tag or the
   job insert fails.
 - **Side effects (after the response):** `after(async () => { await runInstagramImportJob(...); await flushLangfuse(); })`
-  on `createServiceClient()` — monthly AI budget check, HikerAPI + Gemini + Google
+  on `createServiceClient()` — the Claude cap check (its background share, `capFor`, v1.56.0), HikerAPI + the Claude read + Google
   Maps search (DataForSEO; v1.42.0, was Google Text Search) and Mapbox city
-  lookups through `analyzeInstagramPost`, `trackUsage` / `trackAiUsage`,
+  lookups through `analyzeInstagramPost`, `trackUsage` (the read itself goes to the Claude ledger, v1.51.0),
   `import_job_items` INSERT, tag + note on already-saved places
   (`attachInstagramSource`), `import_jobs` UPDATE (`meta`, `total`, `status`,
   `finished_at`), then `kickDrain` when places were queued. Every write is keyed
@@ -217,9 +228,12 @@ import queue (`/api/cron/drain-imports`). Full sequence:
   cookie client first, then moves the item on the service role — there is no
   UPDATE policy either, and the guard (a stored option, a `skipped` item) is
   what limits a session to the transition the import offered.
-- **Not an `/api/ai/*` route.** It spends a Gemini call, gated like the AI
-  routes: the server's Gemini key, `profiles.ai_features_enabled`, and the monthly
-  `instagram` budget (300 posts per user). See [[../../04-integrations/gemini]].
+- **Not an `/api/ai/*` route.** It spends one Claude call (Haiku 5.5, v1.51.0; a
+  Gemini call before), gated by the server's `ANTHROPIC_API_KEY`,
+  `profiles.ai_features_enabled` and the background share of the platform's
+  monthly Claude cap ($80 of the $100, `capFor`, v1.56.0 — the one ledger; until
+  v1.51.0 the `instagram` budget, 300 posts per user). See
+  [[../../04-integrations/claude-agent]].
 - **Places are not created here.** New places come out of the drain with
   `source = 'instagram'` — a picked place too; this group only writes jobs,
   items, the tag, and the tag + note on places the user already had.

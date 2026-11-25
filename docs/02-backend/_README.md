@@ -2,8 +2,8 @@
 title: Backend Overview
 type: overview
 domain: backend
-version: 1.1.3
-last_updated: 19.11.2026
+version: 1.1.4
+last_updated: 25.11.2026
 status: stable
 sources:
   - src/lib/supabase/client.ts
@@ -39,7 +39,7 @@ The "backend" in this repo is a thin layer: Next.js API route handlers + Supabas
         ├──► createClient()         (cookie-scoped Supabase, respects RLS)
         ├──► createServiceClient()  (service-role, bypasses RLS — share reads, crons,
         │                            import queue, Instagram job; see supabase-clients)
-        └──► fetch(...)             (Google Places, DataForSEO, Mapbox, Gemini,
+        └──► fetch(...)             (DataForSEO, Mapbox, the Claude API,
                                      HikerAPI, Supabase Storage)
         │
         ▼

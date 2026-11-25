@@ -1,10 +1,9 @@
 import "server-only";
-import { generateText, NoObjectGeneratedError, NoOutputGeneratedError, Output } from "ai";
 import { z } from "zod";
-import { getAiClient, FLASH_MODEL } from "@/lib/ai/client";
+import { structuredClaude, StructuredCallError, type ClaudeChoice, type SpendContext } from "@/lib/agent/structured";
 
 /**
- * One Gemini call reads an Instagram post: which accounts are venues, whether
+ * One model call reads an Instagram post: which accounts are venues, whether
  * the post features them, the branch or street address the post gives, venue
  * names written only in the caption, and the area the post is about.
  *
@@ -46,6 +45,16 @@ export const PostReadingSchema = z.object({
 });
 
 export type PostReading = z.infer<typeof PostReadingSchema>;
+
+/**
+ * Who reads the post, and whose ledger pays: the import passes
+ * INSTAGRAM_READER (Claude Haiku 5.5 — Gemini read posts until v1.51.0); the
+ * eval can name another Claude model or effort.
+ */
+export interface PostReader {
+  choice: ClaudeChoice;
+  spend: SpendContext;
+}
 export type AccountRole = (typeof ROLES)[number];
 
 export interface PostReadingInput {
@@ -90,19 +99,18 @@ Also return:
 - area: the main area of the post {neighbourhood, district, city, country}, only from explicit evidence (location tag, caption, hashtags, profiles); null when unknown.`;
 
 /**
- * Gemini now and then answers without a usable object — "No output generated."
- * on 1 of 35 reads in the 2026-10-16 eval — and the whole import used to fail
- * on it. Such an answer gets one more call. Network and 5xx errors are not
- * retried here: the SDK already retries those (maxRetries).
+ * An answer that isn't a usable object — cut off, off the schema — gets one
+ * more call, so one bad answer doesn't fail the whole import; a refusal
+ * doesn't: asking again won't change it. Network and 5xx errors are not
+ * retried here: the SDK already retries those (maxRetries, 2 by default).
  */
 const ATTEMPTS = 2;
 
+/** The reading, as a structured output of the reader's model. */
 export async function readPost(
   input: PostReadingInput,
-  meta: { userId: string; shortcode: string; onAttempt?: () => void }
+  meta: { shortcode: string; onAttempt?: () => void; reader: PostReader }
 ): Promise<PostReading> {
-  const ai = getAiClient();
-  if (!ai) throw new Error("ai_not_configured");
   const prompt = `POST DATA (JSON):\n${JSON.stringify(
       {
         caption: input.caption.slice(0, 3000),
@@ -122,26 +130,27 @@ export async function readPost(
       null,
       1
     )}`;
+  const { reader } = meta;
   for (let attempt = 1; ; attempt++) {
     meta.onAttempt?.();
     try {
-      const result = await generateText({
-        model: ai(FLASH_MODEL),
-        output: Output.object({ schema: PostReadingSchema }),
-        system: SYSTEM,
-        prompt,
-        providerOptions: { google: { thinkingConfig: { thinkingLevel: "low" } } },
-        experimental_telemetry: {
-          isEnabled: true,
-          functionId: "ai.instagram-read-post",
-          metadata: { userId: meta.userId, shortcode: meta.shortcode, attempt },
+      const { output } = await structuredClaude(
+        {
+          choice: reader.choice,
+          system: SYSTEM,
+          prompt,
+          schema: PostReadingSchema,
+          maxTokens: 16_000,
+          label: "instagram.read",
+          metadata: { shortcode: meta.shortcode, attempt },
         },
-      });
-      return result.output;
+        reader.spend
+      );
+      return output;
     } catch (e) {
-      const unusable = NoOutputGeneratedError.isInstance(e) || NoObjectGeneratedError.isInstance(e);
-      if (!unusable || attempt >= ATTEMPTS) throw e;
-      console.warn(`[instagram] post ${meta.shortcode}: Gemini returned no usable reading, asking again`);
+      const retry = e instanceof StructuredCallError && e.reason !== "refusal";
+      if (!retry || attempt >= ATTEMPTS) throw e;
+      console.warn(`[instagram] post ${meta.shortcode}: ${reader.choice.model} returned no usable reading (${e.reason}), asking again`);
     }
   }
 }

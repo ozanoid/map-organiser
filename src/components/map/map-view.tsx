@@ -7,6 +7,7 @@ import type { FeatureCollection } from "geojson";
 import type { Place, Category } from "@/lib/types";
 import { registerCategoryIcons } from "@/lib/map/category-icons";
 import { googleMapsPlaceUrl } from "@/lib/google/maps-url";
+import { haversineDistance } from "@/lib/geo";
 
 export interface RouteLine {
   id: string;
@@ -41,6 +42,9 @@ export interface MapViewHandle {
   fitToCoords: (points: { lng: number; lat: number }[]) => void;
   /** Read viewport center — used for Search Box proximity bias. */
   getCenter: () => { lng: number; lat: number } | null;
+  /** The part of the map on screen: its centre and the distance to a corner
+   *  — a request to the assistant carries it ("here"). */
+  getArea: () => { lat: number; lng: number; radiusM: number } | null;
 }
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -156,6 +160,14 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
     getCenter: () => {
       const c = map.current?.getCenter();
       return c ? { lng: c.lng, lat: c.lat } : null;
+    },
+    getArea: () => {
+      const m = map.current;
+      const bounds = m?.getBounds();
+      if (!m || !bounds) return null;
+      const c = m.getCenter();
+      const ne = bounds.getNorthEast();
+      return { lat: c.lat, lng: c.lng, radiusM: haversineDistance(c.lat, c.lng, ne.lat, ne.lng) * 1000 };
     },
   }), []);
 

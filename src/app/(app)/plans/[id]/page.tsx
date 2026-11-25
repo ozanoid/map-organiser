@@ -8,7 +8,7 @@ import {
   ArrowLeft, Calendar, CalendarPlus, LayoutList, Loader2, Map as MapIcon, MapPin, Minus, Plus, Users, Wand2,
 } from "lucide-react";
 import { MapView } from "@/components/map/map-view";
-import { AiPlanButton } from "@/components/plans/ai-plan-button";
+import { PlanWithAssistant } from "@/components/plans/plan-with-assistant";
 import { PlanDayTimeline } from "@/components/plans/plan-day";
 import { PlanDatesDialog, PlanMenu, PLANS_HOME } from "@/components/plans/plan-menu";
 import { usePlanEditor } from "@/components/plans/use-plan-editor";
@@ -162,7 +162,7 @@ function PlanDetail() {
           <PlanBudget plan={plan} readOnly={cancelled} />
           {!cancelled && (
             <div className="ml-auto flex items-center gap-2">
-              <AiPlanButton plan={plan} />
+              <PlanWithAssistant plan={plan} />
               {stopCount > 0 && <AutoPlanButton planId={plan.id} />}
             </div>
           )}

@@ -2,8 +2,8 @@
 title: Settings components
 type: component
 domain: frontend
-version: 1.4.1
-last_updated: 19.11.2026
+version: 1.8.0
+last_updated: 25.11.2026
 status: stable
 sources:
   - src/components/settings/api-keys-manager.tsx
@@ -54,6 +54,7 @@ Five components powering the Settings page tabs. All `"use client"`.
 - **API calls:** `GET /api/user/usage` (fetch monthly usage).
 - **State:** `data`, `loading`.
 - **Renders:**
+  - **Claude** row first (v1.48.0; "Claude assistant" until v1.51.0): dollars spent this month against the $100 cap (`assistant` in the response), same bar colours, and under the bar what each purpose took — Assistant, Profiles, Instagram, Evals (`assistant.byPurpose`, v1.51.0) — and where background work stops (`assistant.backgroundCapUsd`, v1.56.0): "Profiles and Instagram reads stop at $80; the rest is kept for the assistant.", in amber "…are paused until the 1st: the last $20 is kept for the assistant." once spending reaches it.
   - Per-SKU usage rows — name, count, free limit, progress bar (emerald < 80 %, amber 80–100 %, red > 100 %).
   - Estimated cost per row.
   - Total estimated cost at the bottom (green if $0, red if charged).
@@ -66,8 +67,8 @@ Five components powering the Settings page tabs. All `"use client"`.
 - **Props:** none.
 - **Hooks:** `useState`, `useEffect` — loads once on mount; the loader sits inside the effect (React's immutability lint rule rejects a call to a function declared below it, v1.43.0) and drops a late answer after unmount. Optimistic-update + rollback-on-error pattern.
 - **API calls:** `GET` and `PUT` `/api/user/ai-settings`.
-- **State:** `{ enabled: boolean, available: boolean, cronRefreshEnabled: boolean } | null` + `loading` + `saving`.
-- **Renders:** Master toggle (rounded switch, accessible `role="switch"`/`aria-checked`). Always below it (independent of the AI master — the data half isn't AI): the **"Background data refresh" toggle** (15.07.2026 — opt-in for the whole periodic sweep, default off; see [[../../06-ops/runbooks/periodic-refresh]]). Then, when **enabled + available**: `BackfillProfilesPanel` and `AiSuggestionsQueue`. When **not available** (server-side env missing): amber banner mentioning `GOOGLE_GENERATIVE_AI_API_KEY`.
+- **State:** `{ enabled: boolean, aiAvailable: boolean, assistantAvailable: boolean, cronRefreshEnabled: boolean } | null` + `loading` + `saving` — `aiAvailable` (v1.56.0) is Claude being set up, which every AI feature runs on (the Gemini flag `available` went in v1.54.0); `assistantAvailable` is per account since v1.56.0 — an owner may use the assistant — and only the description reads it: it names the assistant for an owner alone.
+- **Renders:** Master toggle (rounded switch, accessible `role="switch"`/`aria-checked`). Always below it (independent of the AI master — the data half isn't AI): the **"Background data refresh" toggle** (15.07.2026 — opt-in for the whole periodic sweep, default off; see [[../../06-ops/runbooks/periodic-refresh]]). Then, when **enabled** and Claude is set up (`aiAvailable`; `assistantAvailable` until v1.56.0 — Claude writes the profiles and with them the suggestions; v1.51.0, it was the Gemini flag before): `BackfillProfilesPanel` and `AiSuggestionsQueue`. An amber banner when the server has no `ANTHROPIC_API_KEY` ("AI features are not configured…"), and the master switch is disabled then (v1.54.0; v1.51.0–v1.53.0 a banner per provider, the switch disabled only when both were missing). A change of the switch refreshes `["ai-settings"]`, so the assistant's button and the screens' assistant entries follow without a reload (v1.52.0).
 - **Used by:** `/settings` page (AI tab).
 
 ## `AiSuggestionsQueue`
@@ -91,12 +92,12 @@ Five components powering the Settings page tabs. All `"use client"`.
 - **File:** `src/components/settings/backfill-profiles-panel.tsx` (Phase 6 follow-up, v1.7.x)
 - **Props:** none.
 - **Hooks:** [[../hooks/use-backfill-profiles|`useBackfillEligibility`/`useStartBackfill`]].
-- **Why it exists:** Pre-Phase-4 places have no `place_profile` (the AI summary + features payload). Phase 6 NL search soft-features filter and rerank both lean on profile content, so collections with low coverage feel weaker. This panel lets the user opt into bulk generation for their existing places.
+- **Why it exists:** Pre-Phase-4 places have no `place_profile` (the AI summary + features payload). The assistant leans on profile content to judge, rank and compare places, so collections with low coverage get weaker answers. This panel lets the user opt into bulk generation for their existing places.
 - **Renders:** an emerald-tinted card that summarizes coverage and a `Generate (N)` button. Three counts:
-  - `has_reviews_no_profile` — Gemini Flash only (~\$0.001 each).
-  - `has_cid_no_reviews` — DataForSEO `step=reviews` then chained `step=profile` (~\$0.002 each).
+  - `has_reviews_no_profile` — the profile only (≈ \$0.032 each in a batch, Claude Sonnet 5.5, v1.51.0).
+  - `has_cid_no_reviews` — DataForSEO `step=reviews` then chained `step=profile` (≈ \$0.040 each).
   - `no_cid_no_profile` — cannot be enriched (no Google Place ID). Shown as muted "skipped" line.
-  - Cost estimate footer with the total in USD.
+  - Cost estimate footer with the total in USD — `PROFILE_WRITER_AVG_USD` a profile plus the DataForSEO reviews SKU's price (v1.51.0; it priced Gemini and \$1 / 1,000 reviews before).
 - **Behavior:**
   - Click `Generate` → `POST /api/user/backfill-profiles` (limit 25 per call). The route fires `step=profile` or `step=reviews` for each, fire-and-forget. UI receives `{ queued, has_more, remaining_after }`.
   - When `has_more = true`, the panel enters **auto-iterate mode**: it re-POSTs every 12 s until the eligible count hits zero, while polling eligibility every 5 s. Safety ceiling: 50 iterations (covers up to 1250 places).

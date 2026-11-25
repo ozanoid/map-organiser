@@ -16,9 +16,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { AiSearchInput } from "@/components/search/ai-search-input";
+import { usePathname } from "next/navigation";
+import { useAskFromSearch } from "@/components/assistant/ask-assistant";
 import { useFilters } from "@/lib/hooks/use-filters";
-import { useAiSearchStore } from "@/lib/stores/ai-search-store";
 import { X } from "lucide-react";
 
 const SORT_OPTIONS = [
@@ -32,15 +32,7 @@ const SORT_OPTIONS = [
 
 export function FilterPanel() {
   const { filters, setFilters, clearFilters, hasActiveFilters } = useFilters();
-  const resetAiSearch = useAiSearchStore((s) => s.reset);
-  // AI search active mode = rankings populated. When active, sort
-  // dropdown is replaced with a static "AI Ranked" badge.
-  const aiSearchActive = useAiSearchStore((s) => s.rankings !== null);
-
-  function handleClearAll() {
-    clearFilters();
-    resetAiSearch();
-  }
+  const askAssistant = useAskFromSearch(usePathname() === "/map" ? "map" : "places");
 
   return (
     <div className="space-y-5">
@@ -48,14 +40,13 @@ export function FilterPanel() {
         <h3 className="text-sm font-semibold">Filters</h3>
         <div className="flex items-center gap-1">
           {/* Save = only meaningful with active filters (same gate as
-              Clear, enforced inside the component). Does NOT reset AI
-              state — only Clear does that. */}
+              Clear, enforced inside the component). */}
           <SaveFilterButton />
           {hasActiveFilters && (
             <Button
               variant="ghost"
               size="sm"
-              onClick={handleClearAll}
+              onClick={clearFilters}
               className="cursor-pointer text-xs h-7 px-2"
             >
               <X className="h-3 w-3 mr-1" />
@@ -65,47 +56,30 @@ export function FilterPanel() {
         </div>
       </div>
 
-      {/* AI natural-language search (hidden when ai_features_enabled = false) */}
-      {/* v1.23.0: AI-01 bar retired from the UI (user decision) — the
-          assistant is the AI entry point now. bannerOnly keeps the
-          active-state banner (query + clear ✕ + broaden) alive for
-          assistant pushes and saved ✨ chip re-runs. */}
-      <AiSearchInput bannerOnly />
-
-      {/* Sort — disabled during AI search (sort dictated by rerank score). */}
+      {/* Sort */}
       <div>
         <label className="text-xs font-medium mb-1.5 block text-muted-foreground">
           Sort by
         </label>
         <div>
-          {aiSearchActive ? (
-            <div
-              className="w-full h-9 px-3 text-sm border border-input rounded-md bg-muted/40 inline-flex items-center text-muted-foreground cursor-not-allowed select-none"
-              title="Sorting is controlled by AI ranking while AI search is active"
-              aria-label="Sort: AI ranked (disabled)"
-            >
-              AI Ranked
-            </div>
-          ) : (
-            <Select
-              items={SORT_OPTIONS}
-              value={filters.sort || "newest"}
-              onValueChange={(v) =>
-                setFilters({ sort: v === "newest" ? undefined : (v as string) })
-              }
-            >
-              <SelectTrigger className="w-full h-9">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {SORT_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
+          <Select
+            items={SORT_OPTIONS}
+            value={filters.sort || "newest"}
+            onValueChange={(v) =>
+              setFilters({ sort: v === "newest" ? undefined : (v as string) })
+            }
+          >
+            <SelectTrigger className="w-full h-9">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {SORT_OPTIONS.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
@@ -133,6 +107,7 @@ export function FilterPanel() {
         <DebouncedSearchInput
           value={filters.search}
           onSearch={(search) => setFilters({ search })}
+          onAsk={askAssistant}
         />
       </div>
 

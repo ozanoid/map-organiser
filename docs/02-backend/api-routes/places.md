@@ -2,8 +2,8 @@
 title: Places routes
 type: route-group
 domain: backend
-version: 2.5.4
-last_updated: 20.11.2026
+version: 2.5.6
+last_updated: 24.11.2026
 status: stable
 sources:
   - src/lib/places/query-places.ts
@@ -93,7 +93,7 @@ All require auth except `drain-imports`, which is bearer-authed with `CRON_SECRE
 - **DB:** `places` SELECT, joins to `categories`; secondary in-memory filtering for tags and lists (via `place_tags` / `list_places` lookups).
 - **Response:** `Place[]` with `location` parsed to `{ lat, lng }`. `200`.
 - **Notes:** Tag/list filters applied post-query in JS. `google_rating_desc` sort happens post-fetch (JSONB sort).
-- **`ids`** (v1.19.0, compare view): CSV of place ids (cap 10) → `.in("id", ids)`. Deliberately on the LIST route — it has the EWKB-safe location parser + subcategory join the `[id]` route lacks.
+- **`ids`** (v1.19.0, compare view; the assistant's "Show on map" since v1.48.0): CSV of place ids — valid UUIDs, at most `MAX_PLACE_IDS` = 25 (`src/lib/places/limits.ts`; the most `search_places` returns; it was 10) → `.in("id", ids)`. Deliberately on the LIST route — it has the EWKB-safe location parser + subcategory join the `[id]` route lacks.
 - **`open_now=true`** (v1.18.0): dynamic filter — JS post-filter evaluating `isOpenNow(google_data.work_timetable, google_data.tz)` at request time in the place's local timezone (`src/lib/places/open-now.ts`). Places without timetable/tz are EXCLUDED (unknown ≠ open). The same module also exports `isOpenOnDate(timetable, isoDate)` (v1.22.0) — **day-granular**, not point-in-time: "does the place open at all on this calendar date" (weekday straight from the ISO date, tz-independent; missing timetable → null = unknown ≠ closed, listed-but-empty day → false). Used by `/api/ai/trip-plan` to precompute per-trip-day open flags — not by this route group's filters.
 
 
@@ -199,7 +199,7 @@ All require auth except `drain-imports`, which is bearer-authed with `CRON_SECRE
 - **Source:** `src/app/api/cron/drain-imports/route.ts`
 - **Auth:** `Authorization: Bearer ${CRON_SECRET}` — Vercel Cron (every minute), the kick from both create paths (Takeout route, Instagram job) and from the Instagram branch pick (v1.28.1), and its own self-chain.
 - **DB:** `claim_import_items` RPC; `import_job_items` UPDATE; `places`/`list_places`/`place_tags` writes via `importPlace`.
-- **External:** DataForSEO business-info + reviews, Gemini via `generatePlaceProfile`.
+- **External:** DataForSEO business-info + reviews, Claude via `generatePlaceProfile` (Sonnet 5.5, v1.51.0; Gemini before).
 - **Response:** `{ ok, claimed, processed, released, chained, imported, photographed, skipped, failed, reviewed, profiled, done, elapsed_ms }`.
 - **Job kinds (v1.28.0):** per-job defaults (visit status, lists, tags, `kind`) are read with `select("*")` — naming `kind` would make a deploy that lands before the column exists lose a Takeout job's defaults to a select error; a missing `kind` counts as `takeout`. Items of an `instagram` job are inserted with `source: "instagram"` (`ImportDefaults.source`). When such an item turns out to be a place the user already has (`skipped / Already exists` with a `place_id`), the drain runs `attachInstagramSource` on that place: the job's tag(s) are upserted and the post URL is appended to its notes if not already there. `finalizeJobs` selects `*` for the same reason; when it closes an `instagram` job it also writes `meta.phase = 'done'` (v1.28.1), so the stored phase follows the job.
 - **Notes:** `maxDuration` 800 (v1.46.0; was 300 — a reviews item started at the deadline could cross it), soft deadline 240 s, 2 workers, 24 items per claim. Each run first retires items stuck at `attempts = 3` behind a stale claim (`retired_stuck` in the summary). Overlapping runs are safe (`FOR UPDATE SKIP LOCKED`); exits early above 60 in-flight items to bound spend. See [[../../05-flows/place-import-flow]].

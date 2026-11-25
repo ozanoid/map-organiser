@@ -1,7 +1,7 @@
 import "server-only";
 import { OAuthError, OAuthErrorCode, type AuthInfo } from "@modelcontextprotocol/server";
 import { createClient } from "@supabase/supabase-js";
-import { getPublicOrigin } from "mcp-handler";
+import { appOrigin } from "@/lib/api/origin";
 import { supabaseAuthIssuer } from "@/lib/assistant/oauth";
 import { isAssistantOwner } from "@/lib/assistant/owner";
 
@@ -20,18 +20,6 @@ import { isAssistantOwner } from "@/lib/assistant/owner";
  * one the OAuth metadata advertises — so links in tool results open the app
  * the user is connected to (production, a preview, or localhost).
  */
-
-/** The public origin, parsed once: only http(s), else the request's own. A
- *  link built on it can't throw later, after a tool has written. */
-function appOrigin(req: Request): string {
-  try {
-    const url = new URL(getPublicOrigin(req));
-    if (url.protocol === "https:" || url.protocol === "http:") return url.origin;
-  } catch {
-    // a forwarded host that doesn't parse
-  }
-  return new URL(req.url).origin;
-}
 
 export async function verifyAssistantToken(req: Request, bearer?: string): Promise<AuthInfo | undefined> {
   if (!bearer) return undefined;

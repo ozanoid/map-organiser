@@ -2,8 +2,8 @@
 title: Dedupe duplicate categories (per user)
 type: runbook
 domain: ops
-version: 1.0.0
-last_updated: 19.05.2026
+version: 1.0.1
+last_updated: 25.11.2026
 status: stable
 related:
   - "[[_README]]"
@@ -21,7 +21,7 @@ related:
 - The audit query (Step 1 below) returns ≥ 1 row
 - Suspected after restoring a backup or replaying signup events
 
-**Do NOT run** if Step 1 returns 0 rows. The Phase 6 NL search has a defensive `expandDuplicateCategories` helper in `src/app/api/ai/parse-query/route.ts` that is a safe no-op when no dupes exist; nothing else in the app cares about category-name collisions.
+**Do NOT run** if Step 1 returns 0 rows. The Phase 6 NL search had a defensive `expandDuplicateCategories` helper (`/api/ai/parse-query`, removed in v1.54.0); nothing else in the app cares about category-name collisions.
 
 ## Preconditions
 

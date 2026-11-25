@@ -23,7 +23,7 @@ import { z } from "zod";
  * screen that shows a plan sends ids: if the days were renumbered meanwhile
  * the change still lands on the day that was shown, and a day that is gone
  * is an error instead of a write to another day. Numbers are for callers
- * that think in dates ("day 2 is the Saturday") — the assistant, AI Plan.
+ * that think in dates ("day 2 is the Saturday") — the assistant.
  */
 
 export const DAY_PARTS = ["morning", "afternoon", "evening", "night"] as const;

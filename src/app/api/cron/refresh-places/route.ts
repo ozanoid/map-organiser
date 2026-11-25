@@ -208,7 +208,7 @@ export async function GET(request: NextRequest) {
           r.totalReviews > 0 &&
           (r.newReviews > CRON_REPROFILE_MIN_NEW_REVIEWS || !r.hadProfile);
         if (wantsProfile && (await aiEnabledFor(place.user_id as string))) {
-          // Langfuse trace-level fields for the gen_ai spans inside. The
+          // Langfuse trace-level fields for the Claude generation inside. The
           // whole sweep is ONE OTel trace; per-place userId still lands on
           // each generation span (single-user in practice, so no clashes).
           const p = await propagateAttributes(

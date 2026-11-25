@@ -37,7 +37,7 @@ export const useFilterPersistStore = create<FilterPersistState>((set) => ({
 }));
 
 // ─── Debug: expose to window for console inspection ───
-// Same gating as ai-search-store: dev OR localStorage["ai-debug"]="1".
+// Gated: dev, or localStorage["ai-debug"]="1".
 if (typeof window !== "undefined") {
   const enabled =
     process.env.NODE_ENV !== "production" ||

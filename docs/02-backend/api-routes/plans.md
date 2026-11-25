@@ -2,8 +2,8 @@
 title: Plans routes
 type: route-group
 domain: backend
-version: 1.1.2
-last_updated: 19.11.2026
+version: 1.1.3
+last_updated: 25.11.2026
 status: stable
 sources:
   - src/app/api/plans/route.ts
@@ -19,7 +19,6 @@ related:
   - "[[_README]]"
   - "[[../../01-domain/plans]]"
   - "[[../schema/plans]]"
-  - "[[ai]]"
   - "[[shared]]"
   - "[[../../03-frontend/hooks/use-plans]]"
 ---

@@ -2,8 +2,8 @@
 title: usePlaces
 type: hook
 domain: frontend
-version: 1.2.3
-last_updated: 20.11.2026
+version: 1.2.5
+last_updated: 25.11.2026
 status: stable
 sources:
   - src/lib/hooks/use-places.ts
@@ -15,6 +15,8 @@ related:
 ---
 
 # `usePlaces` and family
+
+> **v1.48.0:** `fetchPlaces` serializes `ids` (the assistant's "Show on map"); `GET /api/places` already took it.
 
 > **v1.18.0:** `fetchPlaces` serializes `open_now=true`; `usePlaces` adds `refetchInterval: 60s` while the open-now filter is active (the list is a server-evaluated snapshot — the interval bounds its staleness).
 
@@ -87,4 +89,4 @@ type CreatePlaceInput = {
 - **No optimistic updates.** Visit-status toggles wait for the round-trip. The map detail panel and place cards re-render after the cache invalidation.
 - **No pagination.** All matching places come back in one response. With ~500 places per user this is fine; will hurt at 10K+.
 - **Mutations don't update the cache directly** — they invalidate and let React Query refetch. Simpler, but a brief loading state shows up.
-- **AI search trace context.** While an AI search is mid-flight, `fetchPlaces` attaches the search's W3C `traceparent` request header (read from `ai-search-store`) so the `/api/places` call joins the pipeline's single Honeycomb trace. Normal browsing fetches send no such header. See [[../../05-flows/observability-flow]].
+- **AI search trace context** (until v1.54.0). While an AI search was mid-flight, `fetchPlaces` attached the search's W3C `traceparent` request header; the AI search is gone, and the fetch carries none. Normal browsing fetches send no such header. See [[../../05-flows/observability-flow]].

@@ -2,8 +2,8 @@
 title: Repo Structure
 type: overview
 domain: overview
-version: 1.13.2
-last_updated: 19.11.2026
+version: 1.14.5
+last_updated: 25.11.2026
 status: stable
 sources:
   - src/
@@ -86,7 +86,6 @@ src/
 │   ├── offline/page.tsx       PWA offline fallback
 │   └── api/                   Route handlers (see [[../02-backend/api-routes/_README]])
 │       ├── places/            CRUD + bulk + enrich (info/reviews/profile) + refresh-google-data (merge + profile chain) + import-jobs (durable import queue) + parse-link (returns lite_profile) + migrate-photos
-│       ├── ai/                parse-query + rank-results (Phase 6) + compare (v1.19.0) + chat (v1.21.0, streaming) + day-plan (AI Plan; v1.22.0 as trip-plan, on the plans model since v1.37.0)
 │       ├── cron/              refresh-places — daily periodic-refresh sweep (CRON_SECRET, service-role, opt-in per user);
 │       │                      drain-imports — every minute, the import queue (Takeout + Instagram jobs)
 │       ├── instagram/         import (POST — start from a post URL, work in after()) + import/[id] (GET — dialog progress) — v1.28.0; import/[id]/pick (POST — add the place picked for a skipped venue) — v1.28.1
@@ -106,7 +105,7 @@ src/
 │   ├── map/                   MapView, MapContent, SearchBox, SearchResultPanel
 │   ├── places/                PlaceCard, AddPlaceDialog (with AI Suggestions panel + sub-cat strip), InstagramImportPanel (v1.28.0), BulkActionBar, inline creators, VisitStatusToggle, AiSummaryCard,
 │   │                          + detail-page widgets (v1.17.0): RatingDistributionBar, PopularTimesWidget, PlaceStatusBadges, PlaceActionLinks, AmenitiesGrid, PlaceTopics, ReviewsSection
-│   ├── plans/                 PlansTab, CreatePlanDialog, PlanDayTimeline, StopRow (done / skipped), AddStopDialog, PlanMenu + PlanDatesDialog, AiPlanButton, usePlanEditor (v1.37.0)
+│   ├── plans/                 PlansTab, CreatePlanDialog, PlanDayTimeline, StopRow (done / skipped), AddStopDialog, PlanMenu + PlanDatesDialog, PlanWithAssistant (v1.53.0), usePlanEditor (v1.37.0)
 │   ├── visits/                VisitDialog, DeleteVisitDialog, PlaceVisitSummary + PlaceVisitList, StarRatingInput / RatingStars (v1.38.0)
 │   ├── settings/              ApiKeysManager, CostTracker, AiSettings (master toggle), AiSuggestionsQueue (moderation UI)
 │   ├── sw-register.tsx        Service worker registration (client component)
@@ -116,16 +115,15 @@ src/
     │                          place projection, name resolution, time + busyness helpers), place-filters.ts, mcp.ts (MCP server),
     │                          verify-token.ts, oauth.ts (resource paths, redirect allowlist), owner.ts — see [[../04-integrations/claude-mcp]]
     ├── auth/                  safe-next.ts — same-site `next` validation for login and the OAuth callback (17.11.2026)
-    ├── ai/                    AI SDK v6 wiring (Gemini 3 Flash). client.ts, context-builder.ts,
-    │                          dedup.ts, normalize.ts, track-usage.ts (budgets), generate-profile.ts,
-    │                          chat-tools.ts (assistant tool belt, v1.21.0; +rank_places v1.23.0); rank-engine.ts (server-side LLM-as-judge twin, v1.23.0);
-    │                          schemas/ (Zod — +compare.ts v1.19.0, +day-plan.ts v1.22.0); prompts/ (place-profile-full.ts, compare.ts, chat.ts,
-    │                          day-plan.ts v1.22.0); extract/ (lite-profile.ts,
+    ├── ai/                    The place-profile pipeline (Claude since v1.51.0; the Gemini client went in v1.55.0). context-builder.ts,
+    │                          dedup.ts, normalize.ts, track-usage.ts (the retired AI SKUs), generate-profile.ts,
+    │                          schemas/ (Zod); prompts/ (place-profile-full.ts,
+    │                          ); extract/ (lite-profile.ts,
     │                          category-resolver.ts, features-extractor.ts,
     │                          suggestions-from-profile.ts); apply-suggestions.ts.
     ├── text/                  fold.ts — Turkish-aware text folding for matching (17.11.2026; moved from instagram/normalize.ts)
     ├── places/                refresh-google-data.ts — service-client-safe full re-lookup + review merge (shared by refresh route + cron);
-    │                          open-now.ts (tz-aware render-time isOpenNow, v1.18.0; +day-granular isOpenOnDate for AI Plan, v1.22.0);
+    │                          open-now.ts (tz-aware render-time isOpenNow, v1.18.0; +day-granular isOpenOnDate, v1.22.0 — get_plans' open_that_day since v1.53.0);
     │                          attribute-icons.ts (NF-04 group/icon map);
     │                          query-places.ts + user-stats.ts (v1.21.0 — extracted route engines shared with chat tools)
     ├── place-search/          PlaceSearch interface + the DataForSEO Google Maps provider (18.11.2026) — used by the
@@ -143,15 +141,15 @@ src/
     ├── google/                URL parser + category mapping + Takeout parser + usage tracker + key access (the Google
     │                          Places API modules were removed in v1.42.0 — every lookup goes through DataForSEO)
     ├── hikerapi/              client.ts — HikerAPI (Instagram data) wrapper, server-only (v1.28.0)
-    ├── instagram/             The Instagram import (v1.28.0): url.ts + types.ts (client-safe), analyze.ts, read-post.ts (Gemini),
+    ├── instagram/             The Instagram import (v1.28.0): url.ts + types.ts (client-safe), analyze.ts, read-post.ts (Claude Haiku 5.5 since v1.51.0),
     │                          resolve.ts (deterministic pinning rules), normalize.ts, maps-link.ts, import-job.ts, provenance.ts
     ├── import/                process-place.ts (resolveIdentity / findExisting / importPlace / ensurePlacePhoto),
     │                          kick-drain.ts (nudge the drain; shared by both imports, v1.28.0)
-    ├── hooks/                 React Query hooks (19 files): useAiSearch, useAiSuggestions, useBackfillProfiles, useCategories, useDebounce, useFilters, useImportJob, useInstagramImport, useIsDesktop, useLists, useMapStyle, usePlaceSearch, usePlaces, useSavedFilters, useSharedLinks, useStats, useSubcategories, useTags, usePlans
+    ├── hooks/                 React Query hooks (19 files): useAiSuggestions, useAssistantAvailability, useBackfillProfiles, useCategories, useDebounce, useFilters, useImportJob, useInstagramImport, useIsDesktop, useLists, useMapStyle, usePlaceSearch, usePlaces, useSavedFilters, useSharedLinks, useStats, useSubcategories, useTags, usePlans
     ├── stores/                Zustand stores (currently just import-store.ts)
     ├── map/                   category-icons.ts (canvas marker rendering)
     ├── supabase/              client.ts (browser), server.ts (+ createServiceClient), proxy.ts (updateSession)
-    ├── telemetry/             logger.ts (dual-write log.*), trace-context.ts (W3C traceparent mint),
+    ├── telemetry/             logger.ts (dual-write log.*), (trace-context.ts went with the AI search, v1.54.0),
     │                          langfuse.ts (LangfuseSpanProcessor singleton + flushLangfuse) — see [[../05-flows/observability-flow]]
     ├── types/                 index.ts — domain types (Place, Plan, Category, Subcategory, Tag, …)
     ├── geo.ts                 Shared PostGIS point parser (EWKB hex / WKT / GeoJSON / plain object)
@@ -159,7 +157,7 @@ src/
     └── utils.ts               cn() Tailwind class merger
 ```
 
-> The `src/lib/ai/` tree was added across PRs #30–#35 (AI Phases 1–5.5). The structure is documented in detail under [[../04-integrations/gemini]] and consumed by `src/app/api/places/[id]/enrich/route.ts` (step=profile) and the AI suggestion UI.
+> The `src/lib/ai/` tree was added across PRs #30–#35 (AI Phases 1–5.5), for Gemini; since v1.51.0 Claude writes the profiles through it ([[../05-flows/full-profile-flow]]). It is consumed by `src/app/api/places/[id]/enrich/route.ts` (step=profile) and the AI suggestion UI.
 
 ## `public/` — static assets
 

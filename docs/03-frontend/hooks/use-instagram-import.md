@@ -2,8 +2,8 @@
 title: useInstagramImport
 type: hook
 domain: frontend
-version: 1.1.0
-last_updated: 16.10.2026
+version: 1.1.1
+last_updated: 24.11.2026
 status: stable
 sources:
   - src/lib/hooks/use-instagram-import.ts
@@ -31,7 +31,7 @@ function useStartInstagramImport(
   onStarted?: (jobId: string) => void
 ): UseMutationResult<
   { jobId: string; reused?: boolean },
-  Error,
+  Error, // an InstagramStartError for a refused start (v1.51.0)
   string /* post URL — any text containing an Instagram post/reel link */
 >
 
@@ -59,8 +59,9 @@ pick from, `near`, `photoPending` and the place's coordinates and photo. Shape i
 
 - **`useStartInstagramImport(onStarted)`** — `POST /api/instagram/import { url }`.
   Resolves with `{ jobId, reused }`; on a non-2xx (or a body without `jobId`) it
-  throws `Error(body.error)`, falling back to "Couldn't start the Instagram
-  import". The route's messages are written for the user, so callers show
+  throws `InstagramStartError(body.error, body.code)` (v1.51.0; `code` is the
+  route's `InstagramRefusalCode`, null when the answer carried none), falling
+  back to "Couldn't start the Instagram import". The route's messages are written for the user, so callers show
   `error.message` as is. `onStarted(jobId)` runs from the mutation's own
   `onSuccess`, not from `mutate()`'s callbacks: TanStack drops those once the
   calling component unmounts, and a job started just before "Continue in

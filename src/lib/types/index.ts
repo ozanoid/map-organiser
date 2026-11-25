@@ -381,6 +381,9 @@ export interface GooglePlaceData {
 }
 
 export interface PlaceFilters {
+  /** Exactly these places — the assistant's "Show on map" (?ids=…).
+   *  Combines with the other filters like any filter. */
+  ids?: string[];
   country?: string;
   city?: string;
   category_ids?: string[];
@@ -399,11 +402,9 @@ export interface PlaceFilters {
    * timetable/tz data are EXCLUDED when the filter is on (unknown ≠ open).
    */
   open_now?: boolean;
-  // Phase 6.5 LLM-as-judge pivot: `soft_features` was removed entirely.
-  // Soft matching now happens inside rank-results LLM, which reads
-  // place_profile.features.* + theme_insights + tldr + pros/cons.
-  // Old bookmark URLs with `?f_*` params are silently ignored by the
-  // current useFilters parser. See docs/_plans/phase-6-llm-as-judge-pivot.md.
+  // `soft_features` (Phase 6.5) is gone: soft matching ("cozy", "quiet")
+  // is the assistant's — it reads the places' profiles. Old bookmark URLs
+  // with `?f_*` params are silently ignored by the useFilters parser.
 }
 
 export interface ParsedPlaceData {

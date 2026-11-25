@@ -85,25 +85,81 @@ export async function createPlan(
   return data as string;
 }
 
+/** `changes` as the database takes them — ops copied, added stops with
+ *  their default cost — the same for a save and for its preview. */
+async function preparedChanges(ctx: PlanContext, changes: PlanChanges) {
+  const ops = (changes.ops ?? []).map((op) => ({ ...op }));
+  await withDefaultCosts(
+    ctx,
+    ops.filter((op): op is Extract<PlanOp, { op: "add_stop" }> => op.op === "add_stop")
+  );
+  return { set: changes.set ?? {}, ops };
+}
+
 /** Applies `set` and `ops` to a plan in one transaction. */
 export async function changePlan(
   ctx: PlanContext,
   planId: string,
   changes: PlanChanges
 ): Promise<{ added_days: number[]; added_stops: string[] }> {
-  const ops = (changes.ops ?? []).map((op) => ({ ...op }));
-  await withDefaultCosts(
-    ctx,
-    ops.filter((op): op is Extract<PlanOp, { op: "add_stop" }> => op.op === "add_stop")
-  );
-
   const { data, error } = await ctx.supabase.rpc("apply_plan_changes", {
     p_user_id: ctx.userId,
     p_plan_id: planId,
-    p_changes: { set: changes.set ?? {}, ops },
+    p_changes: await preparedChanges(ctx, changes),
   });
   if (error) fail(error);
   return data as { added_days: number[]; added_stops: string[] };
+}
+
+/** One plan as preview_plan_changes returns it (plan_snapshot). */
+export interface PlanSnapshot {
+  id: string;
+  name: string;
+  start_date: string | null;
+  party_size: number;
+  notes: string | null;
+  status: string;
+  days: {
+    id: string;
+    day_number: number;
+    notes: string | null;
+    stops: {
+      id: string;
+      place_id: string | null;
+      /** The place's name, or the text of a text stop. */
+      name: string | null;
+      start_time: string | null;
+      day_part: string | null;
+      notes: string | null;
+      status: string;
+      cost_estimate: number | null;
+      currency: string | null;
+    }[];
+  }[];
+}
+
+/**
+ * The plan before and after `changes`, worked out by the save itself
+ * (apply_plan_changes) in a transaction that is rolled back — nothing is
+ * written (preview_plan_changes, migration 20261125010309_plan_preview). A
+ * change that can't be applied throws as the save would. null when the
+ * database has no preview function (the migration isn't applied).
+ */
+export async function previewPlanChanges(
+  ctx: PlanContext,
+  planId: string,
+  changes: PlanChanges
+): Promise<{ before: PlanSnapshot; after: PlanSnapshot } | null> {
+  const { data, error } = await ctx.supabase.rpc("preview_plan_changes", {
+    p_user_id: ctx.userId,
+    p_plan_id: planId,
+    p_changes: await preparedChanges(ctx, changes),
+  });
+  if (error) {
+    if (error.code === "PGRST202" || error.code === "42883") return null;
+    fail(error);
+  }
+  return data as { before: PlanSnapshot; after: PlanSnapshot };
 }
 
 /** Deletes a plan with its days and stops. Visits that came from its stops

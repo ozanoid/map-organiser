@@ -2,13 +2,13 @@
 title: Places components
 type: component
 domain: frontend
-version: 1.11.0
-last_updated: 18.11.2026
+version: 1.12.0
+last_updated: 25.11.2026
 status: stable
 sources:
   - src/components/places/add-place-dialog.tsx
   - src/components/places/instagram-import-panel.tsx
-  - src/components/places/ai-compare-card.tsx
+  - src/components/places/compare-with-assistant.tsx
   - src/components/places/ai-summary-card.tsx
   - src/components/places/amenities-grid.tsx
   - src/components/places/bulk-action-bar.tsx
@@ -237,7 +237,8 @@ Twenty files under `src/components/places/`. All `"use client"`. The Place-relat
   - **Failed** — error copy per code (`post_unavailable`, `budget_exceeded`,
     `not_configured`, `service_error`, `stalled`, `invalid_url`), a start error's
     message, or "Couldn't load this import." **Try again** re-posts the URL,
-    except for `budget_exceeded` and `not_configured`.
+    except for `budget_exceeded` and `not_configured` — and, for a refused
+    start, its code `monthly_limit` or `not_configured` (v1.51.0).
   - **Remove** — `DELETE /api/places/[id]` (deletes the place), then invalidates
     `["instagram-import", jobId]` and `["places"]` and toasts. The row becomes
     `removed` and disappears.
@@ -268,11 +269,11 @@ Twenty files under `src/components/places/`. All `"use client"`. The Place-relat
 - **Used by:** Place detail page (`src/app/(app)/places/[id]/page.tsx`) above the Amenities section.
 - **Hidden when:** no reviews available (lets the existing "Loading reviews…" banner own that state).
 
-## `AiCompareCard`
+## `CompareWithAssistant`
 
-- **File:** `src/components/places/ai-compare-card.tsx` (S2 F-04, v1.19.0)
-- **Props:** `{ places: Place[] }` (2-4, column order = idx order).
-- **Behavior:** DELIBERATE-CLICK only — `POST /api/ai/compare` fires on the button, never on mount (each run burns one `ai_compare` unit, 200/mo). Renders `overall` + per-theme winners (trophy) + occasion picks; `idx` resolves via the route-echoed `order` array. Re-run link after first result.
+- **File:** `src/components/places/compare-with-assistant.tsx` (v1.52.0; replaced `AiCompareCard`, the Gemini comparison of v1.19.0)
+- **Props:** `{ places: { id, name }[] }` (the page's columns, 2–4).
+- **Renders:** above the columns, "Which one, when?" with **Ask the assistant** (`AskAssistantButton`, [[assistant]]): the panel opens with "Bu yerleri karşılaştır: hangisi ne zaman daha iyi?" in the composer and the places as its subject ("3 places · …"). Nothing when the assistant can't be used (AI off or no Claude key) or fewer than 2 places.
 - **Used by:** `/places/compare`.
 
 ## `BulkActionBar`

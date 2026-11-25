@@ -2,8 +2,8 @@
 title: Place Import Flow
 type: flow
 domain: places
-version: 2.3.2
-last_updated: 19.11.2026
+version: 2.3.4
+last_updated: 25.11.2026
 status: stable
 sources:
   - src/app/api/places/import-jobs/route.ts
@@ -80,7 +80,7 @@ User goes to `/import`, picks a CSV or GeoJSON file (typically from Google Takeo
 | `import` | `resolveIdentity` (free) → duplicate pre-check → `fetchBusinessInfoLive` → INSERT places + place_tags, storing `main_image`; the chosen lists through `addPlaceToLists` (`save_list`, at the end of each list — v1.40.0; a list problem is logged, not an import failure). A concurrent add of the same place that wins the insert (`places_user_google_place_id_key`, v1.41.0) makes this one `skipped / Already exists` with that place's id | `photo`, or `skipped`/`failed` |
 | `photo` | `ensurePlacePhoto` — CDN fetch of `main_image` → Storage upload. Free unless `main_image` is missing, which costs one business-info lookup | `reviews`, or straight to `done` if the place already has a profile (a repair-only item). A missing photo records a reason and moves on either way |
 | `reviews` | `fetchReviews` (depth 50) → `mergeReviews` into `google_data.reviews` | `profile`, or `done` if the place has no CID or no reviews |
-| `profile` | `generatePlaceProfile` — the full Gemini pass, which also applies vocabulary concepts as tags | `done` |
+| `profile` | `generatePlaceProfile` — the full profile pass (Claude Sonnet 5.5 since v1.51.0; Gemini before), which also applies vocabulary concepts as tags; over the background share of the monthly Claude cap ($80 of $100, v1.56.0) the item ends without a profile (reason `cap_exceeded`) | `done` |
 
 Stage priority in the claim is `import` → `photo` → `reviews` → `profile`, not insertion order. Import is ~17 s per place while reviews poll DataForSEO for up to 110 s; interleaving them would leave the map half-empty for the whole run. The claim's `RETURNING` doesn't keep that order, so the drain sorts the claimed items by stage before working them (v1.41.0; measured before: a picked place's import waited 87 s behind reviews claimed in the same run).
 

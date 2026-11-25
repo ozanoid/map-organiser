@@ -2,8 +2,8 @@
 title: useFilters
 type: hook
 domain: frontend
-version: 1.2.0
-last_updated: 15.07.2026
+version: 1.3.0
+last_updated: 24.11.2026
 status: stable
 sources:
   - src/lib/hooks/use-filters.ts
@@ -17,6 +17,8 @@ related:
 # `useFilters`
 
 > **v1.20.0:** `filtersToQueryString` + `parseUrlToFilters` artık EXPORT — saved-filter kaydetme/uygulama aynı serileştirmeyi paylaşır.
+
+> **v1.48.0:** `ids` key added — `?ids=a,b,c` (up to 100), the assistant's "Show on map": exactly these places, combined with the other filters; counts as an active filter, cleared with the others or by `AssistantPicksChip`.
 
 > **v1.18.0:** `open_now` key added — parsed from `?open_now=true`, serialized back, boolean chip (`OpenNowFilter`). Evaluation is server-side at request time; see [[../../02-backend/api-routes/places]].
 

@@ -130,9 +130,8 @@ export function BackfillProfilesPanel() {
         <p>
           <strong className="font-medium text-foreground">{eligibleNow}</strong>{" "}
           of <strong className="font-medium text-foreground">{data.total_places}</strong>{" "}
-          places don&apos;t have an AI profile yet. Generating profiles
-          improves AI search results (better ranking, accurate atmosphere/
-          occasion matching).
+          places don&apos;t have an AI profile yet. The assistant reads
+          profiles to judge, rank and compare places.
         </p>
 
         <ul className="space-y-0.5 ml-3 list-disc marker:text-muted-foreground/60">
@@ -141,7 +140,7 @@ export function BackfillProfilesPanel() {
               <span className="font-medium text-foreground">
                 {data.has_reviews_no_profile}
               </span>{" "}
-              already have reviews — Gemini Flash only.
+              already have reviews — the profile only.
             </li>
           )}
           {data.has_cid_no_reviews > 0 && (
@@ -149,7 +148,7 @@ export function BackfillProfilesPanel() {
               <span className="font-medium text-foreground">
                 {data.has_cid_no_reviews}
               </span>{" "}
-              need reviews first — DataForSEO then Gemini Flash.
+              need reviews first — DataForSEO, then the profile.
             </li>
           )}
           {data.no_reviews_available > 0 && (
@@ -172,8 +171,8 @@ export function BackfillProfilesPanel() {
           <strong className="font-medium text-foreground">
             ${data.estimated_cost_usd.toFixed(2)}
           </strong>{" "}
-          at current Gemini Flash + DataForSEO rates. Tracked in the cost
-          tracker like any other AI call.
+          at Claude&apos;s measured cost per profile and DataForSEO&apos;s
+          rates. Tracked in the cost tracker like every Claude call.
         </p>
       </div>
 

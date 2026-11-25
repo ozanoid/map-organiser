@@ -3,6 +3,7 @@
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useDebouncedCallback } from "@/lib/hooks/use-debounce";
+import { MAX_PLACE_IDS } from "@/lib/places/limits";
 import type { PlaceFilters } from "@/lib/types";
 
 // URL param name ↔ PlaceFilters property mapping
@@ -27,6 +28,7 @@ export function parseUrlToFilters(searchParams: URLSearchParams): PlaceFilters {
   const subcategory = searchParams.get("subcategory");
   const tagIds = searchParams.get("tags");
   const status = searchParams.get("status");
+  const ids = searchParams.get("ids");
 
   // Phase 6.5 LLM-as-judge pivot: `?f_*` params (atmosphere, occasions,
   // dietary, seating, cuisine_types) used to drive the soft-feature
@@ -35,6 +37,7 @@ export function parseUrlToFilters(searchParams: URLSearchParams): PlaceFilters {
   // structural filters parse. See docs/_plans/phase-6-llm-as-judge-pivot.md.
 
   return {
+    ids: ids ? ids.split(",").filter(Boolean).slice(0, MAX_PLACE_IDS) : undefined,
     country: searchParams.get("country") || undefined,
     city: searchParams.get("city") || undefined,
     category_ids: category ? category.split(",") : undefined,

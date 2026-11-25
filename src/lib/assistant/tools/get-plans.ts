@@ -14,6 +14,7 @@ import {
   type PlanOutline,
   type StopOutline,
 } from "@/lib/plans/read";
+import { isOpenOnDate, type Timetable } from "@/lib/places/open-now";
 import { log } from "@/lib/telemetry/logger";
 import { fold } from "@/lib/text/fold";
 import type { Plan, PlanDay, PlanRoute, PlanStop } from "@/lib/types";
@@ -49,7 +50,18 @@ const phaseOf = (plan: Plan, outline: PlanOutline | undefined) => planPhase(plan
 
 const stopName = (s: Pick<PlanStop, "place" | "title">) => s.place?.name ?? s.title ?? "Stop";
 
-function stopForModel(s: PlanStop) {
+/** About 1 m — enough to tell which stops are close together. */
+const coord = (n: number) => Math.round(n * 1e5) / 1e5;
+
+/**
+ * A stop for the model. `location` lets it keep close places on one day;
+ * `open_that_day` (a dated plan, a place with opening hours) whether the
+ * place opens on the day's date at all — the two things AI Plan used to
+ * weigh (v1.53.0).
+ */
+function stopForModel(s: PlanStop, date: string | null, opening: ReadonlyMap<string, Timetable | null>) {
+  const timetable = s.place_id ? opening.get(s.place_id) : undefined;
+  const open = date && timetable ? isOpenOnDate(timetable, date) : null;
   return {
     stop_id: s.id,
     place_id: s.place_id ?? undefined,
@@ -58,9 +70,11 @@ function stopForModel(s: PlanStop) {
           name: s.place.name,
           category: s.place.category?.name,
           area: s.place.city ?? undefined,
+          location: s.place.location ? { lat: coord(s.place.location.lat), lng: coord(s.place.location.lng) } : undefined,
           maps_url: s.place.google_data.url ?? undefined,
         }
       : undefined,
+    open_that_day: open ?? undefined,
     title: s.title ?? undefined,
     start_time: s.start_time ?? undefined,
     day_part: s.day_part ?? undefined,
@@ -136,7 +150,8 @@ export function planForModel(
   ctx: AssistantContext,
   plan: Plan,
   phase: PlanPhase,
-  routes?: Map<string, RouteForModel>
+  routes?: Map<string, RouteForModel>,
+  opening: ReadonlyMap<string, Timetable | null> = new Map()
 ) {
   return {
     plan_id: plan.id,
@@ -154,7 +169,7 @@ export function planForModel(
       weekday: d.date ? weekdayName(d.date) : undefined,
       notes: d.notes ?? undefined,
       route: routes?.get(d.id),
-      stops: (d.stops ?? []).map(stopForModel),
+      stops: (d.stops ?? []).map((s) => stopForModel(s, d.date ?? null, opening)),
     })),
   };
 }
@@ -202,12 +217,26 @@ function byPhaseThenDate(phases: Map<string, PlanPhase>) {
   };
 }
 
+/** The opening hours of a dated plan's places — none for a plan without
+ *  dates, whose days have no weekday. */
+async function openingOf(ctx: AssistantContext, plan: Plan): Promise<Map<string, Timetable | null>> {
+  const ids = [...new Set((plan.days ?? []).flatMap((d) => (d.stops ?? []).flatMap((s) => (s.place_id ? [s.place_id] : []))))];
+  if (!plan.start_date || ids.length === 0) return new Map();
+  const { data, error } = await ctx.supabase
+    .from("places")
+    .select("id,timetable:google_data->work_timetable")
+    .eq("user_id", ctx.userId)
+    .in("id", ids);
+  if (error) throw new Error(error.message);
+  return new Map((data ?? []).map((r) => [r.id as string, (r.timetable as Timetable | null) ?? null]));
+}
+
 /** One plan in full, with its phase where it takes place. */
 async function planInFull(ctx: AssistantContext, planId: string, withRoutes = false) {
   const [plan, outlines] = await Promise.all([getPlan(ctx, planId), planOutlines(ctx, [planId])]);
   if (!plan) return null;
-  const routes = withRoutes ? await routesOf(ctx, plan) : undefined;
-  return planForModel(ctx, plan, phaseOf(plan, outlines.get(planId)), routes);
+  const [routes, opening] = await Promise.all([withRoutes ? routesOf(ctx, plan) : undefined, openingOf(ctx, plan)]);
+  return planForModel(ctx, plan, phaseOf(plan, outlines.get(planId)), routes, opening);
 }
 
 /**
@@ -236,7 +265,7 @@ export const getPlans = defineTool({
   name: "get_plans",
   title: "Plans",
   description:
-    "The user's plans: outings and trips saved in Map Organiser, each with days and stops. Without plan_id it lists plans with their dates, the first stops and a link — by default the ones still ahead and those without dates yet; a plan is ahead until its last day is over where it takes place. With plan_id it returns one plan in full: every day with its date and weekday, and every stop in order with its saved place or text, start_time or day_part, notes, cost per person, status (planned, done, skipped) and the visit logged for it. with_routes adds travel time and distance between each day's stops. Answers 'what are my plans', 'what's on Saturday', 'show me the Barcelona plan'.",
+    "The user's plans: outings and trips saved in Map Organiser, each with days and stops. Without plan_id it lists plans with their dates, the first stops and a link — by default the ones still ahead and those without dates yet; a plan is ahead until its last day is over where it takes place. With plan_id it returns one plan in full: every day with its date and weekday, and every stop in order with its saved place (and where it is, location) or text, start_time or day_part, notes, cost per person, status (planned, done, skipped), whether its place opens on that day's date (open_that_day, dated plans) and the visit logged for it. with_routes adds travel time and distance between each day's stops. Answers 'what are my plans', 'what's on Saturday', 'show me the Barcelona plan'.",
   inputSchema: z.object({
     plan_id: z.uuid().optional().describe("One plan in full"),
     phase: z

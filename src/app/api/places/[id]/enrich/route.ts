@@ -32,8 +32,9 @@ function getDataForSEOClient(): DataForSEOClient | null {
  * step=reviews  → reviews via CID (~30s). Client fire-and-forgets. On
  *                 success, fire-and-forgets step=profile (Phase 4) when
  *                 ai_features_enabled.
- * step=profile  → Gemini Flash structured-output call that produces the
- *                 full place_profile (Phase 4). Auto-applies matched_existing
+ * step=profile  → one Claude structured-output call (PROFILE_WRITER, since
+ *                 v1.51.0; Gemini Flash before) that produces the full
+ *                 place_profile (Phase 4). Auto-applies matched_existing
  *                 tags/lists/sub-cats; queues new_proposals for moderation.
  *
  * DataForSEO path (provider=dataforseo): step=reviews only (rest already saved).
@@ -206,14 +207,15 @@ export async function POST(
     return NextResponse.json({ ok: true, reviews: rawReviews.length });
   }
 
-  // ─── step=profile: Gemini Flash full place_profile ───
+  // ─── step=profile: the full place_profile, written by Claude ───
   // Logic extracted to src/lib/ai/generate-profile.ts (15.07.2026) so the
   // refresh cron can run it with the service client. This branch is the
   // cookie-authed HTTP shell; response shapes are unchanged.
   if (step === "profile") {
     // Flush the Langfuse span batch once the response is sent (serverless).
     after(flushLangfuse);
-    // Langfuse trace-level fields for the gen_ai spans created inside.
+    // Langfuse trace-level fields for the Claude generation created inside
+    // (profile.write).
     const outcome = await propagateAttributes(
       { traceName: "place-profile", userId: user.id, tags: ["enrichment"] },
       () => generatePlaceProfile(supabase, user.id, id)
@@ -229,13 +231,13 @@ export async function POST(
         );
       case "not_configured":
         return NextResponse.json(
-          { error: "AI not configured (GOOGLE_GENERATIVE_AI_API_KEY missing)" },
+          { error: "AI profiles aren't set up on this server (ANTHROPIC_API_KEY missing)." },
           { status: 503 }
         );
       case "cap_exceeded":
         return NextResponse.json(
           {
-            error: "Monthly AI profile limit reached (1000). Resets on the 1st.",
+            error: `This month's AI budget for profiles ($${outcome.capLimit}) is used up — the rest is kept for the assistant. Profiles resume on the 1st.`,
             used: outcome.capUsed,
             cap: outcome.capLimit,
           },

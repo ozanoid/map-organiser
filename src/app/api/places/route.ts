@@ -64,36 +64,6 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  // ─── Phase 6.5 diagnostic logging ───
-  // Only log when AI-search-relevant params are present, to avoid
-  // spamming the normal browsing path. The presence of `city` is the
-  // best proxy for "this is an AI search call" — manual filter UI
-  // typically picks country+city via the cascade, while AI search
-  // sets city directly.
-  //
-  // Structured so Axiom can correlate with the parent ai.parse-query
-  // log via traceId — one AI search session's full pipeline shows up
-  // as a single timeline.
-  if (city) {
-    log.info("api.places", {
-      userId: user.id,
-      filters: {
-        country: country ?? null,
-        city: city ?? null,
-        categories: categoryIds?.length ?? 0,
-        subcategories: subcategoryIds?.length ?? 0,
-        tags: tagIds?.length ?? 0,
-        status: visitStatus ?? null,
-        rating: ratingMin ?? null,
-        g_rating: googleRatingMin ?? null,
-        search: search ?? null,
-        sort: sort ?? "newest",
-      },
-      sql_rows: result.sqlRows,
-      returned: result.places.length,
-    });
-  }
-
   return NextResponse.json(result.places);
 }
 

@@ -1,9 +1,14 @@
 import "server-only";
-import type { SupabaseClient } from "@supabase/supabase-js";
-import { createClient } from "@/lib/supabase/server";
 
 /**
  * AI SKU registry. Pricing in USD per 1k calls (approximate).
+ *
+ * The Gemini features' usage counters — all of them history since v1.54.0:
+ * every AI call is a Claude call now, priced into the agent's ledger
+ * (assistant_spend, src/lib/agent/spend.ts) under one monthly cap. Nothing
+ * writes these SKUs any more (trackAiUsage, checkAiBudget and the per-user
+ * budgets went with the last Gemini route); they stay so the cost tracker
+ * can show the months that have rows (`retired`).
  *
  * Model: gemini-3-flash-preview (since 15.07.2026). Verified rates
  * (ai.google.dev pricing, standard tier):
@@ -22,29 +27,35 @@ export const AI_SKU_CONFIG = {
     name: "AI Parse Query",
     costPer1k: 0.7,
     freeMonthly: 0,
+    retired: true,
   },
   ai_rank_results: {
     name: "AI Rank Results",
     costPer1k: 20.0,
     freeMonthly: 0,
+    retired: true,
   },
+  // Gemini profiles until v1.51.0 — nothing writes it now. `retired`: the
+  // cost tracker shows it only in a month that still has usage.
   ai_place_profile: {
     name: "AI Place Profile",
     costPer1k: 9.5,
     freeMonthly: 0,
+    retired: true,
   },
   ai_embedding: {
     name: "AI Embedding",
     costPer1k: 0,
     freeMonthly: 0,
+    retired: true,
   },
-  // v1.19.0 (S2 F-04): side-by-side AI comparison. Input = 2-4 stored
-  // place_profiles (~2-6K tokens) + a compact rubric — cost profile is
-  // close to ai_place_profile's.
+  // v1.19.0–v1.51.0: the compare page's Gemini comparison — the assistant
+  // answers it since v1.52.0, nothing writes it now.
   ai_compare: {
     name: "AI Compare",
     costPer1k: 9.5,
     freeMonthly: 0,
+    retired: true,
   },
   // v1.21.0 (S3 AI-02): one unit = one chat TURN (user message →
   // final assistant text), regardless of how many tool/LLM steps the
@@ -52,162 +63,29 @@ export const AI_SKU_CONFIG = {
   // fixed average-turn estimate (~2-3 Flash steps, ~8k input + ~1.2k
   // output ≈ $0.015/turn); increment_api_usage freezes cost_per_1k at
   // the first daily insert, so per-turn variable cost can't be recorded.
+  // The Gemini chat, removed in v1.48.0.
   ai_chat: {
     name: "AI Chat",
     costPer1k: 15.0,
     freeMonthly: 0,
+    retired: true,
   },
-  // v1.22.0 (S4 AI-09): one unit = one AI Plan generation on the plan page.
-  // The key says "trip" because plans were called trips; it stays so the
-  // usage history is one series. Input is a compact projection of up to
-  // ~40 candidates (~350 tok each) + the plan frame ≈ 15-20k tokens ≈
-  // $0.012/plan.
+  // v1.22.0–v1.52.0: one unit = one AI Plan generation on the plan page
+  // (Gemini, ≈ $0.012). The assistant plans since v1.53.0; nothing writes it.
   ai_trip_plan: {
     name: "AI Plan",
     costPer1k: 12.0,
     freeMonthly: 0,
+    retired: true,
   },
-  // Instagram import: one unit = one post read (~1.2k in / ~0.3k out
-  // tokens with low thinking ≈ $0.0015).
+  // Instagram import until v1.51.0 (Gemini) — nothing writes it now. One unit
+  // was one post read (~1.2k in / ~0.3k out tokens, low thinking ≈ $0.0015).
   ai_instagram_read: {
     name: "AI Instagram Read",
     costPer1k: 1.5,
     freeMonthly: 0,
+    retired: true,
   },
 } as const;
 
 export type AiSku = keyof typeof AI_SKU_CONFIG;
-
-/**
- * Increment the per-user/per-SKU/per-day counter in api_usage.
- * Mirrors src/lib/google/track-usage.ts but for AI calls.
- *
- * Failures are swallowed (logged, not thrown) so a tracking outage
- * never breaks a user-facing request.
- */
-export async function trackAiUsage(
-  userId: string,
-  sku: AiSku,
-  client?: SupabaseClient
-): Promise<void> {
-  try {
-    const supabase = client ?? (await createClient());
-    const config = AI_SKU_CONFIG[sku];
-    await supabase.rpc("increment_api_usage", {
-      p_user_id: userId,
-      p_sku: sku,
-      p_cost: config.costPer1k,
-    });
-  } catch (e) {
-    console.error("[AI Usage Tracking] Error:", e);
-  }
-}
-
-/**
- * Per-user MONTHLY AI budgets — two separate buckets (15.07.2026;
- * replaced the single per-call cap after the Gemini 3 price verification
- * showed searches dominate cost).
- *
- * - SEARCH: 500 searches/month. One search burns ONE budget unit no
- *   matter how many LLM calls it makes — counted via the ai_parse_query
- *   SKU (every search runs exactly one parse; rank re-fires from broaden
- *   toggles are free). Ceiling ≈ 500 × ~$0.021 ≈ $10.5/month.
- * - PROFILE: 1000 place-profile generations/month — covers the add-place
- *   chain, manual refresh chain, backfill, and the cron sweep together.
- *   Ceiling = 1000 × ~$9.5/1k ≈ $9.5/month. A full ~470-place backfill
- *   fits inside a single month.
- * - RANK BACKSTOP: rank_results is already budgeted through the search
- *   bucket at parse time; its own 3× ceiling exists ONLY so a client-side
- *   rerank-loop bug can't bypass the parse gate and run up cost.
- */
-export const AI_MONTHLY_SEARCH_CAP = 500;
-export const AI_MONTHLY_PROFILE_CAP = 1000;
-export const AI_MONTHLY_RANK_BACKSTOP = AI_MONTHLY_SEARCH_CAP * 3;
-/** v1.19.0 — hardcoded like its siblings (caps are code constants here,
- *  not env vars; keep the convention). One unit per compare request. */
-export const AI_MONTHLY_COMPARE_CAP = 200;
-/** v1.21.0 (S3 AI-02) — one unit per chat TURN (charged in the route's
- *  onFinish; an approval-continuation POST does NOT burn a second unit).
- *  The stopWhen step ceiling in the chat route bounds per-turn fan-out. */
-export const AI_MONTHLY_CHAT_CAP = 200;
-/** v1.22.0 (S4 AI-09) — one unit per plan generation; deliberate-click
- *  only from the plan page's AI Plan dialog. */
-export const AI_MONTHLY_TRIP_PLAN_CAP = 50;
-/** One unit per Instagram post import (one Gemini read; it also bounds the
- *  HikerAPI and Google calls the import makes). */
-export const AI_MONTHLY_INSTAGRAM_CAP = 300;
-
-export type AiBudgetKind =
-  | "search"
-  | "profile"
-  | "rank_backstop"
-  | "compare"
-  | "chat"
-  | "trip_plan"
-  | "instagram";
-
-const BUDGETS: Record<AiBudgetKind, { sku: AiSku; cap: number }> = {
-  search: { sku: "ai_parse_query", cap: AI_MONTHLY_SEARCH_CAP },
-  profile: { sku: "ai_place_profile", cap: AI_MONTHLY_PROFILE_CAP },
-  rank_backstop: { sku: "ai_rank_results", cap: AI_MONTHLY_RANK_BACKSTOP },
-  compare: { sku: "ai_compare", cap: AI_MONTHLY_COMPARE_CAP },
-  chat: { sku: "ai_chat", cap: AI_MONTHLY_CHAT_CAP },
-  trip_plan: { sku: "ai_trip_plan", cap: AI_MONTHLY_TRIP_PLAN_CAP },
-  instagram: { sku: "ai_instagram_read", cap: AI_MONTHLY_INSTAGRAM_CAP },
-};
-
-export interface AiCapStatus {
-  /** True once this month's AI call count has reached the cap. */
-  exceeded: boolean;
-  /** This calendar month's total AI calls for the user across all AI SKUs. */
-  used: number;
-  /** The cap that `used` is measured against. */
-  cap: number;
-}
-
-/**
- * Check one of the user's monthly AI budgets (calendar month, UTC —
- * resets naturally on the 1st).
- *
- * Reads the per-(user, sku, day) counters in api_usage — the same rows
- * trackAiUsage() / increment_api_usage write — summing only the SKU that
- * backs the requested budget (see BUDGETS).
- *
- * Fails OPEN: if the check itself errors (api_usage unreachable), returns
- * exceeded=false. The budget is a spend guard, not a hard billing gate —
- * a transient DB blip must never 429 a legitimate request.
- */
-export async function checkAiBudget(
-  kind: AiBudgetKind,
-  userId: string,
-  client?: SupabaseClient
-): Promise<AiCapStatus> {
-  const budget = BUDGETS[kind];
-  try {
-    const supabase = client ?? (await createClient());
-    // api_usage.created_at is a DATE (UTC) — month window via >= YYYY-MM-01.
-    const now = new Date();
-    const monthStart = `${now.getUTCFullYear()}-${String(
-      now.getUTCMonth() + 1
-    ).padStart(2, "0")}-01`;
-    const { data, error } = await supabase
-      .from("api_usage")
-      .select("count")
-      .eq("user_id", userId)
-      .gte("created_at", monthStart)
-      .eq("sku", budget.sku);
-    if (error) throw error;
-    const used = (data ?? []).reduce(
-      (sum, row) => sum + (row.count ?? 0),
-      0
-    );
-    return {
-      exceeded: used >= budget.cap,
-      used,
-      cap: budget.cap,
-    };
-  } catch (e) {
-    console.error(`[AI Budget:${kind}] check failed — failing open:`, e);
-    return { exceeded: false, used: 0, cap: budget.cap };
-  }
-}

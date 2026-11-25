@@ -15,6 +15,15 @@ interface UsageItem {
 interface UsageData {
   month: string;
   usage: UsageItem[];
+  /** Every Claude call this month (one ledger): dollars, the platform-wide
+   *  cap, where background work (profiles, Instagram reads) stops, and what
+   *  each purpose took. */
+  assistant?: {
+    spentUsd: number;
+    capUsd: number;
+    backgroundCapUsd?: number;
+    byPurpose?: Partial<Record<"chat" | "profile" | "instagram" | "eval", number>>;
+  };
   totalEstimatedCost: number;
 }
 
@@ -62,6 +71,61 @@ export function CostTracker() {
       </div>
 
       <div className="space-y-3">
+        {data.assistant && (
+          <div className="space-y-1">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-medium">Claude</span>
+              <span className="text-muted-foreground">
+                ${data.assistant.spentUsd.toFixed(2)} / ${data.assistant.capUsd.toFixed(0)} cap
+              </span>
+            </div>
+            <div className="h-2 bg-muted rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all ${
+                  data.assistant.spentUsd >= data.assistant.capUsd
+                    ? "bg-red-500"
+                    : data.assistant.spentUsd > data.assistant.capUsd * 0.8
+                      ? "bg-amber-500"
+                      : "bg-emerald-500"
+                }`}
+                style={{ width: `${Math.min(100, (data.assistant.spentUsd / data.assistant.capUsd) * 100)}%` }}
+              />
+            </div>
+            {data.assistant.byPurpose && (
+              <p className="text-[11px] text-muted-foreground">
+                {(
+                  [
+                    ["chat", "Assistant"],
+                    ["profile", "Profiles"],
+                    ["instagram", "Instagram"],
+                    ["eval", "Evals"],
+                  ] as const
+                )
+                  .filter(([key]) => (data.assistant?.byPurpose?.[key] ?? 0) > 0)
+                  .map(([key, label]) => `${label} $${(data.assistant?.byPurpose?.[key] ?? 0).toFixed(2)}`)
+                  .join(" · ") || "Nothing yet this month"}
+              </p>
+            )}
+            {data.assistant.backgroundCapUsd !== undefined &&
+              data.assistant.backgroundCapUsd < data.assistant.capUsd && (
+                <p
+                  className={`text-[11px] ${
+                    data.assistant.spentUsd >= data.assistant.backgroundCapUsd
+                      ? "text-amber-700 dark:text-amber-400"
+                      : "text-muted-foreground"
+                  }`}
+                >
+                  {data.assistant.spentUsd >= data.assistant.backgroundCapUsd
+                    ? `Profiles and Instagram reads are paused until the 1st: the last $${(
+                        data.assistant.capUsd - data.assistant.backgroundCapUsd
+                      ).toFixed(0)} is kept for the assistant.`
+                    : `Profiles and Instagram reads stop at $${data.assistant.backgroundCapUsd.toFixed(
+                        0
+                      )}; the rest is kept for the assistant.`}
+                </p>
+              )}
+          </div>
+        )}
         {data.usage.map((item) => {
           const percentage = item.freeLimit > 0
             ? Math.min(100, (item.count / item.freeLimit) * 100)

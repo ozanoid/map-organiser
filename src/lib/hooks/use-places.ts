@@ -1,12 +1,12 @@
 "use client";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useAiSearchStore } from "@/lib/stores/ai-search-store";
 import type { Place, PlaceFilters, ParsedPlaceData, VisitStatus } from "@/lib/types";
 
 async function fetchPlaces(filters: PlaceFilters): Promise<Place[]> {
   const params = new URLSearchParams();
   if (filters.country) params.set("country", filters.country);
+  if (filters.ids?.length) params.set("ids", filters.ids.join(","));
   if (filters.city) params.set("city", filters.city);
   if (filters.category_ids?.length) params.set("category", filters.category_ids.join(","));
   if (filters.tag_ids?.length) params.set("tags", filters.tag_ids.join(","));
@@ -19,15 +19,7 @@ async function fetchPlaces(filters: PlaceFilters): Promise<Place[]> {
   if (filters.subcategory_ids?.length)
     params.set("subcategory", filters.subcategory_ids.join(","));
   if (filters.open_now) params.set("open_now", "true");
-  // Phase 6.5 LLM-as-judge pivot: `soft_features` removed. Soft matching
-  // now happens inside rank-results — no URL params for it.
-
-  // When an AI search is mid-flight, carry its trace context so this
-  // /api/places call joins the pipeline's single Honeycomb trace.
-  const traceparent = useAiSearchStore.getState().traceparent;
-  const res = await fetch(`/api/places?${params}`, {
-    headers: traceparent ? { traceparent } : undefined,
-  });
+  const res = await fetch(`/api/places?${params}`);
   if (!res.ok) throw new Error("Failed to fetch places");
   return res.json();
 }

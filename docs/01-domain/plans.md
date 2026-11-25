@@ -2,8 +2,8 @@
 title: Plan
 type: entity
 domain: plans
-version: 1.2.0
-last_updated: 18.11.2026
+version: 1.2.1
+last_updated: 25.11.2026
 status: stable
 sources:
   - src/lib/types/index.ts
@@ -73,7 +73,7 @@ Types live in `src/lib/types/index.ts`.
 - **Done at a saved place means a visit.** A stop at a saved place is `done` exactly when a [[visits|visit]] fulfils it: logging the visit ticks the stop, deleting the visit reopens it; the plan's write path refuses any other way. A free-text stop is ticked off directly. `skipped` is set and undone from the stop's menu.
 - **Deleting a place removes its stops** (FK cascade). The delete dialogs name the plans first (`plansUsingPlaces`).
 - **Day numbers are dense and 1-based. Stop order is an ordering key**: positions are indexes, and every change first closes any gaps in the plan's stop order (a deleted place leaves one), so after its first change a plan's order is 0..n−1 per day.
-- **A day is named by id or by number.** The app sends ids — a change can't land on another day because the days were renumbered meanwhile. AI Plan and the assistant use numbers, which follow the dates.
+- **A day is named by id or by number.** The app sends ids — a change can't land on another day because the days were renumbered meanwhile. The assistant uses numbers, which follow the dates (AI Plan did, until v1.53.0); its change is saved only if the plan would still come out as its card showed.
 - **Limits:** 60 days a plan, 200 stops a day.
 
 ## One write path
@@ -83,7 +83,7 @@ Every change is one call into `src/lib/plans/write.ts`, which is one call to a P
 | Function | Calls | Used by |
 |---|---|---|
 | `createPlan(ctx, input, { createdVia })` | `create_plan` | `POST /api/plans`, shared-plan save, Claude's `create_plan` |
-| `changePlan(ctx, planId, { set?, ops? })` | `apply_plan_changes` | `PATCH /api/plans/[id]`, auto-plan, AI Plan, Claude's `update_plan` |
+| `changePlan(ctx, planId, { set?, ops? })` | `apply_plan_changes` | `PATCH /api/plans/[id]`, auto-plan, Claude's `update_plan` (AI Plan until v1.53.0) |
 | `deletePlan(ctx, planId)` | a delete | `DELETE /api/plans/[id]` |
 | `autoPlanStops(ctx, planId)` | `changePlan` with `move_stop` ops | `POST /api/plans/[id]/auto-plan` |
 
@@ -102,14 +102,14 @@ The app asks for a route per day (`GET /api/plans/[id]/days/[dayId]/route?sig=�
 ## Where it shows
 
 - `/lists?tab=plans` — the Plans tab: upcoming, no date yet, past, cancelled (`planPhase`). "New Plan": a name, a number of days, optionally a date, optionally the places of a list (they start on day 1).
-- `/plans/[id]` — the plan: timeline or map (`?view=map`), dates, budget, Auto Plan, AI Plan, the plan menu (share, dates, rename, cancel / restore, delete). `/trips/[id]` redirects here (plans kept the trips' ids).
+- `/plans/[id]` — the plan: timeline or map (`?view=map`), dates, budget, Auto Plan, Plan with assistant (v1.53.0), the plan menu (share, dates, rename, cancel / restore, delete). `/trips/[id]` redirects here (plans kept the trips' ids).
 - `/shared/[slug]` — the public view of a shared plan ([[sharing]]).
 - **Claude** (connector, v1.39.0): `get_plans` lists and reads plans, `create_plan` saves one, `update_plan` changes one; a stop at a saved place is ticked off with `log_visit` (`plan_stop_id`) and reopened with `delete_visit`. Claude cancels, never deletes, and gives the plan's link (`/plans/<id>` on the deployment it is connected to) — [[../04-integrations/claude-mcp]]. The Plans tab judges upcoming vs past by the viewer's date; `get_plans` by the date where the plan takes place (its last located stop's time zone).
 
 ## Auto Plan and AI Plan
 
 - **Auto Plan** (`autoPlan` in `src/lib/plans/auto-plan.ts`): k-means over the located stops, one cluster per day, each day ordered by a daily rhythm (café → sights → restaurant → bar). Only stops that are still `planned` and have a located place move; the rest keep their day and follow the planned ones. Stops are moved, not recreated — cost, time and note survive.
-- **AI Plan**: [[../05-flows/ai-plan-flow]].
+- **AI Plan**: since v1.53.0 the assistant — **Plan with assistant** opens it with the plan attached, and its change comes as a card showing the plan as it will be, saved on the user's yes if the plan is unchanged ([[../05-flows/ai-plan-flow]]). `preview_plan_changes` ([[../02-backend/schema/plans]]) works that out with the save itself.
 
 ## Not yet
 

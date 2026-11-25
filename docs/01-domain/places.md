@@ -2,8 +2,8 @@
 title: Place
 type: entity
 domain: places
-version: 1.9.1
-last_updated: 19.11.2026
+version: 1.9.4
+last_updated: 25.11.2026
 status: stable
 sources:
   - src/lib/types/index.ts
@@ -43,7 +43,7 @@ related:
   - "[[../04-integrations/google-places]]"
   - "[[../04-integrations/dataforseo]]"
   - "[[../04-integrations/mapbox]]"
-  - "[[../04-integrations/gemini]]"
+  - "[[../04-integrations/claude-agent]]"
   - "[[../05-flows/lite-profile-flow]]"
   - "[[../05-flows/full-profile-flow]]"
   - "[[../05-flows/instagram-import-flow]]"
@@ -118,10 +118,10 @@ DataForSEO-only extensions (set when `provider === "dataforseo"`):
 
 ### `google_data.place_profile` shape (Phase 4)
 
-AI pivot data attached to each place once Gemini full profile generation completes. Set by `POST /api/places/[id]/enrich?step=profile`. Two completeness levels:
+AI pivot data attached to each place once the full profile is written (Claude Sonnet 5.5 since v1.51.0; Gemini Flash before). Set by `POST /api/places/[id]/enrich?step=profile`. Two completeness levels:
 
 - **`completeness: "lite"`** — rule-based, no LLM. Only `category_signals`, `features` (DataForSEO-derived), and `suggested_tags.matched_existing` populated. Stays in this state if AI is disabled, reviews never land, or the LLM call fails. Lite profile is NOT persisted in the schema by default — it's returned inline by `parse-link` for the dialog. Full profile overwrites with `completeness: "full"`.
-- **`completeness: "full"`** — Gemini Flash output. All fields populated.
+- **`completeness: "full"`** — the model's output; `model_version` names the writer (`claude-sonnet-5-5` since v1.51.0, a Gemini id before). All fields populated.
 
 Top-level fields:
 - `category_signals: { primary, primary_confidence, sub_category, sub_category_confidence, secondary_role }` — LLM's classification opinion. Apply layer compares `primary` to `places.category_id` and queues a category_change proposal if they disagree (Phase 5.5).
@@ -207,7 +207,7 @@ All `/api/places/*` routes live in `src/app/api/places/`. See [[../02-backend/ap
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/api/places` | List with filters (country, city, category_ids, tag_ids, list_id, rating_min, google_rating_min, visit_status, search, sort). |
+| `GET` | `/api/places` | List with filters (country, city, category_ids, tag_ids, list_id, rating_min, google_rating_min, visit_status, search, sort, ids — up to 25 named places: compare, and the assistant's "Show on map"). |
 | `POST` | `/api/places` | Create a single place (used by manual UI and parse-link flow). |
 | `GET` | `/api/places/[id]` | Detail. |
 | `PATCH` | `/api/places/[id]` | Update. |

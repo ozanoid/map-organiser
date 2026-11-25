@@ -2,8 +2,8 @@
 title: HikerAPI (Instagram data)
 type: integration
 domain: integrations
-version: 1.0.1
-last_updated: 16.10.2026
+version: 1.1.1
+last_updated: 25.11.2026
 status: stable
 sources:
   - src/lib/hikerapi/client.ts
@@ -15,7 +15,7 @@ sources:
 related:
   - "[[_README]]"
   - "[[google-places]]"
-  - "[[gemini]]"
+  - "[[claude-agent]]"
   - "[[../05-flows/instagram-import-flow]]"
   - "[[../02-backend/api-routes/instagram]]"
   - "[[../02-backend/schema/api_usage]]"
@@ -98,10 +98,15 @@ never more likely to be mis-pinned.
 - **≈ 4 requests per post** (143 for the 35-post eval set, 16.10.2026): the
   post, a reel's usertags, and one profile per tagged / coauthor / mentioned
   account plus the owner. A 10-venue list post takes ~12.
-- **Bounded by the AI budget.** Every import burns one unit of the monthly
-  `instagram` budget (300 posts per user, `AI_MONTHLY_INSTAGRAM_CAP`), which
-  therefore also caps HikerAPI use — at ≈ 4 requests per post, roughly 1,200
-  requests (≈ $1.20) per user per month at the cap.
+- **Bounded by a monthly post count.** Until v1.51.0 every import burned one
+  unit of the monthly `instagram` AI budget (300 posts per user,
+  `AI_MONTHLY_INSTAGRAM_CAP`), which also capped HikerAPI use. Since v1.51.0
+  the post is read by Claude Haiku 5.5, whose cap counts only the read's
+  dollars; the start refuses a user's 301st import of a calendar month instead
+  (`INSTAGRAM_MONTHLY_POST_LIMIT`, counted from `import_jobs` — Ozan's interim
+  guard; one monthly dollar cap over every paid service is the planned lasting
+  fix). At ≈ 4 requests per post (≈ 8 for a multi-venue post) HikerAPI costs
+  about $0.004–0.008 a post.
 - **Tracking is an approximation of the bill.** The client's header comment
   records that HikerAPI bills every 2xx/4xx answer and not 5xx. We count one unit
   per logical call before it is made, so a call retried after a `429` is billed

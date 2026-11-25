@@ -1,14 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
-import { isAiAvailable } from "@/lib/ai/client";
+import { assistantOpenTo, isAssistantConfigured } from "@/lib/agent/door";
 
 /**
  * GET /api/user/ai-settings
  *
- * Returns the user's master AI toggle plus a server-side availability flag
- * (so the UI can disable the toggle gracefully when the deployment has no
- * GOOGLE_GENERATIVE_AI_API_KEY env var).
+ * Returns the user's master AI toggle plus two server-side answers:
+ * `aiAvailable` — the deployment has ANTHROPIC_API_KEY, so AI features can
+ * run at all (every one runs on Claude; Settings disables the toggle without
+ * it) — and `assistantAvailable` — this account may use the in-app assistant
+ * (an owner, ASSISTANT_OWNER_EMAILS: the header button and every entry that
+ * opens the assistant follow it).
  */
 export async function GET() {
   const supabase = await createClient();
@@ -31,7 +34,12 @@ export async function GET() {
 
   return NextResponse.json({
     enabled: profile?.ai_features_enabled ?? true,
-    available: isAiAvailable(),
+    // Every AI feature runs on Claude since v1.54.0: place profiles,
+    // Instagram reads, the assistant.
+    aiAvailable: isAssistantConfigured(),
+    // The assistant — and through it AI Plan, Compare and the search field —
+    // is the owners' alone (v1.56.0).
+    assistantAvailable: assistantOpenTo(user.email),
     cronRefreshEnabled: profile?.cron_refresh_enabled ?? false,
   });
 }

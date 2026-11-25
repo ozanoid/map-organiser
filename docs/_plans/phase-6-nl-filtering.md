@@ -2,12 +2,11 @@
 title: "Phase 6 — AI-01 NL Filtering (plan)"
 type: plan
 domain: ai
-version: 0.2.0
-last_updated: 18.05.2026
+version: 0.2.1
+last_updated: 25.11.2026
 status: draft
 related:
   - "[[../_archive/feature-suggestions_v3#AI-01]]"
-  - "[[../04-integrations/gemini]]"
   - "[[../05-flows/full-profile-flow]]"
   - "[[../01-domain/places]]"
   - "[[../02-backend/schema/profiles]]"

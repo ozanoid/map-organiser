@@ -10,7 +10,7 @@ import { z } from "zod";
  *           suggestions (existing-match only) are populated. Other fields null.
  *
  *   - full: produced by /api/places/[id]/enrich?step=profile after reviews
- *           are fetched. Single Gemini Flash call returns the full object.
+ *           are fetched. One model call (PROFILE_WRITER) returns the full object.
  *
  * The same JSONB path (places.google_data.place_profile) holds either
  * variant; consumers branch on `completeness`.
@@ -46,16 +46,23 @@ export const PlaceProfileSchema = z.object({
   }),
 
   suggested_tags: z.object({
-    /** UUIDs of the user's existing tags that the AI matched. */
-    matched_existing: z.array(z.string().uuid()),
+    /**
+     * Ids of the user's existing tags that the AI matched. Shape only, like the
+     * counts below: writeProfile keeps the ids that name one of the user's
+     * tags, so a malformed or unknown id drops that id, not the whole profile
+     * (4 of 879 Claude profiles were lost to a non-UUID here, 24.11.2026 — the
+     * schema sent to Claude can't carry `format: uuid`, see structured.ts).
+     */
+    matched_existing: z.array(z.string()),
     /** Retired v1.25.0 — the prompt requires this to be empty and the apply
      *  layer routes any straggler to vocabulary_candidates. Uncapped here for
      *  the same reason as pros/cons/evidence_quotes below. */
     new_proposals: z.array(z.string()),
   }),
 
-  /** UUIDs of user lists this place semantically fits. */
-  suggested_lists: z.array(z.string().uuid()),
+  /** Ids of user lists this place semantically fits — kept by writeProfile
+   *  only when they name one of the user's lists, as matched_existing. */
+  suggested_lists: z.array(z.string()),
 
   /**
    * Concepts from the global controlled vocabulary whose `bucket` is `tag`.

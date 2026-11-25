@@ -6,6 +6,759 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 25.11.2026 — v1.56.0 — The assistant is the owners'; background work keeps the last 20% free
+
+Ozan's decisions from the merge study:
+
+- **The in-app assistant is the owners' alone** (`assistantOpenTo`,
+  `src/lib/agent/door.ts`): the server's Claude key and an account on
+  `ASSISTANT_OWNER_EMAILS` — the list the claude.ai connector checks. Anyone
+  else gets 403 `{ code: "not_owner" }` from `/api/assistant/chat` and
+  `/api/assistant/conversation`, nothing written, and sees no button or entry.
+  `GET /api/user/ai-settings` answers both questions apart: `aiAvailable` (the
+  key — Settings' switch, the backfill, the suggestions queue) and
+  `assistantAvailable` (this account may use the assistant — the header
+  button and every entry). Settings → AI names the assistant in its
+  description only for an owner.
+- **Background work stops at 80% of the cap** (`capFor`,
+  `BACKGROUND_CAP_SHARE`, `src/lib/agent/spend.ts`): place profiles (imports,
+  the queue, the refresh sweep, the backfill) and Instagram reads stop at
+  $80; the assistant and the evals have the whole $100. A big import can no
+  longer use up the month and leave the assistant without budget. The
+  profile route's 429 and the Instagram dialog say it is the budget for
+  profiles / imports; Settings → usage shows where background work stops
+  (`assistant.backgroundCapUsd`), in amber once it has.
+- Checks: `npm run check:agent` (the background share, a turn past it, the
+  owner list — case, spacing, an empty list fails closed); types, lint. Tried
+  on the dev server with the test account: as an owner — the assistant, the
+  usage note; with the account left off the list — no button, no "Ask the
+  assistant" under the search field, 403 `not_owner` from the three
+  assistant calls, Settings' AI switch usable with the backfill and the
+  queue, the description without the assistant.
+- Docs: [[02-backend/api-routes/assistant]], [[02-backend/api-routes/user]],
+  [[02-backend/api-routes/instagram]], [[02-backend/schema/assistant-conversations]],
+  [[04-integrations/claude-agent]], [[04-integrations/claude-mcp]],
+  [[05-flows/ai-chat-flow]], [[05-flows/ai-enrichment-flow]],
+  [[05-flows/full-profile-flow]], [[05-flows/instagram-import-flow]],
+  [[05-flows/place-import-flow]], [[03-frontend/components/assistant]],
+  [[03-frontend/components/settings]], [[01-domain/users-and-profiles]],
+  [[06-ops/env-vars]], [[06-ops/runbooks/profile-backfill]],
+  [[_plans/phase-2-assistant]], [[_plans/personal-assistant]].
+
+---
+
+## 25.11.2026 — v1.55.1 — The plan-date rule, measured
+
+- **`eval:assistant`** runs a case on the test account's library
+  (`user: "test"`), sends a message with what it is about (`subject`, a plan
+  by name, resolved like the chat route does), lets a case check the writes
+  proposed (`check`) and repeats cases (`--repeat N`); a FAIL line says why.
+- **New case `spread-plan-keeps-dates`:** the plan page's request on the
+  test account's "Summer in London" (days 20–22.07.2026, passed); it fails
+  when `update_plan` sets `start_date`. Sonnet 5.5 high, 3 runs, $0.208:
+  **3/3** — each said the days had passed, went through the stops on those
+  days and asked for a new start date; none opened a card. (The end-to-end
+  run before the rule had moved the date unasked, once in one try.)
+- Docs: [[_plans/phase-2-assistant]], [[04-integrations/claude-agent]],
+  [[05-flows/ai-plan-flow]]; the eval's README.
+
+---
+
+## 25.11.2026 — v1.55.0 — Step 5: Gemini is gone; a plan's dates are the user's
+
+- **Gemini removed** (Phase 2, decision 6.5 step 5): `@ai-sdk/google` (and
+  its lockfile entries), `src/lib/ai/client.ts`, the Gemini branch of the
+  profile writer (`writeProfile`) and of the Instagram reader (`readPost`),
+  and the evals' Gemini arms. `ProfileWriter` and `PostReader` are
+  `{ choice, spend }` now — a Claude model and effort, and the ledger that
+  pays; `writeProfile`'s and `readPost`'s `userId` and `AnalyzeDeps.userId`,
+  which only fed the Gemini spans, are gone; `eval:profiles` runs both
+  Claude writers by default and
+  `eval:instagram` reads with `INSTAGRAM_READER` unless `--model` /
+  `--effort` name another. No code reads `GOOGLE_GENERATIVE_AI_API_KEY`;
+  `main` still calls Gemini until the branch merges — after the merge the
+  key goes from Vercel and `.env.local` and is revoked in Google AI Studio
+  (Ozan). `.env.local.example` lists `ANTHROPIC_API_KEY` instead.
+- **Langfuse:** the span processor uses Langfuse's built-in filter; the
+  composed filter that dropped the AI SDK's umbrella span of each Gemini
+  call went with the last AI SDK model call. The `ai` package stays for
+  the assistant panel's stream.
+- **A plan's dates are the user's** (Ozan, after the end-to-end run saw a
+  date moved unasked): the shared instructions (`instructions.ts`, both
+  doors) say to change `start_date` only when the user asks, and when the
+  dates don't work to say so and ask. Not measured yet.
+- Docs: `04-integrations/gemini` archived (superseded by
+  [[04-integrations/claude-agent]]) and every live link to it replaced;
+  [[05-flows/observability-flow]] brought up to date — the Claude calls'
+  Langfuse observations, the flush points and the log events in the code
+  (its event table still listed the Gemini AI search's); and
+  [[00-overview/glossary]], [[00-overview/tech-stack]],
+  [[00-overview/system-overview]], [[00-overview/repo-structure]],
+  [[01-domain/visits]], [[01-domain/places]], [[02-backend/_README]],
+  [[02-backend/api-routes/_README]], [[02-backend/schema/ai_suggestions_queue]],
+  [[02-backend/schema/api_usage]], [[04-integrations/_README]],
+  [[04-integrations/claude-agent]], [[04-integrations/claude-mcp]],
+  [[04-integrations/hikerapi]], [[05-flows/ai-plan-flow]],
+  [[05-flows/ai-enrichment-flow]], [[05-flows/full-profile-flow]],
+  [[05-flows/instagram-import-flow]], [[05-flows/manual-place-create-flow]],
+  [[06-ops/env-vars]], [[06-ops/runbooks/periodic-refresh]],
+  [[06-ops/runbooks/profile-backfill]], [[_plans/phase-2-assistant]],
+  [[_plans/personal-assistant]], [[_archive/_README]]; the profile and
+  Instagram eval READMEs.
+
+---
+
+## 25.11.2026 — v1.54.1 — Step 4 tried end to end; two display fixes
+
+- Tried in a signed-in browser on the admin test account (the branch's dev
+  server, 12 Claude calls, $0.29): the request from the compare page; from
+  the plan page — the card showed the plan as it would be saved, a plan
+  changed after the proposal was refused and a fresh proposal came, the
+  approved one saved, the plan page refreshed by itself; from the search
+  field — the field and its filter cleared, the request went at once and
+  came back with "Map · this area" and Show on map. The subjects were
+  stored as sent; the test plan was put back exactly as it was.
+- Fixed what it found: the search field's icon centred on the field and the
+  Ask row together (`DebouncedSearchInput` — the icon and the field sit in a
+  `relative` box of their own now), and a numbered list in a reply lost its
+  first number — "3. gün" showed 1 (`AssistantMarkdown` passes `start` to
+  `<ol>`).
+- Docs: [[03-frontend/components/filters]], [[03-frontend/components/assistant]],
+  [[04-integrations/claude-agent]], [[_plans/phase-2-assistant]],
+  [[_plans/personal-assistant]].
+
+---
+
+## 25.11.2026 — v1.54.0 — Step 4, slice 3: the search field asks the assistant; the Gemini AI search is gone
+
+- **Ask the assistant** under the filter search field (`DebouncedSearchInput`
+  `onAsk`; the map sidebar, the mobile sheet, the `/places` header): the
+  words typed leave the field — the pending keyword filter is cancelled
+  (`useDebouncedCallback().cancel()`) — and go to the assistant at once
+  (`useAskFromSearch`), with the screen as subject: the filters on and, on
+  the map, the area in view (`useMapAreaStore`, written by the map through
+  `MapViewHandle.getArea()`). The panel waits instead when a reply is being
+  written or a card waits.
+- **The Gemini AI search, removed** (its input left the UI in v1.23.0; only
+  saved ✨ chips could still run it, and there were none): `POST
+  /api/ai/parse-query` and `/api/ai/rank-results`, their schemas and
+  prompts, `useAiSearchStore`, `useAiSearch` / `useAiRerankOrchestrator`,
+  `AiSearchInput`, the "AI Ranked" sort lock, the cards' and map list's
+  "why" lines and score hiding, the saved-filter AI re-run and "Save this AI
+  search", the `traceparent` mint (`trace-context.ts`), the `api.places`
+  diagnostic log, `countriesForCity`. With the last Gemini route gone:
+  `trackAiUsage`, `checkAiBudget` and the `search` / `rank_backstop` budgets;
+  every AI SKU is `retired`.
+- **Settings → AI** asks only for `ANTHROPIC_API_KEY` (the Gemini flag
+  `available` left `/api/user/ai-settings`); the switch is disabled when the
+  Claude key is missing. No user-facing feature reads the Gemini key any
+  more — only the profile and Instagram evals' Gemini arms (step 5).
+- `saved_filters.ai_query` is no longer written or read; dropping the column
+  needs its own approval.
+- Docs: [[05-flows/ai-search-flow]] (rewritten), `03-frontend/components/search`
+  and `02-backend/api-routes/ai` archived (superseded), and
+  [[03-frontend/components/filters]], [[03-frontend/components/map]],
+  [[03-frontend/components/assistant]], [[03-frontend/components/settings]],
+  [[03-frontend/components/_README]], [[03-frontend/state-management]],
+  [[03-frontend/hooks/_README]], [[03-frontend/hooks/use-places]],
+  [[02-backend/api-routes/_README]], [[02-backend/api-routes/user]],
+  [[02-backend/api-routes/plans]], [[02-backend/api-routes/lists]],
+  [[02-backend/schema/api_usage]], [[02-backend/schema/saved_filters]],
+  [[04-integrations/gemini]], [[04-integrations/_README]],
+  [[04-integrations/claude-agent]], [[05-flows/ai-chat-flow]],
+  [[05-flows/ai-enrichment-flow]], [[05-flows/observability-flow]],
+  [[05-flows/_README]], [[01-domain/categories-and-tags]],
+  [[06-ops/env-vars]], [[06-ops/runbooks/_README]],
+  [[06-ops/runbooks/profile-backfill]], [[06-ops/runbooks/dedupe-categories]],
+  [[00-overview/repo-structure]], [[00-overview/system-overview]],
+  [[00-overview/tech-stack]], [[_plans/phase-2-assistant]].
+
+---
+
+## 25.11.2026 — v1.53.0 — Step 4, slice 2: AI Plan goes to the assistant; plan cards show the plan as it will be
+
+- **Plan with assistant** (`PlanWithAssistant`) replaces the Gemini AI Plan
+  button and dialog on the plan page: the panel opens with "spread this
+  plan over its days" (or, with fewer than two places, "fill it from my
+  want-to-go places in <city>") and the plan as the subject. Removed:
+  `AiPlanButton`, `useAiPlan`, `POST /api/ai/day-plan`, its schema and
+  prompt, the `trip_plan` budget; `ai_trip_plan` is `retired`.
+- **The card shows the plan as it will be.** A waiting `update_plan` is
+  previewed by the save itself: `previewPlanChanges` →
+  `preview_plan_changes` runs `apply_plan_changes` in a block that always
+  rolls back and returns before/after; the card lists the plan's changes,
+  each changed day stop by stop, and what is removed (`planChangeLines`),
+  with up to 60 lines. It carries the outcome's fingerprint.
+- **What you approve is what you get.** The panel sends the approved
+  cards' fingerprints (`seen`); before running such a call `settleCalls`
+  asks `verifyProposal` — if the plan would now come out differently,
+  nothing is saved and the result says the plan changed (the model
+  proposes again). Without the database function: the old card, no check.
+- **What AI Plan used to weigh, now in the tools:** `get_plans` gives every
+  stop's place `location` and, for dated plans, `open_that_day`
+  (`isOpenOnDate`, read only by the tool); `get_places` gives `location`.
+  The shared instructions say how to spread a plan (close places together,
+  days they open, exact times kept, a theme per day).
+- `changePlan` and the preview share the preparation of the changes
+  (default costs), so the preview is what the save would do.
+- Schema, checked in a rolled-back transaction, then applied with Ozan's
+  OK (25.11.2026, version 20261125010309):
+  `20261125010309_plan_preview.sql` (`plan_snapshot`,
+  `preview_plan_changes`; new functions only).
+- Checks: `check:agent` — the card's lines from two snapshots, a changed
+  plan refused with nothing run, an unchanged one saved, a card without a
+  fingerprint not checked. Not tried in the browser.
+- Docs: [[05-flows/ai-plan-flow]] (rewritten), [[04-integrations/claude-agent]],
+  [[02-backend/api-routes/assistant]], [[02-backend/schema/plans]],
+  [[03-frontend/components/assistant]], [[03-frontend/components/plans]],
+  [[03-frontend/hooks/use-plans]], [[04-integrations/claude-mcp]],
+  [[01-domain/plans]], [[02-backend/api-routes/ai]],
+  [[02-backend/api-routes/_README]], [[02-backend/schema/api_usage]],
+  [[02-backend/schema/places]], [[04-integrations/gemini]],
+  [[04-integrations/_README]], [[05-flows/ai-enrichment-flow]],
+  [[05-flows/observability-flow]], [[05-flows/_README]],
+  [[00-overview/repo-structure]], [[06-ops/deployment]],
+  [[03-frontend/components/settings]], [[_plans/phase-2-assistant]].
+
+---
+
+## 25.11.2026 — v1.52.0 — Step 4, slice 1: requests with a subject; Compare goes to the assistant
+
+Phase 2, decision 6.1 (design approved by Ozan on 25.11.2026, all six
+recommendations): screens open the assistant with a request written and
+what it is about attached. This slice builds the mechanism and hands over
+Compare; AI Plan and the search field follow.
+
+- **Subject.** A request from a screen carries a subject — a plan, the
+  places compared, or the map / places list with its filters and area
+  (`AssistantSubject`, `ui-types.ts`). The chat route checks it against the
+  user's library and names it before the turn opens (`resolveSubject`,
+  `src/lib/agent/subject.ts`: names from the database, never the request;
+  a plan or place gone → 400 `subject_unavailable`, nothing written). The
+  user's message keeps it as a `<subject>` block after `<context>` — JSON
+  with the kind, ids, names and an `about` line, self-explaining for
+  conversations started before; the app prompt says so for new ones, and
+  asks for comparisons in a few lines (best for what, what to watch out
+  for, which when). The panel shows it as a chip (`SubjectChip`,
+  `subjectLabel`) in the composer (✕ takes it off) and on the sent bubble.
+- **Composer in the store.** `useAssistantStore` holds the composer (text,
+  subject) instead of the panel: a request survives New chat and closing
+  the panel. `openAssistant({ text, subject, send })`: in the composer with
+  the cursor at the end, or — the user's own words — sent as soon as the
+  conversation shows, unless a reply is being written or a card waits.
+  Sign-out clears it.
+- **One availability answer.** `useAssistantAvailability()` (React Query
+  `["ai-settings"]`) for the header button and every entry; Settings
+  refreshes it when the AI switch changes.
+- **Fix — screens refresh after a saved change.** The panel invalidated
+  five fixed keys; a plan page reads `["plan", id]` and a place's tags
+  `["place-tags", id]`, so an open plan page kept the old plan for up to a
+  minute after the assistant changed it. Now every query is refreshed but
+  the conversation and the paid lookups (`place-search`, `plan-route`).
+- **Compare → the assistant.** The compare page's "Which one, when?" with
+  **Ask the assistant** (`CompareWithAssistant`, `AskAssistantButton`)
+  replaces the Gemini card; the columns stay. Removed: `AiCompareCard`,
+  `POST /api/ai/compare`, its schema and prompt, the `compare` budget.
+  `ai_compare` stays for past rows, now `retired: true` like
+  `ai_place_profile`, `ai_instagram_read` and `ai_chat` (shown only in a
+  month that has usage).
+- Checks: `npm run check:agent` (the block in the message, read back,
+  hidden from the bubble, the chip and its labels) and `check:agent:db`
+  (subjects resolved against the owner's library, read-only). Not tried in
+  the browser yet.
+- Docs: [[03-frontend/components/assistant]], [[05-flows/ai-chat-flow]],
+  [[02-backend/api-routes/assistant]], [[04-integrations/claude-agent]],
+  [[03-frontend/components/places]], [[03-frontend/components/settings]],
+  [[03-frontend/state-management]], [[03-frontend/routing]],
+  [[02-backend/api-routes/ai]], [[02-backend/api-routes/_README]],
+  [[02-backend/schema/api_usage]], [[04-integrations/gemini]],
+  [[05-flows/ai-enrichment-flow]], [[05-flows/observability-flow]],
+  [[00-overview/repo-structure]], [[00-overview/tech-stack]],
+  [[_plans/phase-2-assistant]].
+
+---
+
+## 24.11.2026 — v1.51.0 — Profiles by Claude Sonnet 5.5, Instagram reads by Haiku 5.5
+
+- Ozan's choice after the 6.2 measurement: place profiles are written by
+  Claude Sonnet 5.5 at medium (`PROFILE_WRITER`) and Instagram posts read
+  by Claude Haiku 5.5 at high (`INSTAGRAM_READER`), both in
+  `src/lib/agent/models.ts`. Production uses them on this branch; main
+  still runs Gemini until the merge.
+- One ledger, one cap (decision 6.4): each call goes to `assistant_spend`
+  under its purpose (`profile`, `instagram`); over the monthly cap the place
+  is saved without a profile (the refresh sweep or the backfill writes it
+  later) and an Instagram import fails with `budget_exceeded`. The Gemini-era
+  `ai_place_profile` / `ai_instagram_read` rows are no longer written (the
+  SKUs stay for past months) and the per-user PROFILE (1000) / INSTAGRAM
+  (300) budgets are removed from `src/lib/ai/track-usage.ts`. The gates need
+  `ANTHROPIC_API_KEY` instead of the Gemini key.
+- The 300-post budget also bounded the Instagram import's HikerAPI and Google
+  Maps searches, which the Claude cap doesn't count. Ozan, for now: the start
+  keeps the same number as its own limit — `INSTAGRAM_MONTHLY_POST_LIMIT`,
+  300 new Instagram jobs per user per calendar month, counted from
+  `import_jobs` (a reused job doesn't count); over it
+  `429 { error, code: "monthly_limit" }`, nothing created, no Try again.
+  Every start refusal now carries a code (`InstagramRefusalCode`; the hook
+  throws `InstagramStartError`). The lasting fix, later: one monthly dollar
+  cap over every paid service.
+- The post reader is a required argument (`readPost`, `AnalyzeDeps.reader`):
+  no silent default to Gemini.
+- Settings → AI follows the provider each feature needs: the master switch is
+  usable while either key is set, one banner per missing key, and the
+  profile backfill and the suggestions queue need Claude.
+- The profile backfill's estimate (`GET /api/user/backfill-profiles`) priced
+  Gemini and DataForSEO reviews at $1 / 1,000: now the writer's measured
+  cost (`PROFILE_WRITER_AVG_USD`, `models.ts`: $0.032, the 6.3 rewrite's average) and the reviews
+  SKU's real price ($7.50 / 1,000, `SKU_CONFIG`). The panel's copy no longer
+  names Gemini Flash.
+- `scripts/assistant-check/tsconfig.json`: relative paths instead of the
+  deprecated `baseUrl`, like the eval's.
+- Settings → usage: the Claude row ("Claude", was "Claude assistant")
+  shows what each purpose took this month (`assistant.byPurpose`).
+- 6.3 run on 24.11.2026 (Ozan: profile only, every account): 889 profiles
+  rewritten, every place with a stored review; $28.28 for 893 calls
+  (≈ $0.032 a profile — a lone one ≈ $0.05–0.08 while its prompt cache is
+  written), ≈ 12 s a call at four at a time; 97.1% of 6,965 evidence quotes
+  found in the reviews (punctuation aside). The month's Claude spend after
+  it: $34.69 of the $100 cap.
+- Found by the run: 4 of 893 answers carried a malformed tag id and the
+  schema's UUID check threw the whole profile away (the schema sent to
+  Claude can't carry `format: uuid`). `PlaceProfileSchema` checks the shape
+  of `matched_existing` / `suggested_lists` only; `writeProfile` keeps the
+  ids that name the user's own tags and lists, one by one. The four were
+  rewritten after the fix.
+- 6.3, approved: `npm run regen:profiles` rewrites the existing profiles
+  with the current writer — plain calls, no Batch API (Ozan); every place
+  with reviews whose profile it didn't write, re-runnable, `--dry-run`
+  (895 that day), `--apply-suggestions` optional; it saves the profiles it
+  replaces to a git-ignored backup file before the first write and leaves
+  out places whose review list is empty.
+- Schema, applied with Ozan's OK (24.11.2026, version 20261124225502)
+  after a check in a rolled-back transaction:
+  `20261124225502_assistant_spend_purposes.sql` widens the ledger's
+  `purpose` CHECK to `profile` and `instagram`.
+- Docs: [[04-integrations/claude-agent]], [[04-integrations/gemini]],
+  [[04-integrations/hikerapi]], [[04-integrations/_README]],
+  [[05-flows/full-profile-flow]], [[05-flows/ai-enrichment-flow]],
+  [[05-flows/instagram-import-flow]], [[02-backend/schema/api_usage]],
+  [[02-backend/schema/assistant-conversations]],
+  [[02-backend/api-routes/instagram]], [[02-backend/api-routes/user]],
+  [[03-frontend/components/settings]], [[06-ops/env-vars]],
+  [[06-ops/runbooks/periodic-refresh]], [[06-ops/runbooks/profile-backfill]],
+  [[00-overview/tech-stack]], [[_plans/phase-2-assistant]],
+  [[02-backend/api-routes/places]], [[02-backend/api-routes/_README]],
+  [[04-integrations/claude-mcp]], [[00-overview/repo-structure]],
+  [[00-overview/system-overview]], [[00-overview/glossary]],
+  [[01-domain/places]], [[01-domain/categories-and-tags]],
+  [[01-domain/users-and-profiles]], [[05-flows/_README]],
+  [[05-flows/place-import-flow]], [[05-flows/lite-profile-flow]],
+  [[02-backend/schema/import-jobs]], [[03-frontend/components/places]],
+  [[03-frontend/hooks/use-instagram-import]].
+
+---
+
+## 24.11.2026 — v1.50.0 — 6.2 measured: Claude for profiles and Instagram reads
+
+- The measurement harness (production keeps Gemini until Ozan picks):
+  `structuredClaude` (`src/lib/agent/structured.ts`) — one structured-output
+  Claude call, system prompt cached, priced into the one ledger; Claude
+  Haiku 5.5 in the price list; `readPost` takes a reader (Gemini by
+  default), `generate-profile.ts` split into `profileInputs` /
+  `writeProfile` / `generatePlaceProfile` (unchanged for production);
+  `npm run eval:instagram -- --model=…`, new `npm run eval:profiles`.
+- Found while measuring: two arrays of `format: uuid` made the profile
+  schema's grammar "too large" for structured outputs (400). The schema
+  sent leaves string formats out; the answer is checked against the full
+  zod schema after the call is recorded (it was also possible for a
+  billed call to go unrecorded when the SDK's own parsing threw — fixed).
+- Instagram (35 posts; 1 deleted; 42 places to add): Gemini 35 correct,
+  0 wrong; Claude Haiku 5.5 (high) 36 correct, 0 wrong, $0.00076 a read.
+  Haiku passed the precision contract, so Sonnet wasn't run (the plan).
+- Profiles (10 places): quotes found word for word in the reviews —
+  Gemini 84%, Haiku 5.5 high 94%, Sonnet 5.5 medium 97%; time 30 / 40 /
+  15 s; cost per profile $0.0095 (SKU) / $0.006 / $0.047. Category agreed
+  on 9 of 10. Side by side: https://claude.ai/artifact/5GY7RV3aX3fio8qatL4cUN
+- Spent ≈ $1.42 (Claude $0.55 in the ledger, the rest HikerAPI, Google
+  Maps search through DataForSEO and Gemini), inside the approved
+  $1.6–2.5. Two Sonnet passes failed on a dropped connection and were run
+  again; three of Gemini's Instagram posts likewise.
+- Docs: [[04-integrations/claude-agent]], [[05-flows/full-profile-flow]],
+  [[05-flows/instagram-import-flow]], [[04-integrations/gemini]],
+  [[05-flows/observability-flow]], [[06-ops/env-vars]],
+  [[00-overview/tech-stack]], [[_plans/phase-2-assistant]].
+
+---
+
+## 24.11.2026 — v1.49.0 — rank_places: Claude ranks, no Gemini judge
+
+- `rank_places` (MCP and the app's assistant) no longer asks Gemini to
+  score places (Phase 2, decision 6). It filters like `search_places` and
+  returns the best-rated 30 — places carrying a boost tag always among them
+  — each with its row and a short review-derived profile (pros, cons, the
+  four most talked-about themes, what it is good for); the conversing
+  Claude judges and ranks them, and looks closer at finalists with
+  `get_places` / `read_reviews`. Inputs stay compatible (`intent` optional
+  and echoed back; `limit` is now the number of candidates, up to 30).
+- One profile shape for every tool: `src/lib/assistant/profile.ts`
+  (`get_places` keeps the full view, unchanged; `rank_places` the
+  shortlist view). `src/lib/ai/rank-engine.ts` deleted; the pool helper
+  moved to `place-filters.ts`. The search bar's AI mode is untouched.
+- The shared instruction drops "costs an AI call". The app's prompt links
+  a saved place to its page (`/places/<id>`); the panel offers "Show these
+  N on map" for the places a reply links (Ozan's choice, 1A) — a rank row
+  shows its candidate count and nothing to map.
+- Measured (24.11.2026, the eval's six subjective cases on Sonnet 5.5 high
+  vs the 23.11 run with the Gemini judge; run cost $0.61): picks largely
+  the same; turns 22.3 → 15.5 s on average, the call 0.4 s (was 15–64 s);
+  Claude's cost for the six $0.394 → $0.607, ~$0.02–0.035 more per
+  ranking question net of the $0.02 Gemini call; the pool is 16–22k tokens
+  (estimated 9–12k). `lisbon-dinner`'s tool expectation loosened: it
+  answered from the profiles, without `read_reviews`.
+- Also fixed: stale mentions of the Gemini chat's push into the search
+  store (comments in `ai-search-store.ts`, `use-ai-search.ts`) and of its
+  files in the repo map.
+- Checks: `npm run check:agent` 127 offline; `npm run check:assistant --
+  rank` (free) — the tool's shape, the default pool, a boost tag, and
+  `get_places`' profile.
+- Docs: [[04-integrations/claude-mcp]], [[04-integrations/claude-agent]],
+  [[04-integrations/gemini]], [[02-backend/api-routes/ai]],
+  [[02-backend/api-routes/assistant]], [[03-frontend/components/assistant]],
+  [[03-frontend/components/search]], [[05-flows/ai-chat-flow]],
+  [[05-flows/ai-search-flow]],
+  [[00-overview/repo-structure]], [[_plans/phase-2-assistant]],
+  [[_plans/personal-assistant]].
+
+---
+
+## 24.11.2026 — v1.48.0 — The in-app assistant runs on Claude
+
+- New routes ([[02-backend/api-routes/assistant]]): `POST /api/assistant/chat`
+  runs one turn of the agent core and streams it in the AI SDK UI message
+  format — the panel sends only the new message or its card answers;
+  `GET /api/assistant/conversation` gives the latest conversation as the
+  panel shows it (and whether a turn of it is running), `POST` starts a new
+  one. A turn finishes on the server even if the panel closes (`after()`).
+- New panel ([[03-frontend/components/assistant]], [[05-flows/ai-chat-flow]]),
+  built to the approved mockups A–D: a row per tool as it runs, Markdown
+  replies with links, a card per proposed change showing the proposal in
+  words (built on the server from the call — `describeWrites`), Saved / Not
+  saved / Couldn't save states, the conversation kept on the server (reload,
+  other tabs and devices agree), writing while a card waits closes it as not
+  saved, a turn running elsewhere is waited for, errors with Try again where
+  it helps, "Show on map" for search and ranking results (new `ids` filter,
+  `?ids=…`, with an "N from the assistant" chip on the map and places pages).
+  The panel can be opened with a request written (`openAssistant(draft)`),
+  for AI Plan, Compare and the search bar next (decision 6.1).
+- Settings → usage: a "Claude assistant" row, dollars this month against
+  the $100 cap; added to the total. `ai-settings` reports
+  `assistantAvailable` (the Claude key); the header button uses it.
+- Removed: the Gemini chat — `/api/ai/chat`, `src/lib/ai/chat-tools.ts`,
+  `src/lib/ai/prompts/chat.ts` and the `chat` AI budget (the `ai_chat` SKU
+  stays for past rows).
+- New dependencies: `react-markdown` 10.1.0, `remark-gfm` 4.0.1 (exact pins;
+  `npm audit --omit=dev`: 0 vulnerabilities).
+- Fixed after an independent review of the door, before it shipped:
+  - The turn is split in two (`openTurn` checks, `run` does it): a refusal
+    before the turn — a turn already running, the budget, answers that
+    don't fit — is a plain HTTP error with nothing written; the panel puts
+    the user's text back and reloads. It no longer resends on its own: the
+    answers to the cards go once, explicitly (an automatic resend looped on
+    a refusal).
+  - An answer must be for exactly the cards waiting now (`conflict`
+    otherwise): an older tab can no longer decline a card the user hasn't
+    seen.
+  - The reply carries the id the stored conversation gives it
+    (`replyMessageId`), so an answer to a card updates the message in place
+    instead of adding a copy.
+  - Try again is a turn input (`retry`): it carries the turn on without
+    sending the user's message twice or running a call again — also after
+    a failed append or an interrupted run.
+  - How the last turn ended is recorded on the conversation; a reload shows
+    its note (and Try again) again. A card answered before a reload shows
+    "Saving…", not its buttons; a run whose turn is gone shows as
+    interrupted.
+  - "New chat" sticks: the panel shows the conversation opened last
+    (`opened_at`), not the one a running turn wrote to last.
+  - The panel ignores a server copy older than what it streamed
+    (`version`); text blocks stay apart; reads that weren't run show as
+    skipped, not failed; cards and Try again wait while a reply is written.
+  - "Show on map" names up to 25 places (`MAX_PLACE_IDS`, the most
+    `search_places` returns; it was 10).
+  - Replies never load images (a reply can carry a web page's text; an
+    image URL would leak what it holds) — an image is a link; a link
+    starting `/\` is no longer taken for an app link.
+  - The trace is flushed after the turn, not alongside it; 44 px buttons;
+    the composer stops at 8,000 characters.
+- Schema: `20261124143554_assistant_open_and_last_turn.sql` (`opened_at`,
+  `last_turn_*`; the conversations index now orders by `opened_at`) —
+  checked in a rolled-back transaction, applied with Ozan's approval
+  (24.11.2026), verified after; `npm run check:agent:db` 11 checks (the
+  new store queries accepted by the live database, nothing written).
+- Checked: build, types, lint; `npm run check:agent` 120 offline checks
+  (incl. the checks before a turn, Try again, the recorded outcome, the
+  panel's view of a stored conversation and a live turn's stream).
+- Tried end to end in a signed-in browser (24.11.2026, the admin test
+  account, localhost; 13 Claude calls, $0.21): a search with "Show on map"
+  and its chip; a list proposal declined, then saved after a reload (no
+  duplicate message; the list was there with its notes); a reload while a
+  web search ran ("still being written", then the reply); New chat kept
+  after a reload; a stale card answered in a second tab (409, nothing
+  saved, the latest shown). Fixed from it: decided cards keep their
+  description after the server's copy loads (previews for every write);
+  links into the app close the panel; "Show on map" from the map brings
+  the places into view. Web search failed once — the model's first
+  filtering step used all 3 allowed searches and it couldn't recover — so
+  Ozan raised `max_uses` to 10 per request (a ceiling against a runaway
+  loop, not a budget; new conversations get it). Found, not fixed: a
+  hydration warning in `CategoryFilter` on `/map` (exists on main too).
+- Docs: [[02-backend/api-routes/assistant]] (new), [[05-flows/ai-chat-flow]]
+  and [[03-frontend/components/assistant]] (rewritten),
+  [[02-backend/api-routes/ai]], [[02-backend/api-routes/_README]],
+  [[02-backend/api-routes/user]], [[02-backend/schema/api_usage]],
+  [[03-frontend/components/settings]], [[03-frontend/components/layout]],
+  [[03-frontend/hooks/use-filters]], [[03-frontend/hooks/use-places]],
+  [[03-frontend/state-management]], [[04-integrations/gemini]],
+  [[04-integrations/claude-agent]], [[04-integrations/claude-mcp]],
+  [[02-backend/schema/assistant-conversations]], [[06-ops/deployment]],
+  [[02-backend/api-routes/places]], [[01-domain/places]],
+  [[01-domain/users-and-profiles]], [[03-frontend/routing]],
+  [[03-frontend/components/map]], [[00-overview/tech-stack]],
+  [[05-flows/ai-enrichment-flow]],
+  [[_plans/phase-2-assistant]], [[_plans/personal-assistant]].
+
+---
+
+## 24.11.2026 — v1.47.8 — In-app door: design approved
+
+- Ozan approved the panel design (mockups A–D) and every recommendation on
+  its open questions: no Stop button in the first version; writing while a
+  card waits is allowed (the card closes as not saved); "Show on map" stays;
+  English chrome, replies in the user's language; latest conversation plus
+  "New chat" only; Turkish example prompts.
+- Docs: [[_plans/phase-2-assistant]].
+
+---
+
+## 23.11.2026 — v1.47.7 — Decision 6: Gemini's work moves to Claude
+
+- Inventory of every Gemini call (code + `api_usage` since June): the old
+  in-app chat, `rank_places`, the search bar's AI mode (parse + rank), AI
+  Plan, compare, place profiles, the Instagram read. Usage is low; the
+  profiles' August backfill (515) is the only volume.
+- Ozan's decisions: the search bar's AI mode, AI Plan and compare are
+  handed to the assistant (they open it with a ready request); `rank_places`
+  goes to the assistant (the tool returns short profiles, the talking
+  Claude ranks); profiles and the Instagram read keep their pipelines with
+  a Claude model — Haiku 5.5 or Sonnet 5.5 decided by measurement, and
+  whether to rewrite the existing ~900 profiles too; one spend ledger and
+  one $100 cap for every Claude call. Order: the in-app door, `rank_places`,
+  the model swaps, the buttons, then Gemini's library and key removed.
+- Checked live (Models API): Claude takes images and PDFs, not video or
+  audio — Phase 5's video understanding stays a separate decision.
+- Docs: [[_plans/phase-2-assistant]], [[_plans/personal-assistant]].
+
+---
+
+## 23.11.2026 — v1.47.6 — Next: the in-app door
+
+- Ozan's decision: the next piece of work is the in-app door (the panel on
+  the agent core) — a design proposal with `/ui-ux-pro-max` first, built
+  after his approval; it starts once decision 6 (moving Gemini's work to
+  Claude) has been discussed.
+- Docs: [[_plans/phase-2-assistant]].
+
+---
+
+## 23.11.2026 — v1.47.5 — Turkish address: "sen"
+
+- Ozan confirmed the in-app assistant addresses him as "sen" in Turkish
+  (the app door's system prompt, `src/lib/agent/prompt.ts`); it mixed
+  "sen" and "siz" before. claude.ai's instructions don't carry the line.
+  No code change.
+- Docs: [[_plans/phase-2-assistant]].
+
+---
+
+## 23.11.2026 — v1.47.4 — Web search cap: per call, as is
+
+- Ozan's decision after the measurement: the agent's web search stays at
+  `max_uses: 3` per Claude call — about 3–4 per message, since a message can
+  span several calls and the filtering code made 4 searches in one call.
+  Recorded as an update of Phase 2 decision 5 (it said "3 per turn"). No
+  code change.
+- Docs: [[_plans/phase-2-assistant]], [[04-integrations/claude-agent]].
+
+---
+
+## 23.11.2026 — v1.47.3 — Second agent migration applied
+
+- Ozan approved; `assistant_turns_and_tool_runs` applied to the live
+  database (version 20261123143607; the file renamed from the prepared
+  `20261123140000_…`). Users no longer insert conversations or messages —
+  only the server writes; `assistant_conversations.turn_lease_until` (one
+  turn at a time); `assistant_tool_runs` (each tool call's decision before
+  it runs, then its result).
+- Checked after applying, in a rolled-back transaction: owner inserts and
+  updates refused, the service role writes, the lease taken once and
+  refused while held, a second claim of a call refused, another user sees
+  nothing. 5 policies on the four tables, RLS on for all.
+- New: `npm run check:agent:db` (`scripts/agent-check/db.ts`) — the store's
+  and the ledger's queries against the live database without writing:
+  10 checks passed; the tables still hold no conversation, message or run.
+- Docs: [[02-backend/schema/assistant-conversations]] (now four tables),
+  [[02-backend/schema/_README]], [[02-backend/rls-policies]],
+  [[04-integrations/claude-agent]], [[_plans/phase-2-assistant]],
+  [[_plans/personal-assistant]].
+
+---
+
+## 23.11.2026 — v1.47.2 — Model chosen: Sonnet 5.5, effort high
+
+- Ozan chose the eval's recommendation: new agent conversations start on
+  `claude-sonnet-5-5` at effort high (`DEFAULT_AGENT_MODEL` in
+  `src/lib/agent/models.ts`; was the provisional `claude-opus-5-5`).
+- Direction recorded (Ozan, 23.11.2026): everything Gemini does moves to
+  Claude in a fitting way — the tool's model swapped, or the work handed to
+  the assistant itself. How, per job, is decision 6, discussed after the
+  open decisions 2–5.
+- Docs: [[_plans/phase-2-assistant]], [[_plans/personal-assistant]],
+  [[04-integrations/claude-agent]].
+
+---
+
+## 23.11.2026 — v1.47.1 — Agent core: tool runs, one turn at a time, server-only writes
+
+- An independent review of v1.47.0 found that an approved write could run
+  twice (two tabs, a double submit, a retried webhook, or a result that
+  failed to reach the conversation) and that a signed-in user could insert
+  their own conversation — any system prompt and tools — and have the
+  server run it on the platform's key and budget.
+- Fixed in the core: every tool call is recorded with its decision before
+  it runs and with its result after (`settleCalls`); a call is never run
+  twice, a result that didn't reach the conversation is used from the
+  record, an interrupted run is reported as such. One turn at a time per
+  conversation (a 15-minute lease). The Supabase store now writes with the
+  service role, scoped to the user in code.
+- Also: a broken stream is aborted before the retry; an invalid write input
+  gets no approval card; at the step limit the model gets one last call to
+  answer; door event handlers can't break a turn; a refusal fallback's
+  declined attempt is priced at the requested model.
+- Checked against the live API (< $0.01): consecutive messages of one role
+  are accepted and read as one turn — the reviewer's worry that an error
+  path breaks the conversation doesn't hold. `tool_choice: none` returned
+  an empty reply on both models, so the step limit doesn't use it.
+- Prepared, **not applied** (needs Ozan's approval):
+  `supabase/migrations/20261123140000_assistant_turns_and_tool_runs.sql` —
+  drops the user INSERT policies, adds `turn_lease_until` and
+  `assistant_tool_runs`. Checked in a rolled-back transaction on the live
+  database; nothing persisted.
+- New: `npm run check:agent` (`scripts/agent-check/`) — 70 free offline
+  checks of the loop with a scripted Claude API.
+- Docs: [[04-integrations/claude-agent]],
+  [[02-backend/schema/assistant-conversations]],
+  [[_plans/phase-2-assistant]].
+
+---
+
+## 23.11.2026 — v1.47.0 — The Claude agent core and its eval
+
+- New: `src/lib/agent/` — the platform's own Claude agent, one core for
+  every door ([[04-integrations/claude-agent]]). `runTurn` runs one user turn:
+  the message (or the answer to an approval card) in, Claude's reply out,
+  tool rounds in between. Conversations are append-only — model, system
+  prompt and tools fixed at the start, messages stored as the exact API JSON
+  — because Claude 5.5's thinking is bound to the conversation before it.
+  A tool that saves something stops the turn until the user approves it;
+  reads made with it wait. Every model call goes to `assistant_spend`; the
+  $100 monthly cap is checked before a turn. Prompt caching (an explicit
+  breakpoint after the fixed prefix plus automatic caching), server-side
+  refusal fallback (`fallbacks: "default"`), web search
+  (`web_search_20260209`, `max_uses` 3), Langfuse traces. Official
+  `@anthropic-ai/sdk` 1.8.0, streamed, manual loop. No route uses it yet.
+- Shared with the MCP server, behaviour unchanged: the instructions moved
+  verbatim to `src/lib/assistant/instructions.ts`; running a tool and turning
+  its errors into what the model reads moved to
+  `src/lib/assistant/run-tool.ts` (the log line `assistant.tool` gains
+  `door`).
+- New: `npm run eval:assistant` ([[../scripts/assistant-eval/README]]) — 12 of
+  Ozan's requests on his library through the same loop; writes stop at the
+  approval card, never run. Ran on Opus 5.5 (medium, low) and Sonnet 5.5
+  (high, medium): **$5.03** in all, within the approved $3–7. Results and the
+  recommendation (Sonnet 5.5, effort high) in
+  [[_plans/phase-2-assistant#Eval sonuçları (23.11.2026)]]; the model choice
+  is Ozan's.
+- Measured: the fixed prompt is ~27,000 tokens (tools ~19,800 — `update_plan`
+  alone ~5,500 —, web search ~5,900, system ~1,380); cached after the first
+  call of a conversation.
+- Found by the eval and fixed in the app's prompt and context: date
+  arithmetic written into replies (the context line now carries yesterday
+  and the next six days), mixed "sen" / "siz", writes proposed with no word
+  on what they save (now one sentence for single changes; plans and lists
+  still go to the card silently — the approval card must show them).
+- Docs: [[04-integrations/claude-agent]] (new), [[04-integrations/claude-mcp]],
+  [[04-integrations/_README]], [[_plans/phase-2-assistant]],
+  [[_plans/personal-assistant]].
+
+---
+
+## 23.11.2026 — v1.46.4 — Phase 2 schema applied
+
+- Ozan approved the SQL; `assistant_conversations` applied to the live
+  database (version 20261123123953; the file renamed from the prepared
+  `20261123031712_…` to the recorded version). Checked after applying: RLS on
+  for all three tables, six policies, one trigger, the trigger function's
+  `EXECUTE` limited to `postgres` and `service_role`.
+- New table doc: [[02-backend/schema/assistant-conversations]]; the three
+  tables, the trigger and its function added to [[02-backend/schema/_README]]
+  and [[02-backend/rls-policies]].
+- `@anthropic-ai/sdk` 1.8.0 added (the agent core is next).
+- Docs: [[_plans/phase-2-assistant]], [[_plans/personal-assistant]].
+
+---
+
+## 23.11.2026 — v1.46.3 — Phase 2 design approved; schema prepared
+
+- New: [[_plans/phase-2-assistant]] — Phase 2 as one server-side Claude agent
+  on the shared tool layer, the in-app panel its first door. Ozan approved
+  all six proposals: Phase 2 now; conversations kept on the server,
+  append-only; writes confirmed with a card in the app; model and effort by
+  a paid eval; web search on (3 per turn); a dollar budget of $100 a month.
+- Why the history moves to the server: Claude's 5.5 models bind each
+  thinking block to the exact conversation before it, and today's route
+  rebuilds the system prompt every request (date and library summary),
+  keeps the history in the browser and trims it to 30 messages.
+- Measured: the in-app chat ran 17 turns in July, 3 in August, none since.
+- Prepared, not applied: `supabase/migrations/20261123031712_assistant_conversations.sql`
+  — `assistant_conversations`, `assistant_messages` (append-only),
+  `assistant_spend`. Dry run in a rolled-back transaction on the live
+  database: the owner starts a conversation and appends; a message can't be
+  edited or deleted, nor a conversation's model / prompt / tools changed; a
+  duplicate turn number is refused; another user sees and appends nothing;
+  only the service role writes spend; deleting a conversation removes its
+  messages and keeps its spend rows; a message bumps the conversation's
+  `updated_at`.
+- `ANTHROPIC_API_KEY` copied from the main folder's `.env.local` into the
+  worktree's (value not shown).
+- Docs: [[_plans/phase-2-assistant]], [[_plans/personal-assistant]].
+
+---
+
+## 20.11.2026 — v1.46.2 — Stuck-item sweep, 800 s and the refresh warning on main
+
+- v1.45.2–v1.46.1 merged to main with Ozan's approval (merge `3a6ac0b`; main
+  had not moved since the previous merge, and the merged tree equals the
+  branch tree). Production deployment succeeded.
+- **Checked in production:** `/api/mcp` → 401 from `fra1`; a signed-out
+  `/plans/<id>` → `/login?next=…`; `/api/cron/drain-imports` without the
+  secret → 401; the queue untouched (20 jobs, 460 items, none active). The
+  sweep runs with every minute's drain; its count (`retired_stuck`) is in
+  the drain's response and log, which need the cron secret or the Vercel
+  logs to see.
+- Docs: this entry.
+
+---
+
 ## 20.11.2026 — v1.46.1 — A manual refresh says when the reviews didn't come
 
 The last open item of the review of v1.44.0–v1.45.0. Ozan: "küçük açığı

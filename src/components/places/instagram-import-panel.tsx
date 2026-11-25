@@ -5,7 +5,12 @@ import Link from "next/link";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Bookmark, Check, ChevronLeft, CircleAlert, Loader2, MapPin, MapPinOff, Pencil, Search } from "lucide-react";
-import { useInstagramImport, usePickInstagramPlace, useStartInstagramImport } from "@/lib/hooks/use-instagram-import";
+import {
+  InstagramStartError,
+  useInstagramImport,
+  usePickInstagramPlace,
+  useStartInstagramImport,
+} from "@/lib/hooks/use-instagram-import";
 import { fold } from "@/lib/instagram/normalize";
 import type { InstagramImportItemView, InstagramJobError, InstagramJobPhase } from "@/lib/instagram/types";
 import { cn } from "@/lib/utils";
@@ -60,7 +65,7 @@ function InstagramGlyph({ className }: { className?: string }) {
 const ERROR_COPY: Record<InstagramJobError, string> = {
   invalid_url: "That isn't an Instagram post or reel link.",
   post_unavailable: "Couldn't open this post. It may be private or deleted.",
-  budget_exceeded: "You've used this month's Instagram imports.",
+  budget_exceeded: "This month's AI budget for imports is used up. Instagram imports resume on the 1st.",
   not_configured: "Instagram import isn't set up on this server.",
   service_error: "Something went wrong while reading this post.",
   stalled: "This took too long and stopped.",
@@ -259,7 +264,13 @@ export function InstagramImportPanel({
   const placeRows = shown.filter((i) => i.status !== "skipped" && i.status !== "failed");
   const single = phase === "done" && placeRows.length === 1 && shown.length === 1 ? placeRows[0] : null;
   const startError = start.isError ? start.error.message : null;
+  const startCode = start.error instanceof InstagramStartError ? start.error.code : null;
   const failed = phase === "failed" || loadFailed || !!startError;
+  // Asking again can't help with a limit or a cap that resets on the 1st, or
+  // a server that isn't set up. A refused start is judged by its own code.
+  const retryable = startError
+    ? startCode !== "monthly_limit" && startCode !== "not_configured"
+    : view?.error !== "budget_exceeded" && view?.error !== "not_configured";
   const working = !failed && (!view || phase === "reading" || phase === "adding");
   const empty = phase === "done" && placeRows.length === 0;
   // An empty result isn't always an empty post: the user may have removed
@@ -506,7 +517,7 @@ export function InstagramImportPanel({
             <Button variant="outline" className="flex-1 h-10 cursor-pointer" onClick={onClose}>
               Close
             </Button>
-            {view?.error !== "budget_exceeded" && view?.error !== "not_configured" && (view?.postUrl || url) && (
+            {retryable && (view?.postUrl || url) && (
               <Button className="flex-1 h-10 cursor-pointer" onClick={retry} disabled={start.isPending}>
                 {start.isPending && <Loader2 className="h-4 w-4 mr-1 animate-spin" aria-hidden="true" />}
                 Try again

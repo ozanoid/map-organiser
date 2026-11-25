@@ -1,14 +1,12 @@
 "use client";
 
 import { useRouter, usePathname } from "next/navigation";
-import { Sparkles, X } from "lucide-react";
+import { X } from "lucide-react";
 import { toast } from "sonner";
 import {
   useSavedFilters,
   useDeleteSavedFilter,
 } from "@/lib/hooks/use-saved-filters";
-import { useAiSearch } from "@/lib/hooks/use-ai-search";
-import { useAiSearchStore } from "@/lib/stores/ai-search-store";
 
 /**
  * v1.20.0 (NF-20/21) — saved-filter quick chips, mounted on /places
@@ -19,9 +17,8 @@ import { useAiSearchStore } from "@/lib/stores/ai-search-store";
  *   active filters (setFilters merges partials; pushing the stored URL
  *   is the cleanest replace and is back/forward-safe — useFilters syncs
  *   URL → local).
- * - AI preset (ai_query non-null) → also re-run the AI pipeline via the
- *   same `useAiSearch` hook the search input uses; fresh rankings every
- *   time (rankings are session-only by design).
+ * - (Until v1.54.0 a preset saved from an AI search re-ran it — the
+ *   `ai_query` column; none were ever saved, and the AI search is gone.)
  * - X on a chip deletes the preset (no confirm — one-tap undoable by
  *   re-saving; presets are cheap).
  *
@@ -35,25 +32,13 @@ export function SavedFilterChips() {
   const pathname = usePathname();
   const { data: savedFilters = [] } = useSavedFilters();
   const deleteSavedFilter = useDeleteSavedFilter();
-  const aiSearch = useAiSearch();
-  const resetAiSearch = useAiSearchStore((s) => s.reset);
 
   if (savedFilters.length === 0) return null;
 
-  function applyPreset(qs: string, aiQuery: string | null) {
+  function applyPreset(qs: string) {
     // Replace-all: push the stored query string; useFilters picks it up
-    // from the URL. Clear any stale AI state first — a previous search's
-    // rankings must not survive a preset switch.
-    resetAiSearch();
+    // from the URL.
     router.push(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
-    if (aiQuery) {
-      aiSearch.mutate(aiQuery, {
-        onError: (err) =>
-          toast.error(
-            err instanceof Error ? err.message : "AI search failed"
-          ),
-      });
-    }
   }
 
   return (
@@ -65,13 +50,9 @@ export function SavedFilterChips() {
         >
           <button
             type="button"
-            onClick={() => applyPreset(sf.query_string, sf.ai_query)}
+            onClick={() => applyPreset(sf.query_string)}
             className="flex items-center gap-1 pl-2.5 pr-1 py-1 text-xs font-medium cursor-pointer"
-            title={sf.ai_query ? `AI: “${sf.ai_query}”` : undefined}
           >
-            {sf.ai_query && (
-              <Sparkles className="h-3 w-3 text-emerald-600" />
-            )}
             {sf.name}
           </button>
           <button

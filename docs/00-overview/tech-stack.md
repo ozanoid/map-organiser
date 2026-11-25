@@ -2,8 +2,8 @@
 title: Tech Stack
 type: overview
 domain: overview
-version: 1.7.1
-last_updated: 19.11.2026
+version: 1.8.3
+last_updated: 25.11.2026
 status: stable
 sources:
   - package.json
@@ -61,16 +61,19 @@ Every runtime, library, and tool the repo currently depends on. Pin sources are 
 | `@supabase/supabase-js` | `^2.103.0` | Postgres + Auth + Storage client | Used by `createServiceClient` in `src/lib/supabase/server.ts`. |
 | `@supabase/ssr` | `^0.12.0` | SSR cookie auth | Powers all three clients (browser/server/proxy) in `src/lib/supabase/`. |
 | `@tanstack/react-query` | `^5.101.2` | Server-state cache | Default `staleTime: 60_000`, `refetchOnWindowFocus: false`. |
-| `zustand` | `^5.0.14` | Client state store | Currently only `src/lib/stores/import-store.ts`. |
+| `zustand` | `^5.0.14` | Client state store | `src/lib/stores/import-store.ts`; `assistant-store.ts` (the assistant panel's open state and its composer — a request a screen wrote, with its subject; v1.48.0, v1.52.0). |
 | `zod` | `^4.6.7` | Runtime validation (below 4.6.6, validating an oversized constrained collection could exhaust memory) | Used on every mutation API route + every AI structured output. |
 
 ## AI
 
 | Lib | Version | Role | Notes |
 |---|---|---|---|
-| `ai` | `^6.0.228` | AI SDK v6 — model-agnostic call layer (`generateText` + `Output.object`; `streamText` for the chat assistant, v1.21.0) | Used by Phase 4 `step=profile` enrich branch + `/api/ai/*`. Direct provider wiring (not AI Gateway) — see [[../04-integrations/gemini]] for the explicit choice. |
-| `@ai-sdk/react` | `3.0.230` | `useChat` for the assistant panel (v1.21.0) | ⚠️ version-lockstep with `ai@6` — see [[../04-integrations/gemini#npm-packages]]. |
-| `@ai-sdk/google` | `^3.0.141` | Google provider for AI SDK (3.0.75 until v1.43.0 — its `@ai-sdk/provider-utils` had a low-severity advisory) | `createGoogleGenerativeAI({ apiKey: GOOGLE_GENERATIVE_AI_API_KEY })`. Model: `gemini-3-flash-preview` (since 15.07.2026). |
+| `ai` | `^6.0.228` | AI SDK v6 — its UI message stream (`createUIMessageStream`) carries the Claude assistant's turns to the panel (v1.48.0) | No model calls since v1.55.0 — every model call goes through `@anthropic-ai/sdk`. Until then the Gemini calls used its `generateText` + `Output.object` (the Gemini chat `streamText`, v1.21.0). |
+| `@anthropic-ai/sdk` | `^1.8.0` | The Claude API — the platform's agent core (`src/lib/agent/`, v1.47.x): streamed messages, tool use, server-side fallback, prompt caching | See [[../04-integrations/claude-agent]]. |
+| `@ai-sdk/react` | `3.0.230` | `useChat` for the assistant panel (v1.21.0; the Claude panel since v1.48.0) | ⚠️ Version lockstep: the 3.x line pairs with `ai@6` through an exact pin (3.0.230 → `ai@6.0.228`). A plain `npm i @ai-sdk/react` installs 4.x, which drags in `ai@7` as a nested duplicate and splits the `UIMessage` type identity — always bump the two together. |
+| `react-markdown` | `10.1.0` (exact) | The assistant's replies as Markdown (v1.48.0) | Raw HTML never rendered, images never loaded — [[../03-frontend/components/assistant]]. |
+| `remark-gfm` | `4.0.1` (exact) | Lists, tables and autolinks in those replies | — |
+| ~~`@ai-sdk/google`~~ | — | The Gemini provider for the AI SDK — removed in v1.55.0 with the last Gemini code | — |
 
 ## Observability
 
@@ -81,7 +84,7 @@ Every runtime, library, and tool the repo currently depends on. Pin sources are 
 | `@opentelemetry/sdk-logs` | `^0.220.0` | OTel log pipeline | `BatchLogRecordProcessor` (≥0.220: options-object ctor). |
 | `@opentelemetry/exporter-logs-otlp-http` | `^0.220.0` | OTLP log exporter | → Honeycomb `/v1/logs`. |
 | `@langfuse/otel` | `^5.9.1` | Langfuse span processor | `src/lib/telemetry/langfuse.ts` — LLM-only span export to cloud.langfuse.com (v1.16.0). |
-| `@langfuse/tracing` | `^5.9.1` | Langfuse trace helpers | `propagateAttributes` (trace name/user/tags) in the four routes that trigger LLM calls (parse-query, rank-results, enrich, refresh cron). |
+| `@langfuse/tracing` | `^5.9.1` | Langfuse trace helpers | `propagateAttributes` (trace name/user/tags) where LLM calls start (enrich, the refresh cron, the Instagram import, the assistant's turn); `startObservation` for Claude's structured calls. |
 
 See [[../05-flows/observability-flow]] for the full architecture.
 
@@ -117,7 +120,8 @@ See [[../05-flows/observability-flow]] for the full architecture.
 - **Google Places API** — not called since v1.42.0: link previews, imports and the Instagram import's search all go through DataForSEO (Google Maps data, no free-tier cliff). See [[../04-integrations/google-places]].
 - **DataForSEO Business Data API** — default enrichment provider. HTTP basic auth via `DATAFORSEO_LOGIN`/`DATAFORSEO_PASSWORD`.
 - **HikerAPI** — hosted Instagram data API for the Instagram import (v1.28.0). System-level key `HIKERAPI_KEY` (server-only); SKU `hikerapi_request`. See [[../04-integrations/hikerapi]].
-- **Google Gemini** (via Generative Language API) — Phase 4+ AI feature provider. Model: `gemini-3-flash-preview` (since 15.07.2026). Key: `GOOGLE_GENERATIVE_AI_API_KEY` (server-only). Cost-tracked via `api_usage` table under SKUs `ai_*`. See [[../04-integrations/gemini]].
+- **Claude API** (Anthropic) — every AI feature: the in-app assistant (v1.48.0), place profiles (Sonnet 5.5) and Instagram reads (Haiku 5.5) since v1.51.0. Key `ANTHROPIC_API_KEY` (server-only); every call priced into `assistant_spend` against the $100 monthly cap. See [[../04-integrations/claude-agent]].
+- **Google Gemini** — the AI provider from Phase 1 until Phase 2 moved every feature to Claude (v1.48.0–v1.54.0); no code calls it since v1.55.0. Past usage stays in `api_usage` under the retired `ai_*` SKUs.
 - **Vercel** — hosting platform. CLI permission granted in `.claude/settings.local.json`.
 
 See [[../04-integrations/_README]] (when written) for per-service deep-dives.
@@ -146,7 +150,12 @@ These are common adjacent picks that this repo deliberately doesn't use:
 - **Security audit (v1.43.0, 19.11.2026).** `npm audit` went from 36 vulnerable packages (2 critical, 14 high) to 4 moderate, all in the `shadcn` CLI's `ts-morph` → `minimatch` chain (dev only; `npm audit` offers only a downgrade). Upgrades stayed inside each package's major. Re-run `npm audit` after dependency changes; GitHub's Dependabot list counts per advisory, so its numbers are higher.
 - Scripts: `dev`, `build`, `start`, `lint`, and `eval:instagram` (v1.28.0 —
   the Instagram import's regression run; makes paid API calls, writes nothing to
-  the DB; see [[../05-flows/instagram-import-flow#measured-quality]]).
+  the DB; see [[../05-flows/instagram-import-flow#measured-quality]]; since
+  v1.50.0 `--model=` picks the reader). Also `eval:profiles` (v1.50.0, paid —
+  place profiles written by Claude models and efforts side by side — Gemini
+  too until v1.55.0 — nothing saved), `regen:profiles` (v1.51.0, paid — rewrites the existing profiles
+  with the current writer, re-runnable), `eval:assistant`, `check:agent`,
+  `check:agent:db`, `check:assistant`.
 - **Keep `node_modules` in step with the lockfile.** On 16.10.2026 a local
   install held `ai@7.0.31` and `@ai-sdk/google@4.0.18` while the lockfile pins
   `6.0.228` / `3.0.75`; `npm install` re-synced them. The 7
