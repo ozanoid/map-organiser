@@ -25,6 +25,8 @@ import {
 import { AGENT_MODELS, FALLBACK_BETA, MAX_STEPS, MAX_TOKENS, isAgentModel, type Effort } from "@/lib/agent/models";
 import { costOfMessage, type CallCost } from "@/lib/agent/pricing";
 import { systemPromptFor } from "@/lib/agent/prompt";
+import { subjectBlock } from "@/lib/agent/subject";
+import type { ResolvedSubject } from "@/lib/agent/ui-types";
 import { MONTHLY_CAP_USD, type SpendLedger, type SpendPurpose } from "@/lib/agent/spend";
 import type { Conversation, ConversationStore, Door, NewToolRun, ToolRunDecision, TurnRecord } from "@/lib/agent/store";
 import { agentToolDefinitions, checkToolCall, executeToolCall, needsApproval } from "@/lib/agent/tools";
@@ -58,7 +60,9 @@ import { log } from "@/lib/telemetry/logger";
 const TURN_LEASE_MS = 15 * 60 * 1000;
 
 export type TurnInput =
-  | { kind: "message"; text: string; timeZone: string }
+  /** `subject`: what the user asked about from a screen, already checked
+   *  and named (agent/subject.ts) — kept in the message after <context>. */
+  | { kind: "message"; text: string; timeZone: string; subject?: ResolvedSubject }
   /** The answers to the cards waiting now: tool-use id → approved — one for
    *  every waiting card, no other (else "conflict": the cards have changed
    *  since the user saw them). */
@@ -327,6 +331,7 @@ async function turn(
     await append("user", [
       ...(await settleCalls(deps, conversationId, pending, { kind: "superseded" }, events)),
       contextBlock(now(), input.timeZone),
+      ...(input.subject ? [subjectBlock(input.subject)] : []),
       { type: "text", text: input.text },
     ]);
   } else if (input.kind === "approval") {

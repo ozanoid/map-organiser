@@ -2,8 +2,8 @@
 title: api_usage
 type: table
 domain: backend
-version: 1.7.0
-last_updated: 24.11.2026
+version: 1.8.0
+last_updated: 25.11.2026
 status: stable
 sources:
   - Supabase project hukppmaevcapvbrvxtph (live)
@@ -88,10 +88,11 @@ The composite UNIQUE constraint makes the UPSERT atomic. App code calls this via
     - `mapbox_geocoding` (Mapbox Geocoding v6, 17.11.2026 — one per `near.area` lookup in the assistant's search tools, and since v1.42.0 one per city an Instagram post names; $0.75/1k past 100k free)
     - `dataforseo_maps_search` (DataForSEO SERP API, 18.11.2026 — one per `search_google_maps` call, and since v1.42.0 one per Instagram candidate or area search; $2/1k, no free tier)
   - `src/lib/ai/track-usage.ts#AI_SKU_CONFIG` (via `trackAiUsage`, same RPC):
-    - `ai_parse_query`, `ai_rank_results`, `ai_place_profile`, `ai_embedding` (placeholder), `ai_compare` (v1.19.0), `ai_chat` (v1.21.0 — the Gemini chat, removed in v1.48.0; kept for past rows), `ai_trip_plan` (v1.22.0, $12/1k), `ai_instagram_read` (v1.28.0, $1.5/1k — one per Gemini call reading an Instagram post, so a retried read counts twice (v1.28.2); also the unit of the `instagram` budget, 300/month)
+    - `ai_parse_query`, `ai_rank_results`, `ai_place_profile`, `ai_embedding` (placeholder), `ai_compare` (v1.19.0 — the Gemini comparison, handed to the assistant in v1.52.0; kept for past rows), `ai_chat` (v1.21.0 — the Gemini chat, removed in v1.48.0; kept for past rows), `ai_trip_plan` (v1.22.0, $12/1k), `ai_instagram_read` (v1.28.0, $1.5/1k — one per Gemini call reading an Instagram post, so a retried read counts twice (v1.28.2); also the unit of the `instagram` budget, 300/month)
   - The Instagram import writes its `hikerapi_request`, `dataforseo_maps_search` and `mapbox_geocoding` rows (before v1.42.0: `text_search_enterprise`) in a `finally`, so a failed import's calls are still counted; from v1.28.2 until v1.51.0 the same `finally` wrote one `ai_instagram_read` per Gemini call, retries and failed reads included.
   - The cost tracker UI merges both registries (`getMonthlyUsage` spreads `{...SKU_CONFIG, ...AI_SKU_CONFIG}`).
   - Since v1.51.0 (on `feat/personal-assistant`) place profiles are written by Claude Sonnet 5.5 at medium (`PROFILE_WRITER`) and Instagram posts read by Claude Haiku 5.5 at high (`INSTAGRAM_READER`) — Ozan's choice after the Phase 2 6.2 measurement. Their cost goes to the Claude ledger (`assistant_spend`, purposes `profile` / `instagram`) under the one $100 monthly cap; the `ai_place_profile` and `ai_instagram_read` SKUs and their per-user budgets are no longer written or checked. The rows written before stay as history.
+- **Retired SKUs** (v1.52.0): `ai_place_profile`, `ai_instagram_read`, `ai_chat` and `ai_compare` carry `retired: true` — nothing writes them, and the cost tracker shows one only in a month that still has usage, as with the retired Google Places SKUs.
 - **Cost computed in UI, not stored.** The `cost_per_1k` column lets the UI multiply by `count / 1000` for monthly spend; no aggregate is precomputed.
 - Consumed by: `GET /api/user/usage` (monthly aggregate), `CostTracker` UI component, every external API helper in `src/lib/google/` and `src/lib/dataforseo/`, and `checkAiBudget` (`src/lib/ai/track-usage.ts`) — the monthly AI budget gates read these same per-day counters.
 

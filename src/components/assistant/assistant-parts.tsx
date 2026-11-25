@@ -14,13 +14,15 @@ import {
   Map as MapIcon,
   MapPin,
   MessageSquareQuote,
+  Scale,
   Search,
   Sparkles,
   Footprints,
   Wrench,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import type { ToolMetadata, ToolSummary, TurnOutcome, WritePreview } from "@/lib/agent/ui-types";
+import type { SubjectPart, ToolMetadata, ToolSummary, TurnOutcome, WritePreview } from "@/lib/agent/ui-types";
 import { useAssistantStore } from "@/lib/stores/assistant-store";
 
 /**
@@ -146,6 +148,33 @@ export function ToolRow({
  * "Show on map": a search's results (on its row), or the saved places a
  * reply links to (under the reply). One button for both.
  */
+const SUBJECT_ICON: Record<SubjectPart["kind"], LucideIcon> = { plan: CalendarDays, places: Scale, view: MapIcon };
+
+/**
+ * What a request is about — the plan, the places compared, the map — on
+ * the message the user sent and, before sending, in the composer, where it
+ * can be taken off.
+ */
+export function SubjectChip({ part, onRemove }: { part: SubjectPart; onRemove?: () => void }) {
+  const Icon = SUBJECT_ICON[part.kind];
+  return (
+    <span className="inline-flex max-w-full items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300">
+      <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden />
+      <span className="truncate">{part.label}</span>
+      {onRemove && (
+        <button
+          type="button"
+          onClick={onRemove}
+          aria-label={`Don't send with ${part.label}`}
+          className="relative -mr-1 ml-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full hover:bg-emerald-100 dark:hover:bg-emerald-900/60 cursor-pointer transition-colors after:absolute after:-inset-3 after:content-['']"
+        >
+          <X className="h-3.5 w-3.5" aria-hidden />
+        </button>
+      )}
+    </span>
+  );
+}
+
 export function MapButton({
   ids,
   label,

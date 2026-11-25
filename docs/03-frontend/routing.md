@@ -2,8 +2,8 @@
 title: Routing
 type: overview
 domain: frontend
-version: 1.6.5
-last_updated: 24.11.2026
+version: 1.6.6
+last_updated: 25.11.2026
 status: stable
 sources:
   - src/app/
@@ -31,7 +31,7 @@ Every route in the app — pages, API handlers, and special routes — in one pl
 | `/map` | `src/app/(app)/map/page.tsx` | `(app)/layout.tsx` | Required | Default post-login destination. Mapbox GL view. `?ids=a,b,…` (v1.48.0): only the places the assistant put on the map ("Show on map"), with an "N from the assistant" chip that clears it. |
 | `/places` | `src/app/(app)/places/page.tsx` | `(app)/layout.tsx` | Required | Filter/search/sort the user's places. Takes the same `?ids=` filter and chip (v1.48.0). |
 | `/places/[id]` | `src/app/(app)/places/[id]/page.tsx` | `(app)/layout.tsx` | Required | Place detail with tags, lists, photos, plan refs. |
-| `/places/compare` | `src/app/(app)/places/compare/page.tsx` | `(app)/layout.tsx` | Required | S2 F-04 (v1.19.0): side-by-side 2-4 place comparison (`?ids=a,b,c`) + deliberate-click AI analysis. |
+| `/places/compare` | `src/app/(app)/places/compare/page.tsx` | `(app)/layout.tsx` | Required | S2 F-04 (v1.19.0): side-by-side 2-4 place comparison (`?ids=a,b,c`) + "which one, when?" for the assistant (v1.52.0; a Gemini analysis before). |
 | `/lists` | `src/app/(app)/lists/page.tsx` | `(app)/layout.tsx` | Required | Lists + Plans tabbed view; `?tab=plans` opens the Plans tab. |
 | `/lists/[id]` | `src/app/(app)/lists/[id]/page.tsx` | `(app)/layout.tsx` | Required | List detail with drag-and-drop reorder. |
 | `/plans/[id]` | `src/app/(app)/plans/[id]/page.tsx` | `(app)/layout.tsx` | Required | Plan timeline + map (`?view=map`). `/trips/[id]` redirects here (308, `next.config.ts`). |

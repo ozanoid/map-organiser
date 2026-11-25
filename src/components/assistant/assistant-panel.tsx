@@ -10,12 +10,14 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { AssistantMarkdown } from "@/components/assistant/assistant-markdown";
-import { ChangeCard, isWritePart, MapButton, ToolRow, TurnNote } from "@/components/assistant/assistant-parts";
+import { ChangeCard, isWritePart, MapButton, SubjectChip, ToolRow, TurnNote } from "@/components/assistant/assistant-parts";
 import {
   approvalsAnswered,
+  isSubjectPart,
   lastStepToolParts,
   placeIdsIn,
   type AssistantUIMessage,
+  type SubjectPart,
   type ChatRequestBody,
   type ConversationResponse,
   type DoorErrorBody,
@@ -112,8 +114,18 @@ function seen(conversationId: string, version: number | undefined) {
 export function resetAssistantChat(queryClient?: QueryClient) {
   chats.clear();
   versions.clear();
+  useAssistantStore.getState().clearComposer();
   queryClient?.removeQueries({ queryKey: ["assistant"] });
 }
+
+/**
+ * After a saved change, every screen refreshes what it shows: the app's own
+ * data, by whatever key its screen reads it — a plan page reads ["plan",
+ * id], not ["plans"] — rather than a list of keys that misses one. Left
+ * alone: the conversation (refetched on its own) and the lookups that call
+ * paid services (Mapbox suggestions and routes).
+ */
+const NOT_REFRESHED_AFTER_WRITES = new Set(["assistant", "place-search", "plan-route"]);
 
 function requestBody(conversationId: string, messages: AssistantUIMessage[], intent: SendIntent | undefined): ChatRequestBody {
   const last = messages.at(-1);
@@ -126,9 +138,16 @@ function requestBody(conversationId: string, messages: AssistantUIMessage[], int
     return { conversationId, input: { kind: "approval", decisions } };
   }
   const text = (last?.parts ?? []).flatMap((p) => (p.type === "text" ? [p.text] : [])).join("\n");
+  // A request from a screen: what it is about rides on its subject chip.
+  const subject = (last?.parts ?? []).find(isSubjectPart)?.data.subject;
   return {
     conversationId,
-    input: { kind: "message", text, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone },
+    input: {
+      kind: "message",
+      text,
+      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      ...(subject ? { subject } : {}),
+    },
   };
 }
 
@@ -153,9 +172,9 @@ function chatFor(conversationId: string, data: ConversationResponse, queryClient
           (p) => p.type === "dynamic-tool" && p.state === "output-available" && p.approval?.approved
         );
         if (wrote) {
-          for (const key of ["places", "lists", "plans", "visits", "tags"]) {
-            void queryClient.invalidateQueries({ queryKey: [key] });
-          }
+          void queryClient.invalidateQueries({
+            predicate: (q) => !NOT_REFRESHED_AFTER_WRITES.has(String(q.queryKey[0])),
+          });
         }
         // After every request — done, broken off or refused before it
         // started (a DoorError: nothing written, the cards may have
@@ -264,8 +283,14 @@ function ConversationView({
   const setOpen = useAssistantStore((s) => s.setOpen);
   const [chat] = useState(() => chatFor(conversationId, data, queryClient));
   const { messages, setMessages, sendMessage, status, error, clearError, addToolApprovalResponse } = useChat({ chat });
-  const [input, setInput] = useState(() => useAssistantStore.getState().takeDraft() ?? "");
+  // The composer lives in the store: a request from a screen lands there,
+  // and it outlasts New chat and closing the panel.
+  const input = useAssistantStore((s) => s.text);
+  const setInput = useAssistantStore((s) => s.setText);
+  const subject = useAssistantStore((s) => s.subject);
+  const setSubject = useAssistantStore((s) => s.setSubject);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const appliedAt = useRef(0);
 
   const busy = status === "submitted" || status === "streaming";
@@ -280,15 +305,6 @@ function ConversationView({
     setMessages(data.messages);
   }, [busy, conversationId, data.messages, data.version, dataUpdatedAt, setMessages]);
 
-  // A request written by another screen while the panel is open.
-  useEffect(
-    () =>
-      useAssistantStore.subscribe((s) => {
-        if (s.draft !== null) setInput(useAssistantStore.getState().takeDraft() ?? "");
-      }),
-    []
-  );
-
   // Keep the newest content in view.
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
@@ -299,7 +315,7 @@ function ConversationView({
     last?.role === "assistant" ? lastStepToolParts(last).filter((p) => p.state === "approval-requested") : [];
   const locked = busy || turnElsewhere;
 
-  async function send(text: string) {
+  async function send(text: string, attached: SubjectPart | null) {
     const trimmed = text.trim();
     if (!trimmed || locked) return;
     clearError();
@@ -322,11 +338,16 @@ function ConversationView({
       );
     }
     setInput("");
-    await sendMessage({ text: trimmed });
+    setSubject(null);
+    await sendMessage({
+      parts: [...(attached ? [{ type: "data-subject" as const, data: attached }] : []), { type: "text" as const, text: trimmed }],
+    });
     if (chat.error instanceof DoorError) {
       // Not sent: the message goes back where the user wrote it.
       setMessages(chat.messages.at(-1)?.role === "user" ? chat.messages.slice(0, -1) : chat.messages);
-      setInput((current) => current || trimmed);
+      const composer = useAssistantStore.getState();
+      if (!composer.text) setInput(trimmed);
+      if (!composer.subject && attached) setSubject(attached);
     }
   }
 
@@ -352,6 +373,28 @@ function ConversationView({
     router.push(`/map?ids=${ids.join(",")}`);
   }
 
+  // A request from a screen, read once when the conversation shows. Typed by
+  // the user (the search field), it goes out at once — unless a reply is
+  // being written or cards are waiting for an answer: then it waits in the
+  // composer like a written one, ready to send.
+  useEffect(() => {
+    const store = useAssistantStore.getState();
+    if (store.takeSendWhenReady() && !locked && waitingCards.length === 0) {
+      void send(store.text, store.subject);
+      return;
+    }
+    if (!store.text) return;
+    const frame = requestAnimationFrame(() => {
+      const el = textareaRef.current;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(el.value.length, el.value.length);
+    });
+    return () => cancelAnimationFrame(frame);
+    // Once, when the conversation shows: later changes are the user's typing.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <>
       <div
@@ -376,7 +419,7 @@ function ConversationView({
                 <button
                   key={example}
                   type="button"
-                  onClick={() => void send(example)}
+                  onClick={() => void send(example, null)}
                   disabled={locked}
                   className="min-h-11 rounded-lg border px-3 py-2 text-left text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground cursor-pointer transition-colors"
                 >
@@ -434,20 +477,26 @@ function ConversationView({
             Answer the card above, or write a new message — the proposal won&apos;t be saved.
           </p>
         )}
+        {subject && (
+          <div className="mb-2 flex min-w-0">
+            <SubjectChip part={subject} onRemove={() => setSubject(null)} />
+          </div>
+        )}
         <form
           className="flex items-end gap-2"
           onSubmit={(e) => {
             e.preventDefault();
-            void send(input);
+            void send(input, subject);
           }}
         >
           <Textarea
+            ref={textareaRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
                 e.preventDefault();
-                void send(input);
+                void send(input, subject);
               }
             }}
             placeholder="Ask your assistant…"
@@ -486,8 +535,14 @@ function hasVisible(message: AssistantUIMessage): boolean {
 function UserBubble({ message }: { message: AssistantUIMessage }) {
   const text = message.parts.map((p) => (p.type === "text" ? p.text : "")).join("");
   if (!text) return null;
+  const subject = message.parts.find(isSubjectPart)?.data;
   return (
-    <div className="flex justify-end">
+    <div className="flex flex-col items-end gap-1">
+      {subject && (
+        <div className="flex max-w-[85%] justify-end">
+          <SubjectChip part={subject} />
+        </div>
+      )}
       <div className="max-w-[85%] whitespace-pre-wrap break-words rounded-2xl rounded-br-sm bg-emerald-600 px-3.5 py-2 text-sm text-white">
         {text}
       </div>

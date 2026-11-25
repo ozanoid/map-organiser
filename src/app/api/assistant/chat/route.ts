@@ -6,6 +6,7 @@ import { doorRequest } from "@/lib/agent/door";
 import { AgentError, type AgentErrorCode } from "@/lib/agent/errors";
 import { pendingToolCalls } from "@/lib/agent/history";
 import { openTurn, type OpenTurn, type TurnInput } from "@/lib/agent/run-turn";
+import { resolveSubject, SubjectError, SubjectSchema } from "@/lib/agent/subject";
 import { replyMessageId } from "@/lib/agent/ui";
 import { turnStream } from "@/lib/agent/ui-stream";
 import type { AssistantUIMessage, DoorErrorBody } from "@/lib/agent/ui-types";
@@ -34,7 +35,12 @@ export const maxDuration = 800;
 const Body = z.object({
   conversationId: z.string().uuid(),
   input: z.discriminatedUnion("kind", [
-    z.object({ kind: z.literal("message"), text: z.string().trim().min(1).max(8000), timeZone: z.string().max(64) }),
+    z.object({
+      kind: z.literal("message"),
+      text: z.string().trim().min(1).max(8000),
+      timeZone: z.string().max(64),
+      subject: SubjectSchema.optional(),
+    }),
     z.object({ kind: z.literal("approval"), decisions: z.record(z.string(), z.boolean()) }),
     z.object({ kind: z.literal("retry") }),
   ]),
@@ -58,7 +64,23 @@ export async function POST(req: Request) {
   const parsed = Body.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return refuse({ error: "Invalid request." }, 400);
   const { conversationId } = parsed.data;
-  const input: TurnInput = parsed.data.input;
+  const body = parsed.data.input;
+
+  // A request from a screen: its subject is checked and named before the
+  // turn opens — a plan or place gone since the screen loaded is refused
+  // like any other check, with nothing written.
+  let input: TurnInput;
+  if (body.kind === "message" && body.subject) {
+    try {
+      input = { ...body, subject: await resolveSubject(door.toolCtx, body.subject) };
+    } catch (e) {
+      if (e instanceof SubjectError) return refuse({ error: e.message, code: "subject_unavailable" }, 400);
+      log.error("assistant.subject_failed", e, { userId: door.userId, conversationId });
+      return refuse({ error: "Couldn't start the reply. Try again." }, 500);
+    }
+  } else {
+    input = body.kind === "message" ? { kind: "message", text: body.text, timeZone: body.timeZone } : body;
+  }
 
   let turn: OpenTurn;
   try {

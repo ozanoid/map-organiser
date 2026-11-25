@@ -16,7 +16,8 @@ import { isOpenNow } from "@/lib/places/open-now";
  */
 
 export interface PlaceQueryFilters {
-  /** Explicit id set (UUID-validated, capped at 10) — compare view. */
+  /** Explicit id set (UUID-validated, capped at MAX_PLACE_IDS) — the compare
+   *  view and the assistant's "Show on map". */
   ids?: string[];
   country?: string;
   city?: string;

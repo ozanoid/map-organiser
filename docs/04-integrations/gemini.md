@@ -2,8 +2,8 @@
 title: Google Gemini (LLM)
 type: integration
 domain: integrations
-version: 1.14.0
-last_updated: 24.11.2026
+version: 1.14.1
+last_updated: 25.11.2026
 status: stable
 sources:
   - src/lib/ai/client.ts
@@ -29,7 +29,7 @@ related:
 
 > **Telemetry (v1.16.0):** every Gemini call now exports gen_ai spans to Honeycomb **and** Langfuse (LLM-only view: prompts, completions, tokens, cost). See [[../05-flows/observability-flow]].
 
-The LLM provider behind the AI features added across PRs #30–#35 (Phases 1–5.5) — today AI search, Compare and AI Plan; the full place profile and the Instagram read moved to Claude in v1.51.0 ([[claude-agent]]). Model: **`gemini-3-flash-preview`** (Gemini 3 Flash — upgraded from `gemini-flash-latest` / 2.5 family on 15.07.2026; old profiles remain distinguishable via `model_version`). Note the id namespace: this is the **Generative Language API** id (what our direct provider hits); the Vercel AI Gateway catalog normalizes the same model as `google/gemini-3-flash`. Accessed through Vercel's AI SDK v6 with the Google provider — **direct provider wiring**, not via the Vercel AI Gateway (deliberate; see "Why direct, not Gateway?" below).
+The LLM provider behind the AI features added across PRs #30–#35 (Phases 1–5.5) — today AI search and AI Plan (Compare went to the assistant in v1.52.0); the full place profile and the Instagram read moved to Claude in v1.51.0 ([[claude-agent]]). Model: **`gemini-3-flash-preview`** (Gemini 3 Flash — upgraded from `gemini-flash-latest` / 2.5 family on 15.07.2026; old profiles remain distinguishable via `model_version`). Note the id namespace: this is the **Generative Language API** id (what our direct provider hits); the Vercel AI Gateway catalog normalizes the same model as `google/gemini-3-flash`. Accessed through Vercel's AI SDK v6 with the Google provider — **direct provider wiring**, not via the Vercel AI Gateway (deliberate; see "Why direct, not Gateway?" below).
 
 ## Account & access
 
@@ -109,7 +109,7 @@ The output is Zod-validated at the SDK boundary, so route code can treat it as a
 |---|---|---|---|---|
 | `POST /api/places/[id]/enrich?step=profile` — **moved to Claude Sonnet 5.5 in v1.51.0** (`PROFILE_WRITER`) | Full place_profile generation. Triggered by the `step=reviews` fire-and-forget chain (Phase 4) or the manual refresh/generate button in `AiSummaryCard`. | Once per place, plus opt-in refresh | ~4–6 s | `ai_place_profile` |
 | `POST /api/ai/parse-query` (Phase 6) | Parse NL search query into structured filters + semantic intent. | Per user-submitted query | ~700 ms – 1.5 s | `ai_parse_query` |
-| `POST /api/ai/compare` (S2 F-04, v1.19.0) | Per-theme winners + occasion picks for 2-4 places from stored profiles. | Deliberate click on /places/compare | ~2-5 s | `ai_compare` |
+| ~~`POST /api/ai/compare`~~ (S2 F-04, v1.19.0) — **handed to the assistant in v1.52.0** | Was: per-theme winners + occasion picks for 2-4 places from stored profiles. Now the compare page opens the assistant with the places as its subject. | — | was ~2-5 s | was `ai_compare` |
 | `POST /api/ai/rank-results` (Phase 6) | LLM-as-judge rerank against `place_profile.searchable_summary` when `requires_semantic_ranking` is set. | Conditional — only when the query has fuzzy intent | ~1–2 s | `ai_rank_results` |
 | ~~`rank_places` assistant tool~~ — **moved to Claude in v1.49.0 (24.11.2026)** | Was: the rank-results prompt/schema run server-side via `rank-engine.ts` (deleted). Now the tool returns candidates with profiles and the conversing Claude judges them — no Gemini call ([[claude-mcp]]). | — | was 7–39 s (23 calls in the 23.11.2026 eval, median 16.7 s) | was `ai_rank_results` |
 | `POST /api/ai/day-plan` (AI Plan; S4 AI-09, v1.22.0 as `/api/ai/trip-plan`) | Distributes ≤40 candidate places across a plan's days (idx-referenced `DayPlanSchema`; applied as one atomic batch of plan changes). Input ≈ 15-20k tokens (compact ~350-tok/candidate projection + plan frame). | Deliberate click on the plan page's AI Plan dialog | ~3-8 s | `ai_trip_plan` (1 unit per generation, spent even when generation fails — the plan stays untouched) |
@@ -169,7 +169,7 @@ If we ever add a second provider (Claude/OpenAI for ranking, vision, etc.), revi
 | Symptom | Cause | Recovery |
 |---|---|---|
 | Route returns `{ ok: false, reason: "ai_disabled" }` 503 | `GOOGLE_GENERATIVE_AI_API_KEY` not set | Add the env var in Vercel → redeploy. Settings AI tab also shows the "not configured" banner. |
-| Route returns 429 | User spent a monthly AI budget (search 500 / compare 200 / trip_plan 50) | Expected — resets on the 1st (UTC). An app-level guard, not a Gemini rate limit. |
+| Route returns 429 | User spent a monthly AI budget (search 500 / trip_plan 50; compare 200 until v1.52.0) | Expected — resets on the 1st (UTC). An app-level guard, not a Gemini rate limit. |
 | Instagram dialog: "This month's AI budget is used up. Instagram imports resume on the 1st." | The platform's monthly Claude cap is spent (since v1.51.0; before: the `instagram` budget, 300 reads/month) | Resets on the 1st. |
 | Route returns 500 with "LLM generation failed" | Provider 5xx, rate limit, or schema validation failure | Retry from `AiSummaryCard` refresh button. Persistent failure → check Vercel logs for the underlying error. |
 | AI Summary card stays in skeleton state | Reviews not yet present OR profile hasn't been generated (pre-Phase-4 place) | If reviews exist, click "Generate" in the skeleton header. If not, wait for `step=reviews` to finish (~30 s on a fresh paste). |

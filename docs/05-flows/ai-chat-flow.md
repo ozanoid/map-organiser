@@ -2,8 +2,8 @@
 title: Assistant flow (in-app, Claude)
 type: flow
 domain: ai
-version: 2.2.0
-last_updated: 24.11.2026
+version: 2.3.0
+last_updated: 25.11.2026
 status: draft
 sources:
   - src/components/assistant/assistant-panel.tsx
@@ -46,13 +46,13 @@ Header ✦ (or another screen, with a request written)
 ## Opening
 
 - `AssistantLauncher` shows the ✦ button when `GET /api/user/ai-settings` says AI is on for the user and `assistantAvailable` (the server's Claude key).
-- `useAssistantStore.openAssistant(draft?)` opens the panel from anywhere; a draft goes into the composer (the user sends it). Planned users: AI Plan, Compare and the search bar (Phase 2, decision 6.1).
+- `useAssistantStore.openAssistant(request?)` opens the panel from anywhere. A screen's request goes into the composer with its **subject** as a chip — the user adds to it and sends; typed by the user (the search field), it goes out at once when the conversation is free (v1.52.0). In use: the compare page (v1.52.0); AI Plan and the search field next (Phase 2, decision 6.1).
 - The panel loads the latest conversation; when there is none, it starts one. One `Chat` (AI SDK) per conversation is kept for the app's lifetime, so closing the panel mid-stream keeps the stream.
 
 ## A turn
 
 1. The panel sends only the new message and the conversation id (`prepareSendMessagesRequest`); the history lives on the server.
-2. The route checks the user and the gates, then runs `runTurn`: the turn lease (one turn per conversation), the monthly budget, the user message with its `<context>` line (date and time in the user's zone, yesterday, the next six days), then model calls and tool rounds — at most 10.
+2. The route checks the user and the gates, then runs `runTurn`: the turn lease (one turn per conversation), the monthly budget, the user message with its `<context>` line (date and time in the user's zone, yesterday, the next six days) and, for a request from a screen, its `<subject>` block — the plan, the places or the map's view, checked against the user's library and named on the server before the turn opens (`resolveSubject`, v1.52.0; gone since → 400 `subject_unavailable`), then model calls and tool rounds — at most 10.
 3. The panel sees each step: a row per tool ("Searching your places…" → "Searched your places · 12 places"), the reply streaming in Markdown, web searches with their query and top results. Search rows offer **Show on map** (`/map?ids=…`: the panel closes, the map brings those places into view and shows an "N from the assistant" chip that clears it). The reply links the saved places it recommends to their pages (`/places/<id>`), and under it **Show these N on map** puts exactly those on the map (v1.49.0). For a subjective question `rank_places` hands the model the candidates with their profiles ("Read place profiles · 30 candidates") and the model ranks them. Any link into the app closes the panel too.
 4. A call that saves something stops the turn. The panel shows a **card** with the proposal in words (the plan's stops and times, the list's places and notes, the visit, the changes) — built on the server from the call's input (`describeWrites`), because the model doesn't describe plans or lists before calling. **Save** / **Not now**: once every card of the paused call has an answer (`approvalsAnswered`), the panel sends them — once, explicitly. The server checks they are the answers to the cards waiting now (an older tab can't decide a card the user hasn't seen), records them, runs approved writes and the reads that waited, and the model goes on in the same message. The card turns into **Saving…**, then **Saved** (with a link to what was saved), **Not saved** or **Couldn't save**. With two cards, the first answered says it will (or won't) be saved and waits for the other.
 5. Writing a new message while a card waits closes the card as not saved (in the panel, and on the server as "not run") and sends the message; reads that waited with it show as skipped.

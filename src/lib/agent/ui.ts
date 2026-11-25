@@ -3,10 +3,18 @@ import type { BetaContentBlockParam } from "@anthropic-ai/sdk/resources/beta/mes
 import type { DynamicToolUIPart } from "ai";
 import { isTransient, userMessageFor } from "@/lib/agent/errors";
 import { CONTEXT_TAG, type StoredMessage } from "@/lib/agent/history";
+import { SUBJECT_TAG, subjectIn } from "@/lib/agent/subject";
 import { canRetry, type TurnInput } from "@/lib/agent/run-turn";
 import type { ToolRun, TurnRecord } from "@/lib/agent/store";
 import { checkToolCall, needsApproval } from "@/lib/agent/tools";
-import type { AssistantUIMessage, ToolMetadata, ToolSummary, TurnOutcome, WritePreview } from "@/lib/agent/ui-types";
+import {
+  subjectLabel,
+  type AssistantUIMessage,
+  type ToolMetadata,
+  type ToolSummary,
+  type TurnOutcome,
+  type WritePreview,
+} from "@/lib/agent/ui-types";
 
 /**
  * The stored conversation as the app's panel shows it (AI SDK UI messages),
@@ -104,9 +112,12 @@ export function searchResults(content: unknown): ToolSummary {
   return { summary: plural(results.length, "result"), results: results.slice(0, 5) };
 }
 
+/** What the user wrote: the server's own blocks (<context>, <subject>) left out. */
 function userText(content: BetaContentBlockParam[]): string {
   return content
-    .flatMap((b) => (b.type === "text" && !b.text.startsWith(`<${CONTEXT_TAG}>`) ? [b.text] : []))
+    .flatMap((b) =>
+      b.type === "text" && !b.text.startsWith(`<${CONTEXT_TAG}>`) && !b.text.startsWith(`<${SUBJECT_TAG}>`) ? [b.text] : []
+    )
     .join("\n")
     .trim();
 }
@@ -189,7 +200,15 @@ export function toUIMessages(
       const text = userText(m.content);
       if (text) {
         current = null;
-        out.push({ id: `u${m.seq}`, role: "user", parts: [{ type: "text", text, state: "done" }] });
+        const subject = subjectIn(m.content);
+        out.push({
+          id: `u${m.seq}`,
+          role: "user",
+          parts: [
+            ...(subject ? [{ type: "data-subject" as const, data: { kind: subject.kind, label: subjectLabel(subject) } }] : []),
+            { type: "text", text, state: "done" },
+          ],
+        });
       }
       continue;
     }

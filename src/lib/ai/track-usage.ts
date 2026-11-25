@@ -33,24 +33,26 @@ export const AI_SKU_CONFIG = {
     costPer1k: 20.0,
     freeMonthly: 0,
   },
-  // Gemini profiles until v1.51.0 — nothing writes it now.
+  // Gemini profiles until v1.51.0 — nothing writes it now. `retired`: the
+  // cost tracker shows it only in a month that still has usage.
   ai_place_profile: {
     name: "AI Place Profile",
     costPer1k: 9.5,
     freeMonthly: 0,
+    retired: true,
   },
   ai_embedding: {
     name: "AI Embedding",
     costPer1k: 0,
     freeMonthly: 0,
   },
-  // v1.19.0 (S2 F-04): side-by-side AI comparison. Input = 2-4 stored
-  // place_profiles (~2-6K tokens) + a compact rubric — cost profile is
-  // close to ai_place_profile's.
+  // v1.19.0–v1.51.0: the compare page's Gemini comparison — the assistant
+  // answers it since v1.52.0, nothing writes it now.
   ai_compare: {
     name: "AI Compare",
     costPer1k: 9.5,
     freeMonthly: 0,
+    retired: true,
   },
   // v1.21.0 (S3 AI-02): one unit = one chat TURN (user message →
   // final assistant text), regardless of how many tool/LLM steps the
@@ -58,10 +60,12 @@ export const AI_SKU_CONFIG = {
   // fixed average-turn estimate (~2-3 Flash steps, ~8k input + ~1.2k
   // output ≈ $0.015/turn); increment_api_usage freezes cost_per_1k at
   // the first daily insert, so per-turn variable cost can't be recorded.
+  // The Gemini chat, removed in v1.48.0.
   ai_chat: {
     name: "AI Chat",
     costPer1k: 15.0,
     freeMonthly: 0,
+    retired: true,
   },
   // v1.22.0 (S4 AI-09): one unit = one AI Plan generation on the plan page.
   // The key says "trip" because plans were called trips; it stays so the
@@ -79,6 +83,7 @@ export const AI_SKU_CONFIG = {
     name: "AI Instagram Read",
     costPer1k: 1.5,
     freeMonthly: 0,
+    retired: true,
   },
 } as const;
 
@@ -124,23 +129,20 @@ export async function trackAiUsage(
  *
  * Place profiles (1000 a month) and Instagram post reads (300 a month) had
  * buckets here until v1.51.0; as Claude calls they are bounded by the
- * ledger's monthly cap instead.
+ * ledger's monthly cap instead. Compare (200 a month) went with the
+ * Gemini comparison in v1.52.0 — the assistant answers it.
  */
 export const AI_MONTHLY_SEARCH_CAP = 500;
 export const AI_MONTHLY_RANK_BACKSTOP = AI_MONTHLY_SEARCH_CAP * 3;
-/** v1.19.0 — hardcoded like its siblings (caps are code constants here,
- *  not env vars; keep the convention). One unit per compare request. */
-export const AI_MONTHLY_COMPARE_CAP = 200;
 /** v1.22.0 (S4 AI-09) — one unit per plan generation; deliberate-click
  *  only from the plan page's AI Plan dialog. */
 export const AI_MONTHLY_TRIP_PLAN_CAP = 50;
 
-export type AiBudgetKind = "search" | "rank_backstop" | "compare" | "trip_plan";
+export type AiBudgetKind = "search" | "rank_backstop" | "trip_plan";
 
 const BUDGETS: Record<AiBudgetKind, { sku: AiSku; cap: number }> = {
   search: { sku: "ai_parse_query", cap: AI_MONTHLY_SEARCH_CAP },
   rank_backstop: { sku: "ai_rank_results", cap: AI_MONTHLY_RANK_BACKSTOP },
-  compare: { sku: "ai_compare", cap: AI_MONTHLY_COMPARE_CAP },
   trip_plan: { sku: "ai_trip_plan", cap: AI_MONTHLY_TRIP_PLAN_CAP },
 };
 

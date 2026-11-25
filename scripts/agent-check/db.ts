@@ -13,6 +13,7 @@ import { createClient } from "@supabase/supabase-js";
 import { AgentError } from "@/lib/agent/errors";
 import { monthSpendByPurpose, SPEND_PURPOSES, supabaseSpendLedger } from "@/lib/agent/spend";
 import { supabaseConversationStore } from "@/lib/agent/store";
+import { resolveSubject, SubjectError } from "@/lib/agent/subject";
 
 const OWNER = "ozan@maporganiser.com";
 const say = (line = "") => process.stderr.write(`${line}\n`);
@@ -82,6 +83,49 @@ async function main() {
   const total = Number(spent.replace("ok:", ""));
   expect("…and its parts add up to monthToDate", Math.abs(parts - total) < 1e-6, { parts, total });
   say(`   (${SPEND_PURPOSES.map((p) => `${p} $${byPurpose[p].toFixed(2)}`).join(" · ")})`);
+
+  say("## a request's subject, read against the owner's library");
+  {
+    const ctx = { supabase: admin, userId, appUrl: "http://localhost" };
+    const { data: two } = await admin.from("places").select("id, name").eq("user_id", userId).order("created_at").limit(2);
+    const { data: plan } = await admin.from("plans").select("id, name").eq("user_id", userId).limit(1).maybeSingle();
+    const { data: cat } = await admin.from("categories").select("id, name").eq("user_id", userId).limit(1).maybeSingle();
+    if (two?.length === 2) {
+      const r = await resolveSubject(ctx, { kind: "places", placeIds: two.map((p) => p.id as string) });
+      expect(
+        "places → their names, in the order asked",
+        r.kind === "places" && r.places.map((p) => p.name).join("|") === two.map((p) => p.name).join("|"),
+        r
+      );
+    }
+    const missing = await resolveSubject(ctx, { kind: "places", placeIds: [randomUUID()] }).then(
+      () => "resolved",
+      (e) => (e instanceof SubjectError ? "refused" : String(e))
+    );
+    expect("a place not in the library → refused with a message for the user", missing === "refused", missing);
+    if (plan) {
+      const r = await resolveSubject(ctx, { kind: "plan", planId: plan.id as string });
+      expect("a plan → its name", r.kind === "plan" && r.plan.name === plan.name, r);
+    }
+    const ghostPlan = await resolveSubject(ctx, { kind: "plan", planId: randomUUID() }).then(
+      () => "resolved",
+      (e) => (e instanceof SubjectError ? "refused" : String(e))
+    );
+    expect("a plan that isn't theirs → refused", ghostPlan === "refused", ghostPlan);
+    if (cat) {
+      const r = await resolveSubject(ctx, {
+        kind: "view",
+        page: "map",
+        filters: { category_ids: [cat.id as string, randomUUID()], city: "London" },
+        area: { lat: 51.523456789, lng: -0.0812345, radiusM: 2400.4 },
+      });
+      expect(
+        "the map's filters → names (an unknown id drops out), the area rounded",
+        r.kind === "view" && r.filters.categories?.join() === cat.name && r.filters.city === "London" && r.area?.lat === 51.52346 && r.area?.radius_m === 2400,
+        r
+      );
+    }
+  }
 
   say();
   say(failures ? `${failures} FAILED` : "all passed");

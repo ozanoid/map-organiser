@@ -2,8 +2,8 @@
 title: State Management
 type: overview
 domain: frontend
-version: 1.6.0
-last_updated: 24.11.2026
+version: 1.6.1
+last_updated: 25.11.2026
 status: stable
 sources:
   - src/lib/providers.tsx
@@ -96,7 +96,7 @@ const [queryClient] = useState(
 
 ## Zustand setup
 
-Zustand stores: `src/lib/stores/import-store.ts` (below), `ai-search-store.ts` (above) and, since v1.48.0, `assistant-store.ts` — the assistant panel's open state and a request another screen wrote for it (`openAssistant(draft)`; [[components/assistant]]).
+Zustand stores: `src/lib/stores/import-store.ts` (below), `ai-search-store.ts` (above) and, since v1.48.0, `assistant-store.ts` — the assistant panel's open state and its composer: what the user writes, or a request a screen wrote with its subject (`openAssistant(request)`; kept outside the panel since v1.52.0 so it survives New chat; [[components/assistant]]).
 
 Pattern:
 

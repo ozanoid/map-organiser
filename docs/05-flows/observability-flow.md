@@ -2,8 +2,8 @@
 title: Observability Flow (Honeycomb + Vercel/Axiom + Langfuse)
 type: flow
 domain: infra
-version: 3.7.0
-last_updated: 24.11.2026
+version: 3.7.1
+last_updated: 25.11.2026
 status: stable
 sources:
   - src/instrumentation.ts
@@ -133,7 +133,7 @@ Span sources:
   Every LLM call site carries this: `ai.parse-query`,
   `ai.rank-results`, `ai.generate-profile` (lib — runs under the enrich
   route, the refresh cron and the import drain's `profile` stage),
-  `ai.compare` (v1.19.0), `ai.chat` (v1.21.0) and its `ai.chat.rank` tool
+  `ai.compare` (v1.19.0–v1.51.0), `ai.chat` (v1.21.0) and its `ai.chat.rank` tool
   (v1.23.0), `ai.trip-plan` (v1.22.0), and `ai.instagram-read-post`
   (v1.28.0 — `src/lib/instagram/read-post.ts`, userId + shortcode metadata).
   A Claude call through `structuredClaude` (v1.50.0, the 6.2 measurement) is a
@@ -146,7 +146,7 @@ Span sources:
 (`@langfuse/tracing`) at each call site: `ai-search` (parse-query +
 rank-results — one merged trace via the traceparent below),
 `place-profile` (enrich step=profile), `cron-refresh-places` (cron),
-`ai-compare` (compare route, v1.19.0).
+`ai-compare` (compare route, v1.19.0–v1.51.0; the assistant answers it since v1.52.0).
 
 **Serverless flush:** Langfuse batches span exports; Vercel can suspend
 the function right after the response. Routes that produce LLM spans call

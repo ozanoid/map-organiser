@@ -1,35 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { Sparkles } from "lucide-react";
+import { useAssistantAvailability } from "@/lib/hooks/use-assistant-availability";
 import { useAssistantStore } from "@/lib/stores/assistant-store";
 import { AssistantPanel } from "./assistant-panel";
 
 /**
- * The header's entry to the assistant. Shown when the user has AI features
- * on and the server can run the assistant (its Claude API key is set) —
- * GET /api/user/ai-settings; refresh after changing the setting.
+ * The header's entry to the assistant, and the panel every screen opens.
+ * Shown when the user has AI features on and the server can run the
+ * assistant (useAssistantAvailability).
  */
 export function AssistantLauncher() {
   const openAssistant = useAssistantStore((s) => s.openAssistant);
-  const [available, setAvailable] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        const res = await fetch("/api/user/ai-settings");
-        if (!res.ok || cancelled) return;
-        const settings = (await res.json()) as { enabled?: boolean; assistantAvailable?: boolean };
-        if (!cancelled) setAvailable(Boolean(settings.enabled && settings.assistantAvailable));
-      } catch {
-        // The button just stays hidden.
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const available = useAssistantAvailability();
 
   if (!available) return null;
 

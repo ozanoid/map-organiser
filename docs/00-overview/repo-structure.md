@@ -2,8 +2,8 @@
 title: Repo Structure
 type: overview
 domain: overview
-version: 1.14.1
-last_updated: 24.11.2026
+version: 1.14.2
+last_updated: 25.11.2026
 status: stable
 sources:
   - src/
@@ -86,7 +86,7 @@ src/
 │   ├── offline/page.tsx       PWA offline fallback
 │   └── api/                   Route handlers (see [[../02-backend/api-routes/_README]])
 │       ├── places/            CRUD + bulk + enrich (info/reviews/profile) + refresh-google-data (merge + profile chain) + import-jobs (durable import queue) + parse-link (returns lite_profile) + migrate-photos
-│       ├── ai/                parse-query + rank-results (Phase 6) + compare (v1.19.0) + chat (v1.21.0, streaming) + day-plan (AI Plan; v1.22.0 as trip-plan, on the plans model since v1.37.0)
+│       ├── ai/                parse-query + rank-results (Phase 6) + day-plan (AI Plan; v1.22.0 as trip-plan, on the plans model since v1.37.0)
 │       ├── cron/              refresh-places — daily periodic-refresh sweep (CRON_SECRET, service-role, opt-in per user);
 │       │                      drain-imports — every minute, the import queue (Takeout + Instagram jobs)
 │       ├── instagram/         import (POST — start from a post URL, work in after()) + import/[id] (GET — dialog progress) — v1.28.0; import/[id]/pick (POST — add the place picked for a skipped venue) — v1.28.1
@@ -118,7 +118,7 @@ src/
     ├── auth/                  safe-next.ts — same-site `next` validation for login and the OAuth callback (17.11.2026)
     ├── ai/                    AI SDK v6 wiring (Gemini 3 Flash; profiles by Claude since v1.51.0). client.ts, context-builder.ts,
     │                          dedup.ts, normalize.ts, track-usage.ts (budgets), generate-profile.ts,
-    │                          schemas/ (Zod — +compare.ts v1.19.0, +day-plan.ts v1.22.0); prompts/ (place-profile-full.ts, compare.ts,
+    │                          schemas/ (Zod — +day-plan.ts v1.22.0); prompts/ (place-profile-full.ts,
     │                          parse-query.ts, rank-results.ts, day-plan.ts v1.22.0); extract/ (lite-profile.ts,
     │                          category-resolver.ts, features-extractor.ts,
     │                          suggestions-from-profile.ts); apply-suggestions.ts.

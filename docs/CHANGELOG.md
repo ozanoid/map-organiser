@@ -6,6 +6,62 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 25.11.2026 — v1.52.0 — Step 4, slice 1: requests with a subject; Compare goes to the assistant
+
+Phase 2, decision 6.1 (design approved by Ozan on 25.11.2026, all six
+recommendations): screens open the assistant with a request written and
+what it is about attached. This slice builds the mechanism and hands over
+Compare; AI Plan and the search field follow.
+
+- **Subject.** A request from a screen carries a subject — a plan, the
+  places compared, or the map / places list with its filters and area
+  (`AssistantSubject`, `ui-types.ts`). The chat route checks it against the
+  user's library and names it before the turn opens (`resolveSubject`,
+  `src/lib/agent/subject.ts`: names from the database, never the request;
+  a plan or place gone → 400 `subject_unavailable`, nothing written). The
+  user's message keeps it as a `<subject>` block after `<context>` — JSON
+  with the kind, ids, names and an `about` line, self-explaining for
+  conversations started before; the app prompt says so for new ones, and
+  asks for comparisons in a few lines (best for what, what to watch out
+  for, which when). The panel shows it as a chip (`SubjectChip`,
+  `subjectLabel`) in the composer (✕ takes it off) and on the sent bubble.
+- **Composer in the store.** `useAssistantStore` holds the composer (text,
+  subject) instead of the panel: a request survives New chat and closing
+  the panel. `openAssistant({ text, subject, send })`: in the composer with
+  the cursor at the end, or — the user's own words — sent as soon as the
+  conversation shows, unless a reply is being written or a card waits.
+  Sign-out clears it.
+- **One availability answer.** `useAssistantAvailability()` (React Query
+  `["ai-settings"]`) for the header button and every entry; Settings
+  refreshes it when the AI switch changes.
+- **Fix — screens refresh after a saved change.** The panel invalidated
+  five fixed keys; a plan page reads `["plan", id]` and a place's tags
+  `["place-tags", id]`, so an open plan page kept the old plan for up to a
+  minute after the assistant changed it. Now every query is refreshed but
+  the conversation and the paid lookups (`place-search`, `plan-route`).
+- **Compare → the assistant.** The compare page's "Which one, when?" with
+  **Ask the assistant** (`CompareWithAssistant`, `AskAssistantButton`)
+  replaces the Gemini card; the columns stay. Removed: `AiCompareCard`,
+  `POST /api/ai/compare`, its schema and prompt, the `compare` budget.
+  `ai_compare` stays for past rows, now `retired: true` like
+  `ai_place_profile`, `ai_instagram_read` and `ai_chat` (shown only in a
+  month that has usage).
+- Checks: `npm run check:agent` (the block in the message, read back,
+  hidden from the bubble, the chip and its labels) and `check:agent:db`
+  (subjects resolved against the owner's library, read-only). Not tried in
+  the browser yet.
+- Docs: [[03-frontend/components/assistant]], [[05-flows/ai-chat-flow]],
+  [[02-backend/api-routes/assistant]], [[04-integrations/claude-agent]],
+  [[03-frontend/components/places]], [[03-frontend/components/settings]],
+  [[03-frontend/state-management]], [[03-frontend/routing]],
+  [[02-backend/api-routes/ai]], [[02-backend/api-routes/_README]],
+  [[02-backend/schema/api_usage]], [[04-integrations/gemini]],
+  [[05-flows/ai-enrichment-flow]], [[05-flows/observability-flow]],
+  [[00-overview/repo-structure]], [[00-overview/tech-stack]],
+  [[_plans/phase-2-assistant]].
+
+---
+
 ## 24.11.2026 — v1.51.0 — Profiles by Claude Sonnet 5.5, Instagram reads by Haiku 5.5
 
 - Ozan's choice after the 6.2 measurement: place profiles are written by

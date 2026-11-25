@@ -2,8 +2,8 @@
 title: Tech Stack
 type: overview
 domain: overview
-version: 1.8.0
-last_updated: 24.11.2026
+version: 1.8.1
+last_updated: 25.11.2026
 status: stable
 sources:
   - package.json
@@ -61,7 +61,7 @@ Every runtime, library, and tool the repo currently depends on. Pin sources are 
 | `@supabase/supabase-js` | `^2.103.0` | Postgres + Auth + Storage client | Used by `createServiceClient` in `src/lib/supabase/server.ts`. |
 | `@supabase/ssr` | `^0.12.0` | SSR cookie auth | Powers all three clients (browser/server/proxy) in `src/lib/supabase/`. |
 | `@tanstack/react-query` | `^5.101.2` | Server-state cache | Default `staleTime: 60_000`, `refetchOnWindowFocus: false`. |
-| `zustand` | `^5.0.14` | Client state store | `src/lib/stores/import-store.ts`; `assistant-store.ts` (the assistant panel's open state and a request written by another screen, v1.48.0). |
+| `zustand` | `^5.0.14` | Client state store | `src/lib/stores/import-store.ts`; `assistant-store.ts` (the assistant panel's open state and its composer — a request a screen wrote, with its subject; v1.48.0, v1.52.0). |
 | `zod` | `^4.6.7` | Runtime validation (below 4.6.6, validating an oversized constrained collection could exhaust memory) | Used on every mutation API route + every AI structured output. |
 
 ## AI

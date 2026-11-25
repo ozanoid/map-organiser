@@ -18,7 +18,8 @@ import { replyMessageId, toUIMessages, uiToolOutput } from "@/lib/agent/ui";
 import { systemPromptFor } from "@/lib/agent/prompt";
 import { capWithGuaranteedSeats } from "@/lib/assistant/place-filters";
 import { turnStream } from "@/lib/agent/ui-stream";
-import { approvalsAnswered, placeIdsIn, type AssistantUIMessage } from "@/lib/agent/ui-types";
+import { approvalsAnswered, placeIdsIn, subjectLabel, type AssistantUIMessage, type ResolvedSubject } from "@/lib/agent/ui-types";
+import { SUBJECT_TAG, subjectBlock, subjectIn } from "@/lib/agent/subject";
 import type { ToolRun } from "@/lib/agent/store";
 import { openTurn, runTurn, startConversation, type AgentDeps, type TurnEvents, type TurnResult } from "@/lib/agent/run-turn";
 import type { SpendEntry, SpendLedger } from "@/lib/agent/spend";
@@ -662,6 +663,56 @@ async function main() {
     expect("the pool: the best-rated 30, a tagged place below the cut swapped in for the lowest", pool.length === 30 && pool.some((r) => r.id === "r35") && pool.some((r) => r.id === "r39") && !pool.some((r) => r.id === "r29") && !pool.some((r) => r.id === "r28"), pool.map((r) => r.id));
     const flood = capWithGuaranteedSeats(rows, new Set(rows.slice(4).map((r) => r.id)), 10);
     expect("guaranteed seats take at most half the pool", flood.filter((r) => Number(r.id.slice(1)) >= 10).length <= 5, flood.map((r) => r.id));
+  }
+
+  say("## a request from a screen: its subject");
+  {
+    const t = await setup();
+    t.client.queue.push({ kind: "message", stop: "end_turn", content: [text("Joie for brunch, Neni for dinner.")] });
+    const places: ResolvedSubject = {
+      kind: "places",
+      places: [
+        { id: "11111111-1111-4111-8111-111111111111", name: "Joie" },
+        { id: "22222222-2222-4222-8222-222222222222", name: "Neni" },
+      ],
+    };
+    await t.turn({ ...t.msg("Bu yerleri karşılaştır"), subject: places });
+    const h = await t.history();
+    const blocks = h[0].content as any[];
+    expect(
+      "the user's message: context, then the subject, then the text",
+      blocks.length === 3 && blocks[0].text.startsWith(`<${CONTEXT_TAG}>`) && blocks[1].text.startsWith(`<${SUBJECT_TAG}>`) && blocks[2].text === "Bu yerleri karşılaştır",
+      blocks.map((b) => String(b.text).slice(0, 20))
+    );
+    const json = JSON.parse(blocks[1].text.slice(`<${SUBJECT_TAG}>`.length, -`</${SUBJECT_TAG}>`.length));
+    expect("the block names the places with their ids and says what it is", json.kind === "places" && json.places[1].id.startsWith("2222") && typeof json.about === "string", json);
+    expect("read back as it was written", JSON.stringify(subjectIn(blocks as any)) === JSON.stringify(places), subjectIn(blocks as any));
+    expect("a message without one has none", subjectIn([{ type: "text", text: "Selam" }]) === null);
+    expect("a malformed block is ignored, not shown", subjectIn([{ type: "text", text: `<${SUBJECT_TAG}>{oops</${SUBJECT_TAG}>` }]) === null);
+
+    const ui = toUIMessages(h, new Map(), {}, { turnInProgress: false, lastTurn: null });
+    const userParts = ui[0].parts as any[];
+    expect(
+      "the panel: a chip with the names, then the text — no block text, no ids",
+      userParts.length === 2 && userParts[0].type === "data-subject" && userParts[0].data.label === "2 places · Joie, Neni" && userParts[0].data.kind === "places" && userParts[1].text === "Bu yerleri karşılaştır",
+      userParts
+    );
+    expect("its reply's id is unchanged by the subject", ui[1].id === "a1" && replyMessageId(h, "retry") === "a1", ui.map((m) => m.id));
+    expect("a stored chip carries no request subject", userParts[0].data.subject === undefined);
+    const sent = subjectBlock({ kind: "plan", plan: { id: "33333333-3333-4333-8333-333333333333", name: "Lizbon hafta sonu" } });
+    expect("a plan's block", sent.text.includes('"kind":"plan"') && sent.text.includes("Lizbon hafta sonu"));
+
+    expect("label: a plan", subjectLabel({ kind: "plan", plan: { id: "x", name: "Lizbon hafta sonu" } }) === "Plan · Lizbon hafta sonu");
+    expect("label: one place", subjectLabel({ kind: "places", places: [{ id: "x", name: "Joie" }] }) === "1 place · Joie");
+    const long = subjectLabel({ kind: "places", places: ["Bolland & Crust Bakery", "Monmouth Coffee Company", "Prufrock Coffee", "Kiln Soho"].map((name, i) => ({ id: String(i), name })) });
+    expect("label: a long list is cut", long.startsWith("4 places · Bolland") && long.endsWith("…") && long.length <= 72, long);
+    expect("label: the map with no filters", subjectLabel({ kind: "view", page: "map", filters: {}, area: { lat: 51.5, lng: -0.1, radius_m: 2000 } }) === "Map · this area");
+    expect(
+      "label: the map's filters",
+      subjectLabel({ kind: "view", page: "map", filters: { categories: ["Cafe"], tags: ["laptop"], city: "London" } }) === "Map · Cafe, #laptop, London"
+    );
+    expect("label: your places", subjectLabel({ kind: "view", page: "places", filters: {} }) === "Your places");
+    expect("the app door explains the block (new conversations)", systemPromptFor("app").includes("<subject>"));
   }
 
   say("## a live turn, as the panel receives it");

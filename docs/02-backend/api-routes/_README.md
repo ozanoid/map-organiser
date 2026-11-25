@@ -2,8 +2,8 @@
 title: API Routes
 type: overview
 domain: backend
-version: 1.12.1
-last_updated: 24.11.2026
+version: 1.12.2
+last_updated: 25.11.2026
 status: stable
 sources:
   - src/app/api/
@@ -31,7 +31,7 @@ All Next.js route handlers grouped by area. Each linked doc is the canonical ref
 | Shared | `/api/shared/*` | **Mixed** — GET `/[slug]` public via service role | [[shared]] |
 | Stats | `/api/stats` | Required | [[stats]] |
 | User | `/api/user/*` — includes `ai-settings` (Phase 1) and `ai-suggestions/*` (Phase 5 moderation queue: list, accept, reject) | Required | [[user]] |
-| AI | `/api/ai/*` — `parse-query`, `rank-results` (Phase 6 NL filtering), `compare` (v1.19.0), `day-plan` (AI Plan — v1.22.0 as `trip-plan`; the group's only writing route). `chat` was removed in v1.48.0 | Required | [[ai]] |
+| AI | `/api/ai/*` — `parse-query`, `rank-results` (Phase 6 NL filtering), `day-plan` (AI Plan — v1.22.0 as `trip-plan`; the group's only writing route). `chat` was removed in v1.48.0, `compare` in v1.52.0 (the compare page asks the assistant) | Required | [[ai]] |
 | Assistant | `/api/assistant/chat` (one turn of the Claude agent, streaming), `/api/assistant/conversation` (latest conversation, New chat) — v1.48.0 | Required | [[assistant]] |
 | Search | `/api/search/*` (Mapbox geocoder proxy) | Required | [[search]] |
 | Instagram | `/api/instagram/import` (POST — start an import from a post URL, work runs in `after()`) + `/api/instagram/import/[id]` (GET — the dialog's progress view) — v1.28.0; `/api/instagram/import/[id]/pick` (POST — add the place picked for a skipped venue) — v1.28.1 | Required | [[instagram]] |
@@ -103,7 +103,7 @@ These are reused across many routes:
 | `applyProfileSuggestions` | `src/lib/ai/apply-suggestions.ts` | 4-band auto-apply policy for LLM output. |
 | `buildLiteProfile` | `src/lib/ai/extract/lite-profile.ts` | LLM-less rule-based profile inline in `parse-link`. |
 | `dedupProposals` / `isFuzzyMatch` | `src/lib/ai/dedup.ts`, `normalize.ts` | Post-LLM and accept-time fuzzy match. |
-| `trackAiUsage` / `checkAiBudget` | `src/lib/ai/track-usage.ts` | Per-SKU Gemini counter + monthly budget gates (search 500 / compare 200 / trip_plan 50; chat removed in v1.48.0, profile and instagram in v1.51.0 — the Claude ledger's cap covers those). |
+| `trackAiUsage` / `checkAiBudget` | `src/lib/ai/track-usage.ts` | Per-SKU Gemini counter + monthly budget gates (search 500 / trip_plan 50; chat removed in v1.48.0, profile and instagram in v1.51.0, compare in v1.52.0 — the Claude ledger's cap covers those). |
 | `findExisting` / `importPlace` | `src/lib/import/process-place.ts` | Duplicate check by place_id / CID without an API call; per-place import used by the drain (`ImportDefaults.source` sets `places.source`). |
 | `kickDrain` | `src/lib/import/kick-drain.ts` | Non-awaited `GET /api/cron/drain-imports` with the `CRON_SECRET` bearer — fired by the Takeout create route and the Instagram job (v1.28.0, moved out of the import-jobs route), and by the Instagram pick route (v1.28.1). |
 | `analyzeInstagramPost` / `runInstagramImportJob` | `src/lib/instagram/analyze.ts`, `import-job.ts` | Instagram post → venues → Google places (writes nothing) / the job that turns that into `import_job_items` (v1.28.0). See [[instagram]]. |

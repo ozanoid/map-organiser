@@ -44,11 +44,103 @@ export type TurnOutcome = (
   | { status: "error"; code: string; message: string; retry?: boolean }
 ) & { version?: number };
 
+/**
+ * What a request sent from a screen of the app is about (Phase 2, 6.1):
+ * the plan on the plan page, the places on the compare page, the map or
+ * the places list with its filters. The screen names it by id; the server
+ * checks it is the user's, names it for the model in a <subject> block of
+ * the message (agent/subject.ts) and keeps it with the conversation.
+ */
+export type AssistantSubject =
+  | { kind: "plan"; planId: string }
+  | { kind: "places"; placeIds: string[] }
+  | { kind: "view"; page: "map" | "places"; filters: SubjectViewFilters; area?: SubjectArea };
+
+/** The filters of the screen the request came from — the app's own
+ *  (PlaceFilters), by id; the server turns them into names. */
+export type SubjectViewFilters = {
+  city?: string;
+  country?: string;
+  category_ids?: string[];
+  subcategory_ids?: string[];
+  tag_ids?: string[];
+  list_id?: string;
+  rating_min?: number;
+  google_rating_min?: number;
+  visit_status?: string;
+  open_now?: boolean;
+};
+
+/** The part of the map on screen: its centre and about how far it reaches. */
+export type SubjectArea = { lat: number; lng: number; radiusM: number };
+
+/** The subject as the model reads it and the chip names it — the names
+ *  come from the database, never from the request. */
+export type ResolvedSubject =
+  | { kind: "plan"; plan: { id: string; name: string } }
+  | { kind: "places"; places: { id: string; name: string }[] }
+  | {
+      kind: "view";
+      page: "map" | "places";
+      filters: {
+        city?: string;
+        country?: string;
+        categories?: string[];
+        subcategories?: string[];
+        tags?: string[];
+        list?: string;
+        visit_status?: string;
+        min_my_rating?: number;
+        min_google_rating?: number;
+        open_now?: boolean;
+      };
+      area?: { lat: number; lng: number; radius_m: number };
+    };
+
+/** A message's subject chip (`data-subject` part). On a message the panel
+ *  sends, `subject` carries what the request body needs. */
+export type SubjectPart = { kind: AssistantSubject["kind"]; label: string; subject?: AssistantSubject };
+
+/** What a chip says — the same words before the message is sent (the
+ *  screen knows the names) and after (the server's names). */
+export function subjectLabel(s: ResolvedSubject): string {
+  switch (s.kind) {
+    case "plan":
+      return `Plan · ${s.plan.name}`;
+    case "places": {
+      const names = s.places.map((p) => p.name).join(", ");
+      const shown = names.length > 60 ? `${names.slice(0, 59).trimEnd()}…` : names;
+      return `${s.places.length} ${s.places.length === 1 ? "place" : "places"} · ${shown}`;
+    }
+    case "view": {
+      const f = s.filters;
+      const parts = [
+        ...(f.categories ?? []),
+        ...(f.subcategories ?? []),
+        ...(f.tags ?? []).map((t) => `#${t}`),
+        f.list,
+        f.city ?? f.country,
+      ].filter((x): x is string => Boolean(x));
+      const base = s.page === "map" ? "Map" : "Your places";
+      if (parts.length) return `${base} · ${parts.slice(0, 3).join(", ")}${parts.length > 3 ? "…" : ""}`;
+      return s.page === "map" ? "Map · this area" : base;
+    }
+  }
+}
+
 export type AssistantDataTypes = {
   turn: TurnOutcome;
+  subject: SubjectPart;
 };
 
 export type AssistantUIMessage = UIMessage<unknown, AssistantDataTypes>;
+
+type AssistantPart = AssistantUIMessage["parts"][number];
+
+/** A message's subject chip. */
+export function isSubjectPart(part: AssistantPart): part is Extract<AssistantPart, { type: "data-subject" }> {
+  return part.type === "data-subject";
+}
 
 /** The trimmed tool output the panel gets — what it shows, not what the
  *  model read. */
@@ -73,7 +165,7 @@ export type ToolMetadata = {
 export type ChatRequestBody = {
   conversationId: string;
   input:
-    | { kind: "message"; text: string; timeZone: string }
+    | { kind: "message"; text: string; timeZone: string; subject?: AssistantSubject }
     | { kind: "approval"; decisions: Record<string, boolean> }
     | { kind: "retry" };
 };

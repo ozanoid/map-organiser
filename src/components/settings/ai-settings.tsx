@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Sparkles, Loader2, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Separator } from "@/components/ui/separator";
 import { AiSuggestionsQueue } from "@/components/settings/ai-suggestions-queue";
 import { BackfillProfilesPanel } from "@/components/settings/backfill-profiles-panel";
+import { AI_SETTINGS_KEY } from "@/lib/hooks/use-assistant-availability";
 
 interface AiSettingsState {
   enabled: boolean;
@@ -34,6 +36,7 @@ export function AiSettings() {
   const [state, setState] = useState<AiSettingsState | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const queryClient = useQueryClient();
 
   // Load once on mount. The loader lives inside the effect: declared below
   // it, React's immutability lint rule (eslint-config-next 16.4) rejects the
@@ -74,6 +77,8 @@ export function AiSettings() {
         throw new Error(body.error ?? "Failed to update AI settings");
       }
       toast.success(next ? "AI features enabled" : "AI features disabled");
+      // The assistant's button and the screens' entries follow the switch.
+      void queryClient.invalidateQueries({ queryKey: AI_SETTINGS_KEY });
     } catch (e) {
       // Rollback
       setState({ ...state, enabled: !next });

@@ -2,8 +2,8 @@
 title: Settings components
 type: component
 domain: frontend
-version: 1.6.0
-last_updated: 24.11.2026
+version: 1.6.1
+last_updated: 25.11.2026
 status: stable
 sources:
   - src/components/settings/api-keys-manager.tsx
@@ -68,7 +68,7 @@ Five components powering the Settings page tabs. All `"use client"`.
 - **Hooks:** `useState`, `useEffect` — loads once on mount; the loader sits inside the effect (React's immutability lint rule rejects a call to a function declared below it, v1.43.0) and drops a late answer after unmount. Optimistic-update + rollback-on-error pattern.
 - **API calls:** `GET` and `PUT` `/api/user/ai-settings`.
 - **State:** `{ enabled: boolean, available: boolean, assistantAvailable: boolean, cronRefreshEnabled: boolean } | null` + `loading` + `saving` — `available` is Gemini (AI search, AI Plan, Compare), `assistantAvailable` Claude (the assistant, place profiles, Instagram imports).
-- **Renders:** Master toggle (rounded switch, accessible `role="switch"`/`aria-checked`). Always below it (independent of the AI master — the data half isn't AI): the **"Background data refresh" toggle** (15.07.2026 — opt-in for the whole periodic sweep, default off; see [[../../06-ops/runbooks/periodic-refresh]]). Then, when **enabled** and Claude is set up (`assistantAvailable` — Claude writes the profiles and with them the suggestions; v1.51.0, it was the Gemini flag before): `BackfillProfilesPanel` and `AiSuggestionsQueue`. One amber banner per provider the server is missing, naming what it turns off and its key (`GOOGLE_GENERATIVE_AI_API_KEY`, `ANTHROPIC_API_KEY`; v1.51.0). The master switch is disabled only when both are missing.
+- **Renders:** Master toggle (rounded switch, accessible `role="switch"`/`aria-checked`). Always below it (independent of the AI master — the data half isn't AI): the **"Background data refresh" toggle** (15.07.2026 — opt-in for the whole periodic sweep, default off; see [[../../06-ops/runbooks/periodic-refresh]]). Then, when **enabled** and Claude is set up (`assistantAvailable` — Claude writes the profiles and with them the suggestions; v1.51.0, it was the Gemini flag before): `BackfillProfilesPanel` and `AiSuggestionsQueue`. One amber banner per provider the server is missing, naming what it turns off and its key (`GOOGLE_GENERATIVE_AI_API_KEY`, `ANTHROPIC_API_KEY`; v1.51.0). The master switch is disabled only when both are missing. A change of the switch refreshes `["ai-settings"]`, so the assistant's button and the screens' assistant entries follow without a reload (v1.52.0).
 - **Used by:** `/settings` page (AI tab).
 
 ## `AiSuggestionsQueue`

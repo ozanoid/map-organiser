@@ -2,8 +2,8 @@
 title: AI Enrichment Flow
 type: flow
 domain: places
-version: 1.9.0
-last_updated: 24.11.2026
+version: 1.9.1
+last_updated: 25.11.2026
 status: stable
 sources:
   - src/app/api/places/[id]/enrich/route.ts
@@ -117,9 +117,9 @@ buckets added as those features shipped):
   `parse-query` (every search runs exactly one parse); `rank-results`
   rides free — its own 3× ceiling (`AI_MONTHLY_RANK_BACKSTOP`) exists
   only to stop a client-side rerank-loop bug. Ceiling ≈ $10.5/month.
-- **COMPARE — `AI_MONTHLY_COMPARE_CAP = 200` runs** (v1.19.0, S2 F-04).
-  One unit per `/api/ai/compare` request (SKU `ai_compare`); deliberate-click
-  only from the compare page, never auto-fired.
+- **COMPARE — removed in v1.52.0** with the Gemini comparison (it was
+  `AI_MONTHLY_COMPARE_CAP = 200` runs, SKU `ai_compare`, kept for past rows);
+  the compare page asks the assistant, under the Claude ledger's cap.
 - **CHAT — removed in v1.48.0** with the Gemini chat (it was
   `AI_MONTHLY_CHAT_CAP = 200` turns, SKU `ai_chat`, which stays for past
   rows). The Claude assistant that replaced it is capped by the platform's
@@ -188,7 +188,7 @@ Both AI layers are gated. A place skips them silently when a gate fails:
 ## Related code
 
 - `src/app/api/places/[id]/enrich/route.ts` — the cascade (`step=info|reviews|profile`).
-- `src/lib/ai/track-usage.ts` — `trackAiUsage`, `checkAiBudget`, `AI_MONTHLY_SEARCH_CAP` / `AI_MONTHLY_COMPARE_CAP` / `AI_MONTHLY_TRIP_PLAN_CAP` (the chat, profile and Instagram caps are gone — v1.48.0, v1.51.0).
+- `src/lib/ai/track-usage.ts` — `trackAiUsage`, `checkAiBudget`, `AI_MONTHLY_SEARCH_CAP` / `AI_MONTHLY_TRIP_PLAN_CAP` (the chat, profile, Instagram and compare caps are gone — v1.48.0, v1.51.0, v1.52.0).
 - `src/lib/agent/spend.ts` — the Claude ledger and its monthly cap (`MONTHLY_CAP_USD`) that bounds profiles and Instagram reads.
 - `src/lib/ai/extract/lite-profile.ts` — `buildLiteProfile` (layer 3). See [[lite-profile-flow]].
 - `src/lib/ai/prompts/place-profile-full.ts`, `src/lib/ai/apply-suggestions.ts` — layer 5. See [[full-profile-flow]].
