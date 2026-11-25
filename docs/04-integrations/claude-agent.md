@@ -2,7 +2,7 @@
 title: "Claude agent (platform side)"
 type: integration
 domain: integrations
-version: 1.9.0
+version: 1.10.0
 last_updated: 25.11.2026
 status: draft
 sources:
@@ -39,7 +39,7 @@ related:
 
 The platform's own assistant: Claude, called by our server through the Claude API, using the same tools claude.ai reaches over MCP ([[claude-mcp]]). One core (`src/lib/agent/`) for every door; the first door is the in-app panel ([[../_plans/phase-2-assistant]] — not wired yet). Added 23.11.2026.
 
-**State (25.11.2026):** on `feat/personal-assistant`, not on main. The core ran against the live Claude API and the live database through the eval (below): 209 model calls, $5.03. Its first door — the app's assistant panel — is built (v1.48.0): [[../02-backend/api-routes/assistant]], [[../05-flows/ai-chat-flow]], [[../03-frontend/components/assistant]]; an independent review's findings are fixed, and the third migration (which conversation the door shows, how the last turn ended) is applied (24.11.2026, with Ozan's approval). Tried end to end in a signed-in browser on the admin test account: the panel on 24.11.2026 (13 Claude calls, $0.21), the requests from the compare page, the plan page and the search field on 25.11.2026 (12 calls, $0.29).
+**State (25.11.2026):** on main since the merge 7df90df of 25.11.2026 (Ozan's approval; v1.46.3–v1.56.0); v1.56.1 on the branch. The core ran against the live Claude API and the live database through the eval (below): 209 model calls, $5.03. Its first door — the app's assistant panel — is built (v1.48.0): [[../02-backend/api-routes/assistant]], [[../05-flows/ai-chat-flow]], [[../03-frontend/components/assistant]]; an independent review's findings are fixed, and the third migration (which conversation the door shows, how the last turn ended) is applied (24.11.2026, with Ozan's approval). Tried end to end in a signed-in browser on the admin test account: the panel on 24.11.2026 (13 Claude calls, $0.21), the requests from the compare page, the plan page and the search field on 25.11.2026 (12 calls, $0.29).
 
 ## How a turn runs
 
@@ -160,6 +160,7 @@ The panel ([[../03-frontend/components/assistant]]) speaks the AI SDK's UI messa
 - **Who can use it** (v1.56.0, Ozan): the in-app door is the owners' alone — `assistantOpenTo` (`door.ts`), the `ASSISTANT_OWNER_EMAILS` list the connector checks; anyone else gets 403 `not_owner` and sees no button or entry (`GET /api/user/ai-settings` → `assistantAvailable`). The assistant spends the platform's one budget.
 - **A plan's dates** (v1.55.0): the shared instructions (`instructions.ts`, both doors) keep a plan's dates — `start_date` changes only when the user asks; when the dates don't work (passed, places closed) the model says so and asks. The end-to-end run of 25.11.2026 saw it move a plan's date unasked while spreading the plan over its days (the card showed it). Measured on 25.11.2026 with the eval case `spread-plan-keeps-dates` (the test account's plan, the plan page's request with the plan as subject, Sonnet 5.5 high, 3 runs, $0.208): 3/3 kept the dates — each said the plan's days (20–22.07.2026) had passed, went through the stops on those days and asked for a new start date; none opened a card.
 - **Previews** (`describe-writes.ts`): the card's text from the call's input — ids resolved to names through the user's own rows; a place proposed from a Google Maps search named from that search's result in the conversation. The model doesn't describe plans or lists before calling (eval), so the card has to.
+- **The map's area** (v1.56.1): a view subject carries any area the map can show, normalized on the server (`normalizeArea`: the longitude wrapped, the radius within the Earth); the app's prompt says `near` takes up to 30 km of it and a wider area is a region. Found in production on 25.11.2026: a view of Europe (≈ 2,000 km to the corner) failed the old 500 km limit with 400 — the search field's request never reached the model. The prompt note applies to new conversations (a conversation keeps the prompt it started with); a wide view in an older one was answered right without it.
 - **Requests from a screen** (v1.52.0, decision 6.1): a screen opens the panel with a request and what it is about — the plan, the places compared, the map or the places list with its filters. The route checks it against the user's library and names it (`resolveSubject`, `subject.ts`); the user's message keeps it as a `<subject>` block after `<context>`: JSON with the kind, the ids and names, and an `about` line saying what it is, so it reads right in a conversation whose system prompt predates it. The app's prompt says so for new conversations, and asks for a comparison in a few lines — what each place is best for, what to watch out for, which to pick when. The panel shows it as a chip (`subjectLabel`, `ui-types.ts`). In use: the compare page (v1.52.0), the plan page (v1.53.0) and the search field (v1.54.0) — with that, every AI feature of the app runs on Claude.
 - **After the browser:** the chat route waits for the turn with `after()`; the turn lease makes another tab wait instead of starting a second turn.
 

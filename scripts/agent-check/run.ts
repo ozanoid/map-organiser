@@ -19,7 +19,7 @@ import { systemPromptFor } from "@/lib/agent/prompt";
 import { capWithGuaranteedSeats } from "@/lib/assistant/place-filters";
 import { turnStream } from "@/lib/agent/ui-stream";
 import { approvalsAnswered, placeIdsIn, subjectLabel, type AssistantUIMessage, type ResolvedSubject } from "@/lib/agent/ui-types";
-import { SUBJECT_TAG, subjectBlock, subjectIn } from "@/lib/agent/subject";
+import { normalizeArea, SUBJECT_TAG, SubjectSchema, subjectBlock, subjectIn } from "@/lib/agent/subject";
 import { planChangeLines } from "@/lib/agent/describe-writes";
 import type { PlanSnapshot } from "@/lib/plans/write";
 import type { ToolRun } from "@/lib/agent/store";
@@ -820,6 +820,22 @@ async function main() {
     );
     expect("label: your places", subjectLabel({ kind: "view", page: "places", filters: {} }) === "Your places");
     expect("the app door explains the block (new conversations)", systemPromptFor("app").includes("<subject>"));
+  }
+
+  say("## every view the map can show is a subject");
+  {
+    const view = (area: { lat: number; lng: number; radiusM: number }) =>
+      SubjectSchema.safeParse({ kind: "view", page: "map", filters: {}, area }).success;
+    // 25.11.2026, production: a view of Europe (≈ 2,000 km to the corner) failed the old 500 km limit.
+    expect("zoomed out past a continent", view({ lat: 48.5, lng: 10.2, radiusM: 2_134_000 }));
+    expect("zoomed in to a street", view({ lat: 51.5, lng: -0.1, radiusM: 12 }));
+    expect("panned round the world", view({ lat: 35.6, lng: 499.7, radiusM: 9000 }));
+    expect("not a latitude off the globe", !view({ lat: 95, lng: 0, radiusM: 1000 }));
+    const wrapped = normalizeArea({ lat: 35.612345678, lng: 499.7, radiusM: 9000.4 });
+    expect("the longitude wrapped, both rounded", wrapped.lng === 139.7 && wrapped.lat === 35.61235 && wrapped.radius_m === 9000, wrapped);
+    expect("the dateline: -180 and 180 are one", normalizeArea({ lat: 0, lng: 180, radiusM: 1 }).lng === -180);
+    expect("the radius within the Earth", normalizeArea({ lat: 0, lng: 0, radiusM: 9e9 }).radius_m === Math.round(Math.PI * 6_371_000));
+    expect("the prompt says how to use a wide area", systemPromptFor("app").includes("near takes up to 30 km"));
   }
 
   say("## a live turn, as the panel receives it");

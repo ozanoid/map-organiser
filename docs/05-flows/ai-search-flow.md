@@ -2,7 +2,7 @@
 title: AI Search Flow
 type: flow
 domain: ai
-version: 2.0.0
+version: 2.0.1
 last_updated: 25.11.2026
 status: draft
 sources:
@@ -29,7 +29,7 @@ The filter **Search** field (`DebouncedSearchInput` — the map's filter sidebar
 ## Steps
 
 1. A tap takes the words out of the field (the pending keyword filter is dropped — they are the assistant's question now, not a keyword) and calls `useAskFromSearch(page)`.
-2. The request is the words as typed, **sent at once** (`openAssistant({ text, subject, send: true })`), with the screen as its subject: `{ kind: "view", page: "map" | "places", filters, area? }` — the filters on (by id: city, country, categories, sub-categories, tags, list, visit status, ratings, open now) and, on the map, the area in view (`useMapAreaStore`, which the map writes as it moves: its centre and the distance to a corner, `MapViewHandle.getArea`). The chip is named from the screen's caches until the server names it ("Map · Cafe, London").
+2. The request is the words as typed, **sent at once** (`openAssistant({ text, subject, send: true })`), with the screen as its subject: `{ kind: "view", page: "map" | "places", filters, area? }` — the filters on (by id: city, country, categories, sub-categories, tags, list, visit status, ratings, open now) and, on the map, the area in view (`useMapAreaStore`, which the map writes as it moves: its centre and the distance to a corner, `MapViewHandle.getArea`). Any view goes — a continent, a street, a map panned round the world (v1.56.1, after a view of Europe was refused in production); the app's prompt tells the model that `near` takes up to 30 km of it and that a wider area is a region (its city or country, or no place filter). The chip is named from the screen's caches until the server names it ("Map · Cafe, London").
 3. The panel opens and sends it — unless a reply is being written or cards wait for an answer; then it waits in the composer. The mobile filter sheet closes first.
 4. The server checks the subject and names it (`resolveSubject`: ids to names, the area rounded); the model reads it as "here" — it can search near the area or with the filters ([[ai-chat-flow]]).
 5. The reply links the places it recommends; **Show these N on map** puts them on the map.
