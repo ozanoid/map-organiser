@@ -6,6 +6,27 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 25.11.2026 — v1.56.3 — Phase 3 design draft: communication
+
+- New: [[_plans/phase-3-communication]] (draft) — Ozan's own notifications
+  (plan summary, reminders, a weekly summary by e-mail and Telegram) and
+  inviting friends (one link for a WhatsApp group, an RSVP page without
+  accounts), calendar export and the assistant's `send_plan` /
+  `invite_to_plan`. It carries the gaps of the current structure with
+  evidence (no user time zone, a client-only share page without link
+  previews, 60-bit share slugs, indexable public pages, no outbound
+  messaging), the measured use (7 plans in all, none on Ozan's account; plan
+  share links 2 / 14 views), the model (`notification_channels`,
+  `notification_settings`, a `notifications` outbox, `plan_invitations`,
+  `plan_rsvps`, `profiles.time_zone` — all additive), four slices with a
+  regression list, Ozan's dashboard steps, what was considered and rejected
+  and 14 decisions with recommendations. Researched from primary sources
+  (Resend, Telegram Bot API 10.5, WhatsApp, RFC 5545, Partiful / Luma /
+  Apple Invites / Google Calendar). No code, no schema change.
+- Docs: [[_plans/personal-assistant]].
+
+---
+
 ## 25.11.2026 — v1.56.2 — The wide map view fix on main
 
 - v1.56.1 merged to main with Ozan's approval (merge e92e9fa; main
