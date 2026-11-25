@@ -2,11 +2,13 @@
 title: notification_channels, channel_link_tokens, notifications
 type: table
 domain: backend
-version: 1.0.0
+version: 1.1.0
 last_updated: 25.11.2026
 status: draft
 sources:
-  - supabase/migrations/20261125160000_notifications.sql
+  - Supabase project hukppmaevcapvbrvxtph (live)
+  - supabase/migrations/20261125203540_notifications.sql
+  - supabase/migrations/20261125210000_notifications_plan_index.sql
   - src/lib/notify/channels.ts
   - src/lib/notify/tokens.ts
   - src/lib/notify/outbox.ts
@@ -26,7 +28,7 @@ tags:
 
 # `notification_channels`, `channel_link_tokens`, `notifications`
 
-Phase 3, slice 1 ([[../../_plans/phase-3-communication]]): where the owner gets messages — one e-mail address and one Telegram chat — the one-time tokens that connect them, and a record of every message the app sends. **Written as migration `20261125160000_notifications.sql` (v1.57.0); not applied yet — it waits for Ozan's approval.** A dry-run in a rolled-back transaction passed (25.11.2026, results below). All three tables are new; nothing existing changes.
+Phase 3, slice 1 ([[../../_plans/phase-3-communication]]): where the owner gets messages — one e-mail address and one Telegram chat — the one-time tokens that connect them, and a record of every message the app sends. **Applied on 25.11.2026 with Ozan's approval** — migration `notifications`, version 20261125203540 (v1.57.0; the file was written as 20261125160000 and renamed to the recorded version). A dry-run in a rolled-back transaction passed first (results below); after applying, `npm run check:notify:db` passed 15 of 15 against the live schema, writing nothing. All three tables are new; nothing existing changes.
 
 Every write is the server's, with the service role, scoped to the user in code (`src/lib/notify/`); users only read their own rows. With no write policies, a signed-in user can't mark an address confirmed or point a channel at someone else's chat through the REST API.
 
@@ -82,7 +84,7 @@ The outbox: every message sent or to be sent is a row, written before it is sent
 | `created_at` | timestamptz | no | `now()` | — |
 | `sent_at` | timestamptz | yes | — | — |
 
-Indexes: `notifications_due_idx (due_at) where status in ('pending', 'sending', 'failed')` — slice 2's "what is due"; `notifications_user_idx (user_id, created_at desc)`.
+Indexes: `notifications_due_idx (due_at) where status in ('pending', 'sending', 'failed')` — slice 2's "what is due"; `notifications_user_idx (user_id, created_at desc)`. **Missing, written as a follow-up migration (`20261125210000_notifications_plan_index.sql`, not applied — awaits Ozan's approval):** `notifications_plan_idx (plan_id)` — `plan_id` is a foreign key with ON DELETE SET NULL, and without an index deleting a plan reads the whole table to find its records. Supabase's performance advisor flagged it right after the apply (lint 0001); its dry-run passed and was rolled back.
 
 ### `notification_claim(p_id uuid, p_lease_seconds integer default 120) returns setof notifications`
 
@@ -105,4 +107,5 @@ The migration plus a test block in one transaction that ends in an exception, on
 ## Notes
 
 - Consumed by: `src/lib/notify/channels.ts` (channels, the confirmation page's state, linking), `tokens.ts`, `outbox.ts` (`deliver`), `send.ts` (`sendToOwner`); the approval card for `send_plan` reads `notification_channels` with the user's own session (`describe-writes.ts`).
-- `npm run check:notify:db` checks every query against the live schema without writing (run it once the migration is applied).
+- `npm run check:notify:db` checks every query against the live schema without writing: 15 of 15 on 25.11.2026, all three tables still empty afterwards.
+- Advisors after the apply (25.11.2026): security — one new INFO, `rls_enabled_no_policy` on `channel_link_tokens`, which is the design (server-only; no policy means no access for `anon` / `authenticated`); performance — `unindexed_foreign_keys` on `notifications.plan_id` (the follow-up above) and `unused_index` on the three new indexes (the tables are new and empty). Every other finding predates these tables.

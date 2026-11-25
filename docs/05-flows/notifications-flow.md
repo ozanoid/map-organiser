@@ -2,7 +2,7 @@
 title: Notifications flow (channels and "Send to me")
 type: flow
 domain: sharing
-version: 1.0.0
+version: 1.0.1
 last_updated: 25.11.2026
 status: draft
 sources:
@@ -82,4 +82,4 @@ The owner (an account in `ASSISTANT_OWNER_EMAILS`) in Settings → Notifications
 ## Checks
 
 - `npm run check:notify` — offline: the Turkish messages and their escaping, Telegram's 4,096 characters, the bot's updates, tokens, the outbox, connecting both channels, sending, `send_plan`'s answer and card (107 checks, in-memory tables, stand-in providers).
-- `npm run check:notify:db` — the same queries against the live schema, writing nothing (after the migration).
+- `npm run check:notify:db` — the same queries against the live schema, writing nothing (15 of 15 on 25.11.2026, after the migration was applied).

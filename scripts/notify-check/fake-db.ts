@@ -5,7 +5,7 @@
  * delete with eq, is and gt filters, maybeSingle, and the notification_claim
  * RPC. It keeps the migration's unique keys — the 23505s the code relies on
  * — and the claim's rule. Not a database: the dry-run against Postgres
- * (supabase/migrations/20261125160000_notifications.sql) checks the SQL.
+ * (supabase/migrations/20261125203540_notifications.sql) checks the SQL.
  */
 type Row = Record<string, any>;
 type Result = { data: any; error: { code: string; message: string } | null };

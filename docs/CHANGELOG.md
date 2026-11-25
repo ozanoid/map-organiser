@@ -6,6 +6,26 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 25.11.2026 — v1.57.1 — The notifications migration applied
+
+- Applied with Ozan's approval: migration `notifications`, version
+  20261125203540 — the file renamed from 20261125160000 to the recorded
+  version. All three tables have RLS on, the two read policies, and
+  `notification_claim` executable by `service_role` alone.
+  `npm run check:notify:db` passed 15 of 15 against the live schema; the
+  tables are still empty.
+- Advisors after the apply: security — one new INFO, `channel_link_tokens`
+  has RLS and no policy, which is the design (server-only); performance —
+  `notifications.plan_id` has no index (a plan delete would read the whole
+  table). A follow-up migration,
+  `20261125210000_notifications_plan_index.sql`, adds it; its dry-run passed
+  and was rolled back; **not applied — awaits Ozan's approval**.
+- Docs: [[02-backend/schema/notifications]], [[02-backend/schema/_README]],
+  [[02-backend/rls-policies]], [[05-flows/notifications-flow]],
+  [[_plans/phase-3-communication]], [[_plans/personal-assistant]].
+
+---
+
 ## 25.11.2026 — v1.57.0 — Phase 3, slice 1: e-mail, Telegram and "Send to me"
 
 - The 14 Phase 3 decisions were taken as recommended (Ozan, 25.11.2026);

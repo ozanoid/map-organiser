@@ -7,7 +7,7 @@
  * the claim function and its grant, value types) — the offline checks'
  * stand-in accepts any column.
  *
- * Needs the migration 20261125160000_notifications.sql applied.
+ * Needs the migration 20261125203540_notifications.sql applied.
  *
  *   npm run check:notify:db
  */

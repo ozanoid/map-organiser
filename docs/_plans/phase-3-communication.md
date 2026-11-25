@@ -2,7 +2,7 @@
 title: "Faz 3 — İletişim: tasarım"
 type: plan
 domain: sharing
-version: 0.2.0
+version: 0.2.1
 last_updated: 25.11.2026
 status: draft
 related:
@@ -19,7 +19,7 @@ related:
 
 # Faz 3 — İletişim: tasarım
 
-> [[personal-assistant]] planının Faz 3'ü. **14 karar onaylandı (25.11.2026, hepsi önerildiği gibi).** **Dilim 1 kodu `feat/personal-assistant` dalında (v1.57.0)**; migration'ı yazıldı ve geri alınan bir deneme çalıştırmasından geçti, **uygulanması Ozan'ın onayını bekliyor** — durum ve tasarımdan sapmalar: [[#Dilim 1 — durum (25.11.2026)]]. Şema SQL'i her dilimin başında `supabase/migrations/` altında yazılır, Ozan'a gösterilir, onayıyla uygulanır.
+> [[personal-assistant]] planının Faz 3'ü. **14 karar onaylandı (25.11.2026, hepsi önerildiği gibi).** **Dilim 1 kodu `feat/personal-assistant` dalında (v1.57.0)**; migration'ı deneme çalıştırmasından geçti ve **Ozan'ın onayıyla uygulandı (25.11.2026, sürüm 20261125203540)**; `plan_id` indeksi için küçük bir ek migration onay bekliyor — durum ve tasarımdan sapmalar: [[#Dilim 1 — durum (25.11.2026)]]. Şema SQL'i her dilimin başında `supabase/migrations/` altında yazılır, Ozan'a gösterilir, onayıyla uygulanır.
 
 ## Ne anladım
 
@@ -214,7 +214,7 @@ Hatırlatmalar plan tablosundan **türetilir**, önceden kuyruğa yazılmaz: pla
 **Doğrulama:** `npm run check:notify` 107 kontrol (Türkçe metinler ve kaçış, Telegram sınırı, bot güncellemeleri, anahtarlar, outbox, iki kanalın bağlanması, gönderim, `send_plan`'ın cevabı ve kartı); `npm run check:agent` 165 kontrol; migration'ın geri alınan deneme çalıştırması (sonuçlar şema dokümanında); `next build`; dev sunucusunda `/confirm-email` oturumsuz açılıyor (telefonda da), webhook bot ayarlı değilken 404. Henüz denenmeyen: gerçek e-posta ve Telegram gönderimi (aşağıdaki adımlardan sonra).
 
 **Açık adımlar (sırayla):**
-1. Migration'ın uygulanması — Ozan'ın onayı; sonra `npm run check:notify:db`.
+1. ~~Migration'ın uygulanması~~ — uygulandı (25.11.2026, sürüm 20261125203540); `npm run check:notify:db` 15/15. Ek: `notifications.plan_id` indeksi (`20261125210000_notifications_plan_index.sql`, Supabase'in performans uyarısı) — Ozan'ın onayını bekliyor.
 2. Ozan'ın dashboard adımları (aşağıda): Resend alanı ve anahtarı → Vercel + worktree `.env.local`; BotFather → Vercel Production.
 3. E-posta uçtan uca: yerelde, test hesabıyla (Ozan isterse).
 4. Telegram: yalnız production'da (karar 13) — main'e merge'den ve deploy'dan sonra `setWebhook` (Ozan'ın onayıyla), sonra bağlama ve test.
