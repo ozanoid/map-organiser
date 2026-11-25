@@ -1,12 +1,15 @@
 /**
  * Paid eval of the platform's Claude agent (docs/_plans/phase-2-assistant.md):
- * real requests against Ozan's library, through the same loop the app uses
- * (src/lib/agent/run-turn.ts), on a model and effort.
+ * real requests against Ozan's library (or the test account's, where a case
+ * says so), through the same loop the app uses (src/lib/agent/run-turn.ts),
+ * on a model and effort.
  *
  *   npm run eval:assistant -- --count-tokens                     free: the fixed prompt size
  *   npm run eval:assistant -- --config opus-medium               all cases
  *   npm run eval:assistant -- --config sonnet-high --cases visit-log,laptop-cafe
  *   npm run eval:assistant -- --config opus-low --max-usd 2      stop before a case once the run has spent $2
+ *   npm run eval:assistant -- --config sonnet-high --cases spread-plan-keeps-dates --repeat 3
+ *                                                                each case three times — for a behaviour that varies
  *
  * Nothing is written to the library: a call that saves something stops at
  * the approval card (recorded, never run), or is declined (the case says
@@ -30,11 +33,17 @@ import { systemPromptFor } from "@/lib/agent/prompt";
 import { runTurn, startConversation, type TurnInput, type TurnResult } from "@/lib/agent/run-turn";
 import { supabaseSpendLedger } from "@/lib/agent/spend";
 import { memoryConversationStore } from "@/lib/agent/store";
+import { resolveSubject } from "@/lib/agent/subject";
 import { agentToolDefinitions } from "@/lib/agent/tools";
+import type { ResolvedSubject } from "@/lib/agent/ui-types";
+import type { AssistantContext } from "@/lib/assistant/library";
 import { CHECK_APP_URL } from "../assistant-check/context";
-import { CASES, type EvalCase } from "./cases";
+import { CASES, type EvalCase, type TurnSubject } from "./cases";
 
-const OWNER = "ozan@maporganiser.com";
+const ACCOUNTS: Record<NonNullable<EvalCase["user"]>, string> = {
+  owner: "ozan@maporganiser.com",
+  test: "admin@maporganiser.com",
+};
 const TIME_ZONE = "Europe/London";
 
 const CONFIGS: Record<string, { model: string; effort: Effort }> = {
@@ -61,6 +70,16 @@ async function userIdOf(email: string): Promise<string> {
   const user = data.users.find((u) => u.email === email);
   if (!user) throw new Error(`no user ${email}`);
   return user.id;
+}
+
+/** A case's subject as the chat route sends it on: found by name in the
+ *  case's library, then checked and named like a screen's (resolveSubject). */
+async function subjectOf(ctx: AssistantContext, subject: TurnSubject | undefined): Promise<ResolvedSubject | undefined> {
+  if (!subject) return undefined;
+  const { data, error } = await ctx.supabase.from("plans").select("id").eq("user_id", ctx.userId).eq("name", subject.name).limit(2);
+  if (error) throw error;
+  if (data.length !== 1) throw new Error(`plan "${subject.name}": ${data.length} in the library, want exactly one`);
+  return resolveSubject(ctx, { kind: "plan", planId: data[0].id as string });
 }
 
 interface TurnRecord {
@@ -94,10 +113,13 @@ interface TurnRecord {
 
 interface CaseRecord {
   id: string;
+  /** Which run of the case (--repeat), from 1. */
+  run: number;
   lang: EvalCase["lang"];
   turns: TurnRecord[];
   costUsd: number;
-  checks: { tools: boolean; write: boolean | null; lang: boolean | null; ok: boolean };
+  /** custom: why the case's own check failed, or null. */
+  checks: { tools: boolean; write: boolean | null; lang: boolean | null; custom: string | null; ok: boolean };
 }
 
 /** Rough language check on the final reply: Turkish vs English function
@@ -122,7 +144,21 @@ function grade(c: EvalCase, turns: TurnRecord[]): CaseRecord["checks"] {
   const last = [...turns].reverse().find((t) => t.reply);
   const lang = last ? looksTurkish(last.reply) === (c.lang === "tr") : null;
   const errors = turns.some((t) => t.status === "error");
-  return { tools, write, lang, ok: tools && write !== false && lang !== false && !errors };
+  const custom = c.check?.(turns.flatMap((t) => t.pending.map((p) => ({ name: p.name, input: p.input })))) ?? null;
+  return { tools, write, lang, custom, ok: tools && write !== false && lang !== false && !custom && !errors };
+}
+
+/** Why a case failed, for the summary line. */
+function failures(checks: CaseRecord["checks"], turns: TurnRecord[]): string {
+  return [
+    !checks.tools && "tools",
+    checks.write === false && "write",
+    checks.lang === false && "lang",
+    checks.custom && `check: ${checks.custom}`,
+    turns.some((t) => t.status === "error") && "error",
+  ]
+    .filter(Boolean)
+    .join("; ");
 }
 
 async function countTokens(client: Anthropic) {
@@ -141,6 +177,7 @@ async function countTokens(client: Anthropic) {
 
 async function runCase(
   c: EvalCase,
+  run: number,
   config: { model: string; effort: Effort },
   deps: Omit<Parameters<typeof runTurn>[0], "store" | "effort">
 ): Promise<CaseRecord> {
@@ -159,7 +196,7 @@ async function runCase(
 
     const input: TurnInput =
       turn.kind === "message"
-        ? { kind: "message", text: turn.text, timeZone: TIME_ZONE }
+        ? { kind: "message", text: turn.text, timeZone: TIME_ZONE, subject: await subjectOf(deps.toolCtx, turn.subject) }
         : { kind: "approval", decisions: {} };
     const record: TurnRecord = {
       input: turn.kind === "message" ? turn.text : "(declines the card)",
@@ -233,7 +270,7 @@ async function runCase(
   }
 
   const costUsd = turns.reduce((sum, t) => sum + t.costUsd, 0);
-  return { id: c.id, lang: c.lang, turns, costUsd, checks: grade(c, turns) };
+  return { id: c.id, run, lang: c.lang, turns, costUsd, checks: grade(c, turns) };
 }
 
 async function main() {
@@ -247,36 +284,42 @@ async function main() {
   const cases = only ? CASES.filter((c) => only.includes(c.id)) : CASES;
   if (only && cases.length !== only.length) throw new Error(`unknown case in ${only.join(",")}`);
   const maxUsd = Number(arg("max-usd") ?? "Infinity");
+  const repeat = Math.max(1, Math.floor(Number(arg("repeat") ?? "1")) || 1);
 
-  const userId = await userIdOf(OWNER);
-  const deps = {
+  // Only the accounts the cases run on are looked up.
+  const userIds = new Map<NonNullable<EvalCase["user"]>, string>();
+  for (const who of new Set(cases.map((c) => c.user ?? "owner"))) userIds.set(who, await userIdOf(ACCOUNTS[who]));
+  const depsFor = (c: EvalCase) => ({
     client,
     ledger: supabaseSpendLedger(admin),
-    toolCtx: { supabase: admin, userId, appUrl: CHECK_APP_URL },
+    toolCtx: { supabase: admin, userId: userIds.get(c.user ?? "owner")!, appUrl: CHECK_APP_URL },
     purpose: "eval" as const,
-  };
+  });
 
-  say(`# ${configName} (${config.model}, effort ${config.effort}) — ${cases.length} cases`);
+  say(`# ${configName} (${config.model}, effort ${config.effort}) — ${cases.length} cases${repeat > 1 ? ` × ${repeat}` : ""}`);
   const results: CaseRecord[] = [];
   let spent = 0;
-  for (const c of cases) {
-    if (spent >= maxUsd) {
-      say(`stopping: $${spent.toFixed(3)} spent, limit $${maxUsd}`);
-      break;
+  runs: for (const c of cases) {
+    for (let run = 1; run <= repeat; run++) {
+      if (spent >= maxUsd) {
+        say(`stopping: $${spent.toFixed(3)} spent, limit $${maxUsd}`);
+        break runs;
+      }
+      const r = await runCase(c, run, config, depsFor(c));
+      spent += r.costUsd;
+      results.push(r);
+      const t = r.turns;
+      const label = repeat > 1 ? `${c.id} #${run}` : c.id;
+      say(
+        `${r.checks.ok ? "PASS" : "FAIL"} ${label.padEnd(22)} $${r.costUsd.toFixed(3)}  ${t
+          .map((x) => `${x.status}/${x.steps} steps/${(x.ms / 1000).toFixed(1)}s`)
+          .join(" → ")}  tools: ${[...new Set(t.flatMap((x) => [...x.tools.map((y) => y.name), ...x.webSearches.map(() => "web_search")]))].join(",") || "—"}${
+          t.some((x) => x.pending.length)
+            ? `  proposes: ${t.flatMap((x) => x.pending.map((p) => p.name)).join(",")}${t.some((x) => x.pending.length && !x.reply) ? " (no text)" : ""}`
+            : ""
+        }${r.checks.ok ? "" : `  FAILED: ${failures(r.checks, t)}`}${t.some((x) => x.error) ? `  ERROR ${t.find((x) => x.error)!.error}` : ""}`
+      );
     }
-    const r = await runCase(c, config, deps);
-    spent += r.costUsd;
-    results.push(r);
-    const t = r.turns;
-    say(
-      `${r.checks.ok ? "PASS" : "FAIL"} ${c.id.padEnd(22)} $${r.costUsd.toFixed(3)}  ${t
-        .map((x) => `${x.status}/${x.steps} steps/${(x.ms / 1000).toFixed(1)}s`)
-        .join(" → ")}  tools: ${[...new Set(t.flatMap((x) => [...x.tools.map((y) => y.name), ...x.webSearches.map(() => "web_search")]))].join(",") || "—"}${
-        t.some((x) => x.pending.length)
-          ? `  proposes: ${t.flatMap((x) => x.pending.map((p) => p.name)).join(",")}${t.some((x) => x.pending.length && !x.reply) ? " (no text)" : ""}`
-          : ""
-      }${t.some((x) => x.error) ? `  ERROR ${t.find((x) => x.error)!.error}` : ""}`
-    );
   }
 
   const outDir = join(process.cwd(), "scripts/assistant-eval/out");

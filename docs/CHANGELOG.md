@@ -6,6 +6,23 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 25.11.2026 — v1.55.1 — The plan-date rule, measured
+
+- **`eval:assistant`** runs a case on the test account's library
+  (`user: "test"`), sends a message with what it is about (`subject`, a plan
+  by name, resolved like the chat route does), lets a case check the writes
+  proposed (`check`) and repeats cases (`--repeat N`); a FAIL line says why.
+- **New case `spread-plan-keeps-dates`:** the plan page's request on the
+  test account's "Summer in London" (days 20–22.07.2026, passed); it fails
+  when `update_plan` sets `start_date`. Sonnet 5.5 high, 3 runs, $0.208:
+  **3/3** — each said the days had passed, went through the stops on those
+  days and asked for a new start date; none opened a card. (The end-to-end
+  run before the rule had moved the date unasked, once in one try.)
+- Docs: [[_plans/phase-2-assistant]], [[04-integrations/claude-agent]],
+  [[05-flows/ai-plan-flow]]; the eval's README.
+
+---
+
 ## 25.11.2026 — v1.55.0 — Step 5: Gemini is gone; a plan's dates are the user's
 
 - **Gemini removed** (Phase 2, decision 6.5 step 5): `@ai-sdk/google` (and

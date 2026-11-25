@@ -1,29 +1,52 @@
 /**
  * The eval's requests: things Ozan asks the assistant, in Turkish and
  * English, against his own library (ozan@maporganiser.com — London, Lisbon,
- * Istanbul; no plans, lists or visits yet).
+ * Istanbul; no plans, lists or visits yet) — or, where a case needs data his
+ * library doesn't hold, the test account's (admin@maporganiser.com).
  *
  * Each case says which tools a good answer needs (one of each group), the
  * write it should propose (never run: the eval stops at the approval card,
- * or declines it), and the reply language.
+ * or declines it), and the reply language; a case can add its own check of
+ * the writes proposed.
  */
 
+/** What a message is about, as a screen of the app sends it (a `<subject>`
+ *  block) — named here, looked up in the case's library when it runs. */
+export type TurnSubject = { kind: "plan"; name: string };
+
 export type Turn =
-  | { kind: "message"; text: string }
+  | { kind: "message"; text: string; subject?: TurnSubject }
   /** Answer the approval card with "no" to everything — the resume path,
    *  without writing anything. */
   | { kind: "decline" };
 
+/** A write the model proposed (waiting for approval), as a check sees it. */
+export interface ProposedWrite {
+  name: string;
+  input: unknown;
+}
+
 export interface EvalCase {
   id: string;
   lang: "tr" | "en";
+  /** Whose library the case runs on: the owner's (default) or the test account's. */
+  user?: "owner" | "test";
   turns: Turn[];
   /** Each inner list: at least one of these tools should be called. */
   expectTools: string[][];
   /** The write the model should propose (awaiting approval). */
   expectWrite?: string;
+  /** The case's own check of the writes proposed: why it fails, or null. */
+  check?: (proposed: ProposedWrite[]) => string | null;
   /** What a good answer does — for reading the transcripts. */
   note: string;
+}
+
+/** An update_plan call that sets the plan's start date. */
+function movesPlanDate(write: ProposedWrite): boolean {
+  if (write.name !== "update_plan") return false;
+  const set = (write.input as { set?: Record<string, unknown> } | null)?.set;
+  return !!set && Object.hasOwn(set, "start_date");
 }
 
 export const CASES: EvalCase[] = [
@@ -149,5 +172,25 @@ export const CASES: EvalCase[] = [
     expectTools: [["search_places", "get_places"]],
     expectWrite: "update_places",
     note: "Proposes update_places (visited, no date); after the decline, acknowledges without retrying.",
+  },
+  {
+    // The plan page's request, with the plan as subject. In the end-to-end run
+    // of 25.11.2026 the model also moved this plan — whose days had passed —
+    // to the coming Saturday, unasked. Since v1.55.0 the instructions keep a
+    // plan's dates (Ozan's decision).
+    id: "spread-plan-keeps-dates",
+    lang: "tr",
+    user: "test",
+    turns: [
+      {
+        kind: "message",
+        text: "Bu planı günlere dağıt: yakın yerleri aynı güne koy, kapalı oldukları günlere koyma.",
+        subject: { kind: "plan", name: "Summer in London" },
+      },
+    ],
+    expectTools: [["get_plans"]],
+    check: (proposed) =>
+      proposed.some(movesPlanDate) ? "update_plan changes the plan's start_date — the user didn't ask" : null,
+    note: "The plan (from 20.07.2026, passed) keeps its dates: the stops are spread over its own days, or the reply says the dates have passed and asks — no start_date in update_plan.",
   },
 ];

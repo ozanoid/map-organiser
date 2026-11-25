@@ -1,7 +1,9 @@
 # Claude agent — eval
 
-Twelve requests Ozan makes of the assistant (`cases.ts`, Turkish and English),
-run against his own library (`ozan@maporganiser.com`) through the same loop the
+Thirteen requests Ozan makes of the assistant (`cases.ts`, Turkish and English),
+run against his own library (`ozan@maporganiser.com`) — one, which needs a plan
+his library may not hold, against the test account's (`admin@maporganiser.com`,
+`user: "test"`) — through the same loop the
 app uses (`src/lib/agent/run-turn.ts`), on one model and effort at a time. It
 chose the model and effort the agent starts conversations on
 ([[docs/_plans/phase-2-assistant]]).
@@ -49,8 +51,22 @@ writes, the replies, tokens and dollars per step — goes to
 ## What it checks
 
 Per case, automatically: the tools a good answer needs (one of each group),
-the write it should propose, and the reply language. The quality of the answer
-is read from the transcript — `note` in each case says what a good one does.
+the write it should propose, the reply language, and the case's own check of
+the writes proposed (`check`). A message can carry what it is about as a screen
+would send it (`subject`, a plan by name — resolved like the chat route does).
+The quality of the answer is read from the transcript — `note` in each case
+says what a good one does.
+
+A behaviour that varies is measured with `--repeat N` (each case N times):
+
+```bash
+npm run eval:assistant -- --config sonnet-high --cases spread-plan-keeps-dates --repeat 3
+```
+
+`spread-plan-keeps-dates` (v1.55.1): the plan page's request on a plan whose
+days have passed; it fails when `update_plan` sets `start_date`. 25.11.2026,
+Sonnet 5.5 high, 3 runs: 3/3, $0.208 (the first run $0.119 — it writes the
+prompt cache — then ≈ $0.045).
 
 The language check counts Turkish against English function words; a one-line
 proposal ("Dünkü ziyareti kaydediyorum: …, 4 puan") can have neither and show
