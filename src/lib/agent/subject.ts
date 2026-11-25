@@ -24,6 +24,30 @@ export class SubjectError extends Error {}
 const uuid = z.string().uuid();
 const ids = z.array(uuid).max(50);
 
+/** Half the Earth's circumference, in metres: no two points are farther apart. */
+const MAX_DISTANCE_M = Math.round(Math.PI * 6_371_000);
+
+/**
+ * The map's area as the model gets it: the centre's longitude wrapped into
+ * [-180, 180), both rounded to about a metre, the radius in whole metres
+ * within what the Earth allows. Every view the map can show is an area —
+ * zoomed out past a continent, in to a street, panned round the world — and
+ * never a refused request (25.11.2026: a view of Europe, ≈ 2,000 km to the
+ * corner, failed the old 500 km limit in production).
+ */
+export function normalizeArea(area: { lat: number; lng: number; radiusM: number }): {
+  lat: number;
+  lng: number;
+  radius_m: number;
+} {
+  const lng = ((((area.lng + 180) % 360) + 360) % 360) - 180;
+  return {
+    lat: Math.round(area.lat * 1e5) / 1e5,
+    lng: Math.round(lng * 1e5) / 1e5,
+    radius_m: Math.min(MAX_DISTANCE_M, Math.max(0, Math.round(area.radiusM))),
+  };
+}
+
 export const SubjectSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("plan"), planId: uuid }).strict(),
   z.object({ kind: z.literal("places"), placeIds: z.array(uuid).min(1).max(MAX_SUBJECT_PLACES) }).strict(),
@@ -45,11 +69,12 @@ export const SubjectSchema = z.discriminatedUnion("kind", [
           open_now: z.boolean().optional(),
         })
         .strict(),
+      // Whatever the map shows is accepted; normalizeArea makes it canonical.
       area: z
         .object({
           lat: z.number().min(-90).max(90),
-          lng: z.number().min(-180).max(180),
-          radiusM: z.number().min(50).max(500_000),
+          lng: z.number(),
+          radiusM: z.number().min(0),
         })
         .strict()
         .optional(),
@@ -116,15 +141,7 @@ export async function resolveSubject(ctx: AssistantContext, subject: AssistantSu
         kind: "view",
         page: subject.page,
         filters,
-        ...(subject.area
-          ? {
-              area: {
-                lat: Math.round(subject.area.lat * 1e5) / 1e5,
-                lng: Math.round(subject.area.lng * 1e5) / 1e5,
-                radius_m: Math.round(subject.area.radiusM),
-              },
-            }
-          : {}),
+        ...(subject.area ? { area: normalizeArea(subject.area) } : {}),
       };
     }
   }

@@ -6,6 +6,43 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 25.11.2026 — v1.56.1 — Phase 2 on main; a wide map view no longer refuses the request
+
+- **On main:** v1.46.3–v1.56.0 merged with Ozan's approval (merge 7df90df; main
+  `3a6ac0b` had nothing the branch lacked, the merged tree is the branch's).
+  Vercel's production deploy completed.
+- **Smoke test in production** (Ozan's account, 2 Claude calls, $0.084): the
+  new version answers (`aiAvailable`, `assistantAvailable`, the $80
+  background limit); the assistant read the library and answered in
+  Turkish (291 places, most in London); Compare opened the panel with its
+  request and the two places (not sent, cleared after). Plan wasn't tried:
+  the account has no plan (it ran end to end on the test account the day
+  before).
+- **Found by it, fixed here:** asked from the search field while the map
+  showed Europe (≈ 2,000 km to the corner), the request was refused —
+  400 "Invalid request." — because `SubjectSchema` held the area to 50 m–
+  500 km and the longitude to ±180 (a map panned round the world reports
+  more). Any view is accepted now; `normalizeArea` (`subject.ts`) wraps the
+  longitude and keeps the radius within the Earth; the map sends a wrapped
+  centre (`getArea`); the app's prompt says `near` takes up to 30 km of the
+  area and a wider one is a region (new conversations — a conversation keeps
+  the prompt it started with). `check:agent`: a continent, a street, a map
+  panned round the world, the dateline. Tried on the dev server with the
+  test account: a globe view (≈ 4,990 km) went through and was answered
+  right ($0.19 — the turn reread a long conversation). **On the branch; on
+  main after Ozan's approval.**
+- `regen:profiles` isn't needed: all 889 full profiles are Claude Sonnet
+  5.5's, none Gemini's.
+- Ozan's: delete `GOOGLE_GENERATIVE_AI_API_KEY` from Vercel and
+  `.env.local`, revoke it in Google AI Studio.
+- Docs: [[03-frontend/components/map]], [[02-backend/api-routes/assistant]],
+  [[05-flows/ai-search-flow]], [[04-integrations/claude-agent]],
+  [[04-integrations/_README]], [[02-backend/schema/api_usage]],
+  [[06-ops/env-vars]], [[_plans/phase-2-assistant]],
+  [[_plans/personal-assistant]].
+
+---
+
 ## 25.11.2026 — v1.56.0 — The assistant is the owners'; background work keeps the last 20% free
 
 Ozan's decisions from the merge study:

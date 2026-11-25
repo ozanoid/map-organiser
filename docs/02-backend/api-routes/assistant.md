@@ -2,7 +2,7 @@
 title: Assistant routes
 type: route-group
 domain: backend
-version: 1.5.0
+version: 1.5.1
 last_updated: 25.11.2026
 status: draft
 sources:
@@ -56,7 +56,7 @@ Starts a conversation (`startConversation`, door `app`, `DEFAULT_AGENT_MODEL`): 
 ## `POST /api/assistant/chat`
 
 - **Body** (`ChatRequestBody`): `{ conversationId: uuid, input }`, `input` one of
-  - `{ kind: "message", text (1–8000), timeZone, subject? }` — the browser's IANA zone, for the turn's `<context>` line; `subject` (v1.52.0, `SubjectSchema` in `src/lib/agent/subject.ts`) when the request comes from a screen: `{ kind: "plan", planId }`, `{ kind: "places", placeIds (1–5) }` or `{ kind: "view", page: "map" | "places", filters (the app's, by id), area? { lat, lng, radiusM } }`. It is checked against the user's library and named before the turn opens (`resolveSubject`: names from the database, never from the request; filters turned into names, an id the user no longer has dropped) and kept in the user's message as a `<subject>` block after `<context>`;
+  - `{ kind: "message", text (1–8000), timeZone, subject? }` — the browser's IANA zone, for the turn's `<context>` line; `subject` (v1.52.0, `SubjectSchema` in `src/lib/agent/subject.ts`) when the request comes from a screen: `{ kind: "plan", planId }`, `{ kind: "places", placeIds (1–5) }` or `{ kind: "view", page: "map" | "places", filters (the app's, by id), area? { lat, lng, radiusM } }` — any area the map can show (v1.56.1: until then the radius had to be 50 m–500 km and the longitude within ±180, and a wider view refused the whole request with 400 "Invalid request."); `normalizeArea` wraps the longitude and keeps the radius within the Earth. It is checked against the user's library and named before the turn opens (`resolveSubject`: names from the database, never from the request; filters turned into names, an id the user no longer has dropped) and kept in the user's message as a `<subject>` block after `<context>`;
   - `{ kind: "approval", decisions: { [toolUseId]: boolean }, seen? }` — one answer for every card waiting now, no other; `seen` (v1.53.0): `{ [toolUseId]: fingerprint }` for the cards approved that showed their outcome (a plan change, as the plan will be) — such a change is saved only if it still comes out the same, else its result says the plan changed and nothing was saved;
   - `{ kind: "retry" }` — Try again: carry on a turn that broke off.
 - **Before the turn — a plain HTTP error, nothing written** (`openTurn`; body `DoorErrorBody` `{ error, code }`): **400** malformed body, or `subject_unavailable` (the plan or a place isn't the user's any more — "That plan isn't in your library any more."); **404** `not_found`; **409** `turn_in_progress` (a turn of this conversation is running), `conflict` (the answers aren't for the cards waiting now, or there's nothing to try again — the conversation changed elsewhere), `nothing_pending` (no card waits); **429** `budget_exhausted`; **500** otherwise. The panel gives the user their text back and reloads the conversation.

@@ -165,7 +165,8 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
       const m = map.current;
       const bounds = m?.getBounds();
       if (!m || !bounds) return null;
-      const c = m.getCenter();
+      // wrap(): a map panned round the world reports longitudes past ±180.
+      const c = m.getCenter().wrap();
       const ne = bounds.getNorthEast();
       return { lat: c.lat, lng: c.lng, radiusM: haversineDistance(c.lat, c.lng, ne.lat, ne.lng) * 1000 };
     },

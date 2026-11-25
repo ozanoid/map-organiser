@@ -2,7 +2,7 @@
 title: Integrations
 type: overview
 domain: integrations
-version: 1.7.3
+version: 1.7.4
 last_updated: 25.11.2026
 status: stable
 related:
@@ -33,7 +33,7 @@ Third-party services and runtime libraries that materially shape how this app wo
 | **DataForSEO** (Business Data + Google Maps SERP) | Every place lookup: link previews, imports, enrichment, the Instagram import's search, Claude's Google Maps search (no per-user key) | [[dataforseo]] |
 | **Google Gemini** (Generative Language API) | The AI provider from Phase 1 until Phase 2: the full place_profile (Phase 4), the Instagram read (v1.28.0), Compare, AI Plan, AI search and the old chat — all moved to Claude (v1.48.0–v1.54.0). Its client, package and the evals' Gemini arms went in v1.55.0 | — (archived) |
 | **Claude (MCP connector)** | The user's library as an MCP server for claude.ai and Claude Code; Supabase Auth is the OAuth 2.1 server (17.11.2026) | [[claude-mcp]] |
-| **Claude API (platform agent)** | The platform's own Claude: the in-app assistant (v1.48.0) — called by our server with the same tools, conversations kept append-only — and, since v1.51.0, place profiles (Sonnet 5.5) and Instagram reads (Haiku 5.5); every call's dollars in one ledger against a $100 monthly cap. On `feat/personal-assistant` | [[claude-agent]] |
+| **Claude API (platform agent)** | The platform's own Claude: the in-app assistant (v1.48.0) — called by our server with the same tools, conversations kept append-only — and, since v1.51.0, place profiles (Sonnet 5.5) and Instagram reads (Haiku 5.5); every call's dollars in one ledger against a $100 monthly cap. On main since 25.11.2026 (merge 7df90df) | [[claude-agent]] |
 | **HikerAPI** | Instagram data — the post, its tagged/mentioned accounts and their profiles, for the Instagram import (v1.28.0). System-level key `HIKERAPI_KEY` | [[hikerapi]] |
 
 ## Runtime libraries (architecturally significant)
