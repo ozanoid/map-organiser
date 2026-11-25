@@ -6,6 +6,27 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 25.11.2026 — v1.54.1 — Step 4 tried end to end; two display fixes
+
+- Tried in a signed-in browser on the admin test account (the branch's dev
+  server, 12 Claude calls, $0.29): the request from the compare page; from
+  the plan page — the card showed the plan as it would be saved, a plan
+  changed after the proposal was refused and a fresh proposal came, the
+  approved one saved, the plan page refreshed by itself; from the search
+  field — the field and its filter cleared, the request went at once and
+  came back with "Map · this area" and Show on map. The subjects were
+  stored as sent; the test plan was put back exactly as it was.
+- Fixed what it found: the search field's icon centred on the field and the
+  Ask row together (`DebouncedSearchInput` — the icon and the field sit in a
+  `relative` box of their own now), and a numbered list in a reply lost its
+  first number — "3. gün" showed 1 (`AssistantMarkdown` passes `start` to
+  `<ol>`).
+- Docs: [[03-frontend/components/filters]], [[03-frontend/components/assistant]],
+  [[04-integrations/claude-agent]], [[_plans/phase-2-assistant]],
+  [[_plans/personal-assistant]].
+
+---
+
 ## 25.11.2026 — v1.54.0 — Step 4, slice 3: the search field asks the assistant; the Gemini AI search is gone
 
 - **Ask the assistant** under the filter search field (`DebouncedSearchInput`

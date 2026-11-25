@@ -35,20 +35,23 @@ export function DebouncedSearchInput({
   }, 400);
 
   return (
-    <div className={`relative ${className || ""}`}>
-      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-      <Input
-        type="search"
-        inputMode="search"
-        enterKeyHint="search"
-        placeholder={placeholder}
-        value={localValue}
-        onChange={(e) => {
-          setLocalValue(e.target.value);
-          debouncedSearch(e.target.value);
-        }}
-        className="pl-9"
-      />
+    <div className={className}>
+      {/* The icon centres on the field alone, not on the field and the row under it. */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          type="search"
+          inputMode="search"
+          enterKeyHint="search"
+          placeholder={placeholder}
+          value={localValue}
+          onChange={(e) => {
+            setLocalValue(e.target.value);
+            debouncedSearch(e.target.value);
+          }}
+          className="pl-9"
+        />
+      </div>
       {onAsk && localValue.trim().length >= 2 && (
         <button
           type="button"

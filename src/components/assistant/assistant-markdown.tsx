@@ -53,7 +53,12 @@ const components: Components = {
   },
   p: ({ children }) => <p className="my-2 first:mt-0 last:mb-0">{children}</p>,
   ul: ({ children }) => <ul className="my-2 list-disc space-y-1 pl-5">{children}</ul>,
-  ol: ({ children }) => <ol className="my-2 list-decimal space-y-1 pl-5">{children}</ol>,
+  // `start`: a list the model numbers from 3 ("3. gün…") reads 3, not 1.
+  ol: ({ children, start }) => (
+    <ol start={start} className="my-2 list-decimal space-y-1 pl-5">
+      {children}
+    </ol>
+  ),
   li: ({ children }) => <li className="pl-0.5">{children}</li>,
   strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
   h1: ({ children }) => <p className="my-2 font-semibold">{children}</p>,

@@ -2,7 +2,7 @@
 title: Assistant components
 type: component
 domain: frontend
-version: 2.5.0
+version: 2.5.1
 last_updated: 25.11.2026
 status: draft
 sources:
@@ -65,7 +65,7 @@ A screen's door to the assistant (decision 6.1): an outline ✦ button that call
 
 ## `AssistantMarkdown` (`assistant-markdown.tsx`)
 
-`react-markdown` 10.1.0 + `remark-gfm` 4.0.1. Raw HTML is never rendered (`skipHtml`). Links into the app open in place (`next/link`) and close the panel, so the page isn't hidden behind it — decided by resolving the link against the app's origin, as the browser would (`/\host` and `//host` are other sites); others open in a new tab (`noopener noreferrer`). **Images are never loaded**: a reply can carry text from a web page, and an image's URL would send whatever it holds to that server the moment the reply shows — an image renders as a link. Headings render as bold paragraphs; tables scroll horizontally.
+`react-markdown` 10.1.0 + `remark-gfm` 4.0.1. Raw HTML is never rendered (`skipHtml`). Links into the app open in place (`next/link`) and close the panel, so the page isn't hidden behind it — decided by resolving the link against the app's origin, as the browser would (`/\host` and `//host` are other sites); others open in a new tab (`noopener noreferrer`). **Images are never loaded**: a reply can carry text from a web page, and an image's URL would send whatever it holds to that server the moment the reply shows — an image renders as a link. Headings render as bold paragraphs; tables scroll horizontally. A numbered list keeps the number it starts from (`start` on `<ol>`): a list the model starts at "3. gün" shows 3, not 1 (v1.54.1, found in the end-to-end run).
 
 ## `AssistantPicksChip` (`src/components/filters/assistant-picks-chip.tsx`)
 
