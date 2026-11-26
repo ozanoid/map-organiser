@@ -6,6 +6,19 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 26.11.2026 — v1.57.8 — Phase 3 slice 1 on main
+
+- Merged with Ozan's approval: main e92e9fa → 265999e (a local merge
+  commit of `feat/personal-assistant` at 51a1483; main and the branch tip
+  checked unmoved before the push; no conflicts). v1.56.2–v1.57.7: the Phase 3
+  design, the notifications tables (applied 25.11.2026), e-mail and Telegram
+  channels, "Send to me", `send_plan`, the app-side webhook, Mappy.
+- Not yet tried in production: Telegram (it lives there only) and e-mail on
+  the production address.
+- Docs: [[_plans/personal-assistant]], [[_plans/phase-3-communication]].
+
+---
+
 ## 26.11.2026 — v1.57.7 — Messages go out as Mappy
 
 - Ozan: e-mails carry the bot's name. `SENDER_NAME = "Mappy"`

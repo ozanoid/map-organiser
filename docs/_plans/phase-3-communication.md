@@ -2,7 +2,7 @@
 title: "Faz 3 — İletişim: tasarım"
 type: plan
 domain: sharing
-version: 0.4.1
+version: 0.5.0
 last_updated: 26.11.2026
 status: draft
 related:
@@ -19,7 +19,7 @@ related:
 
 # Faz 3 — İletişim: tasarım
 
-> [[personal-assistant]] planının Faz 3'ü. **14 karar onaylandı (25.11.2026, hepsi önerildiği gibi).** **Dilim 1 kodu `feat/personal-assistant` dalında (v1.57.0)**; migration'ı deneme çalıştırmasından geçti ve **Ozan'ın onayıyla uygulandı (25.11.2026, sürüm 20261125203540)**; ardından `notifications.plan_id` indeksi de uygulandı (sürüm 20261125224149) — durum ve tasarımdan sapmalar: [[#Dilim 1 — durum (25.11.2026)]]. Şema SQL'i her dilimin başında `supabase/migrations/` altında yazılır, Ozan'a gösterilir, onayıyla uygulanır.
+> [[personal-assistant]] planının Faz 3'ü. **14 karar onaylandı (25.11.2026, hepsi önerildiği gibi).** **Dilim 1 main'de (merge 265999e, 26.11.2026; v1.57.0–v1.57.7)**; migration'ı deneme çalıştırmasından geçti ve **Ozan'ın onayıyla uygulandı (25.11.2026, sürüm 20261125203540)**; ardından `notifications.plan_id` indeksi de uygulandı (sürüm 20261125224149) — durum ve tasarımdan sapmalar: [[#Dilim 1 — durum (25.11.2026)]]. Şema SQL'i her dilimin başında `supabase/migrations/` altında yazılır, Ozan'a gösterilir, onayıyla uygulanır.
 
 ## Ne anladım
 
@@ -198,7 +198,7 @@ Hatırlatmalar plan tablosundan **türetilir**, önceden kuyruğa yazılmaz: pla
 
 ## Dilim 1 — durum (25.11.2026)
 
-**Yapılan (v1.57.0, dalda; main'de değil):** `notification_channels`, `channel_link_tokens`, `notifications` ve `notification_claim` ([[../02-backend/schema/notifications]]); Resend ve Telegram göndericileri; outbox (`deliver`: önce kayıt, sonra kilit, gönderim, sonuç); Telegram bağlama (webhook, `/start <anahtar>`, engelleme / engel kaldırma); e-posta onayı; Ayarlar → Notifications (sekme adreste, `?tab=`); plan menüsünde *Send to me…*; asistanın `send_plan` aracı, onay kartı ve talimat satırı. Akış: [[../05-flows/notifications-flow]], yollar: [[../02-backend/api-routes/notifications]].
+**Yapılan (v1.57.0–v1.57.7; main'e geçti: merge 265999e, 26.11.2026):** `notification_channels`, `channel_link_tokens`, `notifications` ve `notification_claim` ([[../02-backend/schema/notifications]]); Resend ve Telegram göndericileri; outbox (`deliver`: önce kayıt, sonra kilit, gönderim, sonuç); Telegram bağlama (webhook, `/start <anahtar>`, engelleme / engel kaldırma); e-posta onayı; Ayarlar → Notifications (sekme adreste, `?tab=`); plan menüsünde *Send to me…*; asistanın `send_plan` aracı, onay kartı ve talimat satırı. Akış: [[../05-flows/notifications-flow]], yollar: [[../02-backend/api-routes/notifications]].
 
 **Tasarımdan sapmalar (gerekçeli):**
 
