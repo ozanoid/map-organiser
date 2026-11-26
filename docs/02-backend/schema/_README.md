@@ -2,8 +2,8 @@
 title: Schema
 type: overview
 domain: backend
-version: 1.4.0
-last_updated: 23.11.2026
+version: 1.5.1
+last_updated: 25.11.2026
 status: stable
 sources:
   - Supabase project hukppmaevcapvbrvxtph (via MCP)
@@ -11,6 +11,7 @@ related:
   - "[[../_README]]"
   - "[[../rls-policies]]"
   - "[[../supabase-clients]]"
+  - "[[notifications]]"
 ---
 
 # Schema
@@ -51,6 +52,9 @@ All user-facing tables in the `public` schema of the Supabase project `hukppmaev
 | `assistant_messages` | [[assistant-conversations]] | 0 | A conversation's turns, append-only, stored exactly as sent / received |
 | `assistant_tool_runs` | [[assistant-conversations]] | 0 | One row per tool call: the decision before it runs, then the result — never run twice, never lost |
 | `assistant_spend` | [[assistant-conversations]] | 0 | One row per Claude API call: tokens, web searches, dollars; the monthly cap is its sum |
+| `notification_channels` | [[notifications]] | 0 | Phase 3 (v1.57.0; applied 25.11.2026, version 20261125203540): the owner's e-mail address and Telegram chat |
+| `channel_link_tokens` | [[notifications]] | 0 | One-time tokens of the e-mail confirmation and Telegram start links (hash only) |
+| `notifications` | [[notifications]] | 0 | The outbox: every message sent or to be sent, with how it went and a copy of what went out |
 
 > `public.spatial_ref_sys` exists but it's a PostGIS internal table (8500 rows of SRID reference data). Not documented separately.
 

@@ -94,6 +94,22 @@ export function uiToolOutput(name: string, text: string): ToolSummary {
       const results = Array.isArray(out.results) ? out.results : [];
       return { summary: plural(results.length, "result") };
     }
+    case "send_plan": {
+      // Where it went, and what didn't — "Sent to e-mail · Telegram isn't
+      // connected" — and the plan's link. Nothing sent is an error result.
+      const label = (c: unknown) => (c === "email" ? "e-mail" : "Telegram");
+      const channels = (v: unknown) =>
+        (Array.isArray(v) ? v : []).flatMap((x) => (isObj(x) && typeof x.channel === "string" ? [x.channel] : []));
+      const sent = channels(out.sent).map(label);
+      const notes = [
+        ...(Array.isArray(out.not_connected) ? out.not_connected : []).map((c) => `${label(c)} isn't connected`),
+        ...channels(out.failed).map((c) => `${label(c)} failed`),
+      ];
+      return {
+        summary: [sent.length ? `Sent to ${sent.join(" and ")}` : "Nothing sent", ...notes].join(" · "),
+        link: firstLink(out),
+      };
+    }
     default:
       // Writes: link to what was saved.
       return needsApproval(name) ? { link: firstLink(out) } : {};

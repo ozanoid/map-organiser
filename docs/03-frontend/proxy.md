@@ -2,8 +2,8 @@
 title: Proxy
 type: overview
 domain: frontend
-version: 1.5.0
-last_updated: 19.11.2026
+version: 1.6.0
+last_updated: 25.11.2026
 status: stable
 sources:
   - src/proxy.ts
@@ -69,6 +69,8 @@ Hard-coded list in `updateSession`:
 - `/api/shared/*` (public share APIs)
 - `/api/cron/*` (cron routes — they authenticate themselves with `CRON_SECRET`)
 - `/oauth/*` (the OAuth consent page — it redirects signed-out visitors to `/login?next=…` itself, so the authorization request survives sign-in)
+- `/api/telegram/webhook` (exact path, v1.57.0 — Telegram posts the bot's updates with no cookie; the route checks Telegram's secret header itself)
+- `/confirm-email` (exact path, v1.57.0 — the e-mail confirmation page may open in a browser that isn't signed in; its one-time token is the proof, and its Confirm button posts a server action to the same path)
 
 Not in the proxy at all (matcher exclusions, 17.11.2026): `/api/mcp` — the MCP endpoint authenticates bearer tokens and must answer 401 with a challenge, not a redirect — and `/.well-known/*` metadata documents.
 

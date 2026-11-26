@@ -64,7 +64,13 @@ export async function updateSession(request: NextRequest) {
     // Cron runs with no cookie (Vercel sends CRON_SECRET as a bearer);
     // the route authenticates itself, so skip the session-redirect here.
     // Without this the cron 307-redirects to /login and never executes.
-    request.nextUrl.pathname.startsWith("/api/cron/");
+    request.nextUrl.pathname.startsWith("/api/cron/") ||
+    // Telegram posts the bot's updates with no cookie; the route checks
+    // Telegram's secret header itself (Phase 3).
+    request.nextUrl.pathname === "/api/telegram/webhook" ||
+    // The e-mail confirmation page may open in a browser that isn't signed
+    // in; its one-time token is the proof (Phase 3).
+    request.nextUrl.pathname === "/confirm-email";
 
   if (!user && !isAuthRoute && !isPublicRoute) {
     const url = request.nextUrl.clone();

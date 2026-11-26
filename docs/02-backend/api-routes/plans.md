@@ -2,7 +2,7 @@
 title: Plans routes
 type: route-group
 domain: backend
-version: 1.1.3
+version: 1.2.0
 last_updated: 25.11.2026
 status: stable
 sources:
@@ -15,12 +15,14 @@ sources:
   - src/lib/plans/read.ts
   - src/lib/plans/write.ts
   - src/lib/plans/route-signature.ts
+  - src/app/api/plans/[id]/send/route.ts
 related:
   - "[[_README]]"
   - "[[../../01-domain/plans]]"
   - "[[../schema/plans]]"
   - "[[shared]]"
   - "[[../../03-frontend/hooks/use-plans]]"
+  - "[[notifications]]"
 ---
 
 # Plans routes
@@ -38,6 +40,7 @@ All require a signed-in user (401 otherwise; the proxy redirects signed-out requ
 | DELETE | `/api/plans/[id]` | — | `{ success: true }` |
 | POST | `/api/plans/[id]/auto-plan` | — | `{ plan }` |
 | GET | `/api/plans/[id]/days/[dayId]/route?sig=…` | — | `{ route }` — a `PlanRoute` or `null`; 409 / 502 below |
+| POST | `/api/plans/[id]/send` | `{ channels? }` | `{ plan, results }` — "Send to me" (v1.57.0): the plan's summary to the owner's own e-mail and/or Telegram. Owners only; see [[notifications]] |
 
 ## `POST /api/plans`
 

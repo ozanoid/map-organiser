@@ -6,6 +6,218 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 26.11.2026 — v1.57.7 — Messages go out as Mappy
+
+- Ozan: e-mails carry the bot's name. `SENDER_NAME = "Mappy"`
+  (`src/lib/notify/render.ts`) is the one place: the From
+  (`Mappy <hello@mappy.site>`), the subjects ("E-posta adresini onayla —
+  Mappy", "Test — Mappy"), the e-mail texts and footer, and the bot's Telegram
+  replies ("Merhaba! Ben Mappy…"). The app's own screens keep
+  "Map Organiser".
+- Checks: `npm run check:notify` 122.
+- Docs: [[04-integrations/resend]], [[06-ops/env-vars]],
+  [[_plans/phase-3-communication]]; `.env.local.example`.
+
+---
+
+## 26.11.2026 — v1.57.6 — The app registers the Telegram webhook itself
+
+- Ozan made the bot — **Mappy**, `@mappysitebot` — and set
+  `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME` and `TELEGRAM_WEBHOOK_SECRET`
+  in Vercel, Production only.
+- His choice (A): no manual `setWebhook`. On every "Connect Telegram" in
+  production, `registerWebhook` asks the bot who it is (`getMe`) and
+  refuses when that isn't `TELEGRAM_BOT_USERNAME`, then `setWebhook` with
+  this deployment's address, the secret and the two update kinds. Skipped
+  unless `VERCEL_ENV` is `production` (decision 13). The token and the
+  secret stay in BotFather and Vercel. A refusal reaches Settings as
+  "Telegram couldn't be set up: …".
+- Checks: `npm run check:notify` 120 (+10, with a stand-in for the Bot API).
+- Docs: [[04-integrations/telegram]], [[06-ops/env-vars]] (`VERCEL_ENV`),
+  [[02-backend/api-routes/notifications]], [[05-flows/notifications-flow]],
+  [[_plans/phase-3-communication]] (deviation 11, the dashboard steps done).
+
+---
+
+## 25.11.2026 — v1.57.5 — The test e-mails arrived; DMARC in place
+
+- Ozan: all three test e-mails (confirmation, test, the plan's summary)
+  arrived in his Gmail.
+- `mappy.site` has its DMARC record (TXT `_dmarc` = `v=DMARC1; p=none;`),
+  added by Ozan: seen at 23:41 UTC from Vercel's nameserver, Google and
+  Cloudflare. A check at 23:12 UTC had no answer; when the record was created
+  can't be read here (the Vercel CLI on this machine is scoped to another
+  team).
+- Docs: [[04-integrations/resend]], [[05-flows/notifications-flow]],
+  [[_plans/phase-3-communication]].
+
+---
+
+## 25.11.2026 — v1.57.4 — E-mail tested end to end
+
+- On the local dev server (branch code), the test account in Chrome,
+  Resend from `hello@mappy.site`, to Ozan's Gmail with his OK: the address
+  saved and its confirmation sent, the confirmation page and its button, a
+  test e-mail, and a plan's summary (*Summer in Amsterdam*, 4 days, 19
+  stops). Three `notifications` records, each `sent` on the first attempt
+  with Resend's id; the stored copy of the confirmation masks its token; no
+  console or server errors. The confirmation link was made with
+  `createLinkToken` (a sending-only key can't read the sent e-mail).
+- Fix: the confirmation page and Settings broke the address mid-word
+  ("ozankete / nci@gmail.com", `break-all`); it now moves to the next line
+  whole and breaks only if it is longer than the line (`break-words`).
+- Docs: [[05-flows/notifications-flow]], [[_plans/phase-3-communication]].
+
+---
+
+## 25.11.2026 — v1.57.3 — mappy.site; the stored copy of a confirmation e-mail masks its token
+
+- E-mail goes out from Ozan's new domain `mappy.site` (bought for it,
+  25.11.2026; DNS on Vercel) as `hello@mappy.site` instead of the
+  `mail.maporganiser.com` the design proposed. DNS checked: DKIM and the
+  `send.mappy.site` CNAME to Resend's sending service are in place; no DMARC
+  record yet (recommended: TXT `_dmarc` = `v=DMARC1; p=none;`). The API key
+  is sending-only.
+- Fix (found while preparing the e-mail test): the `notifications` record
+  kept the confirmation e-mail's text with its link, so the one-time token
+  sat in the database in plain text — against the rule that only its hash is
+  kept. `Delivery.secrets` now masks it in the stored copy
+  (`…/confirm-email?token=•••`); the e-mail itself goes out whole.
+- `EMAIL_FROM` may be a bare address: it goes out under the app's name,
+  `Map Organiser <hello@mappy.site>` (`fromHeader`).
+- Checks: `npm run check:notify` 110 (+3).
+- Docs: [[04-integrations/resend]], [[04-integrations/_README]],
+  [[06-ops/env-vars]], [[02-backend/schema/notifications]],
+  [[_plans/phase-3-communication]] (decision 7 as built, deviations 9–10);
+  `.env.local.example`.
+
+---
+
+## 25.11.2026 — v1.57.2 — The notifications plan_id index applied
+
+- Applied with Ozan's approval: migration `notifications_plan_index`,
+  version 20261125224149 (the file renamed from 20261125210000) —
+  `notifications_plan_idx (plan_id)`. Supabase's performance advisor no
+  longer lists `notifications.plan_id` among the unindexed foreign keys
+  (16 → 15; the rest predate Phase 3).
+- Docs: [[02-backend/schema/notifications]],
+  [[_plans/phase-3-communication]], [[_plans/personal-assistant]].
+
+---
+
+## 25.11.2026 — v1.57.1 — The notifications migration applied
+
+- Applied with Ozan's approval: migration `notifications`, version
+  20261125203540 — the file renamed from 20261125160000 to the recorded
+  version. All three tables have RLS on, the two read policies, and
+  `notification_claim` executable by `service_role` alone.
+  `npm run check:notify:db` passed 15 of 15 against the live schema; the
+  tables are still empty.
+- Advisors after the apply: security — one new INFO, `channel_link_tokens`
+  has RLS and no policy, which is the design (server-only); performance —
+  `notifications.plan_id` has no index (a plan delete would read the whole
+  table). A follow-up migration,
+  `20261125210000_notifications_plan_index.sql`, adds it; its dry-run passed
+  and was rolled back; **not applied — awaits Ozan's approval**.
+- Docs: [[02-backend/schema/notifications]], [[02-backend/schema/_README]],
+  [[02-backend/rls-policies]], [[05-flows/notifications-flow]],
+  [[_plans/phase-3-communication]], [[_plans/personal-assistant]].
+
+---
+
+## 25.11.2026 — v1.57.0 — Phase 3, slice 1: e-mail, Telegram and "Send to me"
+
+- The 14 Phase 3 decisions were taken as recommended (Ozan, 25.11.2026);
+  slice 1 is on the branch. The migration is written and passed a rolled-back
+  dry-run; **it is not applied** — that waits for Ozan's approval. Nothing is
+  sent before it is applied and Resend / the bot are set up.
+- New tables (migration `20261125160000_notifications.sql`):
+  `notification_channels` (one e-mail address and one Telegram chat per user;
+  one chat belongs to one account), `channel_link_tokens` (one-time tokens of
+  the e-mail confirmation and Telegram start links, SHA-256 only) and the
+  `notifications` outbox (unique `dedupe_key`; a claim holds a row for 60
+  seconds, and a row whose sender died is taken over once its hold lapses; a
+  copy of what went out), and
+  `notification_claim()` for the service role only. Users only read their
+  own rows; every write is the server's.
+- New code (`src/lib/notify/`): Resend and Telegram senders, the outbox
+  (`deliver`), channels (set / confirm / remove e-mail, link / unlink /
+  block Telegram), the bot's update handling, Turkish messages (e-mail HTML +
+  text, Telegram HTML within 4,096 characters, notes clipped), the owner gate
+  (`notifyContext` — `ASSISTANT_OWNER_EMAILS`).
+- New routes: `/api/notifications` (+ `/email`, `/telegram`, `/test`),
+  `POST /api/plans/[id]/send`, `POST /api/telegram/webhook` (secret header),
+  and the `/confirm-email` page with a Confirm button (opening the link
+  changes nothing — mail scanners follow links). Both public paths are in the
+  proxy.
+- UI: Settings → Notifications (the open tab now lives in `?tab=`), the plan
+  menu's "Send to me…" dialog. The assistant: `send_plan` (17 shared tools),
+  its approval card (the plan and each channel, or why one can't take it), a
+  card that speaks of sending, and an error result when nothing went.
+- Fixes found in review before commit: the settings tab and the Telegram
+  wait no longer set state in effects; a Turkish date in another year put
+  the year after the weekday ("2 Ocak Cumartesi 2027" → "2 Ocak 2027
+  Cumartesi").
+- Checks: `npm run check:notify` (new, offline, 107) and
+  `npm run check:notify:db` (new, read-only against the live schema — after
+  the migration); `npm run check:agent` 165 passed; `next build`.
+- New docs: [[02-backend/schema/notifications]],
+  [[02-backend/api-routes/notifications]], [[04-integrations/resend]],
+  [[04-integrations/telegram]], [[05-flows/notifications-flow]],
+  [[03-frontend/hooks/use-notifications]].
+- Docs: [[_plans/phase-3-communication]] (slice 1 status and the eight
+  deviations from the design, with reasons), [[_plans/personal-assistant]],
+  [[02-backend/schema/_README]], [[02-backend/api-routes/_README]],
+  [[02-backend/api-routes/plans]], [[02-backend/api-routes/assistant]],
+  [[02-backend/rls-policies]], [[02-backend/auth]],
+  [[03-frontend/proxy]], [[03-frontend/routing]],
+  [[03-frontend/components/settings]], [[03-frontend/components/plans]],
+  [[03-frontend/components/assistant]], [[03-frontend/hooks/_README]],
+  [[04-integrations/_README]], [[04-integrations/claude-mcp]],
+  [[04-integrations/claude-agent]], [[05-flows/_README]],
+  [[05-flows/ai-chat-flow]], [[06-ops/env-vars]] (`RESEND_API_KEY`,
+  `EMAIL_FROM`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME`,
+  `TELEGRAM_WEBHOOK_SECRET`; also in `.env.local.example`, with
+  `ASSISTANT_OWNER_EMAILS`).
+
+---
+
+## 25.11.2026 — v1.56.3 — Phase 3 design draft: communication
+
+- New: [[_plans/phase-3-communication]] (draft) — Ozan's own notifications
+  (plan summary, reminders, a weekly summary by e-mail and Telegram) and
+  inviting friends (one link for a WhatsApp group, an RSVP page without
+  accounts), calendar export and the assistant's `send_plan` /
+  `invite_to_plan`. It carries the gaps of the current structure with
+  evidence (no user time zone, a client-only share page without link
+  previews, 60-bit share slugs, indexable public pages, no outbound
+  messaging), the measured use (7 plans in all, none on Ozan's account; plan
+  share links 2 / 14 views), the model (`notification_channels`,
+  `notification_settings`, a `notifications` outbox, `plan_invitations`,
+  `plan_rsvps`, `profiles.time_zone` — all additive), four slices with a
+  regression list, Ozan's dashboard steps, what was considered and rejected
+  and 14 decisions with recommendations. Researched from primary sources
+  (Resend, Telegram Bot API 10.5, WhatsApp, RFC 5545, Partiful / Luma /
+  Apple Invites / Google Calendar). No code, no schema change.
+- Docs: [[_plans/personal-assistant]].
+
+---
+
+## 25.11.2026 — v1.56.2 — The wide map view fix on main
+
+- v1.56.1 merged to main with Ozan's approval (merge e92e9fa; main
+  `7df90df` had nothing the branch lacked, the merged tree is the branch's).
+  Vercel's production deploy: completed (25.11.2026, 14:12).
+- Tried in production at Ozan's request: the same view of Europe (≈ 2,614 km
+  to the corner) went through and was answered — about 289 of the 291
+  places, the 2 without a location left out, estimated from the previous
+  turn's results (the conversation predates the prompt's note on wide
+  areas). 1 Claude call, $0.086.
+- Docs: [[04-integrations/claude-agent]], [[_plans/phase-2-assistant]],
+  [[_plans/personal-assistant]].
+
+---
+
 ## 25.11.2026 — v1.56.1 — Phase 2 on main; a wide map view no longer refuses the request
 
 - **On main:** v1.46.3–v1.56.0 merged with Ozan's approval (merge 7df90df; main

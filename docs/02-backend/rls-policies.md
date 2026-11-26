@@ -2,8 +2,8 @@
 title: RLS Policies
 type: overview
 domain: backend
-version: 1.7.0
-last_updated: 23.11.2026
+version: 1.8.1
+last_updated: 25.11.2026
 status: stable
 sources:
   - pg_policies (via Supabase MCP)
@@ -12,6 +12,7 @@ related:
   - "[[auth]]"
   - "[[schema/_README]]"
   - "[[../_agent/pitfalls#supabase-supabase-ssr]]"
+  - "[[schema/notifications]]"
 ---
 
 # RLS Policies
@@ -29,6 +30,9 @@ Truth source: `pg_policies`, fetched via Supabase MCP `execute_sql`. See per-tab
 | `assistant_messages` | Users read own assistant messages | authenticated | SELECT | the conversation is the user's — only the server appends; no UPDATE or DELETE |
 | `assistant_tool_runs` | Users read own assistant tool runs | authenticated | SELECT | the conversation is the user's — only the server writes |
 | `assistant_spend` | Users read own assistant spend | authenticated | SELECT | `auth.uid() = user_id` — only the service role writes |
+| `notification_channels` | Users read own notification channels | authenticated | SELECT | `auth.uid() = user_id` — only the server writes (service role): a user can't mark an address confirmed or point a channel at another chat. Migration 20261125203540, applied 25.11.2026 ([[schema/notifications]]) |
+| `notifications` | Users read own notifications | authenticated | SELECT | `auth.uid() = user_id` — only the server writes |
+| `channel_link_tokens` | — (RLS on, no policy) | — | — | the server alone reads and writes it |
 | `categories` | Users manage own categories | authenticated | ALL | `auth.uid() = user_id` |
 | `import_job_items` | `import_job_items_select` | authenticated | SELECT | `auth.uid() = user_id` — read-only by design ([[schema/import-jobs]]) |
 | `import_jobs` | `import_jobs_select` / `_insert` / `_update` | authenticated | SELECT, INSERT, UPDATE | `auth.uid() = user_id` |

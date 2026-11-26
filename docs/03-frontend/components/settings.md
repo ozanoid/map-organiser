@@ -2,7 +2,7 @@
 title: Settings components
 type: component
 domain: frontend
-version: 1.8.0
+version: 1.9.0
 last_updated: 25.11.2026
 status: stable
 sources:
@@ -11,6 +11,8 @@ sources:
   - src/components/settings/ai-settings.tsx
   - src/components/settings/ai-suggestions-queue.tsx
   - src/components/settings/backfill-profiles-panel.tsx
+  - src/components/settings/notification-settings.tsx
+  - src/app/(app)/settings/page.tsx
 related:
   - "[[_README]]"
   - "[[../../02-backend/api-routes/user]]"
@@ -20,11 +22,15 @@ related:
   - "[[../../05-flows/full-profile-flow]]"
   - "[[../hooks/use-ai-suggestions]]"
   - "[[../../06-ops/runbooks/profile-backfill]]"
+  - "[[../hooks/use-notifications]]"
+  - "[[../../05-flows/notifications-flow]]"
 ---
 
 # Settings components
 
-Five components powering the Settings page tabs. All `"use client"`.
+Six components powering the Settings page tabs. All `"use client"`.
+
+**The open tab lives in the address** (`/settings?tab=…`, v1.57.0): `categories`, `tags`, `api`, `ai`, `notifications`, `appearance`. A link can open one — the e-mail confirmation lands on Notifications — and a refresh keeps it; picking a tab rewrites the address with `history.replaceState`. The page is prerendered, so it reads the address with `useSyncExternalStore` (the server renders the first tab; the browser switches after hydration) rather than `useSearchParams`, which would need a Suspense boundary. The Notifications tab shows its bell icon only on phones, with an `aria-label`.
 
 ## `ApiKeysManager`
 
@@ -105,6 +111,19 @@ Five components powering the Settings page tabs. All `"use client"`.
   - Hides automatically when `ai_features_enabled = false` or when there's nothing left to enrich.
 - **Used by:** `AiSettings` (rendered between the master toggle and the moderation queue).
 - **Companion runbook:** [[../../06-ops/runbooks/profile-backfill]] for ops / re-runs / cost notes.
+
+## `NotificationSettings`
+
+- **File:** `src/components/settings/notification-settings.tsx` (v1.57.0, Phase 3 slice 1).
+- **Props:** none.
+- **Hooks:** `useNotificationSettings` (polls every 3 s while waiting for Telegram's Start), `useSetEmail`, `useRemoveEmail`, `useTelegramLink`, `useUnlinkTelegram`, `useSendTest` — [[../hooks/use-notifications]].
+- **Renders:**
+  - Heading "Notifications": "Where the app sends your plans. Messages are in Turkish; nothing goes anywhere until you ask." For an account that isn't the owner's (`open: false`): "Notifications are only open to this app's owner." and nothing else.
+  - **E-mail:** a labelled address field and Save ("We'll send a link to confirm it first"); then the address with a badge — *Waiting for confirmation* (amber) or *Confirmed* (emerald, check) — and **Send test** (confirmed) or **Send the link again** (unconfirmed), **Change**, **Remove**. "E-mail isn't set up on this server" without the server's keys.
+  - **Telegram:** **Connect Telegram** → **Open Telegram** (the bot's start link, new tab) and "Waiting for Start…" (spinner, `role="status"`), for at most 15 minutes — the link's life; when the poll sees the chat: "Telegram connected" toast, *Connected* badge, `@username`, **Send test**, **Disconnect**. Blocked in Telegram: an amber badge, "Unblock it, or connect again", **Connect again**, **Disconnect**. "Telegram isn't set up on this server" without the bot (preview, local).
+  - Back from the confirmation page (`?email=confirmed` / `link-invalid`): a toast, then the flag is removed from the address so a refresh doesn't repeat it.
+- Buttons are at least 36 px tall (`min-h-9`); busy buttons show a spinner and are disabled.
+- **Used by:** `/settings` page (Notifications tab).
 
 ## Notes
 

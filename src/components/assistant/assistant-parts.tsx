@@ -51,6 +51,7 @@ const SAVED_LABEL: Record<string, string> = {
   add_places: "Places added",
   create_plan: "Plan saved",
   update_plan: "Plan changed",
+  send_plan: "Plan sent",
   save_list: "List saved",
   log_visit: "Visit logged",
   delete_visit: "Visit deleted",
@@ -232,11 +233,20 @@ const APPROVE_LABEL: Record<string, string> = {
   add_places: "Add",
   create_plan: "Save plan",
   update_plan: "Apply changes",
+  send_plan: "Send",
   save_list: "Save list",
   log_visit: "Log visit",
   delete_visit: "Delete visit",
   update_places: "Update",
 };
+
+/** How a card speaks about its change: most save something; send_plan
+ *  sends a message. */
+const WORDS = {
+  save: { doing: "Saving…", will: "Will save", wont: "Won't save", not: "Not saved", failed: "Couldn't save", until: "Nothing is saved until you choose." },
+  send: { doing: "Sending…", will: "Will send", wont: "Won't send", not: "Not sent", failed: "Couldn't send", until: "Nothing is sent until you choose." },
+} as const;
+const wordsFor = (toolName: string) => (toolName === "send_plan" ? WORDS.send : WORDS.save);
 
 export function ChangeCard({
   part,
@@ -253,6 +263,7 @@ export function ChangeCard({
 }) {
   const preview = (part.toolMetadata as ToolMetadata | undefined)?.preview;
   const danger = preview?.danger ?? part.toolName === "delete_visit";
+  const words = wordsFor(part.toolName);
 
   if (part.state === "approval-requested") {
     return (
@@ -281,7 +292,7 @@ export function ChangeCard({
             Not now
           </Button>
         </div>
-        <p className="mt-2 text-[11px] text-muted-foreground">Nothing is saved until you choose.</p>
+        <p className="mt-2 text-[11px] text-muted-foreground">{words.until}</p>
       </div>
     );
   }
@@ -290,19 +301,20 @@ export function ChangeCard({
     const approved = part.approval.approved;
     return othersWaiting ? (
       <div className="rounded-xl border border-dashed p-3 text-sm text-muted-foreground">
-        {approved ? "Will save" : "Won't save"}
+        {approved ? words.will : words.wont}
         {preview ? ` · ${preview.title}` : ""} — answer the other card to go on.
       </div>
     ) : (
       <div className="flex items-center gap-2 rounded-xl border p-3 text-sm text-muted-foreground" role="status">
         <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-        {approved ? "Saving…" : "Skipping…"}
+        {approved ? words.doing : "Skipping…"}
       </div>
     );
   }
 
   if (part.state === "output-available") {
-    const link = summaryOf(part)?.link;
+    const summary = summaryOf(part);
+    const link = summary?.link;
     return (
       <div className="rounded-xl border border-emerald-300 p-3 dark:border-emerald-900">
         <p className="flex items-center gap-1.5 text-sm font-medium text-emerald-700 dark:text-emerald-400">
@@ -310,6 +322,10 @@ export function ChangeCard({
           {SAVED_LABEL[part.toolName] ?? "Saved"}
         </p>
         {preview && <p className="mt-0.5 text-xs text-muted-foreground">{preview.title}</p>}
+        {/* A send says where it went, and what didn't. */}
+        {part.toolName === "send_plan" && summary?.summary && (
+          <p className="mt-0.5 text-xs text-muted-foreground">{summary.summary}</p>
+        )}
         {link && (
           <LinkOut url={link.url} className="mt-1 inline-flex min-h-11 items-center text-sm font-medium text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-400">
             Open {link.label}
@@ -322,7 +338,8 @@ export function ChangeCard({
   if (part.state === "output-denied") {
     return (
       <div className="rounded-xl border border-dashed p-3 text-sm text-muted-foreground">
-        Not saved{preview ? ` · ${preview.title}` : ""}
+        {words.not}
+        {preview ? ` · ${preview.title}` : ""}
       </div>
     );
   }
@@ -332,7 +349,7 @@ export function ChangeCard({
       <div className="rounded-xl border border-red-300 p-3 text-sm dark:border-red-900" role="alert">
         <p className="flex items-center gap-1.5 font-medium text-red-700 dark:text-red-400">
           <AlertCircle className="h-4 w-4" aria-hidden />
-          Couldn&apos;t save
+          {words.failed}
         </p>
         <p className="mt-0.5 text-xs text-muted-foreground break-words">{part.errorText}</p>
       </div>

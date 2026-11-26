@@ -12,6 +12,7 @@ import { readReviews } from "@/lib/assistant/tools/read-reviews";
 import { saveListTool } from "@/lib/assistant/tools/save-list";
 import { searchGoogleMaps } from "@/lib/assistant/tools/search-google-maps";
 import { searchPlaces } from "@/lib/assistant/tools/search-places";
+import { sendPlanTool } from "@/lib/assistant/tools/send-plan";
 import type { AssistantTool } from "@/lib/assistant/tools/types";
 import { updatePlaces } from "@/lib/assistant/tools/update-places";
 import { updatePlanTool } from "@/lib/assistant/tools/update-plan";
@@ -30,6 +31,7 @@ export const ASSISTANT_TOOLS: AssistantTool[] = [
   addPlacesTool,
   createPlanTool,
   updatePlanTool,
+  sendPlanTool,
   saveListTool,
   logVisitTool,
   deleteVisitTool,

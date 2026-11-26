@@ -2,7 +2,7 @@
 title: API Routes
 type: overview
 domain: backend
-version: 1.13.1
+version: 1.14.0
 last_updated: 25.11.2026
 status: stable
 sources:
@@ -13,6 +13,7 @@ related:
   - "[[../supabase-clients]]"
   - "[[../auth]]"
   - "[[../rls-policies]]"
+  - "[[notifications]]"
 ---
 
 # API Routes
@@ -33,6 +34,8 @@ All Next.js route handlers grouped by area. Each linked doc is the canonical ref
 | User | `/api/user/*` — includes `ai-settings` (Phase 1) and `ai-suggestions/*` (Phase 5 moderation queue: list, accept, reject) | Required | [[user]] |
 | ~~AI~~ | `/api/ai/*` — gone since v1.54.0: `chat` (v1.48.0), `compare` (v1.52.0), `day-plan` (v1.53.0), `parse-query` and `rank-results` (v1.54.0). Every AI request goes through the assistant ([[assistant]]) | — | — |
 | Assistant | `/api/assistant/chat` (one turn of the Claude agent, streaming), `/api/assistant/conversation` (latest conversation, New chat) — v1.48.0 | Required | [[assistant]] |
+| Notifications | `/api/notifications` (the owner's channels), `/email`, `/telegram`, `/test`, and `POST /api/plans/[id]/send` ("Send to me") — v1.57.0 | Required, **owners only** (`notifyContext`) | [[notifications]] |
+| Telegram webhook | `/api/telegram/webhook` (POST — the bot's updates; v1.57.0) | **`X-Telegram-Bot-Api-Secret-Token`**, public in the proxy | [[notifications]] |
 | Search | `/api/search/*` (Mapbox geocoder proxy) | Required | [[search]] |
 | Instagram | `/api/instagram/import` (POST — start an import from a post URL, work runs in `after()`) + `/api/instagram/import/[id]` (GET — the dialog's progress view) — v1.28.0; `/api/instagram/import/[id]/pick` (POST — add the place picked for a skipped venue) — v1.28.1 | Required | [[instagram]] |
 | Cron | `/api/cron/refresh-places` (15.07.2026) — daily periodic-refresh sweep; `/api/cron/drain-imports` (v1.26.0) — every minute, drains the import queue for Takeout and Instagram jobs | **`CRON_SECRET` bearer** (service-role) | [[../../06-ops/runbooks/periodic-refresh]], [[places]] |
@@ -44,7 +47,7 @@ All Next.js route handlers grouped by area. Each linked doc is the canonical ref
 
 ## Counts
 
-- 45 route handler files (43 × `src/app/api/**/route.ts` + `src/app/auth/callback/route.ts` + `src/app/.well-known/oauth-protected-resource/[[...path]]/route.ts`; 17.11.2026 added `/api/mcp` and the metadata route) — Phase 6 added `/api/ai/parse-query` + `/api/ai/rank-results`; 15.07.2026 added `/api/cron/refresh-places`; v1.21.0 added `/api/ai/chat` (assistant); v1.22.0 added `/api/ai/trip-plan` + `PATCH /api/trips/[id]/days/[dayId]`; v1.26.0 swapped `import-parse` / `import-batch` / `bulk-enrich-reviews` for `import-jobs`, `import-jobs/[id]` and `cron/drain-imports` (net zero); v1.28.0 added `/api/instagram/import` + `/api/instagram/import/[id]`; v1.28.1 added `/api/instagram/import/[id]/pick`; v1.37.0 replaced the 7 `/api/trips/**` files with 4 under `/api/plans/**` and renamed `/api/ai/trip-plan` to `/api/ai/day-plan`; v1.38.0 added `/api/visits` + `/api/visits/[id]`. (NF-05 similar-adds reuse `POST /api/places` via the AddPlaceDialog preview — no dedicated route.)
+- 49 route handler files on 25.11.2026 (43 before v1.57.0, which added six: four under `/api/notifications`, `/api/plans/[id]/send`, `/api/telegram/webhook`). Earlier: 45 (43 × `src/app/api/**/route.ts` + `src/app/auth/callback/route.ts` + `src/app/.well-known/oauth-protected-resource/[[...path]]/route.ts`; 17.11.2026 added `/api/mcp` and the metadata route) — Phase 6 added `/api/ai/parse-query` + `/api/ai/rank-results`; 15.07.2026 added `/api/cron/refresh-places`; v1.21.0 added `/api/ai/chat` (assistant); v1.22.0 added `/api/ai/trip-plan` + `PATCH /api/trips/[id]/days/[dayId]`; v1.26.0 swapped `import-parse` / `import-batch` / `bulk-enrich-reviews` for `import-jobs`, `import-jobs/[id]` and `cron/drain-imports` (net zero); v1.28.0 added `/api/instagram/import` + `/api/instagram/import/[id]`; v1.28.1 added `/api/instagram/import/[id]/pick`; v1.37.0 replaced the 7 `/api/trips/**` files with 4 under `/api/plans/**` and renamed `/api/ai/trip-plan` to `/api/ai/day-plan`; v1.38.0 added `/api/visits` + `/api/visits/[id]`. (NF-05 similar-adds reuse `POST /api/places` via the AddPlaceDialog preview — no dedicated route.)
 - ~59 HTTP method exports across them
 
 ## Cross-route conventions
