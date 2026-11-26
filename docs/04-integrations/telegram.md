@@ -2,8 +2,8 @@
 title: Telegram (notification bot)
 type: integration
 domain: integrations
-version: 1.0.0
-last_updated: 25.11.2026
+version: 1.1.0
+last_updated: 26.11.2026
 status: draft
 sources:
   - src/lib/notify/telegram.ts
@@ -32,6 +32,7 @@ tags:
 
 - **Provider:** the [Telegram Bot API](https://core.telegram.org/bots/api), plain HTTPS. Free.
 - **Account owner:** Ozan — the bot is made with @BotFather (`/newbot`); its username ends in `bot` and can't change later. Whoever has the token controls the bot; a leaked token is replaced with `/token` in @BotFather.
+- **The bot:** **Mappy**, `@mappysitebot` (made by Ozan with @BotFather, 26.11.2026). `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME` (`mappysitebot`) and `TELEGRAM_WEBHOOK_SECRET` are set in Vercel, Production only (26.11.2026).
 - **Production only** (decision 13): a bot has one webhook address, so the bot lives on the production deployment. Preview and local servers have no `TELEGRAM_BOT_TOKEN`: Settings shows "Telegram isn't set up on this server", and a send lists Telegram as `not_connected`. A second, test bot is the way to try it elsewhere.
 
 ## NPM packages
@@ -54,16 +55,13 @@ None — `fetch` from `src/lib/notify/telegram.ts` (`import "server-only"`).
 
 ### Registering the webhook
 
-Once per bot, after the deploy that has the route and the three variables (with Ozan's OK — it points Telegram at production):
+**The app does it** (Ozan's choice, 26.11.2026 — so the token and the secret live only in BotFather and Vercel, never on a laptop): every "Connect Telegram" (`POST /api/notifications/telegram` → `telegramStartLink`) first runs `registerWebhook(origin)`:
 
-```bash
-curl -sS "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook" \
-  --data-urlencode "url=https://map-organiser.vercel.app/api/telegram/webhook" \
-  --data-urlencode "secret_token=${TELEGRAM_WEBHOOK_SECRET}" \
-  --data-urlencode 'allowed_updates=["message","my_chat_member"]'
-```
+1. Only when `VERCEL_ENV` is `production` (decision 13) — anywhere else it is skipped, and a Start still reaches production's webhook (one database).
+2. `getMe`: the token's bot must be the one `TELEGRAM_BOT_USERNAME` names (case aside) — a mistyped username would send the start link to another bot; refused with both names otherwise.
+3. `setWebhook` with this deployment's `https://<origin>/api/telegram/webhook`, `secret_token` = `TELEGRAM_WEBHOOK_SECRET` and `allowed_updates` `["message", "my_chat_member"]`. Idempotent: a new address or a rotated secret is picked up on the next Connect. Logged as `telegram.webhook_registered` (address and bot, never the secret).
 
-`getWebhookInfo` on the same base URL shows the registered address and the last delivery error. The token sits in the URL Telegram requires, so the code never logs a request — a failure reports only Telegram's `description`.
+A refusal comes back to Settings as "Telegram couldn't be set up: …" (Telegram's own words). For diagnosis, `getWebhookInfo` on the Bot API shows the registered address and the last delivery error. The token sits in the URL Telegram requires, so the code never logs a request — a failure reports only Telegram's `description`.
 
 ## Cost & limits
 

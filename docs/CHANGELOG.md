@@ -6,6 +6,25 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 26.11.2026 — v1.57.6 — The app registers the Telegram webhook itself
+
+- Ozan made the bot — **Mappy**, `@mappysitebot` — and set
+  `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME` and `TELEGRAM_WEBHOOK_SECRET`
+  in Vercel, Production only.
+- His choice (A): no manual `setWebhook`. On every "Connect Telegram" in
+  production, `registerWebhook` asks the bot who it is (`getMe`) and
+  refuses when that isn't `TELEGRAM_BOT_USERNAME`, then `setWebhook` with
+  this deployment's address, the secret and the two update kinds. Skipped
+  unless `VERCEL_ENV` is `production` (decision 13). The token and the
+  secret stay in BotFather and Vercel. A refusal reaches Settings as
+  "Telegram couldn't be set up: …".
+- Checks: `npm run check:notify` 120 (+10, with a stand-in for the Bot API).
+- Docs: [[04-integrations/telegram]], [[06-ops/env-vars]] (`VERCEL_ENV`),
+  [[02-backend/api-routes/notifications]], [[05-flows/notifications-flow]],
+  [[_plans/phase-3-communication]] (deviation 11, the dashboard steps done).
+
+---
+
 ## 25.11.2026 — v1.57.5 — The test e-mails arrived; DMARC in place
 
 - Ozan: all three test e-mails (confirmation, test, the plan's summary)

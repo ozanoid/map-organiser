@@ -41,6 +41,7 @@ import {
   trRange,
 } from "@/lib/notify/render";
 import { sendToOwner } from "@/lib/notify/send";
+import { registerWebhook } from "@/lib/notify/telegram";
 import { handleUpdate, REPLIES, startPayload, type UpdateEffects } from "@/lib/notify/telegram-updates";
 import { TELEGRAM_MAX_CHARS } from "@/lib/notify/telegram-limits";
 import { hashToken, looksLikeToken, newToken } from "@/lib/notify/tokens";
@@ -446,7 +447,7 @@ async function main() {
   {
     const db = new FakeDb();
     const admin = db as any;
-    const url = await telegramStartLink(admin, USER);
+    const url = await telegramStartLink(admin, USER, APP);
     const token = /^https:\/\/t\.me\/MapOrganiserTestBot\?start=([A-Za-z0-9_-]{43})$/.exec(url)?.[1] ?? "";
     expect("the start link: the bot's username without @, a 43-character token", Boolean(token), url);
     expect("Start: linked", (await linkTelegram(admin, token, { id: 42, username: "ozan" })) === "linked");
@@ -456,11 +457,11 @@ async function main() {
     expect("the used link from another chat: invalid", (await linkTelegram(admin, token, { id: 77, username: "baska" })) === "invalid");
     expect("…and the chat stays the first one", (await readChannels(admin, USER)).telegram?.telegram_chat_id === 42);
 
-    const other = await telegramStartLink(admin, OTHER);
+    const other = await telegramStartLink(admin, OTHER, APP);
     const otherToken = /start=(.+)$/.exec(other)?.[1] ?? "";
     expect("the same chat for another account: taken", (await linkTelegram(admin, otherToken, { id: 42, username: "ozan" })) === "taken");
 
-    const late = /start=(.+)$/.exec(await telegramStartLink(admin, USER))?.[1] ?? "";
+    const late = /start=(.+)$/.exec(await telegramStartLink(admin, USER, APP))?.[1] ?? "";
     db.tables.channel_link_tokens.find((r) => r.token_hash === hashToken(late))!.expires_at = new Date(Date.now() - 1_000).toISOString();
     expect("an expired start link: invalid", (await linkTelegram(admin, late, { id: 43, username: null })) === "invalid");
 
@@ -471,6 +472,86 @@ async function main() {
     expect("unblocked: usable again", !(await settingsView(admin, USER)).telegram.blocked);
     await unlinkTelegram(admin, USER);
     expect("unlinked", (await readChannels(admin, USER)).telegram === undefined);
+  }
+
+  say("## pointing the bot at the webhook (registerWebhook)");
+  {
+    // A stand-in for Telegram: records each call's method and body, answers
+    // as told. Nothing leaves the machine.
+    const realFetch = globalThis.fetch;
+    const calls: { method: string; body: Record<string, unknown> }[] = [];
+    let botUsername = "MapOrganiserTestBot";
+    let refuse: string | null = null;
+    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      const method = String(input).split("/").pop() ?? "";
+      calls.push({ method, body: JSON.parse(String(init?.body ?? "{}")) });
+      if (refuse === method) {
+        return new Response(JSON.stringify({ ok: false, error_code: 401, description: "Unauthorized" }), { status: 401 });
+      }
+      const result = method === "getMe" ? { id: 1, is_bot: true, username: botUsername } : true;
+      return new Response(JSON.stringify({ ok: true, result }), { status: 200 });
+    }) as typeof fetch;
+    const outcome = async (origin: string) => {
+      try {
+        return await registerWebhook(origin);
+      } catch (e) {
+        return e instanceof NotifyError ? `NotifyError: ${e.message}` : `other: ${String(e)}`;
+      }
+    };
+    const env = { VERCEL_ENV: process.env.VERCEL_ENV, TELEGRAM_WEBHOOK_SECRET: process.env.TELEGRAM_WEBHOOK_SECRET };
+    try {
+      delete process.env.VERCEL_ENV;
+      process.env.TELEGRAM_WEBHOOK_SECRET = "offline_check_secret";
+      expect("outside Vercel: skipped, Telegram not called", (await outcome("https://app.test")) === "skipped" && calls.length === 0, calls);
+      process.env.VERCEL_ENV = "preview";
+      expect("on a preview: skipped (the bot keeps production's webhook)", (await outcome("https://preview.app.test")) === "skipped" && calls.length === 0, calls);
+
+      process.env.VERCEL_ENV = "production";
+      const done = await outcome("https://app.test");
+      const set = calls.find((c) => c.method === "setWebhook");
+      expect("production: the bot is asked who it is, then pointed at the webhook", done === "registered" && calls.map((c) => c.method).join() === "getMe,setWebhook", { done, calls: calls.map((c) => c.method) });
+      expect(
+        "setWebhook: this deployment's address, the secret, the two update kinds",
+        set?.body.url === "https://app.test/api/telegram/webhook" &&
+          set.body.secret_token === "offline_check_secret" &&
+          JSON.stringify(set.body.allowed_updates) === JSON.stringify(["message", "my_chat_member"]),
+        set?.body
+      );
+
+      calls.length = 0;
+      const link = await telegramStartLink(new FakeDb() as any, USER, "https://app.test");
+      expect("Connect in production: registered, then the start link", calls.map((c) => c.method).join() === "getMe,setWebhook" && /^https:\/\/t\.me\/MapOrganiserTestBot\?start=[A-Za-z0-9_-]{43}$/.test(link), { calls: calls.map((c) => c.method), link });
+
+      calls.length = 0;
+      botUsername = "SomeOtherBot";
+      const wrong = await outcome("https://app.test");
+      expect(
+        "a token of another bot: refused, the webhook untouched",
+        wrong.includes("TELEGRAM_BOT_USERNAME") && wrong.includes("@SomeOtherBot") && !calls.some((c) => c.method === "setWebhook"),
+        { wrong, calls: calls.map((c) => c.method) }
+      );
+      botUsername = "mapORGANISERtestbot";
+      calls.length = 0;
+      expect("the username's case doesn't matter", (await outcome("https://app.test")) === "registered");
+      botUsername = "MapOrganiserTestBot";
+
+      calls.length = 0;
+      refuse = "setWebhook";
+      const refused = await outcome("https://app.test");
+      expect("Telegram refuses: its words come back, not the token", refused === "NotifyError: Telegram: Unauthorized" && !refused.includes("offline:check"), refused);
+      refuse = null;
+
+      calls.length = 0;
+      expect("an http address: refused before calling Telegram", (await outcome("http://app.test")).startsWith("NotifyError: Telegram needs an https address") && calls.length === 0);
+      delete process.env.TELEGRAM_WEBHOOK_SECRET;
+      expect("no webhook secret: refused before calling Telegram", (await outcome("https://app.test")).includes("TELEGRAM_WEBHOOK_SECRET") && calls.length === 0);
+    } finally {
+      globalThis.fetch = realFetch;
+      for (const [k, v] of Object.entries(env)) {
+        if (v === undefined) delete process.env[k];
+        else process.env[k] = v;
+      }
+    }
   }
 
   say("## sending to the owner");

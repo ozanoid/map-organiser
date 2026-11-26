@@ -4,6 +4,7 @@ import { z } from "zod";
 import { emailConfigured, telegramBotUsername, telegramConfigured } from "@/lib/notify/config";
 import { deliver } from "@/lib/notify/outbox";
 import { emailVerifyMessage } from "@/lib/notify/render";
+import { registerWebhook } from "@/lib/notify/telegram";
 import { consumeLinkToken, createLinkToken, hashToken, readLinkToken } from "@/lib/notify/tokens";
 import type { ChannelKind, ChannelsView } from "@/lib/notify/types";
 
@@ -155,10 +156,14 @@ export async function removeEmail(admin: SupabaseClient, userId: string): Promis
 
 // ── Telegram ───────────────────────────────────────────────────────────
 
-/** The bot's start link carrying a one-time token (15 minutes). */
-export async function telegramStartLink(admin: SupabaseClient, userId: string): Promise<string> {
+/** The bot's start link carrying a one-time token (15 minutes), the bot
+ *  pointed at this deployment first. */
+export async function telegramStartLink(admin: SupabaseClient, userId: string, origin: string): Promise<string> {
   const bot = telegramBotUsername();
   if (!bot) throw new Error("Telegram isn't set up on this server.");
+  // The Start must reach this deployment: the bot is pointed at its webhook
+  // first (production only — registerWebhook).
+  await registerWebhook(origin);
   const token = await createLinkToken(admin, userId, "telegram_link");
   return `https://t.me/${bot}?start=${token}`;
 }

@@ -2,8 +2,8 @@
 title: Notifications flow (channels and "Send to me")
 type: flow
 domain: sharing
-version: 1.1.1
-last_updated: 25.11.2026
+version: 1.2.0
+last_updated: 26.11.2026
 status: draft
 sources:
   - src/lib/notify/send.ts
@@ -48,7 +48,7 @@ The owner (an account in `ASSISTANT_OWNER_EMAILS`) in Settings → Notifications
 
 **Connecting Telegram** (production only)
 
-1. **Connect Telegram** → `POST /api/notifications/telegram` → `t.me/<bot>?start=<token>` (15 minutes) → **Open Telegram**; the panel says "Waiting for Start…" and asks the server every 3 s.
+1. **Connect Telegram** → `POST /api/notifications/telegram` — in production the server first points the bot at its webhook (`getMe` must match `TELEGRAM_BOT_USERNAME`, then `setWebhook`) → `t.me/<bot>?start=<token>` (15 minutes) → **Open Telegram**; the panel says "Waiting for Start…" and asks the server every 3 s.
 2. Start in Telegram → Telegram posts `/start <token>` to `/api/telegram/webhook` → the chat is saved to the token's user → the bot answers "Bağlandı ✓".
 3. The next poll sees it: "Telegram connected", **Send test**, **Disconnect**.
 4. Blocking the bot switches the channel off (Telegram's `my_chat_member`, or a 403 on the next send): "Blocked in Telegram" and **Connect again**.
@@ -73,6 +73,7 @@ The owner (an account in `ASSISTANT_OWNER_EMAILS`) in Settings → Notifications
 | Provider keys missing on this server | — | "isn't set up on this server" (Settings), `not_connected` (send) |
 | Confirmation e-mail | Resend error | `502` → toast with Resend's reason; the address stays unconfirmed, **Send the link again** |
 | Confirm page | Expired, replaced, address changed | "This link doesn't work any more" + a link to Settings |
+| Connect Telegram | Telegram refuses the webhook, or the token belongs to another bot than `TELEGRAM_BOT_USERNAME` | `502` → toast "Telegram couldn't be set up: …" |
 | Telegram start link | Expired or used from another chat | The bot: "Bu bağlantı linki geçersiz…"; the same chat again: "Bağlandı" |
 | Telegram start link | The chat belongs to another account | The bot: "Bu Telegram hesabı başka bir Map Organiser hesabına bağlı." |
 | Send | Provider error | That channel `failed` with the reason; the other channel is unaffected |
@@ -81,6 +82,6 @@ The owner (an account in `ASSISTANT_OWNER_EMAILS`) in Settings → Notifications
 
 ## Checks
 
-- `npm run check:notify` — offline: the Turkish messages and their escaping, Telegram's 4,096 characters, the bot's updates, tokens, the outbox, connecting both channels, sending, `send_plan`'s answer and card (107 checks, in-memory tables, stand-in providers).
+- `npm run check:notify` — offline: the Turkish messages and their escaping, Telegram's 4,096 characters, the bot's updates, tokens, the outbox, connecting both channels, sending, `send_plan`'s answer and card (120 checks, in-memory tables, stand-in providers and a stand-in for the Bot API).
 - `npm run check:notify:db` — the same queries against the live schema, writing nothing (15 of 15 on 25.11.2026, after the migration was applied).
 - **End to end, e-mail (25.11.2026, local dev server on the branch, the test account `admin@maporganiser.com` in Chrome, Resend with `hello@mappy.site`, to Ozan's own Gmail with his OK):** Settings → Notifications → address saved → "Confirmation link sent" and a `sent` record (the token masked in its copy) → the confirmation page showed the address and **Confirm address**; pressed → back on Settings, "E-mail address confirmed", *Confirmed* → **Send test** → "Test e-mail sent" → the plan *Summer in Amsterdam* (4 days, 19 stops) → **Send to me…** (e-mail ticked, Telegram "Not connected") → "Sent to E-mail". Three records, each `sent` on its first attempt with Resend's id, no error; the requests took 0.4–1.6 s; no console or server errors. The confirmation link was made for the test with `createLinkToken` (the key is sending-only, so the sent e-mail can't be read back); the used link opened again shows "Address confirmed". The plan e-mail, rendered again from the same plan, looked right (Turkish dates and parts of the day, notes, map links, **Planı aç**). In a local run the e-mail's links point at `localhost:3001`. Ozan: all three e-mails arrived in his Gmail.

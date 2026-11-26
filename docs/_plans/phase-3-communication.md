@@ -2,8 +2,8 @@
 title: "Faz 3 — İletişim: tasarım"
 type: plan
 domain: sharing
-version: 0.3.2
-last_updated: 25.11.2026
+version: 0.4.0
+last_updated: 26.11.2026
 status: draft
 related:
   - "[[personal-assistant]]"
@@ -212,6 +212,7 @@ Hatırlatmalar plan tablosundan **türetilir**, önceden kuyruğa yazılmaz: pla
 8. **Telegram mesajında notlar kısaltılır** (plan 500, gün 300, durak 200 karakter): plan notu 5.000 karaktere kadar çıkabiliyor, mesaj sınırı 4.096.
 9. **Kayıttaki e-posta kopyasında onay anahtarı gizlenir** (e-posta testine hazırlanırken bulundu, v1.57.3): gönderim kaydı onay e-postasının metnini linkiyle saklıyordu — anahtar yalnız hash'iyle saklanır ilkesini delen bir hataydı. Artık kopyada `token=•••` yazıyor; e-postanın kendisi tam gider.
 10. **Gönderen adı koddan:** `EMAIL_FROM` yalnız adres olduğunda (`hello@mappy.site`) e-posta "Map Organiser" adıyla gider.
+11. **Webhook kaydını uygulama yapar** (Ozan'ın seçimi, 26.11.2026): production'da her "Connect Telegram"de sunucu önce `getMe` ile botun kullanıcı adını Vercel'dekiyle karşılaştırır, sonra `setWebhook` ile adresi ve sırrı kaydeder. Bot anahtarı ve sır yalnız BotFather'da ve Vercel'de durur; elle komut yok. Preview ve yerelde atlanır (karar 13).
 
 **Doğrulama:** `npm run check:notify` 107 kontrol (Türkçe metinler ve kaçış, Telegram sınırı, bot güncellemeleri, anahtarlar, outbox, iki kanalın bağlanması, gönderim, `send_plan`'ın cevabı ve kartı); `npm run check:agent` 165 kontrol; migration'ın geri alınan deneme çalıştırması (sonuçlar şema dokümanında); `next build`; dev sunucusunda `/confirm-email` oturumsuz açılıyor (telefonda da), webhook bot ayarlı değilken 404. Henüz denenmeyen: gerçek e-posta ve Telegram gönderimi (aşağıdaki adımlardan sonra).
 
@@ -219,7 +220,7 @@ Hatırlatmalar plan tablosundan **türetilir**, önceden kuyruğa yazılmaz: pla
 1. ~~Migration'ın uygulanması~~ — uygulandı (25.11.2026, sürüm 20261125203540); `npm run check:notify:db` 15/15. Ek: `notifications.plan_id` indeksi (Supabase'in performans uyarısı) — Ozan'ın onayıyla uygulandı (25.11.2026, sürüm 20261125224149); uyarı kalktı.
 2. Ozan'ın dashboard adımları (aşağıda): Resend alanı ve anahtarı → Vercel + worktree `.env.local`; BotFather → Vercel Production.
 3. ~~E-posta uçtan uca~~ — yerelde test hesabıyla, Chrome'da, Ozan'ın Gmail'ine denendi (25.11.2026): onay, test e-postası ve bir planın özeti gitti; üç kayıt `sent`. Üç e-posta da Ozan'ın Gmail'ine geldi. Ayrıntı: [[../05-flows/notifications-flow#Checks]].
-4. Telegram: yalnız production'da (karar 13) — main'e merge'den ve deploy'dan sonra `setWebhook` (Ozan'ın onayıyla), sonra bağlama ve test.
+4. Telegram: yalnız production'da (karar 13). Bot ve Vercel değişkenleri hazır (26.11.2026); main'e merge ve deploy'dan sonra production'da Ayarlar → Connect Telegram (webhook'u uygulama kaydeder), sonra test.
 
 ## Dilimler ve geçiş yolu
 
@@ -242,7 +243,7 @@ Bütün şema değişiklikleri **eklemeli** (yeni tablolar, `profiles.time_zone`
 ## Ozan'ın dashboard adımları
 
 - **Resend:** hesap; `mail.maporganiser.com` alanını ekle (bölge seçimi kalıcı); Resend'in ürettiği DNS kayıtlarını DNS sağlayıcısına gir (Cloudflare ise proxy kapalı); `_dmarc.maporganiser.com` TXT `v=DMARC1; p=none; rua=mailto:…`; API anahtarı → Vercel `RESEND_API_KEY`.
-- **Telegram:** @BotFather `/newbot` (görünen ad, `…bot` ile biten kullanıcı adı — sonradan değişmez); token → Vercel `TELEGRAM_BOT_TOKEN`, kullanıcı adı → `TELEGRAM_BOT_USERNAME`; webhook sırrı (`openssl rand -hex 32`) → `TELEGRAM_WEBHOOK_SECRET` (üçü de yalnız Production); deploy sonrası `setWebhook` çağrısı (onayınla ben yaparım; komut [[../04-integrations/telegram#Registering the webhook]]).
+- **Telegram:** ~~@BotFather `/newbot`; üç değişken Vercel'e (yalnız Production)~~ — yapıldı (26.11.2026): bot **Mappy**, `@mappysitebot`; `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME`, `TELEGRAM_WEBHOOK_SECRET` Production'da. Webhook kaydını uygulama kendisi yapar (sapma 11) — deploy'dan sonra production'da Ayarlar → Connect Telegram yeterli.
 - **Resend gönderen:** Vercel `EMAIL_FROM` = `hello@mappy.site` (Production + Preview; uygulama "Map Organiser" adını kendisi ekler). Yerelde ana klasörün ve worktree'nin `.env.local`'ında var (25.11.2026). `mappy.site` DMARC kaydı da var (TXT `_dmarc` = `v=DMARC1; p=none;`).
 - Uygulamada: e-posta onay linkine tıkla, Telegram'ı bağla.
 
