@@ -2,7 +2,7 @@
 title: Settings components
 type: component
 domain: frontend
-version: 1.10.0
+version: 1.10.1
 last_updated: 26.11.2026
 status: stable
 sources:
@@ -120,7 +120,7 @@ Six components powering the Settings page tabs. All `"use client"`.
 - **Props:** none.
 - **Hooks:** `useNotificationSettings` (polls every 3 s while waiting for Telegram's Start), `useSetEmail`, `useRemoveEmail`, `useTelegramLink`, `useUnlinkTelegram`, `useSendTest` — [[../hooks/use-notifications]].
 - **Renders:**
-  - Heading "Notifications": "Where the app sends your plans. Messages are in Turkish; nothing goes anywhere until you ask." For an account that isn't the owner's (`open: false`): "Notifications are only open to this app's owner." and nothing else.
+  - Heading "Notifications": "Where the app sends your plans, their reminders and a weekly summary — in Turkish. Nothing goes out before you connect a channel." (v1.58.2; until then "…nothing goes anywhere until you ask", untrue once reminders go by themselves.) For an account that isn't the owner's (`open: false`): "Notifications are only open to this app's owner." and nothing else.
   - **E-mail:** a labelled address field and Save ("We'll send a link to confirm it first"); then the address with a badge — *Waiting for confirmation* (amber) or *Confirmed* (emerald, check) — and **Send test** (confirmed) or **Send the link again** (unconfirmed), **Change**, **Remove**. "E-mail isn't set up on this server" without the server's keys.
   - **Telegram:** **Connect Telegram** → **Open Telegram** (the bot's start link, new tab) and "Waiting for Start…" (spinner, `role="status"`), for at most 15 minutes — the link's life; when the poll sees the chat: "Telegram connected" toast, *Connected* badge, `@username`, **Send test**, **Disconnect**. Blocked in Telegram: an amber badge, "Unblock it, or connect again", **Connect again**, **Disconnect**. "Telegram isn't set up on this server" without the bot (preview, local).
   - Back from the confirmation page (`?email=confirmed` / `link-invalid`): a toast, then the flag is removed from the address so a refresh doesn't repeat it.

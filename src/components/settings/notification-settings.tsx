@@ -60,7 +60,7 @@ export function NotificationSettings() {
       </div>
       <p className="text-xs text-muted-foreground mt-1">
         {data.open
-          ? "Where the app sends your plans. Messages are in Turkish; nothing goes anywhere until you ask."
+          ? "Where the app sends your plans, their reminders and a weekly summary — in Turkish. Nothing goes out before you connect a channel."
           : "Notifications are only open to this app's owner."}
       </p>
     </div>

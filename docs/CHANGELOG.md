@@ -6,6 +6,23 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 26.11.2026 — v1.58.2 — Settings says what goes out by itself
+
+- Ozan: both test e-mails arrived (the reminder and the weekly summary).
+- Found in the merge check (copy the branch's change made untrue): Settings →
+  Notifications still said "nothing goes anywhere until you ask" — no longer
+  so, since reminders and the weekly summary go by themselves, on by default.
+  Now: "Where the app sends your plans, their reminders and a weekly summary —
+  in Turkish. Nothing goes out before you connect a channel." The other
+  sentences of the kind still hold: the assistant's approval card
+  ("Nothing is sent until you choose." — `send_plan`), the confirmation page
+  (nothing goes to an unconfirmed address), the bot's greeting (it already
+  names the reminders).
+- Docs: [[03-frontend/components/settings]], [[_plans/phase-3-communication]],
+  [[05-flows/notifications-flow]].
+
+---
+
 ## 26.11.2026 — v1.58.1 — Reminders sent for real; every cron's secret in constant time
 
 - Ozan's answers: the weekly summary covering the seven days from its day
