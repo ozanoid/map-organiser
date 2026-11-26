@@ -35,12 +35,33 @@ import { deliver, setSenders, type Delivery } from "@/lib/notify/outbox";
 import {
   channelTestMessage,
   clip,
+  reminderMessage,
+  weeklyMessage,
   emailVerifyMessage,
   escapeHtml,
   planSummaryMessage,
   trDay,
   trRange,
 } from "@/lib/notify/render";
+import {
+  atLocal,
+  candidates,
+  candidateWindow,
+  DEFAULT_SCHEDULE,
+  dueNow,
+  isoWeekday,
+  localDate,
+  planZone,
+  reminderKey,
+  verdict,
+  weekOf,
+  weeklyKey,
+  type CandidatePlan,
+  type Existing,
+  type ScheduleUser,
+} from "@/lib/notify/schedule";
+import { readSchedule, saveSchedule, scheduleFromRow, scheduleInput } from "@/lib/notify/schedule-store";
+import { runScheduler, type SchedulerStore } from "@/lib/notify/scheduler";
 import { sendToOwner } from "@/lib/notify/send";
 import { registerWebhook } from "@/lib/notify/telegram";
 import { handleUpdate, REPLIES, startPayload, type UpdateEffects } from "@/lib/notify/telegram-updates";
@@ -678,6 +699,219 @@ async function main() {
     expect("the asked channel not connected: an error result", notConn === "Nothing was sent: Telegram isn't connected. A channel is connected in the app under Settings → Notifications.", notConn);
     const allFailed = refused([{ channel: "email", status: "failed", error: "E-mail: invalid from" }]);
     expect("every send failed: an error result with the reason", allFailed === "Nothing was sent: e-mail failed (E-mail: invalid from).", allFailed);
+  }
+
+  say("## the schedule: time zones and weeks");
+  {
+    const iso = (d: string, t: string, z: string) => atLocal(d, t, z).toISOString();
+    expect("08:00 London the day the clocks go forward = 07:00 UTC", iso("2026-03-29", "08:00", "Europe/London") === "2026-03-29T07:00:00.000Z");
+    expect("08:00 London the day they go back = 08:00 UTC", iso("2026-10-25", "08:00", "Europe/London") === "2026-10-25T08:00:00.000Z");
+    expect("18:00 Tokyo = 09:00 UTC", iso("2026-11-27", "18:00", "Asia/Tokyo") === "2026-11-27T09:00:00.000Z");
+    expect("23:30 UTC is already tomorrow in Istanbul", localDate(new Date("2026-11-26T23:30:00Z"), "Europe/Istanbul") === "2026-11-27");
+    expect("30.11.2026 is a Monday, 6.12 a Sunday", isoWeekday("2026-11-30") === 1 && isoWeekday("2026-12-06") === 7);
+    const w = weekOf("2026-12-02");
+    expect("a week: Monday to Sunday, its ISO number", w.start === "2026-11-30" && w.end === "2026-12-06" && w.key === "2026-W49", w);
+    expect("1 January 2027 is in 2026-W53", weekOf("2027-01-01").key === "2026-W53", weekOf("2027-01-01"));
+    expect("4 January 2027 starts 2027-W01", weekOf("2027-01-04").key === "2027-W01");
+    expect(
+      "a plan's zone: its own, else the user's, else UTC",
+      planZone("Asia/Tokyo", "Europe/London") === "Asia/Tokyo" && planZone(null, "Europe/London") === "Europe/London" && planZone("Not/AZone", null) === "UTC"
+    );
+    const win = candidateWindow(new Date("2026-11-27T12:00:00Z"));
+    expect("plans read: starting yesterday to two days on (every zone, the grace)", win.from === "2026-11-26" && win.to === "2026-11-29", win);
+  }
+
+  say("## the schedule: what is due");
+  {
+    const T = new Date("2026-11-27T18:00:00Z");
+    const at = (minutes: number) => new Date(T.getTime() + minutes * 60_000);
+    expect("before its time: wait", verdict(T, at(-1), null, undefined) === "wait");
+    expect("at its time: send", verdict(T, at(5), null, undefined) === "send");
+    expect("the plan changed after its time: skipped as changed (decision 15)", verdict(T, at(30), at(10), undefined) === "changed");
+    expect("the plan changed before its time: send", verdict(T, at(30), at(-10), undefined) === "send");
+    expect("three hours and a minute late, nothing on record: skipped late", verdict(T, at(181), null, undefined) === "late");
+    expect(
+      "sent or skipped: done",
+      verdict(T, at(5), null, { status: "sent", attempts: 1 }) === "done" && verdict(T, at(5), null, { status: "skipped", attempts: 0 }) === "done"
+    );
+    expect("failed twice: tried again", verdict(T, at(30), null, { status: "failed", attempts: 2 }) === "send");
+    expect("failed three times: left", verdict(T, at(30), null, { status: "failed", attempts: 3 }) === "done");
+    expect("a try on record, now late: left as it is", verdict(T, at(200), null, { status: "failed", attempts: 1 }) === "done");
+
+    const user: ScheduleUser = {
+      userId: USER,
+      timeZone: "Europe/London",
+      settings: DEFAULT_SCHEDULE,
+      targets: { email: { channel: "email", email: "ozan@example.com" }, telegram: { channel: "telegram", chatId: 42, username: "ozan" } },
+    };
+    const plan1: CandidatePlan = { id: "p1", userId: USER, startDate: "2026-11-28", zone: "Europe/London", changedAt: new Date("2026-11-20T10:00:00Z") };
+    const now1 = new Date("2026-11-27T18:05:00Z");
+    const c1 = candidates(now1, [user], [plan1]);
+    expect(
+      "candidates: evening and morning on two channels, and this week's summary (last week's is past saving)",
+      c1.filter((c) => c.kind === "plan_reminder").length === 4 && c1.filter((c) => c.kind === "weekly_summary").length === 2,
+      c1.map((c) => c.key)
+    );
+    const ev = c1.find((c) => c.key === reminderKey("p1", "2026-11-28", "evening", "email"));
+    expect("the evening reminder: 18:00 London, the day before", ev?.at.toISOString() === "2026-11-27T18:00:00.000Z", ev?.at);
+    const d1 = dueNow(now1, c1, new Map());
+    expect(
+      "18:05: the evening reminder goes on both channels, the morning one waits",
+      d1.send.filter((m) => m.slot === "evening").length === 2 && !d1.send.some((m) => m.slot === "morning"),
+      d1.send.map((m) => m.key)
+    );
+    expect(
+      "Friday: this week's Monday summary was missed — skipped late, once per channel; last week's not looked at",
+      d1.skip.filter((x) => x.key.includes(":2026-W48:") && x.reason === "late").length === 2 && !d1.skip.some((x) => x.key.includes(":2026-W47:")),
+      d1.skip
+    );
+    const now2 = new Date("2026-11-27T21:30:00Z");
+    const d2 = dueNow(now2, candidates(now2, [user], [plan1]), new Map());
+    expect("21:30 with nothing on record: the evening reminder skipped late", d2.skip.filter((x) => x.kind === "plan_reminder" && x.reason === "late").length === 2);
+    const now3 = new Date("2026-11-27T18:45:00Z");
+    const d3 = dueNow(now3, candidates(now3, [user], [{ ...plan1, changedAt: new Date("2026-11-27T18:30:00Z") }]), new Map());
+    expect(
+      "a plan changed at 18:30: tonight's reminder skipped as changed",
+      d3.skip.filter((x) => x.reason === "changed").length === 2 && !d3.send.some((m) => m.kind === "plan_reminder")
+    );
+    const sentRows: Existing = new Map(c1.filter((c) => c.slot === "evening").map((c) => [c.key, { status: "sent", attempts: 1 }]));
+    expect("already sent: not again", !dueNow(now1, c1, sentRows).send.some((m) => m.slot === "evening"));
+    expect(
+      "a channel that isn't connected gets nothing",
+      candidates(now1, [{ ...user, targets: { email: user.targets.email } }], [plan1]).every((c) => c.channel === "email")
+    );
+    const c4 = candidates(now1, [{ ...user, settings: { ...DEFAULT_SCHEDULE, eveningTime: null, weeklyTime: null } }], [plan1]);
+    expect("the evening and the weekly summary off: only the morning reminders", c4.length === 2 && c4.every((c) => c.slot === "morning"), c4.map((c) => c.key));
+    const tk = candidates(now1, [user], [{ ...plan1, id: "p2", zone: "Asia/Tokyo" }]).find((c) => c.slot === "evening" && c.channel === "email");
+    expect("a Tokyo plan's evening reminder: 18:00 Tokyo, 09:00 UTC (decision 18)", tk?.at.toISOString() === "2026-11-27T09:00:00.000Z", tk?.at);
+    const monday = new Date("2026-11-30T08:05:00Z");
+    const wk = dueNow(monday, candidates(monday, [user], []), new Map());
+    expect(
+      "Monday 08:05 London: the weekly summary of 30.11–6.12 goes",
+      wk.send.length === 2 && wk.send[0].kind === "weekly_summary" && wk.send[0].week?.start === "2026-11-30" && wk.send[0].week?.end === "2026-12-06" && wk.send[0].key === weeklyKey(USER, "2026-W49", "email"),
+      wk.send
+    );
+    const thursday = new Date("2026-12-03T08:05:00Z");
+    const th = dueNow(thursday, candidates(thursday, [{ ...user, settings: { ...DEFAULT_SCHEDULE, weeklyDay: 4 } }], []), new Map());
+    expect(
+      "Thursday's summary covers Thursday to Wednesday, once in that ISO week",
+      th.send.length === 2 && th.send[0].week?.start === "2026-12-03" && th.send[0].week?.end === "2026-12-09" && th.send[0].key === weeklyKey(USER, "2026-W49", "email"),
+      th.send
+    );
+    const afterMidnight = new Date("2026-11-30T00:10:00Z");
+    const sun = dueNow(afterMidnight, candidates(afterMidnight, [{ ...user, settings: { ...DEFAULT_SCHEDULE, weeklyDay: 7, weeklyTime: "23:45" } }], []), new Map());
+    expect(
+      "Sunday 23:45 missed: still sent at 00:10 on Monday, for the week ahead",
+      sun.send.length === 2 && sun.send[0].key === weeklyKey(USER, "2026-W48", "email") && sun.send[0].week?.start === "2026-11-29" && sun.send[0].week?.end === "2026-12-05",
+      sun.send
+    );
+  }
+
+  say("## reminders and the weekly summary, in Turkish");
+  {
+    const trip = plan({
+      name: "Kapadokya",
+      start_date: "2026-12-05",
+      end_date: "2026-12-07",
+      days: [day(1, "2026-12-05", [stop({ title: "Balon", start_time: "05:30:00" })], "Erken kalk"), day(2, "2026-12-06", [stop({ title: "Vadi" })]), day(3, "2026-12-07", [])],
+    });
+    const ev = reminderMessage(trip, "evening", APP);
+    expect("evening: 'Yarın:' and how many days", ev.subject === "Yarın: Kapadokya (3 gün)", ev.subject);
+    expect("evening: the first day only, with its date", ev.text.startsWith("Yarın: Kapadokya\n5 Aralık Cumartesi · 3 günlük planın ilk günü") && ev.text.includes("05:30 — Balon") && ev.text.includes("Erken kalk") && !ev.text.includes("Vadi"), ev.text.slice(0, 160));
+    const mo = reminderMessage(plan({ name: "Kadıköy", days: [day(1, "2026-11-28", [stop({ title: "Çiya", day_part: "evening" })])] }), "morning", APP);
+    expect("morning: 'Bugün:', no count for one day", mo.subject === "Bugün: Kadıköy" && mo.telegram.startsWith("<b>Bugün: Kadıköy</b>"), mo.subject);
+    expect("reminders in Telegram: only b, i, a", foreignTags(ev.telegram).length === 0 && foreignTags(mo.telegram).length === 0);
+    const wm = weeklyMessage(
+      [
+        { id: "a", name: "Kadıköy <akşam>", startDate: "2026-12-01", endDate: "2026-12-01", dayCount: 1, stopCount: 3 },
+        { id: "b", name: "Kapadokya", startDate: "2026-12-05", endDate: "2026-12-07", dayCount: 3, stopCount: 5 },
+      ],
+      { start: "2026-11-30", end: "2026-12-06" },
+      APP
+    );
+    expect("weekly: the count and the week in the subject", wm.subject === "Bu hafta: 2 plan · 30 Kasım Pazartesi – 6 Aralık Pazar", wm.subject);
+    expect("weekly: each plan's dates, days and stops", wm.text.includes("• Kadıköy <akşam> — 1 Aralık Salı · 3 durak") && wm.text.includes("5 Aralık Cumartesi – 7 Aralık Pazartesi · 3 gün · 5 durak"), wm.text);
+    expect("weekly: names escaped, Telegram's tags only", wm.html.includes("Kadıköy &lt;akşam&gt;") && wm.telegram.includes("Kadıköy &lt;akşam&gt;") && foreignTags(wm.telegram).length === 0);
+    const ahead = weeklyMessage([{ id: "c", name: "Brighton", startDate: "2026-12-05", endDate: "2026-12-05", dayCount: 1, stopCount: 4 }], { start: "2026-12-03", end: "2026-12-09" }, APP);
+    expect(
+      "weekly on a Thursday: 'Önümüzdeki 7 gün', not 'Bu hafta'",
+      ahead.subject === "Önümüzdeki 7 gün: 1 plan · 3 Aralık Perşembe – 9 Aralık Çarşamba" && ahead.telegram.startsWith("<b>Önümüzdeki 7 gün: 1 plan</b>"),
+      ahead.subject
+    );
+  }
+
+  say("## a scheduler run (stand-in store and outbox)");
+  {
+    const user: ScheduleUser = {
+      userId: USER,
+      timeZone: "Europe/London",
+      settings: DEFAULT_SCHEDULE,
+      targets: { email: { channel: "email", email: "ozan@example.com" }, telegram: { channel: "telegram", chatId: 42, username: "ozan" } },
+    };
+    const kadikoy = plan({ id: "p1", name: "Kadıköy", start_date: "2026-11-28", end_date: "2026-11-28", days: [day(1, "2026-11-28", [stop({ title: "Çiya", start_time: "19:00:00" })])] });
+    const made = new Date("2026-11-20T00:00:00Z");
+    const skips: { reason: string; kind: string }[] = [];
+    const delivered: Delivery[] = [];
+    const gone: number[] = [];
+    let weekPlans: { id: string; name: string; startDate: string; endDate: string; dayCount: number; stopCount: number }[] = [];
+    const store: SchedulerStore = {
+      users: async () => [user],
+      plans: async () => [
+        { id: "p1", userId: USER, startDate: "2026-11-28", zone: "Europe/London", changedAt: made },
+        { id: "deleted", userId: USER, startDate: "2026-11-28", zone: null, changedAt: made },
+      ],
+      existing: async () => new Map(),
+      plan: async (_u, id) => (id === "p1" ? kadikoy : null),
+      weekPlans: async () => weekPlans,
+      skip: async (x) => void skips.push({ reason: x.reason, kind: x.kind }),
+      telegramGone: async (chatId) => void gone.push(chatId),
+    };
+    const outbox = async (d: Delivery) => {
+      delivered.push(d);
+      return d.target.channel === "telegram"
+        ? ({ status: "failed", error: "Telegram: Forbidden", chatGone: true } as const)
+        : ({ status: "sent" } as const);
+    };
+    const friday = await runScheduler(store, outbox, new Date("2026-11-27T18:05:00Z"), APP);
+    expect(
+      "18:05: the evening reminder rendered and handed to the outbox, with its time",
+      delivered.length === 2 && delivered.every((d) => d.kind === "plan_reminder" && d.message.subject === "Yarın: Kadıköy" && d.dueAt?.toISOString() === "2026-11-27T18:00:00.000Z"),
+      delivered.map((d) => [d.kind, d.dedupeKey])
+    );
+    expect("a plan gone meanwhile: nothing for it", !delivered.some((d) => d.planId === "deleted"));
+    expect("the bot blocked: the chat switched off", gone.length === 1 && gone[0] === 42, gone);
+    expect("the run's summary (late: this week's Monday summary)", friday.sent === 1 && friday.failed === 1 && friday.skipped.late === 2, friday);
+
+    delivered.length = 0;
+    skips.length = 0;
+    const emptyMonday = await runScheduler({ ...store, plans: async () => [] }, outbox, new Date("2026-11-30T08:05:00Z"), APP);
+    expect("Monday, no plan that week: nothing sent, skipped as empty (decision 16)", delivered.length === 0 && skips.filter((x) => x.reason === "empty").length === 2 && emptyMonday.skipped.empty === 2, { skips, emptyMonday });
+    weekPlans = [{ id: "p9", name: "Brighton", startDate: "2026-12-05", endDate: "2026-12-05", dayCount: 1, stopCount: 4 }];
+    delivered.length = 0;
+    await runScheduler({ ...store, plans: async () => [] }, outbox, new Date("2026-11-30T08:05:00Z"), APP);
+    expect("Monday with a plan: the weekly summary goes", delivered.length === 2 && delivered.every((d) => d.kind === "weekly_summary" && d.message.subject.startsWith("Bu hafta: 1 plan")), delivered.map((d) => d.message.subject));
+  }
+
+  say("## the settings: stored, read, checked");
+  {
+    expect("no row: the defaults", scheduleFromRow(null) === DEFAULT_SCHEDULE);
+    const fromDb = scheduleFromRow({ reminder_channels: ["telegram", "sms"], reminder_evening_time: "18:30:00", reminder_morning_time: null, weekly_channels: [], weekly_day: 5, weekly_time: "09:15:00" });
+    expect(
+      "a row: Postgres times as HH:MM, unknown channels dropped",
+      fromDb.eveningTime === "18:30" && fromDb.morningTime === null && fromDb.weeklyTime === "09:15" && JSON.stringify(fromDb.reminderChannels) === '["telegram"]' && fromDb.weeklyDay === 5,
+      fromDb
+    );
+    expect("the screen's settings pass", scheduleInput.safeParse(DEFAULT_SCHEDULE).success);
+    expect("a time that isn't one: refused", !scheduleInput.safeParse({ ...DEFAULT_SCHEDULE, eveningTime: "25:00" }).success);
+    expect("a channel that isn't one: refused", !scheduleInput.safeParse({ ...DEFAULT_SCHEDULE, weeklyChannels: ["sms"] }).success);
+    expect("an extra field: refused", !scheduleInput.safeParse({ ...DEFAULT_SCHEDULE, extra: 1 }).success);
+    const db = new FakeDb();
+    const admin = db as any;
+    expect("read for someone without a row: the defaults", JSON.stringify(await readSchedule(admin, USER)) === JSON.stringify(DEFAULT_SCHEDULE));
+    const saved = await saveSchedule(admin, USER, { ...DEFAULT_SCHEDULE, morningTime: null, weeklyDay: 7 });
+    expect("saved, and read back as saved", saved.morningTime === null && saved.weeklyDay === 7 && JSON.stringify(await readSchedule(admin, USER)) === JSON.stringify(saved), saved);
+    const view = await settingsView(admin, USER);
+    expect("Settings shows the schedule and the zone", view.schedule.weeklyDay === 7 && view.timeZone === null, { schedule: view.schedule, timeZone: view.timeZone });
   }
 
   setSenders(null);

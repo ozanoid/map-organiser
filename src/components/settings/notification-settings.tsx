@@ -16,11 +16,13 @@ import {
   useUnlinkTelegram,
 } from "@/lib/hooks/use-notifications";
 import type { ChannelsView } from "@/lib/notify/types";
+import { NotificationSchedule } from "./notification-schedule";
 
 /**
- * Settings → Notifications (Phase 3, slice 1): where the app sends the
- * owner's plans — an e-mail address (confirmed by a link before anything
- * else goes to it) and a Telegram chat (linked through the bot's Start).
+ * Settings → Notifications (Phase 3): where the app sends the owner's plans
+ * — an e-mail address (confirmed by a link before anything else goes to it)
+ * and a Telegram chat (linked through the bot's Start) — and, since slice 2,
+ * when: the reminders before a plan, the weekly summary, the time zone.
  */
 export function NotificationSettings() {
   const [waitingForTelegram, setWaitingForTelegram] = useState(false);
@@ -72,6 +74,8 @@ export function NotificationSettings() {
       <EmailChannel view={data.email} />
       <Separator />
       <TelegramChannel view={data.telegram} waiting={waitingForTelegram} onWaiting={setWaitingForTelegram} />
+      <Separator />
+      <NotificationSchedule view={data} />
     </div>
   );
 }

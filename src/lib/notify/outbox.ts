@@ -22,6 +22,8 @@ export interface Delivery {
   dedupeKey: string;
   message: Message;
   target: { channel: "email"; email: string } | { channel: "telegram"; chatId: number; username: string | null };
+  /** When it was meant to go — a scheduled reminder's time; now otherwise. */
+  dueAt?: Date;
   /** Values the record's copy must not keep — a one-time token in a link.
    *  The message goes out whole; the stored copy shows "•••" instead. */
   secrets?: readonly string[];
@@ -60,7 +62,14 @@ export async function deliver(admin: SupabaseClient, d: Delivery): Promise<Deliv
   let id: string | undefined;
   const { data: inserted, error: insertError } = await admin
     .from("notifications")
-    .insert({ user_id: d.userId, kind: d.kind, channel, plan_id: d.planId ?? null, dedupe_key: d.dedupeKey })
+    .insert({
+      user_id: d.userId,
+      kind: d.kind,
+      channel,
+      plan_id: d.planId ?? null,
+      dedupe_key: d.dedupeKey,
+      ...(d.dueAt ? { due_at: d.dueAt.toISOString() } : {}),
+    })
     .select("id")
     .maybeSingle();
   if (insertError) {

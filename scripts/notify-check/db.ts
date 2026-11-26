@@ -23,6 +23,9 @@ import {
   settingsView,
   unlinkTelegram,
 } from "@/lib/notify/channels";
+import { DEFAULT_SCHEDULE } from "@/lib/notify/schedule";
+import { readSchedule, readTimeZone } from "@/lib/notify/schedule-store";
+import { supabaseSchedulerStore } from "@/lib/notify/scheduler-store";
 import { consumeLinkToken, newToken, readLinkToken } from "@/lib/notify/tokens";
 
 const say = (line = "") => process.stderr.write(`${line}\n`);
@@ -86,6 +89,26 @@ async function main() {
     expires_at: new Date().toISOString(),
   });
   expect("a token for nobody → refused by the foreign key", tokenInsert.error?.code === "23503", tokenInsert.error);
+
+  say("## the scheduler's queries (slice 2)");
+  const store = supabaseSchedulerStore(admin);
+  const owners = await store.users();
+  expect(
+    "users: owners with a usable channel, their settings and zone (counted, not shown)",
+    owners.every((u) => Object.keys(u.targets).length > 0 && Array.isArray(u.settings.reminderChannels)),
+    { owners: owners.length }
+  );
+  say(`      ${owners.length} owner(s) with a usable channel; ${owners.filter((u) => u.timeZone).length} with a time zone`);
+  expect("plans for nobody → []", (await outcome(store.plans([ghost], "2026-01-01", "2027-12-31"))) === "ok:[]");
+  expect("existing for an unknown key → none", (await store.existing([`check:${randomUUID()}`])).size === 0);
+  expect("a plan that doesn't exist → null", (await outcome(store.plan(ghost, randomUUID()))) === "ok:null");
+  expect("week plans for nobody → []", (await outcome(store.weekPlans(ghost, "2026-11-30", "2026-12-06"))) === "ok:[]");
+  expect("settings for nobody → the defaults", JSON.stringify(await readSchedule(admin, ghost)) === JSON.stringify(DEFAULT_SCHEDULE));
+  expect("the time zone of nobody → null", (await readTimeZone(admin, ghost)) === null);
+  const skipped = await outcome(
+    store.skip({ kind: "plan_reminder", key: `check:${randomUUID()}`, userId: ghost, channel: "email", at: new Date(), reason: "late" })
+  );
+  expect("a skipped record for nobody → refused by the foreign key", skipped.includes("foreign key"), skipped);
 
   say();
   say(failures === 0 ? "All notification database checks passed." : `${failures} check(s) FAILED.`);

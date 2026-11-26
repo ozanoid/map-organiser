@@ -1,6 +1,7 @@
 import { googleMapsPlaceUrl } from "@/lib/google/maps-url";
 import type { DayPart, Plan, PlanDay, PlanStop } from "@/lib/types";
 import type { Message } from "@/lib/notify/types";
+import { isoWeekday } from "@/lib/notify/schedule";
 import { TELEGRAM_MAX_CHARS } from "@/lib/notify/telegram-limits";
 
 /**
@@ -123,18 +124,66 @@ function button(href: string, label: string): string {
 
 // ── Messages ───────────────────────────────────────────────────────────
 
+/** What a plan message shows; each channel draws it its own way. */
+interface PlanMessageParts {
+  /** The heading: the plan's name, or "Yarın: <name>". */
+  title: string;
+  /** The line under it: the dates, or the day. */
+  subtitle: string;
+  cancelled: boolean;
+  notes: string | null;
+  days: DayBlock[];
+  url: string;
+  subject: string;
+}
+
 /** A plan's summary: its dates, days and stops with times, notes and map links. */
 export function planSummaryMessage(plan: Plan, appUrl: string): Message {
   const dates = planDates(plan);
-  const days = dayBlocks(plan);
-  const cancelled = plan.status === "cancelled";
-  const notes = plan.notes?.trim() || null;
-  const url = planUrl(plan, appUrl);
+  return planMessage(
+    {
+      title: plan.name,
+      subtitle: dates,
+      cancelled: plan.status === "cancelled",
+      notes: plan.notes?.trim() || null,
+      days: dayBlocks(plan),
+      url: planUrl(plan, appUrl),
+      subject: `Plan: ${plan.name}${plan.start_date ? ` — ${dates}` : ""}`,
+    },
+    appUrl
+  );
+}
 
+/**
+ * A plan's reminder (Phase 3, slice 2): the evening before — "Yarın: …" —
+ * or the morning of — "Bugün: …". Only the first day's stops (Phase 3,
+ * decision 17): the whole plan is in the app and in "Send to me".
+ */
+export function reminderMessage(plan: Plan, slot: "evening" | "morning", appUrl: string): Message {
+  const days = dayBlocks(plan);
+  const first = days[0] ?? { heading: "", notes: null, stops: [] };
+  const word = slot === "evening" ? "Yarın" : "Bugün";
+  const many = days.length > 1;
+  const date = plan.start_date ? trDay(plan.start_date) : "";
+  return planMessage(
+    {
+      title: `${word}: ${plan.name}`,
+      subtitle: [date, many ? `${days.length} günlük planın ilk günü` : ""].filter(Boolean).join(" · "),
+      cancelled: false,
+      notes: null,
+      days: [{ ...first, heading: "" }],
+      url: planUrl(plan, appUrl),
+      subject: `${word}: ${plan.name}${many ? ` (${days.length} gün)` : ""}`,
+    },
+    appUrl
+  );
+}
+
+function planMessage(p: PlanMessageParts, appUrl: string): Message {
   // Plain text
-  const text: string[] = [plan.name, cancelled ? `${dates} · İptal edildi` : dates];
-  if (notes) text.push("", notes);
-  for (const d of days) {
+  const text: string[] = [p.title, p.cancelled ? `${p.subtitle} · İptal edildi` : p.subtitle];
+  if (p.notes) text.push("", p.notes);
+  for (const d of p.days) {
     text.push("");
     if (d.heading) text.push(d.heading);
     if (d.notes) text.push(d.notes);
@@ -145,23 +194,23 @@ export function planSummaryMessage(plan: Plan, appUrl: string): Message {
       if (s.url) text.push(`  ${s.url}`);
     }
   }
-  text.push("", `Planı aç: ${url}`);
+  text.push("", `Planı aç: ${p.url}`);
 
   // E-mail
   const parts: string[] = [
-    `<h1 style="font-size:20px;margin:0 0 4px">${escapeHtml(plan.name)}</h1>`,
-    `<p style="margin:0;color:#4b5563">${escapeHtml(dates)}${cancelled ? ` · <strong style="color:#b91c1c">İptal edildi</strong>` : ""}</p>`,
+    `<h1 style="font-size:20px;margin:0 0 4px">${escapeHtml(p.title)}</h1>`,
+    `<p style="margin:0;color:#4b5563">${escapeHtml(p.subtitle)}${p.cancelled ? ` · <strong style="color:#b91c1c">İptal edildi</strong>` : ""}</p>`,
   ];
-  if (notes) parts.push(`<p style="margin:12px 0 0">${escapeHtml(notes)}</p>`);
-  for (const d of days) {
+  if (p.notes) parts.push(`<p style="margin:12px 0 0">${escapeHtml(p.notes)}</p>`);
+  for (const d of p.days) {
     if (d.heading) parts.push(`<h2 style="font-size:15px;margin:20px 0 4px">${escapeHtml(d.heading)}</h2>`);
-    if (d.notes) parts.push(`<p style="margin:0 0 4px;color:#4b5563;font-size:14px">${escapeHtml(d.notes)}</p>`);
+    if (d.notes) parts.push(`<p style="margin:${d.heading ? "0" : "16px"} 0 4px;color:#4b5563;font-size:14px">${escapeHtml(d.notes)}</p>`);
     if (d.stops.length === 0) {
       parts.push(`<p style="margin:4px 0;color:#6b7280;font-size:14px">Henüz durak yok</p>`);
       continue;
     }
     parts.push(
-      `<ul style="padding-left:18px;margin:8px 0 0">${d.stops
+      `<ul style="padding-left:18px;margin:${d.heading || d.notes ? "8px" : "16px"} 0 0">${d.stops
         .map((s) => {
           const name = s.url
             ? `<a href="${escapeHtml(s.url)}" style="color:${ACCENT}">${escapeHtml(s.name)}</a>`
@@ -176,13 +225,13 @@ export function planSummaryMessage(plan: Plan, appUrl: string): Message {
         .join("")}</ul>`
     );
   }
-  parts.push(button(url, "Planı aç"));
+  parts.push(button(p.url, "Planı aç"));
 
   return {
-    subject: `Plan: ${plan.name}${plan.start_date ? ` — ${dates}` : ""}`,
+    subject: p.subject,
     text: text.join("\n"),
-    html: emailLayout(plan.name, parts.join("\n"), appUrl),
-    telegram: planTelegram(plan, dates, days, notes, cancelled, url),
+    html: emailLayout(p.title, parts.join("\n"), appUrl),
+    telegram: planTelegram(p),
   };
 }
 
@@ -192,21 +241,14 @@ const TG_NOTES = { plan: 500, day: 300, stop: 200 } as const;
 
 /** The Telegram text, within its 4,096 characters: notes are clipped, and
  *  stops that don't fit are counted and left to the app. */
-function planTelegram(
-  plan: Plan,
-  dates: string,
-  days: DayBlock[],
-  notes: string | null,
-  cancelled: boolean,
-  url: string
-): string {
-  const head = [`<b>${escapeHtml(plan.name)}</b>`, `${escapeHtml(dates)}${cancelled ? " · <b>İptal edildi</b>" : ""}`];
-  if (notes) head.push("", `<i>${escapeHtml(clip(notes, TG_NOTES.plan))}</i>`);
-  const tail = ["", `<a href="${escapeHtml(url)}">Planı aç</a>`];
+function planTelegram(p: PlanMessageParts): string {
+  const head = [`<b>${escapeHtml(p.title)}</b>`, `${escapeHtml(p.subtitle)}${p.cancelled ? " · <b>İptal edildi</b>" : ""}`];
+  if (p.notes) head.push("", `<i>${escapeHtml(clip(p.notes, TG_NOTES.plan))}</i>`);
+  const tail = ["", `<a href="${escapeHtml(p.url)}">Planı aç</a>`];
 
   // Each stop's lines are one unit: a stop is shown whole or not at all.
   const units: { lines: string[]; stop: boolean }[] = [];
-  for (const d of days) {
+  for (const d of p.days) {
     const dayHead = [""];
     if (d.heading) dayHead.push(`<b>${escapeHtml(d.heading)}</b>`);
     if (d.notes) dayHead.push(`<i>${escapeHtml(clip(d.notes, TG_NOTES.day))}</i>`);
@@ -232,6 +274,62 @@ function planTelegram(
   }
   if (shown < total) out.push("", `… ve ${total - shown} durak daha — planın tamamı uygulamada.`);
   return [...out, ...tail].join("\n");
+}
+
+/** A plan as the weekly summary lists it. */
+export interface WeekPlan {
+  id: string;
+  name: string;
+  startDate: string;
+  endDate: string;
+  dayCount: number;
+  stopCount: number;
+}
+
+/**
+ * The weekly summary (Phase 3, slice 2): the plans of the seven days from the
+ * day it goes — "Bu hafta" on a Monday, "Önümüzdeki 7 gün" on another day —
+ * each with its dates, days, stops and link. Never sent when those days hold
+ * no plan (Phase 3, decision 16) — the scheduler skips it.
+ */
+export function weeklyMessage(plans: WeekPlan[], week: { start: string; end: string }, appUrl: string): Message {
+  const range = trRange(week.start, week.end);
+  const heading = isoWeekday(week.start) === 1 ? "Bu hafta" : "Önümüzdeki 7 gün";
+  const count = plans.length === 1 ? "1 plan" : `${plans.length} plan`;
+  const line = (wp: WeekPlan) =>
+    [trRange(wp.startDate, wp.endDate), wp.dayCount > 1 ? `${wp.dayCount} gün` : null, `${wp.stopCount} durak`]
+      .filter(Boolean)
+      .join(" · ");
+  const url = (wp: WeekPlan) => `${appUrl}/plans/${wp.id}`;
+
+  const text = [`${heading}: ${count}`, range, ""];
+  for (const wp of plans) text.push(`• ${wp.name} — ${line(wp)}`, `  ${url(wp)}`);
+
+  const html = emailLayout(
+    heading,
+    [
+      `<h1 style="font-size:20px;margin:0 0 4px">${escapeHtml(heading)}: ${escapeHtml(count)}</h1>`,
+      `<p style="margin:0;color:#4b5563">${escapeHtml(range)}</p>`,
+      `<ul style="padding-left:18px;margin:16px 0 0">${plans
+        .map(
+          (wp) =>
+            `<li style="margin:0 0 10px"><a href="${escapeHtml(url(wp))}" style="color:${ACCENT};font-weight:600">${escapeHtml(wp.name)}</a><br><span style="color:#6b7280;font-size:13px">${escapeHtml(line(wp))}</span></li>`
+        )
+        .join("")}</ul>`,
+    ].join("\n"),
+    appUrl
+  );
+
+  // Telegram: a week holds a handful of plans, far inside 4,096 characters;
+  // plan names are at most 120.
+  const telegram = [
+    `<b>${escapeHtml(heading)}: ${escapeHtml(count)}</b>`,
+    escapeHtml(range),
+    "",
+    ...plans.map((wp) => `• <a href="${escapeHtml(url(wp))}">${escapeHtml(wp.name)}</a> — ${escapeHtml(line(wp))}`),
+  ].join("\n");
+
+  return { subject: `${heading}: ${count} · ${range}`, text: text.join("\n"), html, telegram };
 }
 
 /** The confirmation an address gets before anything else is sent to it. */

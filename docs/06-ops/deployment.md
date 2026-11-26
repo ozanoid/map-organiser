@@ -2,8 +2,8 @@
 title: Deployment
 type: overview
 domain: ops
-version: 1.2.3
-last_updated: 25.11.2026
+version: 1.3.0
+last_updated: 26.11.2026
 status: stable
 sources:
   - next.config.ts
@@ -127,6 +127,7 @@ Routes that export `maxDuration` (checked 19.11.2026; the assistant's route 24.1
 |---|---|---|
 | `/api/cron/refresh-places` | 800 (was 300) | daily sweep; the 240 s soft deadline stays — 800 is headroom for a place started just before it (reviews poll up to ~110 s), which crossed 300 s and got the run killed |
 | `/api/cron/drain-imports` | 800 (was 300) | import queue; same reason. A run holds a claim for at most ~6 min, under the queue's 10-minute stale window — keep it so ([[../02-backend/schema/import-jobs]]) |
+| `/api/cron/notify` | 60 | one scheduler run: a few reads and the handful of messages due (v1.58.0) |
 | `/api/mcp` | 120 | Claude tool calls (`add_places` with an Instagram post waits up to 45 s) |
 | `/api/assistant/chat` | 800 | one assistant turn: up to 10 Claude calls plus the tools, run to the end after the browser goes (`after()`), then the Langfuse flush (v1.48.0; the Gemini chat route `/api/ai/chat` it replaced had 120) |
 | ~~`/api/ai/day-plan`~~ | — | removed in v1.53.0 (was 120: a bounded LLM call + one retry) |
@@ -142,9 +143,11 @@ Configured in `vercel.json` (Vercel Cron fires on **production only**):
 |---|---|---|
 | `/api/cron/refresh-places` | `0 3 * * *` | daily periodic refresh — [[runbooks/periodic-refresh]] |
 | `/api/cron/drain-imports` | `* * * * *` | the import queue (Takeout and Instagram jobs) — [[../05-flows/place-import-flow]] |
+| `/api/cron/notify` | `*/15 * * * *` | the plans' reminders and the weekly summaries (v1.58.0) — [[../05-flows/notifications-flow#Scheduled sends]] |
 
-Both require `CRON_SECRET`. On preview deployments the drain only runs from the
-kick at job creation and its own self-chain.
+All three require `CRON_SECRET`. On preview deployments the drain only runs from the
+kick at job creation and its own self-chain; reminders and summaries are never sent
+from a preview or a local server — only production's cron sends them.
 
 ## Dependabot
 
@@ -152,5 +155,5 @@ kick at job creation and its own self-chain.
 
 ## Open questions
 
-- **`vercel.ts` migration.** The Vercel knowledge update mentions `vercel.ts` as the preferred config (over `vercel.json`). The repo has neither — Vercel infers everything. If we add config (rewrites, redirects, headers, crons), use `vercel.ts`.
+- **`vercel.ts` migration.** The Vercel knowledge update mentions `vercel.ts` as the preferred config (over `vercel.json`). The repo has `vercel.json` (the region and the three crons; this note said "neither" until 26.11.2026); moving it to `vercel.ts` is optional.
 - **Production rollback testing.** No documented procedure has been tested. Worth a dry run.

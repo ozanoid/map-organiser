@@ -2,16 +2,20 @@
 title: profiles
 type: table
 domain: backend
-version: 1.2.1
-last_updated: 19.11.2026
+version: 1.3.0
+last_updated: 26.11.2026
 status: stable
 sources:
   - Supabase project hukppmaevcapvbrvxtph (live)
+  - supabase/migrations/20261126013719_notification_schedule.sql
+  - src/app/api/user/time-zone/route.ts
+  - src/components/layout/time-zone-sync.tsx
 related:
   - "[[_README]]"
   - "[[../../01-domain/users-and-profiles]]"
   - "[[../../06-ops/encryption]]"
   - "[[../../05-flows/full-profile-flow]]"
+  - "[[notifications]]"
 tags:
   - users
   - encryption
@@ -37,6 +41,7 @@ Per-user profile and settings. 1:1 with `auth.users` (the `id` is both PK and FK
 | `google_places_enabled` | boolean | yes | `true` | Per-user toggle for the Google enrichment path. **Unused since v1.42.0** (the path is gone); left in place. |
 | `ai_features_enabled` | boolean | no | `true` | **Phase 1.** Master kill-switch for every AI feature. Set `false` to: skip `lite_profile` in `parse-link`, skip `step=profile` chain, hide moderation UI, short-circuit `/api/ai/*` + `/api/user/ai-*` routes. Surfaced as the Settings → AI toggle. See [[../../05-flows/full-profile-flow]]. |
 | `cron_refresh_enabled` | boolean | no | `false` | **15.07.2026.** Opt-in for the ENTIRE periodic refresh sweep. Default off — the user's places are never scanned by the cron. When on: daily Google-data refresh + AI summary regeneration past >15 new reviews (if `ai_features_enabled`). Surfaced as the "Background data refresh" toggle in Settings → AI. See [[../../06-ops/runbooks/periodic-refresh]]. |
+| `time_zone` | text | yes | — | **26.11.2026, Phase 3 slice 2.** The user's IANA zone ("Europe/London"). CHECK ≤ 64 characters, `^[A-Za-z][A-Za-z0-9_+/-]*$`; the app also checks the runtime knows it. Set from the browser once (`TimeZoneSync` → `PUT /api/user/time-zone` with `auto`, kept only while the column is null) and changed in Settings → Notifications. The weekly summary is timed in it, and so are the reminders of a plan with no stop at a place that has a zone. Null = UTC. See [[notifications]]. |
 | `created_at` | timestamptz | yes | `now()` | — |
 | `updated_at` | timestamptz | yes | `now()` | App-managed (no DB trigger). |
 
@@ -87,6 +92,7 @@ Profile rows themselves are created by `handle_new_user()`, which fires on `auth
   - `add_ai_features_enabled_to_profiles` (2026-05-10, Phase 1)
   - `add_cron_reprofile_enabled_to_profiles` (2026-07-15)
   - `rename_cron_reprofile_to_cron_refresh` (2026-07-15 — semantics widened to the whole sweep)
+  - `notification_schedule` (2026-11-26, version 20261126013719 — `time_zone`; the same migration adds `notification_settings` and `notifications.skip_reason`, see [[notifications]])
 - **Encryption.** All `*_enc` columns use AES-256-GCM with `ENCRYPTION_SECRET` server-only env var. Helpers in `src/lib/google/get-user-api-keys.ts` and `src/components/settings/api-keys-manager.tsx` flow. See [[../../06-ops/encryption]] when written.
 - **Why FK to `auth.users` and not Supabase Auth API.** The 1:1 with FK lets RLS predicates use `auth.uid() = id` directly without subqueries.
 - **Why no `email` column.** Email lives in `auth.users.email` (Supabase Auth's responsibility). Reading it requires the service-role client.

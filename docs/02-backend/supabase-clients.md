@@ -2,8 +2,8 @@
 title: Supabase Clients
 type: overview
 domain: backend
-version: 1.2.1
-last_updated: 19.11.2026
+version: 1.3.0
+last_updated: 26.11.2026
 status: stable
 sources:
   - src/lib/supabase/client.ts
@@ -76,7 +76,7 @@ import { createServiceClient } from "@/lib/supabase/server";
 const supabase = createServiceClient(); // bypasses RLS — use with care
 ```
 
-**Used only where no session can do the job** (checked 16.10.2026 — `createServiceClient` is imported by these seven files):
+**Used only where no session can do the job** (checked 26.11.2026 — `createServiceClient` is imported by these 20 files; until then the list stopped at the import paths of v1.41.0 and missed the assistant's and Phase 3's):
 
 | File | Why the service role |
 |---|---|
@@ -84,7 +84,15 @@ const supabase = createServiceClient(); // bypasses RLS — use with care
 | `src/app/api/shared/[slug]/save/route.ts` | Reads the shared **originals** only (they belong to another user); every insert stays on the viewer's cookie client. |
 | `src/app/api/cron/refresh-places/route.ts` | Daily sweep across users — no cookie. |
 | `src/app/api/cron/drain-imports/route.ts` | Drains the import queue across users — no cookie (v1.26.0). |
+| `src/app/api/cron/notify/route.ts` | The reminders and weekly summaries: reads every owner's channels, settings, zone and plans and writes the outbox — no cookie (v1.58.0, Phase 3 slice 2). |
 | `src/app/api/places/import-jobs/route.ts` | Inserts `import_job_items`, which has no INSERT policy on purpose (v1.26.0). |
+| `src/app/api/user/usage/route.ts` | The month's Claude spend by purpose, from `assistant_spend` — a ledger only the server reads and writes. |
+| `src/app/api/notifications/route.ts`, `…/email/route.ts`, `…/telegram/route.ts`, `…/schedule/route.ts` | The owner's channels and schedule (`notification_channels`, `channel_link_tokens`, `notification_settings`), which users may read but only the server writes — after `notifyContext` has checked the session and the owner list (v1.57.0; `schedule` v1.58.0). |
+| `src/app/api/telegram/webhook/route.ts` | Telegram's updates — no cookie; the secret header proves the caller, a one-time token names the account (v1.57.0). |
+| `src/app/(auth)/confirm-email/page.tsx`, `actions.ts` | The confirmation link: the token, not a session, names the account — the e-mail may be opened on another device (v1.57.0). |
+| `src/lib/notify/send.ts` | "Send to me" and the channel test write the outbox (`notifications` has no write policy) after the caller's own session has read the plan (v1.57.0). |
+| `src/lib/agent/door.ts` | The assistant's conversation store and spend ledger, server-only tables, for the verified user; the tools keep the user's session client (v1.48.0). |
+| `src/lib/ai/generate-profile.ts` | The spend ledger, written with the service role whatever client the caller has. |
 | `src/lib/instagram/start-import.ts` (the read it returns) | Reads the post and writes the job's items — after the response for the route (`after()`, v1.28.0), inside the call for Claude's `add_places` (v1.41.0). |
 | `src/lib/instagram/pick.ts` (the pick route and `add_places`) | Moves a skipped item back into the queue (or marks it `Already exists`) after the caller's own client has read the job and the item, filtered by the user — `import_job_items` has no UPDATE policy (v1.28.1; shared since v1.41.0). |
 | `src/lib/places/add.ts` (`add_places`) | Writes the `assistant` job and its `photo` items for places the tool just created, for the verified user (v1.41.0). |

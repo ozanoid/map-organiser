@@ -2,8 +2,8 @@
 title: Layouts
 type: overview
 domain: frontend
-version: 1.0.3
-last_updated: 19.11.2026
+version: 1.1.0
+last_updated: 26.11.2026
 status: stable
 sources:
   - src/app/layout.tsx
@@ -43,7 +43,7 @@ Owns:
 - `<html lang="...">` + `<body>` with `font-sans antialiased`.
 - Imports `globals.css`.
 - Wraps children in `<Providers>` from `src/lib/providers.tsx`.
-- Renders `<SwRegister />` (service worker registration) and `<OfflineBanner />` globally.
+- Renders `<ServiceWorkerRegister />` (service worker registration) globally. (`OfflineBanner` sits in the `(app)` layout, below — corrected 26.11.2026; this doc had it here.)
 - Renders `<Toaster />` (sonner) for app-wide toasts.
 
 Metadata:
@@ -65,6 +65,8 @@ Children get:
 - `<AppHeader />` — top bar with logo (mobile only), Add Place button, theme toggle, user avatar dropdown.
 - `<AppSidebar />` — desktop-only collapsible sidebar with 6 nav links (Map, Places, Lists, Stats, Import, Settings).
 - `<MobileNav />` — mobile-only bottom tab bar (Map, Places, Lists primary + More menu for Stats/Import/Settings).
+- `<OfflineBanner />` — under the header, while the browser is offline.
+- `<TimeZoneSync />` (v1.58.0) — renders nothing; once per device and zone it tells the server the browser's time zone, kept only while the profile has none (Phase 3 slice 2: the weekly summary and some reminders are timed in it). See [[hooks/use-notifications]].
 - The page content area.
 
 Behavior:
@@ -107,7 +109,8 @@ The actual layout chrome lives in `src/components/layout/`:
 | `AppHeader` | `app-header.tsx` | `(app)` layout |
 | `AppSidebar` | `app-sidebar.tsx` | `(app)` layout (desktop only) |
 | `MobileNav` | `mobile-nav.tsx` | `(app)` layout (mobile only) |
-| `OfflineBanner` | `offline-banner.tsx` | Root layout (whole app) |
+| `OfflineBanner` | `offline-banner.tsx` | `(app)` layout |
+| `TimeZoneSync` | `time-zone-sync.tsx` | `(app)` layout (renders nothing) |
 
 See [[components/layout]] for the per-component breakdown.
 
@@ -134,6 +137,7 @@ Worth a follow-up to at least add a global `not-found.tsx` so 404s aren't the ra
 
 ## Layout-level effects
 
-- **Root layout** runs the service worker registration (`<SwRegister />`). The service worker is loaded once for the whole app.
+- **Root layout** runs the service worker registration (`<ServiceWorkerRegister />`). The service worker is loaded once for the whole app.
 - **OfflineBanner** subscribes to `window.online`/`window.offline` events.
-- **No data fetching** happens in layouts today. All data is loaded from page components.
+- **TimeZoneSync** makes one `PUT /api/user/time-zone` per device and zone (remembered in `localStorage`), then nothing.
+- **No data fetching** happens in layouts otherwise. All data is loaded from page components.

@@ -2,8 +2,8 @@
 title: Repo Structure
 type: overview
 domain: overview
-version: 1.14.5
-last_updated: 25.11.2026
+version: 1.15.0
+last_updated: 26.11.2026
 status: stable
 sources:
   - src/
@@ -87,7 +87,10 @@ src/
 │   └── api/                   Route handlers (see [[../02-backend/api-routes/_README]])
 │       ├── places/            CRUD + bulk + enrich (info/reviews/profile) + refresh-google-data (merge + profile chain) + import-jobs (durable import queue) + parse-link (returns lite_profile) + migrate-photos
 │       ├── cron/              refresh-places — daily periodic-refresh sweep (CRON_SECRET, service-role, opt-in per user);
-│       │                      drain-imports — every minute, the import queue (Takeout + Instagram jobs)
+│       │                      drain-imports — every minute, the import queue (Takeout + Instagram jobs);
+│       │                      notify — every 15 minutes, the plans' reminders and the weekly summaries (v1.58.0)
+│       ├── notifications/     the owner's channels: GET, email, telegram, test (v1.57.0); schedule (v1.58.0)
+│       ├── telegram/webhook/  the bot's updates (v1.57.0)
 │       ├── instagram/         import (POST — start from a post URL, work in after()) + import/[id] (GET — dialog progress) — v1.28.0; import/[id]/pick (POST — add the place picked for a skipped venue) — v1.28.1
 │       ├── plans/             list + create; [id] GET / PATCH { set, ops } / DELETE; auto-plan; days/[dayId]/route (v1.37.0, replaced trips/)
 │       ├── visits/            list + log; [id] PATCH / DELETE (v1.38.0)
@@ -95,21 +98,22 @@ src/
 │       ├── subcategories/     CRUD (per-user; default seed via signup trigger)
 │       ├── shared/            Create + public-read + save-to-account
 │       ├── stats/             Aggregated stats
-│       ├── user/              api-keys + usage + ai-settings + ai-suggestions (list/accept/reject)
+│       ├── user/              api-keys + usage + ai-settings + ai-suggestions (list/accept/reject) + time-zone (v1.58.0)
 │       └── share-target/      PWA share_target sink
 ├── components/
 │   ├── assistant/             AssistantLauncher (header ✨, ai-settings gate) + AssistantPanel (useChat Sheet, v1.21.0)
 │   ├── filters/               Category / country-city / list / tag / visit-status / open-now / search filter UIs;
 │   │                          save-filter-button + saved-filter-chips (v1.20.0)
-│   ├── layout/                AppHeader, AppSidebar, MobileNav, OfflineBanner
+│   ├── layout/                AppHeader, AppSidebar, MobileNav, OfflineBanner, TimeZoneSync (v1.58.0)
 │   ├── map/                   MapView, MapContent, SearchBox, SearchResultPanel
 │   ├── places/                PlaceCard, AddPlaceDialog (with AI Suggestions panel + sub-cat strip), InstagramImportPanel (v1.28.0), BulkActionBar, inline creators, VisitStatusToggle, AiSummaryCard,
 │   │                          + detail-page widgets (v1.17.0): RatingDistributionBar, PopularTimesWidget, PlaceStatusBadges, PlaceActionLinks, AmenitiesGrid, PlaceTopics, ReviewsSection
 │   ├── plans/                 PlansTab, CreatePlanDialog, PlanDayTimeline, StopRow (done / skipped), AddStopDialog, PlanMenu + PlanDatesDialog, PlanWithAssistant (v1.53.0), usePlanEditor (v1.37.0)
 │   ├── visits/                VisitDialog, DeleteVisitDialog, PlaceVisitSummary + PlaceVisitList, StarRatingInput / RatingStars (v1.38.0)
-│   ├── settings/              ApiKeysManager, CostTracker, AiSettings (master toggle), AiSuggestionsQueue (moderation UI)
+│   ├── settings/              ApiKeysManager, CostTracker, AiSettings (master toggle), AiSuggestionsQueue (moderation UI),
+│   │                          NotificationSettings (v1.57.0), NotificationSchedule (v1.58.0)
 │   ├── sw-register.tsx        Service worker registration (client component)
-│   └── ui/                    shadcn primitives (avatar, badge, button, card, command, dialog, dropdown-menu, input, input-group, popover, select, separator, sheet, skeleton, sonner, tabs, textarea)
+│   └── ui/                    shadcn primitives (avatar, badge, bottom-sheet, button, card, command, dialog, drawer, dropdown-menu, icon-button, input, input-group, popover, select, separator, sheet, skeleton, sonner, switch, tabs, textarea)
 └── lib/
     ├── assistant/             The Claude connector (17.11.2026): tools/ (transport-free tool definitions), library.ts (light
     │                          place projection, name resolution, time + busyness helpers), place-filters.ts, mcp.ts (MCP server),
@@ -136,7 +140,11 @@ src/
     │                          write.ts (logVisit, editVisit, deleteVisit → log_visit / delete_visit)
     ├── db/                    context.ts (UserContext — who a data call runs for), errors.ts (InputError, NotFoundError,
     │                          classifyPostgrestError) — shared by plans/, visits/, assistant/
-    ├── api/                   http.ts — requestContext, unauthorized, errorResponse for routes over the data modules
+    ├── api/                   http.ts — requestContext, unauthorized, errorResponse for routes over the data modules;
+    │                          bearer.ts — the cron bearer in constant time (v1.58.0)
+    ├── notify/                Phase 3 notifications (v1.57.0): access, config, channels, tokens, outbox (deliver), render
+    │                          (Turkish messages), email (Resend), telegram, telegram-updates, send; v1.58.0: schedule.ts
+    │                          (pure: what is due when), scheduler.ts + scheduler-store.ts (a cron run), schedule-store.ts
     ├── dataforseo/            DataForSEO client + types + adapters + transform (mergeReviews) + reviews + photo
     ├── google/                URL parser + category mapping + Takeout parser + usage tracker + key access (the Google
     │                          Places API modules were removed in v1.42.0 — every lookup goes through DataForSEO)

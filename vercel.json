@@ -8,6 +8,10 @@
     {
       "path": "/api/cron/drain-imports",
       "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/cron/notify",
+      "schedule": "*/15 * * * *"
     }
   ]
 }
