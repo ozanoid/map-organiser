@@ -2,7 +2,7 @@
 title: "Faz 3 — İletişim: tasarım"
 type: plan
 domain: sharing
-version: 0.7.2
+version: 0.8.0
 last_updated: 26.11.2026
 status: draft
 related:
@@ -19,7 +19,7 @@ related:
 
 # Faz 3 — İletişim: tasarım
 
-> [[personal-assistant]] planının Faz 3'ü. **14 karar onaylandı (25.11.2026, hepsi önerildiği gibi).** **Dilim 1 main'de (merge 265999e ve 76d9204, 26.11.2026; v1.57.0–v1.57.9) — Telegram production'da denendi ve çalışıyor; e-posta yerelde denendi, production'dan henüz gönderilmedi**; migration'ı deneme çalıştırmasından geçti ve **Ozan'ın onayıyla uygulandı (25.11.2026, sürüm 20261125203540)**; ardından `notifications.plan_id` indeksi de uygulandı (sürüm 20261125224149) — durum ve tasarımdan sapmalar: [[#Dilim 1 — durum (25.11.2026)]]. **Dilim 2 (hatırlatmalar ve haftalık özet) dalda, v1.58.0:** 5 kararı alındı (26.11.2026, hepsi önerildiği gibi — tabloda 15–19), migration'ı **Ozan'ın onayıyla uygulandı (26.11.2026, sürüm 20261126013719)**, kod yazıldı ve denendi; gerçek gönderim test hesabıyla e-postada denendi ve çalıştı (v1.58.1); main'e geçiş Ozan'ın onayını bekliyor — [[#Dilim 2 — durum (26.11.2026)]]. Şema SQL'i her dilimin başında `supabase/migrations/` altında yazılır, Ozan'a gösterilir, onayıyla uygulanır.
+> [[personal-assistant]] planının Faz 3'ü. **14 karar onaylandı (25.11.2026, hepsi önerildiği gibi).** **Dilim 1 main'de (merge 265999e ve 76d9204, 26.11.2026; v1.57.0–v1.57.9) — Telegram production'da denendi ve çalışıyor; e-posta yerelde denendi, production'dan henüz gönderilmedi**; migration'ı deneme çalıştırmasından geçti ve **Ozan'ın onayıyla uygulandı (25.11.2026, sürüm 20261125203540)**; ardından `notifications.plan_id` indeksi de uygulandı (sürüm 20261125224149) — durum ve tasarımdan sapmalar: [[#Dilim 1 — durum (25.11.2026)]]. **Dilim 2 (hatırlatmalar ve haftalık özet) main'de (merge 2e7716a, 26.11.2026; v1.57.10–v1.58.2):** 5 kararı alındı (26.11.2026, hepsi önerildiği gibi — tabloda 15–19), migration'ı **Ozan'ın onayıyla uygulandı (26.11.2026, sürüm 20261126013719)**; gerçek gönderim test hesabıyla e-postada denendi ve geldi; production'daki ilk cron çalışması (02:45 UTC) beklendiği gibi — [[#Dilim 2 — durum (26.11.2026)]]. Şema SQL'i her dilimin başında `supabase/migrations/` altında yazılır, Ozan'a gösterilir, onayıyla uygulanır.
 
 ## Ne anladım
 
@@ -224,7 +224,7 @@ Hatırlatmalar plan tablosundan **türetilir**, önceden kuyruğa yazılmaz: pla
 
 ## Dilim 2 — durum (26.11.2026)
 
-**Yapılan (v1.58.0, dalda — main'e geçmedi):** `profiles.time_zone`, `notification_settings`, `notifications.skip_reason` (migration `notification_schedule`, sürüm 20261126013719 — geri alınan deneme çalıştırmasından geçti, Ozan'ın onayıyla uygulandı; [[../02-backend/schema/notifications]]); `/api/cron/notify` (15 dakikada bir, `vercel.json`); zamanlama kuralları `src/lib/notify/schedule.ts` (saf: veritabanı da saat de dışarıdan gelir, bu yüzden her kural çevrimdışı test ediliyor), bir çalışmayı yürüten `scheduler.ts` ve veriyi okuyan `scheduler-store.ts`; hatırlatma ve haftalık özet mesajları (`render.ts`, Türkçe); Ayarlar → Notifications'a **Reminders**, **Weekly summary**, **Time zone**; tarayıcının saat dilimini bir kez kaydeden `TimeZoneSync`; ortak `Switch` bileşeni (AI ayarlarındaki iki elle yazılmış kopyanın yerine). Akış: [[../05-flows/notifications-flow#Scheduled sends]], yollar: [[../02-backend/api-routes/notifications]].
+**Yapılan (v1.58.0–v1.58.2; main'e geçti: merge 2e7716a, 26.11.2026, Ozan'ın onayıyla):** `profiles.time_zone`, `notification_settings`, `notifications.skip_reason` (migration `notification_schedule`, sürüm 20261126013719 — geri alınan deneme çalıştırmasından geçti, Ozan'ın onayıyla uygulandı; [[../02-backend/schema/notifications]]); `/api/cron/notify` (15 dakikada bir, `vercel.json`); zamanlama kuralları `src/lib/notify/schedule.ts` (saf: veritabanı da saat de dışarıdan gelir, bu yüzden her kural çevrimdışı test ediliyor), bir çalışmayı yürüten `scheduler.ts` ve veriyi okuyan `scheduler-store.ts`; hatırlatma ve haftalık özet mesajları (`render.ts`, Türkçe); Ayarlar → Notifications'a **Reminders**, **Weekly summary**, **Time zone**; tarayıcının saat dilimini bir kez kaydeden `TimeZoneSync`; ortak `Switch` bileşeni (AI ayarlarındaki iki elle yazılmış kopyanın yerine). Akış: [[../05-flows/notifications-flow#Scheduled sends]], yollar: [[../02-backend/api-routes/notifications]].
 
 **Kararların koda dökülüşü:** 15 → bir mesajın akıbetini veren `verdict` (`changed`; `apply_plan_changes` her plan değişikliğinde `plans.updated_at`'i günceller, durak değişiklikleri dahil); 16 → `empty` kaydı; 17 → `reminderMessage` ("Yarın: …" / "Bugün: …", ilk günün durakları); 18 → `planZone`: planın gün ve ziyaret sırasındaki ilk konumlu durağının dilimi, yoksa kullanıcınınki, yoksa UTC; 19 → `DEFAULT_SCHEDULE` (satır yoksa varsayılanlar; varsayılanlar yalnız kodda durur).
 
@@ -248,15 +248,16 @@ Hatırlatmalar plan tablosundan **türetilir**, önceden kuyruğa yazılmaz: pla
 
 **Açık adımlar (sırayla):**
 1. ~~Yerelde gerçek gönderimle deneme~~ — yapıldı (yukarıda).
-2. main'e merge — Ozan'ın onayı bekleniyor. Merge'den sonra production'da cron başlar: Ozan'ın hesabında varsayılanlar açık, hatırlatmalar ve haftalık özet Telegram'a gider (e-posta hesabına bağlı değil).
-3. Merge'den sonra: Ozan production'da uygulamayı bir kez açınca saat dilimi kaydolur; Vercel → Cron Jobs'ta `/api/cron/notify` görünmeli; ilk çalışmanın kayıtları (`late`) ve `notify.run` logu kontrol edilir.
+2. ~~main'e merge~~ — yapıldı (26.11.2026, Ozan'ın onayıyla): main `76d9204 → 2e7716a`, yerel merge commit'i; main ve dal ucu push'tan önce kımıldamamıştı; merge'ün içeriği dal ucuyla birebir aynı. Vercel production kurulumu 02:43 UTC'de başarılı.
+3. ~~İlk production çalışması~~ — 02:45:05 UTC'de beklendiği gibi: Ozan'ın hesabı için bu haftanın pazartesi özeti (Telegram) `late` kaydedildi, hiçbir şey gönderilmedi; test hesabında yeni kayıt yok (kayıtları yerel denemede yazılmıştı). Dakikalık `drain-imports` cron'u kurulumdan sonra da her dakika çalışıyor (Supabase istek logları) — yeni anahtar kontrolü orada da geçiyor; `refresh-places` aynı kontrolle 03:00 UTC'de çalışır.
+4. Açık: Ozan production'da uygulamayı bir kez açınca saat dilimi kaydolur (o zamana kadar UTC); zamanlanmış ilk Telegram mesajı Ozan'ın ilk planında görülür; production'dan e-posta henüz denenmedi (Ozan'ın hesabında e-posta bağlı değil).
 
 ## Dilimler ve geçiş yolu
 
 Bütün şema değişiklikleri **eklemeli** (yeni tablolar, `profiles.time_zone`); çalışan hiçbir kodun bağlı olduğu yapı değişmiyor — geçiş ve sonradan söküm adımı yok.
 
 1. **Kanallar ve "Bana gönder"** *(v1.57.0, dalda — yukarıda)*: `notification_channels`, `channel_link_tokens`, `notifications`; Resend ve Telegram göndericileri; Telegram bağlama (webhook); e-posta onayı; Ayarlar → Bildirimler; plan sayfasında *Bana gönder*; `send_plan`.
-2. **Otomatik gönderimler** *(v1.58.0, dalda — yukarıda)*: `profiles.time_zone`, `notification_settings`; `/api/cron/notify`; hatırlatmalar ve haftalık özet.
+2. **Otomatik gönderimler** *(v1.58.0–v1.58.2, main'de — merge 2e7716a; yukarıda)*: `profiles.time_zone`, `notification_settings`; `/api/cron/notify`; hatırlatmalar ve haftalık özet.
 3. **Davet ve RSVP:** `plan_invitations`, `plan_rsvps`; `/invite/<token>` (sunucuda render, OG görseli, `noindex`); paylaşım; cevap bildirimi; `invite_to_plan`; `get_plans`'e cevaplar.
 4. **Takvim:** `.ics` (sahip ve davet sayfası).
 

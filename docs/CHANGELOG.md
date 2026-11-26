@@ -6,6 +6,27 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 26.11.2026 — v1.58.3 — Phase 3 slice 2 on main
+
+- Merged with Ozan's approval: main 76d9204 → 2e7716a (a local merge commit
+  of `feat/personal-assistant` at f9af5ca; main and the branch tip checked
+  unmoved before the push; the merge's tree is the branch tip's). Vercel's
+  production deployment finished at 02:43 UTC.
+- The first production run (02:45:05 UTC) did what the dry run said: one
+  record — Ozan's account, this week's missed Monday summary on Telegram,
+  `skipped` / `late` — and nothing sent. The minute import drain kept running
+  every minute after the deploy (Supabase request logs): the constant-time
+  bearer passes in production. `refresh-places` runs at 03:00 UTC with the
+  same check.
+- Still open: Ozan's time zone is stored the first time he opens the app in
+  production (UTC until then); the first scheduled Telegram message comes
+  with his first plan; e-mail from production not tried (his account has no
+  e-mail channel).
+- Docs: [[_plans/phase-3-communication]], [[_plans/personal-assistant]],
+  [[05-flows/notifications-flow]].
+
+---
+
 ## 26.11.2026 — v1.58.2 — Settings says what goes out by itself
 
 - Ozan: both test e-mails arrived (the reminder and the weekly summary).
