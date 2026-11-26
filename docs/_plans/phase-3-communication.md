@@ -2,7 +2,7 @@
 title: "Faz 3 — İletişim: tasarım"
 type: plan
 domain: sharing
-version: 0.4.0
+version: 0.4.1
 last_updated: 26.11.2026
 status: draft
 related:
@@ -211,7 +211,7 @@ Hatırlatmalar plan tablosundan **türetilir**, önceden kuyruğa yazılmaz: pla
 7. **`send_plan` hiçbir kanala gidemezse hata sonucu döner:** model "gönderildi" diyemez, kart *Couldn't send* ve nedenini gösterir; kısmi başarıda kart nereye gittiğini ve neyin gitmediğini yazar.
 8. **Telegram mesajında notlar kısaltılır** (plan 500, gün 300, durak 200 karakter): plan notu 5.000 karaktere kadar çıkabiliyor, mesaj sınırı 4.096.
 9. **Kayıttaki e-posta kopyasında onay anahtarı gizlenir** (e-posta testine hazırlanırken bulundu, v1.57.3): gönderim kaydı onay e-postasının metnini linkiyle saklıyordu — anahtar yalnız hash'iyle saklanır ilkesini delen bir hataydı. Artık kopyada `token=•••` yazıyor; e-postanın kendisi tam gider.
-10. **Gönderen adı koddan:** `EMAIL_FROM` yalnız adres olduğunda (`hello@mappy.site`) e-posta "Map Organiser" adıyla gider.
+10. **Gönderen adı koddan, "Mappy":** `EMAIL_FROM` yalnız adres olduğunda (`hello@mappy.site`) e-posta "Mappy" adıyla gider (Ozan, 26.11.2026 — botun adıyla aynı; tasarımda "Map Organiser"dı). E-posta konuları, metinleri ve botun Telegram cevapları da "Mappy" der (`SENDER_NAME`); uygulamanın kendi ekranları "Map Organiser" kalır.
 11. **Webhook kaydını uygulama yapar** (Ozan'ın seçimi, 26.11.2026): production'da her "Connect Telegram"de sunucu önce `getMe` ile botun kullanıcı adını Vercel'dekiyle karşılaştırır, sonra `setWebhook` ile adresi ve sırrı kaydeder. Bot anahtarı ve sır yalnız BotFather'da ve Vercel'de durur; elle komut yok. Preview ve yerelde atlanır (karar 13).
 
 **Doğrulama:** `npm run check:notify` 107 kontrol (Türkçe metinler ve kaçış, Telegram sınırı, bot güncellemeleri, anahtarlar, outbox, iki kanalın bağlanması, gönderim, `send_plan`'ın cevabı ve kartı); `npm run check:agent` 165 kontrol; migration'ın geri alınan deneme çalıştırması (sonuçlar şema dokümanında); `next build`; dev sunucusunda `/confirm-email` oturumsuz açılıyor (telefonda da), webhook bot ayarlı değilken 404. Henüz denenmeyen: gerçek e-posta ve Telegram gönderimi (aşağıdaki adımlardan sonra).
@@ -244,7 +244,7 @@ Bütün şema değişiklikleri **eklemeli** (yeni tablolar, `profiles.time_zone`
 
 - **Resend:** hesap; `mail.maporganiser.com` alanını ekle (bölge seçimi kalıcı); Resend'in ürettiği DNS kayıtlarını DNS sağlayıcısına gir (Cloudflare ise proxy kapalı); `_dmarc.maporganiser.com` TXT `v=DMARC1; p=none; rua=mailto:…`; API anahtarı → Vercel `RESEND_API_KEY`.
 - **Telegram:** ~~@BotFather `/newbot`; üç değişken Vercel'e (yalnız Production)~~ — yapıldı (26.11.2026): bot **Mappy**, `@mappysitebot`; `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME`, `TELEGRAM_WEBHOOK_SECRET` Production'da. Webhook kaydını uygulama kendisi yapar (sapma 11) — deploy'dan sonra production'da Ayarlar → Connect Telegram yeterli.
-- **Resend gönderen:** Vercel `EMAIL_FROM` = `hello@mappy.site` (Production + Preview; uygulama "Map Organiser" adını kendisi ekler). Yerelde ana klasörün ve worktree'nin `.env.local`'ında var (25.11.2026). `mappy.site` DMARC kaydı da var (TXT `_dmarc` = `v=DMARC1; p=none;`).
+- **Resend gönderen:** Vercel `EMAIL_FROM` = `hello@mappy.site` (Production + Preview; uygulama "Mappy" adını kendisi ekler). Yerelde ana klasörün ve worktree'nin `.env.local`'ında var (25.11.2026). `mappy.site` DMARC kaydı da var (TXT `_dmarc` = `v=DMARC1; p=none;`).
 - Uygulamada: e-posta onay linkine tıkla, Telegram'ı bağla.
 
 ## Değerlendirilip seçilmeyenler
@@ -272,7 +272,7 @@ Bütün şema değişiklikleri **eklemeli** (yeni tablolar, `profiles.time_zone`
 | 4 | Rehber ve gruplar (açık soru 4) | v1'de yok; grup WhatsApp'ta |
 | 5 | Davet sayfasında adres ve harita | Mekan adı ve semt her zaman; tam adres ve pinler cevaptan sonra |
 | 6 | Cevap seçenekleri ve liste | Geliyorum / Belki / Gelmiyorum, +N en çok 3, not; katılanlar listesi cevap verince görünür |
-| 7 | E-posta | `mail.maporganiser.com`, gönderen "Map Organiser"; bölge eu-west-1 (veri yine ABD'de); v1'de yalnız sana, arkadaşlara e-posta yok. **Uygulamada (Ozan, 25.11.2026):** bunun için alınan `mappy.site` alanı, gönderen adresi `hello@mappy.site` ("Map Organiser" adıyla) |
+| 7 | E-posta | `mail.maporganiser.com`, gönderen "Map Organiser"; bölge eu-west-1 (veri yine ABD'de); v1'de yalnız sana, arkadaşlara e-posta yok. **Uygulamada (Ozan, 25–26.11.2026):** bunun için alınan `mappy.site` alanı, gönderen `Mappy <hello@mappy.site>` |
 | 8 | Hatırlatma ve özet varsayılanları | Önceki akşam 18:00 + plan sabahı 08:00 (planın yerel saati); haftalık özet pazartesi 08:00; ikisi de e-posta + Telegram |
 | 9 | Davete cevap gelince | Telegram (anında); e-posta yalnız haftalık özette |
 | 10 | Takvim | Gün başına `.ics`; Google linki yok |

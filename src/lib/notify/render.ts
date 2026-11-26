@@ -10,6 +10,11 @@ import { TELEGRAM_MAX_CHARS } from "@/lib/notify/telegram-limits";
  * Deterministic templates, not a model: no cost, the same every time.
  */
 
+/** The name the app's messages go out under: the e-mail sender, the
+ *  subjects, the Telegram bot (Mappy, @mappysitebot). Ozan, 26.11.2026 —
+ *  the app's own screens keep "Map Organiser". */
+export const SENDER_NAME = "Mappy";
+
 export function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
@@ -108,7 +113,7 @@ function emailLayout(title: string, body: string, appUrl: string): string {
 <div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:12px;padding:24px">
 ${body}
 </div>
-<p style="max-width:560px;margin:12px auto 0;color:#6b7280;font-size:12px">Map Organiser · <a href="${escapeHtml(settingsUrl(appUrl))}" style="color:#6b7280">Bildirim ayarları</a></p>
+<p style="max-width:560px;margin:12px auto 0;color:#6b7280;font-size:12px">${SENDER_NAME} · <a href="${escapeHtml(settingsUrl(appUrl))}" style="color:#6b7280">Bildirim ayarları</a></p>
 </body></html>`;
 }
 
@@ -231,10 +236,10 @@ function planTelegram(
 
 /** The confirmation an address gets before anything else is sent to it. */
 export function emailVerifyMessage(link: string, appUrl: string): Message {
-  const intro = "Map Organiser bildirimlerini (plan özetleri, hatırlatmalar) bu adrese göndermek için adresini onayla.";
+  const intro = `${SENDER_NAME} bildirimlerini (plan özetleri, hatırlatmalar) bu adrese göndermek için adresini onayla.`;
   const after = "Bu isteği sen yapmadıysan bu e-postayı yok sayabilirsin. Link 24 saat geçerli.";
   return {
-    subject: "E-posta adresini onayla — Map Organiser",
+    subject: `E-posta adresini onayla — ${SENDER_NAME}`,
     text: [intro, "", link, "", after].join("\n"),
     html: emailLayout(
       "E-posta adresini onayla",
@@ -252,9 +257,9 @@ export function emailVerifyMessage(link: string, appUrl: string): Message {
 
 /** "Send test" in Settings. */
 export function channelTestMessage(appUrl: string): Message {
-  const line = "Bu bir test mesajı: Map Organiser bildirimleri buraya ulaşıyor ✓";
+  const line = `Bu bir test mesajı: ${SENDER_NAME} bildirimleri buraya ulaşıyor ✓`;
   return {
-    subject: "Test — Map Organiser",
+    subject: `Test — ${SENDER_NAME}`,
     text: line,
     html: emailLayout("Test", `<p style="margin:0">${escapeHtml(line)}</p>`, appUrl),
     telegram: escapeHtml(line),

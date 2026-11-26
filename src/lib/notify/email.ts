@@ -1,6 +1,7 @@
 import "server-only";
 import { Resend } from "resend";
 import { NotifyError } from "@/lib/notify/errors";
+import { SENDER_NAME } from "@/lib/notify/render";
 
 /**
  * E-mail through Resend (docs/04-integrations/resend.md): RESEND_API_KEY and
@@ -17,12 +18,8 @@ function resend(): Resend {
   return client;
 }
 
-/** The sender name e-mails carry when EMAIL_FROM is a bare address (Phase 3,
- *  decision 7). */
-const SENDER_NAME = "Map Organiser";
-
 /** The From header: EMAIL_FROM as it is when it names the sender
- *  ("Name <address>"), else the bare address under the app's name. */
+ *  ("Name <address>"), else the bare address under SENDER_NAME ("Mappy"). */
 export function fromHeader(raw: string): string {
   const value = raw.trim();
   return value.includes("<") ? value : `${SENDER_NAME} <${value}>`;

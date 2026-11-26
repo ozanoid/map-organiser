@@ -2,8 +2,8 @@
 title: Resend (e-mail)
 type: integration
 domain: integrations
-version: 1.1.1
-last_updated: 25.11.2026
+version: 1.2.0
+last_updated: 26.11.2026
 status: draft
 sources:
   - src/lib/notify/email.ts
@@ -32,7 +32,7 @@ tags:
 - **Provider:** [Resend](https://resend.com). Chosen for its idempotency key (24 hours), signed webhooks and Node SDK; Postmark and Amazon SES were weighed in [[../_plans/phase-3-communication]].
 - **Account owner:** Ozan — the account, the domain and its DNS records, and the API key are set up by him in the Resend dashboard (steps in the Phase 3 doc).
 - **Sending domain:** `mappy.site` — a domain Ozan bought for it (25.11.2026), its DNS on Vercel (`ns1.vercel-dns.com`), instead of the `mail.maporganiser.com` the design proposed. DNS checked on 25.11.2026: the DKIM key `resend._domainkey.mappy.site` and `send.mappy.site` (a CNAME to Resend's own sending service, `send.forge.rmta.net`, which carries the SPF and the bounce MX — the newer style of Resend domain) are in place; DMARC `_dmarc.mappy.site` = `v=DMARC1; p=none;` is in place too (Ozan; seen from Vercel's nameserver, Google and Cloudflare at 23:41 UTC — a check at 23:12 UTC still got no answer). Account data and logs are kept in the US whatever the sending region; the region can't be read with a sending-only key.
-- **Sender:** `EMAIL_FROM` = `hello@mappy.site`. A bare address is sent under the app's name — `Map Organiser <hello@mappy.site>` (`fromHeader`, decision 7); a value that names its sender ("Name <address>") is used as it is.
+- **Sender:** `EMAIL_FROM` = `hello@mappy.site`. A bare address is sent as **Mappy** — `Mappy <hello@mappy.site>` (`fromHeader`, `SENDER_NAME` in `render.ts`; Ozan, 26.11.2026 — the bot's name; the design had "Map Organiser"); a value that names its sender ("Name <address>") is used as it is.
 - **Auth:** `RESEND_API_KEY`, server-only — a **sending-only** key (Resend's "Sending access": it can send and nothing else; reading domains or sent e-mails answers 401 `restricted_api_key`). That is all the app needs.
 - **Tracking:** open and click tracking stay off (a per-domain setting in Resend; never turned on).
 

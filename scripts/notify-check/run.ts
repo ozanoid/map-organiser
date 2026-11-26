@@ -264,7 +264,8 @@ async function main() {
 
   say("## the other messages");
   const verify = emailVerifyMessage(`${APP}/confirm-email?token=abc`, APP);
-  expect("confirmation: subject in Turkish", verify.subject === "E-posta adresini onayla — Map Organiser");
+  expect("confirmation: subject in Turkish, under Mappy", verify.subject === "E-posta adresini onayla — Mappy");
+  expect("confirmation: the text names Mappy", verify.text.startsWith("Mappy bildirimlerini") && verify.html.includes("Mappy · <a"));
   expect("confirmation: the link in text and html", verify.text.includes(`${APP}/confirm-email?token=abc`) && verify.html.includes(`href="${APP}/confirm-email?token=abc"`));
   const test = channelTestMessage(APP);
   expect("test message: every channel has text", Boolean(test.text && test.html && test.telegram));
@@ -345,8 +346,9 @@ async function main() {
   );
 
   say("## the sender");
-  expect("a bare address gets the app's name", fromHeader(" hello@mappy.site ") === "Map Organiser <hello@mappy.site>", fromHeader(" hello@mappy.site "));
-  expect("a named sender stays as set", fromHeader("Mappy <hello@mappy.site>") === "Mappy <hello@mappy.site>");
+  expect("a bare address goes out as Mappy", fromHeader(" hello@mappy.site ") === "Mappy <hello@mappy.site>", fromHeader(" hello@mappy.site "));
+  expect("a named sender stays as set", fromHeader("Another Name <hello@mappy.site>") === "Another Name <hello@mappy.site>");
+  expect("the bot's replies speak as Mappy", REPLIES.linked.includes("Mappy bildirimleri") && REPLIES.hello.startsWith("Merhaba! Ben Mappy"));
 
   say("## e-mail addresses");
   expect("trimmed and lower-cased", emailAddress.safeParse("  Ozan@Example.COM ").data === "ozan@example.com");

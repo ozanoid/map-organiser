@@ -6,6 +6,20 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 26.11.2026 — v1.57.7 — Messages go out as Mappy
+
+- Ozan: e-mails carry the bot's name. `SENDER_NAME = "Mappy"`
+  (`src/lib/notify/render.ts`) is the one place: the From
+  (`Mappy <hello@mappy.site>`), the subjects ("E-posta adresini onayla —
+  Mappy", "Test — Mappy"), the e-mail texts and footer, and the bot's Telegram
+  replies ("Merhaba! Ben Mappy…"). The app's own screens keep
+  "Map Organiser".
+- Checks: `npm run check:notify` 122.
+- Docs: [[04-integrations/resend]], [[06-ops/env-vars]],
+  [[_plans/phase-3-communication]]; `.env.local.example`.
+
+---
+
 ## 26.11.2026 — v1.57.6 — The app registers the Telegram webhook itself
 
 - Ozan made the bot — **Mappy**, `@mappysitebot` — and set

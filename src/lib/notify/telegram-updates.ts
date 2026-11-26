@@ -1,3 +1,5 @@
+import { SENDER_NAME } from "@/lib/notify/render";
+
 /**
  * What the bot does with an update Telegram posts to the webhook. Phase 3
  * keeps the bot to notifications (decision 2): it links a chat with
@@ -25,13 +27,11 @@ interface TgUpdate {
 }
 
 export const REPLIES = {
-  linked:
-    "Bağlandı ✓ Map Organiser bildirimleri (plan özetleri, hatırlatmalar) artık buraya gelecek. Bağlantıyı uygulamada Settings → Notifications'tan kaldırabilirsin.",
+  linked: `Bağlandı ✓ ${SENDER_NAME} bildirimleri (plan özetleri, hatırlatmalar) artık buraya gelecek. Bağlantıyı uygulamada Settings → Notifications'tan kaldırabilirsin.`,
   invalid:
     "Bu bağlantı linki geçersiz ya da süresi dolmuş. Uygulamada Settings → Notifications → Connect Telegram'a basıp yeni bir link aç.",
-  taken: "Bu Telegram hesabı başka bir Map Organiser hesabına bağlı.",
-  hello:
-    "Merhaba! Bu bot Map Organiser bildirimlerini gönderir. Bağlamak için uygulamada Settings → Notifications → Connect Telegram'a bas.",
+  taken: "Bu Telegram hesabı uygulamada başka bir hesaba bağlı.",
+  hello: `Merhaba! Ben ${SENDER_NAME}: plan özetlerini ve hatırlatmaları buraya gönderirim. Bağlamak için uygulamada Settings → Notifications → Connect Telegram'a bas.`,
   notifyOnly:
     "Bu bot şimdilik yalnız bildirim gönderiyor. Bir şey sormak için uygulamadaki asistanı kullanabilirsin.",
 } as const;
