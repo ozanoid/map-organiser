@@ -28,6 +28,7 @@ import {
   telegramStartLink,
   unlinkTelegram,
 } from "@/lib/notify/channels";
+import { resendApiKey, telegramSettingsProblem, telegramToken } from "@/lib/notify/config";
 import { fromHeader } from "@/lib/notify/email";
 import { NotifyError, TelegramChatGone } from "@/lib/notify/errors";
 import { deliver, setSenders, type Delivery } from "@/lib/notify/outbox";
@@ -56,6 +57,8 @@ function expect(label: string, ok: boolean, detail?: unknown) {
 }
 
 const APP = "https://app.test";
+/** A made-up token in BotFather's shape. */
+const FAKE_TOKEN = "123456789:AAHofflineCheckOfflineCheckOfflineCk";
 const USER = "11111111-1111-4111-8111-111111111111";
 const OTHER = "22222222-2222-4222-8222-222222222222";
 
@@ -166,8 +169,9 @@ async function main() {
   // Configured as far as the modules can tell; the providers are stand-ins.
   process.env.RESEND_API_KEY = "re_offline_check";
   process.env.EMAIL_FROM = "Map Organiser <plans@mail.example.test>";
-  process.env.TELEGRAM_BOT_TOKEN = "offline:check";
+  process.env.TELEGRAM_BOT_TOKEN = FAKE_TOKEN;
   process.env.TELEGRAM_BOT_USERNAME = "@MapOrganiserTestBot";
+  process.env.TELEGRAM_WEBHOOK_SECRET = "offline_check_secret";
 
   say("## dates in Turkish");
   expect("trDay: 28 Kasım Cumartesi", trDay("2026-11-28") === "28 Kasım Cumartesi", trDay("2026-11-28"));
@@ -476,17 +480,44 @@ async function main() {
     expect("unlinked", (await readChannels(admin, USER)).telegram === undefined);
   }
 
+  say("## the settings: trimmed, and their shape named");
+  {
+    const saved = { token: process.env.TELEGRAM_BOT_TOKEN, secret: process.env.TELEGRAM_WEBHOOK_SECRET, key: process.env.RESEND_API_KEY };
+    const withToken = (value: string) => {
+      process.env.TELEGRAM_BOT_TOKEN = value;
+      return telegramSettingsProblem() ?? "ok";
+    };
+    process.env.TELEGRAM_WEBHOOK_SECRET = "offline_check_secret";
+    expect("a BotFather token: no problem", withToken(FAKE_TOKEN) === "ok");
+    expect("a space or a line break around it: trimmed, no problem", withToken(`  ${FAKE_TOKEN} \n`) === "ok" && telegramToken() === FAKE_TOKEN);
+    expect("the username in its place: said so", withToken("@MapOrganiserTestBot").includes("it holds the bot's username"));
+    expect("the webhook secret in its place: said so", withToken("a".repeat(64)).includes("it looks like the webhook secret"));
+    expect("quotes around it: said so", withToken(`"${FAKE_TOKEN}"`).includes("it has quotes around it"));
+    expect('"bot" before it: said so', withToken(`bot${FAKE_TOKEN}`).includes('it starts with "bot"'));
+    expect("a space inside: said so", withToken("123456789: AAHofflineCheckOfflineCheckOfflineCk").includes("it has a space inside"));
+    const shown = withToken("not-a-token-at-all");
+    expect("the problem names the variable, never the value", shown.startsWith("TELEGRAM_BOT_TOKEN isn't a BotFather token") && !shown.includes("not-a-token-at-all"), shown);
+    process.env.TELEGRAM_BOT_TOKEN = FAKE_TOKEN;
+    process.env.TELEGRAM_WEBHOOK_SECRET = "has+plus/slash";
+    expect("a secret Telegram won't take: said so", (telegramSettingsProblem() ?? "").startsWith("TELEGRAM_WEBHOOK_SECRET may hold only"));
+    process.env.RESEND_API_KEY = " re_offline_check\n";
+    expect("Resend's key: trimmed too", resendApiKey() === "re_offline_check");
+    process.env.TELEGRAM_BOT_TOKEN = saved.token;
+    process.env.TELEGRAM_WEBHOOK_SECRET = saved.secret;
+    process.env.RESEND_API_KEY = saved.key;
+  }
+
   say("## pointing the bot at the webhook (registerWebhook)");
   {
     // A stand-in for Telegram: records each call's method and body, answers
     // as told. Nothing leaves the machine.
     const realFetch = globalThis.fetch;
-    const calls: { method: string; body: Record<string, unknown> }[] = [];
+    const calls: { method: string; url: string; body: Record<string, unknown> }[] = [];
     let botUsername = "MapOrganiserTestBot";
     let refuse: string | null = null;
     globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
       const method = String(input).split("/").pop() ?? "";
-      calls.push({ method, body: JSON.parse(String(init?.body ?? "{}")) });
+      calls.push({ method, url: String(input), body: JSON.parse(String(init?.body ?? "{}")) });
       if (refuse === method) {
         return new Response(JSON.stringify({ ok: false, error_code: 401, description: "Unauthorized" }), { status: 401 });
       }
@@ -538,9 +569,24 @@ async function main() {
       botUsername = "MapOrganiserTestBot";
 
       calls.length = 0;
+      process.env.TELEGRAM_BOT_TOKEN = `${FAKE_TOKEN} `;
+      expect(
+        "a token pasted with a trailing space: Telegram gets it trimmed",
+        (await outcome("https://app.test")) === "registered" && calls[0]?.url === `https://api.telegram.org/bot${FAKE_TOKEN}/getMe`,
+        calls[0]?.url.replace(FAKE_TOKEN, "<token>")
+      );
+      process.env.TELEGRAM_BOT_TOKEN = FAKE_TOKEN;
+
+      calls.length = 0;
+      process.env.TELEGRAM_BOT_TOKEN = "mappysitebot";
+      const swapped = await outcome("https://app.test");
+      expect("the username as the token: named, Telegram not called", swapped.includes("TELEGRAM_BOT_TOKEN isn't a BotFather token") && calls.length === 0, swapped);
+      process.env.TELEGRAM_BOT_TOKEN = FAKE_TOKEN;
+
+      calls.length = 0;
       refuse = "setWebhook";
       const refused = await outcome("https://app.test");
-      expect("Telegram refuses: its words come back, not the token", refused === "NotifyError: Telegram: Unauthorized" && !refused.includes("offline:check"), refused);
+      expect("Telegram refuses: its words come back, not the token", refused === "NotifyError: Telegram: Unauthorized" && !refused.includes(FAKE_TOKEN), refused);
       refuse = null;
 
       calls.length = 0;
@@ -586,7 +632,7 @@ async function main() {
     delete process.env.TELEGRAM_BOT_TOKEN;
     const noBot = await sendToOwner(admin, { userId: USER, kind: "plan_summary", key: "plan:4", message: msg("Plan"), channels: ["telegram"] });
     expect("a server without the bot: not_connected, nothing sent", noBot[0]?.status === "not_connected" && sent.filter((s) => s.channel === "telegram").length === 1, noBot);
-    process.env.TELEGRAM_BOT_TOKEN = "offline:check";
+    process.env.TELEGRAM_BOT_TOKEN = FAKE_TOKEN;
   }
 
   say("## the assistant's send_plan: its answer and its card");

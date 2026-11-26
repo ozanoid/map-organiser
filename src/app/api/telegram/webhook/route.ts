@@ -1,7 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { linkTelegram, setTelegramBlocked } from "@/lib/notify/channels";
-import { telegramConfigured } from "@/lib/notify/config";
+import { telegramConfigured, telegramWebhookSecret } from "@/lib/notify/config";
 import { escapeHtml } from "@/lib/notify/render";
 import { telegramCall } from "@/lib/notify/telegram";
 import { handleUpdate } from "@/lib/notify/telegram-updates";
@@ -18,7 +18,8 @@ import { log } from "@/lib/telemetry/logger";
  * posting the same update.
  */
 export async function POST(req: Request) {
-  const secret = process.env.TELEGRAM_WEBHOOK_SECRET;
+  // Trimmed, as registerWebhook gave it to Telegram.
+  const secret = telegramWebhookSecret();
   if (!telegramConfigured() || !secret) return new NextResponse(null, { status: 404 });
 
   const given = Buffer.from(req.headers.get("x-telegram-bot-api-secret-token") ?? "");
