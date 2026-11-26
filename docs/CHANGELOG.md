@@ -14,7 +14,9 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
   record `sent`, none failed.
 - v1.57.8–v1.57.9 merged to main with Ozan's approval: 265999e → 76d9204
   (main and the branch tip checked unmoved before the push).
-- Phase 3 slice 1 is done: e-mail and Telegram both working in production.
+- Phase 3 slice 1: Telegram tried and working in production; e-mail tried end
+  to end on the local server with the same Resend setup (25.11.2026) —
+  e-mail from production not tried yet.
 - Docs: [[_plans/phase-3-communication]], [[_plans/personal-assistant]],
   [[05-flows/notifications-flow]], [[04-integrations/telegram]].
 

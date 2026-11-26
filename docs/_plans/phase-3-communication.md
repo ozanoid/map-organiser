@@ -19,7 +19,7 @@ related:
 
 # Faz 3 — İletişim: tasarım
 
-> [[personal-assistant]] planının Faz 3'ü. **14 karar onaylandı (25.11.2026, hepsi önerildiği gibi).** **Dilim 1 main'de (merge 265999e ve 76d9204, 26.11.2026; v1.57.0–v1.57.9) ve production'da iki kanalıyla çalışıyor**; migration'ı deneme çalıştırmasından geçti ve **Ozan'ın onayıyla uygulandı (25.11.2026, sürüm 20261125203540)**; ardından `notifications.plan_id` indeksi de uygulandı (sürüm 20261125224149) — durum ve tasarımdan sapmalar: [[#Dilim 1 — durum (25.11.2026)]]. Şema SQL'i her dilimin başında `supabase/migrations/` altında yazılır, Ozan'a gösterilir, onayıyla uygulanır.
+> [[personal-assistant]] planının Faz 3'ü. **14 karar onaylandı (25.11.2026, hepsi önerildiği gibi).** **Dilim 1 main'de (merge 265999e ve 76d9204, 26.11.2026; v1.57.0–v1.57.9) — Telegram production'da denendi ve çalışıyor; e-posta yerelde denendi, production'dan henüz gönderilmedi**; migration'ı deneme çalıştırmasından geçti ve **Ozan'ın onayıyla uygulandı (25.11.2026, sürüm 20261125203540)**; ardından `notifications.plan_id` indeksi de uygulandı (sürüm 20261125224149) — durum ve tasarımdan sapmalar: [[#Dilim 1 — durum (25.11.2026)]]. Şema SQL'i her dilimin başında `supabase/migrations/` altında yazılır, Ozan'a gösterilir, onayıyla uygulanır.
 
 ## Ne anladım
 
