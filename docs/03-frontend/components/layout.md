@@ -2,14 +2,15 @@
 title: Layout components
 type: component
 domain: frontend
-version: 1.2.1
-last_updated: 24.11.2026
+version: 1.3.0
+last_updated: 26.11.2026
 status: stable
 sources:
   - src/components/layout/app-header.tsx
   - src/components/layout/app-sidebar.tsx
   - src/components/layout/mobile-nav.tsx
   - src/components/layout/offline-banner.tsx
+  - src/components/layout/time-zone-sync.tsx
 related:
   - "[[_README]]"
   - "[[../layouts]]"
@@ -71,7 +72,15 @@ App chrome. All `"use client"`. Rendered by `src/app/(app)/layout.tsx` (header/s
 - **State:** `isOffline`.
 - **Renders:** fixed banner at `top-14` with amber color + `WifiOff` icon. Visible only when offline.
 - **Behavior:** listens to `window.online` and `window.offline` events; checks `navigator.onLine` on mount.
-- **Used by:** root layout (`src/app/layout.tsx`) — visible across every page.
+- **Used by:** the `(app)` layout (`src/app/(app)/layout.tsx`), under the header — every signed-in page. (Until 26.11.2026 this said the root layout; the code had it in `(app)`.)
+
+## `TimeZoneSync`
+
+- **File:** `src/components/layout/time-zone-sync.tsx` (v1.58.0, Phase 3 slice 2).
+- **Props:** none. **Renders:** nothing.
+- **Hooks:** `useEffect`, `useQueryClient`.
+- **Behavior:** reads the browser's zone (`Intl.DateTimeFormat().resolvedOptions().timeZone`); if `localStorage["time-zone-synced"]` already holds it, stops. Otherwise `PUT /api/user/time-zone { timeZone, auto: true }` — the server stores it only while the profile has none, so a zone picked in Settings stays — then remembers it and invalidates `["notifications"]` (Settings, if open, shows it). Blocked storage: it simply asks again on the next visit.
+- **Used by:** the `(app)` layout. See [[../hooks/use-notifications]], [[../../02-backend/api-routes/user]].
 
 ## Open questions
 

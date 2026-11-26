@@ -2,7 +2,7 @@
 title: Resend (e-mail)
 type: integration
 domain: integrations
-version: 1.2.0
+version: 1.3.0
 last_updated: 26.11.2026
 status: draft
 sources:
@@ -51,14 +51,14 @@ Without both, `emailConfigured()` is false: Settings says "E-mail isn't set up o
 
 ## Where it's used
 
-`sendEmail({ to, subject, html, text }, idempotencyKey)` → Resend's message id; the From is `fromHeader(EMAIL_FROM)`. Called only by `deliver` (`outbox.ts`), after the `notifications` row is written and claimed; the key is `notification-<row id>`, so a retry of the same record within 24 hours can't send it twice. Every e-mail carries an HTML part and a plain-text part, both rendered in Turkish by `render.ts` (inline styles, one 560 px column, the app's emerald accent, a footer link to Settings → Notifications). The templates are typed string builders rather than React Email: three short messages, deterministic, checked offline (`npm run check:notify`); React Email can come when the invitation e-mails of slice 3 need it.
+`sendEmail({ to, subject, html, text }, idempotencyKey)` → Resend's message id; the From is `fromHeader(EMAIL_FROM)`. Called only by `deliver` (`outbox.ts`), after the `notifications` row is written and claimed; the key is `notification-<row id>`, so a retry of the same record within 24 hours can't send it twice. Every e-mail carries an HTML part and a plain-text part, both rendered in Turkish by `render.ts` (inline styles, one 560 px column, the app's emerald accent, a footer link to Settings → Notifications). The templates are typed string builders rather than React Email: short messages, deterministic, checked offline (`npm run check:notify`) — the confirmation, the test, a plan's summary, and since v1.58.0 the reminder ("Yarın: <plan>" / "Bugün: <plan>", the first day's stops) and the weekly summary ("Bu hafta: N plan" on a Monday, "Önümüzdeki 7 gün: N plan" on another day); React Email can come when the invitation e-mails of slice 3 need it. A scheduled message's record carries its time as `due_at` (`Delivery.dueAt`).
 
 ## Cost & limits
 
 - **Unit:** one e-mail sent.
 - **Free allowance:** 3,000 e-mails a month, at most 100 a day; past it Resend answers 429 — it doesn't queue. Pro is $20 a month for 50,000 (Resend's pricing page, read 25.11.2026).
 - **Measured usage:** none yet — nothing sent before v1.57.0 is deployed and the key is set.
-- **Expected:** a handful a week in slice 1 (confirmations, tests, "Send to me"); slice 2's reminders and weekly summary add about 10 a week. Well inside the free allowance.
+- **Expected:** a handful a week in slice 1 (confirmations, tests, "Send to me"); slice 2's reminders and weekly summary add about 10 a week (an estimate: two reminders per plan per channel, one summary a week; nothing for a week without plans). Well inside the free allowance. Measured after slice 2 goes live.
 - A new domain's first e-mails may land in Gmail's spam: mark them "Not spam".
 - **DMARC** — in place: a TXT record named `_dmarc` with `v=DMARC1; p=none;` (Vercel → Domains → `mappy.site` → DNS). It tells receiving servers the domain has a policy, which helps inbox placement; `p=none` changes no delivery.
 

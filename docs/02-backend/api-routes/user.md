@@ -2,8 +2,8 @@
 title: User routes
 type: route-group
 domain: backend
-version: 1.7.0
-last_updated: 25.11.2026
+version: 1.8.0
+last_updated: 26.11.2026
 status: stable
 sources:
   - src/app/api/user/api-keys/route.ts
@@ -13,6 +13,7 @@ sources:
   - src/app/api/user/ai-suggestions/[id]/accept/route.ts
   - src/app/api/user/ai-suggestions/[id]/reject/route.ts
   - src/app/api/user/backfill-profiles/route.ts
+  - src/app/api/user/time-zone/route.ts
 related:
   - "[[_README]]"
   - "[[../schema/profiles]]"
@@ -41,6 +42,7 @@ Two endpoints under `/api/user/*` — both about the **caller's own** profile.
 | `POST` | `/api/user/ai-suggestions/[id]/reject` | Mark proposal (and siblings) as `rejected`. Vocabulary untouched. |
 | `GET` | `/api/user/backfill-profiles` | Eligibility report: how many places need an AI profile + estimated cost (the writer's measured cost a profile, `PROFILE_WRITER_AVG_USD`, plus the DataForSEO reviews price; v1.51.0). |
 | `POST` | `/api/user/backfill-profiles` | Dispatch up to 25 fire-and-forget enrich calls for profile-less places. Client iterates until done. |
+| `PUT` | `/api/user/time-zone` | Set `profiles.time_zone` — from the browser once (`auto`), or chosen in Settings → Notifications (v1.58.0). |
 
 All require auth.
 
@@ -105,6 +107,14 @@ Google key fields (`googleApiKey`, `hasGoogleKey`, `googlePlacesEnabled`) were r
 - **DB:** `profiles` UPDATE.
 - **Response:** `{ success: true, enabled }`.
 - **Notes:** Phase 1 master toggle. When `false`, every other AI endpoint short-circuits and the UI hides AI affordances.
+
+### `PUT /api/user/time-zone`
+
+- **Source:** `src/app/api/user/time-zone/route.ts` (v1.58.0, Phase 3 slice 2).
+- **Body:** `{ timeZone: string, auto?: boolean }` — an IANA zone the runtime knows, ≤ 64 characters (`timeZoneInput`, `src/lib/notify/schedule-store.ts`); unknown fields refused. `400` "That isn't a time zone."
+- **DB:** `profiles` UPDATE with the user's own session (`time_zone`, `updated_at`), then a SELECT of the stored zone. `auto: true` — what `TimeZoneSync` sends, the browser's zone once per device — updates only while `time_zone` is null, so a zone chosen in Settings stays.
+- **Response:** `{ timeZone }` — the zone now on the profile (which, after an `auto` call, may be the one already there).
+- **Notes:** open to every signed-in user, not only owners: it is the user's own profile, and the schedule that reads it is owner-gated anyway. See [[../schema/profiles]].
 
 ### `GET /api/user/ai-suggestions`
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { ScheduleSettings } from "@/lib/notify/schedule";
 import type { ChannelKind, ChannelResult, NotificationSettingsView } from "@/lib/notify/types";
 
 /** Settings → Notifications and "Send to me" (Phase 3, slice 1). */
@@ -88,3 +89,46 @@ export function useSendPlan(planId: string) {
     onSettled: () => qc.invalidateQueries({ queryKey: NOTIFICATIONS_KEY }),
   });
 }
+
+/** Reminders and the weekly summary (Phase 3, slice 2): shown at once,
+ *  put back if the server refuses. */
+export function useSaveSchedule() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (schedule: ScheduleSettings) =>
+      fetch("/api/notifications/schedule", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(schedule),
+      }).then(answer<{ schedule: ScheduleSettings }>),
+    onMutate: async (schedule) => {
+      await qc.cancelQueries({ queryKey: NOTIFICATIONS_KEY });
+      const before = qc.getQueryData<NotificationSettingsView>(NOTIFICATIONS_KEY);
+      if (before && before.open) {
+        const next: NotificationSettingsView = { ...before, schedule };
+        qc.setQueryData(NOTIFICATIONS_KEY, next);
+      }
+      return { before };
+    },
+    onError: (_err, _schedule, context) => {
+      if (context?.before) qc.setQueryData(NOTIFICATIONS_KEY, context.before);
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: NOTIFICATIONS_KEY }),
+  });
+}
+
+/** The user's time zone. `auto`: the browser's zone, kept only while none
+ *  is set (TimeZoneSync); without it, a choice made in Settings. */
+export function useSetTimeZone() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { timeZone: string; auto?: boolean }) =>
+      fetch("/api/user/time-zone", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      }).then(answer<{ timeZone: string | null }>),
+    onSettled: () => qc.invalidateQueries({ queryKey: NOTIFICATIONS_KEY }),
+  });
+}
+

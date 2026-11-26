@@ -2,8 +2,8 @@
 title: RLS Policies
 type: overview
 domain: backend
-version: 1.8.1
-last_updated: 25.11.2026
+version: 1.9.0
+last_updated: 26.11.2026
 status: stable
 sources:
   - pg_policies (via Supabase MCP)
@@ -33,6 +33,7 @@ Truth source: `pg_policies`, fetched via Supabase MCP `execute_sql`. See per-tab
 | `notification_channels` | Users read own notification channels | authenticated | SELECT | `auth.uid() = user_id` — only the server writes (service role): a user can't mark an address confirmed or point a channel at another chat. Migration 20261125203540, applied 25.11.2026 ([[schema/notifications]]) |
 | `notifications` | Users read own notifications | authenticated | SELECT | `auth.uid() = user_id` — only the server writes |
 | `channel_link_tokens` | — (RLS on, no policy) | — | — | the server alone reads and writes it |
+| `notification_settings` | Users read own notification settings | authenticated | SELECT | `(select auth.uid()) = user_id` — only the server writes (`PUT /api/notifications/schedule`, owners). Migration 20261126013719, applied 26.11.2026 ([[schema/notifications]]) |
 | `categories` | Users manage own categories | authenticated | ALL | `auth.uid() = user_id` |
 | `import_job_items` | `import_job_items_select` | authenticated | SELECT | `auth.uid() = user_id` — read-only by design ([[schema/import-jobs]]) |
 | `import_jobs` | `import_jobs_select` / `_insert` / `_update` | authenticated | SELECT, INSERT, UPDATE | `auth.uid() = user_id` |
@@ -42,7 +43,7 @@ Truth source: `pg_policies`, fetched via Supabase MCP `execute_sql`. See per-tab
 | `place_tags` | Users manage own place_tags | authenticated | ALL | `place_id IN (SELECT id FROM places WHERE user_id = auth.uid())` |
 | `places` | Users manage own places | authenticated | ALL | `auth.uid() = user_id` |
 | `profiles` | Users can view own profile | authenticated | SELECT | `auth.uid() = id` |
-| `profiles` | Users can update own profile | authenticated | UPDATE | `auth.uid() = id` |
+| `profiles` | Users can update own profile | authenticated | UPDATE | `auth.uid() = id` — also how `PUT /api/user/time-zone` writes `time_zone` (v1.58.0) |
 | `profiles` | Users can insert own profile | authenticated | INSERT | (with_check) `auth.uid() = id` |
 | `saved_filters` | Users manage own saved filters | authenticated | ALL | `auth.uid() = user_id` (v1.20.0 — [[schema/saved_filters]]) |
 | `shared_links` | Anyone can read active shared links | public | SELECT | `is_active = true` |

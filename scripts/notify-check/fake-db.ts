@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- a loosely typed stand-in for supabase-js */
 /**
- * An in-memory stand-in for the three Phase 3 tables, answering the
+ * An in-memory stand-in for the Phase 3 tables (and `profiles.time_zone`), answering the
  * supabase-js calls src/lib/notify makes: select / insert / update / upsert /
  * delete with eq, is and gt filters, maybeSingle, and the notification_claim
  * RPC. It keeps the migration's unique keys — the 23505s the code relies on
@@ -17,16 +17,26 @@ const UNIQUE: Record<string, ((a: Row, b: Row) => boolean)[]> = {
     (a, b) => a.kind === "telegram" && b.kind === "telegram" && a.telegram_chat_id === b.telegram_chat_id,
   ],
   channel_link_tokens: [(a, b) => a.token_hash === b.token_hash],
+  notification_settings: [(a, b) => a.user_id === b.user_id],
+  profiles: [(a, b) => a.id === b.id],
 };
 
 const DEFAULTS: Record<string, () => Row> = {
   notifications: () => ({ status: "pending", attempts: 0, claimed_until: null, last_error: null, sent_at: null }),
   notification_channels: () => ({ email: null, telegram_chat_id: null, telegram_username: null, verified_at: null, disabled_at: null }),
   channel_link_tokens: () => ({ email: null, used_at: null }),
+  notification_settings: () => ({}),
+  profiles: () => ({ time_zone: null }),
 };
 
 export class FakeDb {
-  tables: Record<string, Row[]> = { notifications: [], notification_channels: [], channel_link_tokens: [] };
+  tables: Record<string, Row[]> = {
+    notifications: [],
+    notification_channels: [],
+    channel_link_tokens: [],
+    notification_settings: [],
+    profiles: [],
+  };
   private n = 0;
   /** Calls seen, "table.op" or "rpc.name". */
   calls: string[] = [];
@@ -63,7 +73,8 @@ class Query implements PromiseLike<Result> {
   private onConflict: string[] = [];
   private filters: ((r: Row) => boolean)[] = [];
   private returning = false;
-  private single = false;
+  private one = false;
+  private required = false;
 
   constructor(
     private db: FakeDb,
@@ -107,7 +118,13 @@ class Query implements PromiseLike<Result> {
     return this;
   }
   maybeSingle() {
-    this.single = true;
+    this.one = true;
+    return this;
+  }
+  /** Like maybeSingle, but no row is an error (PostgREST's PGRST116). */
+  single() {
+    this.one = true;
+    this.required = true;
     return this;
   }
   then<A = Result, B = never>(ok?: ((r: Result) => A | PromiseLike<A>) | null, fail?: ((e: unknown) => B | PromiseLike<B>) | null) {
@@ -119,7 +136,8 @@ class Query implements PromiseLike<Result> {
   private answer(rows: Row[]): Result {
     const copies = rows.map((r) => ({ ...r }));
     if (this.op !== "select" && !this.returning) return { data: null, error: null };
-    return { data: this.single ? (copies[0] ?? null) : copies, error: null };
+    if (this.required && copies.length === 0) return { data: null, error: { code: "PGRST116", message: "no rows" } };
+    return { data: this.one ? (copies[0] ?? null) : copies, error: null };
   }
 
   private run(): Result {

@@ -2,8 +2,8 @@
 title: Tech Stack
 type: overview
 domain: overview
-version: 1.8.3
-last_updated: 25.11.2026
+version: 1.9.0
+last_updated: 26.11.2026
 status: stable
 sources:
   - package.json
@@ -112,6 +112,7 @@ See [[../05-flows/observability-flow]] for the full architecture.
 |---|---|---|
 | `recharts` | `^3.9.2` | Stats dashboard charts |
 | `date-fns` | `^4.4.0` | Date formatting |
+| `@date-fns/tz` | `^1.5.0` | Time zones for the reminders and the weekly summary (v1.58.0): `TZDate` turns "18:00 in Tokyo on this date" into the instant, clock changes included (`atLocal`, `src/lib/notify/schedule.ts`) |
 
 ## External integrations (not npm packages)
 

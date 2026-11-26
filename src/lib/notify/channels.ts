@@ -6,7 +6,8 @@ import { deliver } from "@/lib/notify/outbox";
 import { emailVerifyMessage } from "@/lib/notify/render";
 import { registerWebhook } from "@/lib/notify/telegram";
 import { consumeLinkToken, createLinkToken, hashToken, readLinkToken } from "@/lib/notify/tokens";
-import type { ChannelKind, ChannelsView } from "@/lib/notify/types";
+import { readSchedule, readTimeZone } from "@/lib/notify/schedule-store";
+import type { ChannelKind, NotificationSettingsView } from "@/lib/notify/types";
 
 /**
  * The owner's channels (`notification_channels`): one e-mail address and one
@@ -52,10 +53,19 @@ export function usable(row: ChannelRow | undefined): row is ChannelRow {
   return Boolean(row?.verified_at && !row.disabled_at);
 }
 
-export async function settingsView(admin: SupabaseClient, userId: string): Promise<{ open: true } & ChannelsView> {
-  const { email, telegram } = await readChannels(admin, userId);
+export async function settingsView(
+  admin: SupabaseClient,
+  userId: string
+): Promise<Extract<NotificationSettingsView, { open: true }>> {
+  const [{ email, telegram }, schedule, timeZone] = await Promise.all([
+    readChannels(admin, userId),
+    readSchedule(admin, userId),
+    readTimeZone(admin, userId),
+  ]);
   return {
     open: true,
+    schedule,
+    timeZone,
     email: { configured: emailConfigured(), address: email?.email ?? null, confirmed: Boolean(email?.verified_at) },
     telegram: {
       configured: telegramConfigured(),

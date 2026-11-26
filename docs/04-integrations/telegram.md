@@ -2,7 +2,7 @@
 title: Telegram (notification bot)
 type: integration
 domain: integrations
-version: 1.2.0
+version: 1.3.0
 last_updated: 26.11.2026
 status: draft
 sources:
@@ -26,13 +26,13 @@ tags:
 
 # Telegram
 
-> A bot that sends the owner's messages to their Telegram chat (Phase 3, v1.57.0): Settings' test and a plan's summary now; reminders and the weekly summary in slice 2. Notifications only — the bot doesn't talk to the assistant (decision 2).
+> A bot that sends the owner's messages to their Telegram chat (Phase 3, v1.57.0): Settings' test and a plan's summary; since v1.58.0 (slice 2) also the reminders before a plan and the weekly summary, sent by `/api/cron/notify`. Notifications only — the bot doesn't talk to the assistant (decision 2).
 
 ## Account & access
 
 - **Provider:** the [Telegram Bot API](https://core.telegram.org/bots/api), plain HTTPS. Free.
 - **Account owner:** Ozan — the bot is made with @BotFather (`/newbot`); its username ends in `bot` and can't change later. Whoever has the token controls the bot; a leaked token is replaced with `/token` in @BotFather.
-- **The bot:** **Mappy**, `@mappysitebot` (made by Ozan with @BotFather, 26.11.2026). `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME` (`mappysitebot`) and `TELEGRAM_WEBHOOK_SECRET` are set in Vercel, Production only (26.11.2026).
+- **The bot:** **Mappy**, `@mappysitebot` (made by Ozan with @BotFather, 26.11.2026). `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME` (`mappysitebot`) and `TELEGRAM_WEBHOOK_SECRET` are set in Vercel, Production only (26.11.2026). Linked to Ozan's account in production on 26.11.2026 (after the token value in Vercel was corrected).
 - **Production only** (decision 13): a bot has one webhook address, so the bot lives on the production deployment. Preview and local servers have no `TELEGRAM_BOT_TOKEN`: Settings shows "Telegram isn't set up on this server", and a send lists Telegram as `not_connected`. A second, test bot is the way to try it elsewhere.
 
 ## NPM packages
@@ -81,7 +81,7 @@ A refusal comes back to Settings as "Telegram couldn't be set up: …" (Telegram
 | Webhook: wrong or missing secret | `401`; nothing done. |
 | Webhook: an update fails inside | Logged as `telegram.update_failed`, answered `200` so Telegram doesn't resend it forever. |
 
-Telegram has no idempotency key: a sender that dies after Telegram accepted a message but before the record says so can, once its 60-second hold lapses, send it again (slice 2's scheduler) — a rare second copy rather than a lost message.
+Telegram has no idempotency key: a sender that dies after Telegram accepted a message but before the record says so can, once its 60-second hold lapses, send it again (the next claim; for a reminder or summary, the next scheduler run within its 3 hours) — a rare second copy rather than a lost message.
 
 ## Replacement strategy
 

@@ -2,8 +2,8 @@
 title: API Routes
 type: overview
 domain: backend
-version: 1.14.0
-last_updated: 25.11.2026
+version: 1.15.1
+last_updated: 26.11.2026
 status: stable
 sources:
   - src/app/api/
@@ -31,14 +31,14 @@ All Next.js route handlers grouped by area. Each linked doc is the canonical ref
 | Subcategories | `/api/subcategories/*` (Phase 2) | Required | [[subcategories]] |
 | Shared | `/api/shared/*` | **Mixed** — GET `/[slug]` public via service role | [[shared]] |
 | Stats | `/api/stats` | Required | [[stats]] |
-| User | `/api/user/*` — includes `ai-settings` (Phase 1) and `ai-suggestions/*` (Phase 5 moderation queue: list, accept, reject) | Required | [[user]] |
+| User | `/api/user/*` — includes `ai-settings` (Phase 1), `ai-suggestions/*` (Phase 5 moderation queue: list, accept, reject) and `time-zone` (v1.58.0) | Required | [[user]] |
 | ~~AI~~ | `/api/ai/*` — gone since v1.54.0: `chat` (v1.48.0), `compare` (v1.52.0), `day-plan` (v1.53.0), `parse-query` and `rank-results` (v1.54.0). Every AI request goes through the assistant ([[assistant]]) | — | — |
 | Assistant | `/api/assistant/chat` (one turn of the Claude agent, streaming), `/api/assistant/conversation` (latest conversation, New chat) — v1.48.0 | Required | [[assistant]] |
-| Notifications | `/api/notifications` (the owner's channels), `/email`, `/telegram`, `/test`, and `POST /api/plans/[id]/send` ("Send to me") — v1.57.0 | Required, **owners only** (`notifyContext`) | [[notifications]] |
+| Notifications | `/api/notifications` (the owner's channels), `/email`, `/telegram`, `/test`, and `POST /api/plans/[id]/send` ("Send to me") — v1.57.0; `/schedule` (reminders and the weekly summary) — v1.58.0 | Required, **owners only** (`notifyContext`) | [[notifications]] |
 | Telegram webhook | `/api/telegram/webhook` (POST — the bot's updates; v1.57.0) | **`X-Telegram-Bot-Api-Secret-Token`**, public in the proxy | [[notifications]] |
 | Search | `/api/search/*` (Mapbox geocoder proxy) | Required | [[search]] |
 | Instagram | `/api/instagram/import` (POST — start an import from a post URL, work runs in `after()`) + `/api/instagram/import/[id]` (GET — the dialog's progress view) — v1.28.0; `/api/instagram/import/[id]/pick` (POST — add the place picked for a skipped venue) — v1.28.1 | Required | [[instagram]] |
-| Cron | `/api/cron/refresh-places` (15.07.2026) — daily periodic-refresh sweep; `/api/cron/drain-imports` (v1.26.0) — every minute, drains the import queue for Takeout and Instagram jobs | **`CRON_SECRET` bearer** (service-role) | [[../../06-ops/runbooks/periodic-refresh]], [[places]] |
+| Cron | `/api/cron/refresh-places` (15.07.2026) — daily periodic-refresh sweep; `/api/cron/drain-imports` (v1.26.0) — every minute, drains the import queue for Takeout and Instagram jobs; `/api/cron/notify` (v1.58.0) — every 15 minutes, the plans' reminders and the weekly summaries | **`CRON_SECRET` bearer**, compared in constant time by all three (`bearerMatches`; v1.58.1 for the first two) (service-role) | [[../../06-ops/runbooks/periodic-refresh]], [[places]], [[notifications]] |
 | Claude connector | `/api/mcp` (GET/POST/DELETE — MCP Streamable HTTP, stateless; 17.11.2026) | **Bearer** — Supabase OAuth access token, owner accounts only (`withMcpAuth`); skips the session proxy | [[../../04-integrations/claude-mcp]] |
 | Share target | `/api/share-target` | **None** (PWA inbound) | [[share-target]] |
 | Auth callback | `/auth/callback` | **None** (OAuth handshake) | [[auth-callback]] |
@@ -47,7 +47,7 @@ All Next.js route handlers grouped by area. Each linked doc is the canonical ref
 
 ## Counts
 
-- 49 route handler files on 25.11.2026 (43 before v1.57.0, which added six: four under `/api/notifications`, `/api/plans/[id]/send`, `/api/telegram/webhook`). Earlier: 45 (43 × `src/app/api/**/route.ts` + `src/app/auth/callback/route.ts` + `src/app/.well-known/oauth-protected-resource/[[...path]]/route.ts`; 17.11.2026 added `/api/mcp` and the metadata route) — Phase 6 added `/api/ai/parse-query` + `/api/ai/rank-results`; 15.07.2026 added `/api/cron/refresh-places`; v1.21.0 added `/api/ai/chat` (assistant); v1.22.0 added `/api/ai/trip-plan` + `PATCH /api/trips/[id]/days/[dayId]`; v1.26.0 swapped `import-parse` / `import-batch` / `bulk-enrich-reviews` for `import-jobs`, `import-jobs/[id]` and `cron/drain-imports` (net zero); v1.28.0 added `/api/instagram/import` + `/api/instagram/import/[id]`; v1.28.1 added `/api/instagram/import/[id]/pick`; v1.37.0 replaced the 7 `/api/trips/**` files with 4 under `/api/plans/**` and renamed `/api/ai/trip-plan` to `/api/ai/day-plan`; v1.38.0 added `/api/visits` + `/api/visits/[id]`. (NF-05 similar-adds reuse `POST /api/places` via the AddPlaceDialog preview — no dedicated route.)
+- 52 route handler files on 26.11.2026 (v1.58.0 added three: `/api/notifications/schedule`, `/api/user/time-zone`, `/api/cron/notify`). 49 on 25.11.2026 (43 before v1.57.0, which added six: four under `/api/notifications`, `/api/plans/[id]/send`, `/api/telegram/webhook`). Earlier: 45 (43 × `src/app/api/**/route.ts` + `src/app/auth/callback/route.ts` + `src/app/.well-known/oauth-protected-resource/[[...path]]/route.ts`; 17.11.2026 added `/api/mcp` and the metadata route) — Phase 6 added `/api/ai/parse-query` + `/api/ai/rank-results`; 15.07.2026 added `/api/cron/refresh-places`; v1.21.0 added `/api/ai/chat` (assistant); v1.22.0 added `/api/ai/trip-plan` + `PATCH /api/trips/[id]/days/[dayId]`; v1.26.0 swapped `import-parse` / `import-batch` / `bulk-enrich-reviews` for `import-jobs`, `import-jobs/[id]` and `cron/drain-imports` (net zero); v1.28.0 added `/api/instagram/import` + `/api/instagram/import/[id]`; v1.28.1 added `/api/instagram/import/[id]/pick`; v1.37.0 replaced the 7 `/api/trips/**` files with 4 under `/api/plans/**` and renamed `/api/ai/trip-plan` to `/api/ai/day-plan`; v1.38.0 added `/api/visits` + `/api/visits/[id]`. (NF-05 similar-adds reuse `POST /api/places` via the AddPlaceDialog preview — no dedicated route.)
 - ~59 HTTP method exports across them
 
 ## Cross-route conventions
@@ -62,7 +62,7 @@ These hold for every route. See [[../_agent/conventions#api-routes]] for the ful
    if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
    ```
 
-2. **RLS does access control**, not the route. Don't add `.eq("user_id", user.id)` — it's redundant. **Exception:** the service-role paths (listed in [[../supabase-clients]] — the public share read, both cron routes, the import-queue writes, the Instagram import's `after()` job and its pick route, plus the libs they call) BYPASS RLS, so they MUST filter by `user_id` explicitly on every query. Never assume RLS on a service-role client.
+2. **RLS does access control**, not the route. Don't add `.eq("user_id", user.id)` — it's redundant. **Exception:** the service-role paths (the canonical list, with each reason, is [[../supabase-clients]] — 20 files on 26.11.2026: the public share read, the three cron routes, the import-queue writes, the Instagram import, the assistant's conversation store and spend ledger, and Phase 3's notification routes, Telegram webhook and confirmation page) BYPASS RLS, so they MUST filter by `user_id` explicitly on every query. Never assume RLS on a service-role client.
 3. **Validate inputs.** Either Zod (preferred for complex bodies) or explicit destructuring with checks.
 4. **Status codes**:
    - `200` — success (including `Response.redirect`).
@@ -72,7 +72,7 @@ These hold for every route. See [[../_agent/conventions#api-routes]] for the ful
    - `409` — duplicate (e.g. `google_place_id` collision).
    - `500` — unhandled error.
 5. **Cost-tracked external calls go through `trackUsage`** (`src/lib/google/track-usage.ts`) → `increment_api_usage` RPC. Apply to every Google Places, DataForSEO, HikerAPI (v1.28.0, `hikerapi_request`) and (since v1.22.0) Mapbox Directions call (`mapbox_directions` — both `getRoute` call sites). AI calls don't (until v1.54.0 Gemini calls wrote `ai_*` SKUs through `trackAiUsage`, now gone): `structuredClaude` and the agent record their dollars in `assistant_spend` (one ledger, one monthly cap — the assistant since v1.48.0, profiles and Instagram reads since v1.51.0).
-6. **Service-role client** (`createServiceClient()`) only where no session can do the job: the public share read (`/api/shared/[slug]`, and the original-content reads in `.../save`), both cron routes (cross-user, no cookie), the `import_job_items` insert in `POST /api/places/import-jobs` (the table has no INSERT policy), the Instagram import's background job in `POST /api/instagram/import` (runs after the response; writes items), and `POST /api/instagram/import/[id]/pick` (moves an item the session client has just read; the table has no UPDATE policy). Every other route uses the cookie-scoped `createClient()`. Service-role paths must filter by `user_id` (see #2). Canonical list: [[../supabase-clients]].
+6. **Service-role client** (`createServiceClient()`) only where no session can do the job — no cookie (the crons, the Telegram webhook, the confirmation link), another user's rows (the public share read), or a table users may read but only the server writes (the import queue, the assistant's ledger and conversations, the notification channels, settings and outbox). Every other route uses the cookie-scoped `createClient()`. Service-role paths must filter by `user_id` (see #2). Canonical list, file by file: [[../supabase-clients]].
 7. **PostGIS coords are always parsed.** Every route that returns a place coercion `location` to `{ lat, lng }` via `src/lib/geo.ts#parsePostgisPoint` before serializing.
 
 ## Common helpers

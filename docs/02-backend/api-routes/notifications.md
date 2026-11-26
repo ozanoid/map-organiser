@@ -2,7 +2,7 @@
 title: Notification routes
 type: route-group
 domain: backend
-version: 1.1.0
+version: 1.2.0
 last_updated: 26.11.2026
 status: draft
 sources:
@@ -10,7 +10,10 @@ sources:
   - src/app/api/notifications/email/route.ts
   - src/app/api/notifications/telegram/route.ts
   - src/app/api/notifications/test/route.ts
+  - src/app/api/notifications/schedule/route.ts
   - src/app/api/plans/[id]/send/route.ts
+  - src/app/api/cron/notify/route.ts
+  - src/lib/api/bearer.ts
   - src/app/api/telegram/webhook/route.ts
   - src/app/(auth)/confirm-email/page.tsx
   - src/app/(auth)/confirm-email/actions.ts
@@ -31,13 +34,14 @@ tags:
 
 # Notification routes
 
-Phase 3, slice 1 (v1.57.0): the owner's channels — an e-mail address and a Telegram chat — and sending a plan to them. Thin handlers over `src/lib/notify/`; database errors come back through `errorResponse`.
+Phase 3, slice 1 (v1.57.0): the owner's channels — an e-mail address and a Telegram chat — and sending a plan to them. Slice 2 (v1.58.0): the reminders before a plan and the weekly summary — their settings, and the cron that sends them. Thin handlers over `src/lib/notify/`; database errors come back through `errorResponse`.
 
 **Owners only.** In v1 the app sends only to its owner (Phase 3, decision 7): every route below that needs a session asks `notifyContext()` (`src/lib/notify/access.ts`) — signed in, and an account in `ASSISTANT_OWNER_EMAILS`, the same list the assistant is open to. Anyone else gets `403 { error, code: "not_owner" }`, except the settings read, which answers `{ open: false }` so the screen can say so. An account that isn't an owner can't make the app send anything, not even a confirmation link.
 
 | Method | Path | Body | Returns |
 |---|---|---|---|
-| GET | `/api/notifications` | — | `NotificationSettingsView`: `{ open: false }`, or `{ open: true, email: { configured, address, confirmed }, telegram: { configured, linked, username, blocked } }`. `configured`: the server has the provider's keys |
+| GET | `/api/notifications` | — | `NotificationSettingsView`: `{ open: false }`, or `{ open: true, email: { configured, address, confirmed }, telegram: { configured, linked, username, blocked }, schedule, timeZone }`. `configured`: the server has the provider's keys. `schedule`: `ScheduleSettings` — the stored row, or the defaults when there is none ([[../schema/notifications#notification_settings]]); `timeZone`: `profiles.time_zone` or null (v1.58.0) |
+| PUT | `/api/notifications/schedule` | `ScheduleSettings`, every field: `{ reminderChannels, eveningTime, morningTime, weeklyChannels, weeklyDay, weeklyTime }` — times `HH:MM` or null (off), channels ⊆ `email`, `telegram`, `weeklyDay` 1–7 (1 = Monday); unknown fields refused | `{ schedule }` as saved (v1.58.0). `400` with the first problem ("A time like 18:00") |
 | PUT | `/api/notifications/email` | `{ email }` (trimmed, lower-cased, ≤ 254) | `{ status: "sent" }` — the address is saved unconfirmed and its confirmation link sent; `{ status: "already_confirmed" }` for the same confirmed address. `400` not an address · `502` the e-mail couldn't be sent (the provider's reason) · `503` e-mail not set up on this server |
 | DELETE | `/api/notifications/email` | — | `{ ok: true }` |
 | POST | `/api/notifications/telegram` | — | `{ url }` — `https://t.me/<bot>?start=<token>`, a one-time link for 15 minutes. In production the bot is first pointed at this deployment's webhook (`registerWebhook`: `getMe` must match `TELEGRAM_BOT_USERNAME`, then `setWebhook`). `502` "Telegram couldn't be set up: …" when Telegram refuses · `503` without a bot |
@@ -49,13 +53,15 @@ Phase 3, slice 1 (v1.57.0): the owner's channels — an e-mail address and a Tel
 
 ## Without a session
 
-Both are public in the proxy ([[../../03-frontend/proxy]]); each proves itself.
+All three are public in the proxy ([[../../03-frontend/proxy]]); each proves itself.
+
+- **`GET /api/cron/notify`** (v1.58.0) — Vercel's cron, every 15 minutes (`vercel.json`), with `Authorization: Bearer ${CRON_SECRET}`, compared in constant time (`bearerMatches`, `src/lib/api/bearer.ts`): `401` when it doesn't match, `500` without `CRON_SECRET`. One scheduler run (`runScheduler`, [[../../05-flows/notifications-flow#Scheduled sends]]): the reminders and weekly summaries that are due go to the outbox, the ones it can no longer send are recorded as skipped. Returns the run's counts — `{ users, plans, sent, busy, failed, skipped: { late, changed, empty } }` — also logged as `notify.run`; a failed run is `500` and `notify.run_failed`. Links in the messages point at `https://${VERCEL_PROJECT_PRODUCTION_URL}` (set by Vercel), else at the address the cron called. `maxDuration` 60 s.
 
 - **`POST /api/telegram/webhook`** — Telegram posts the bot's updates here; the app registers it itself on Connect in production (`setWebhook` with `secret_token`, `allowed_updates: ["message", "my_chat_member"]`, [[../../04-integrations/telegram#Registering the webhook]]). The `X-Telegram-Bot-Api-Secret-Token` header is compared with `TELEGRAM_WEBHOOK_SECRET` in constant time: `401` when it doesn't match, `404` when the server has no bot or no secret. Otherwise always `200` — a failure is logged (`telegram.update_failed`), else Telegram would keep posting the same update. What the bot does: `handleUpdate` (`src/lib/notify/telegram-updates.ts`) — `/start <token>` links the chat, a block or unblock switches the channel off or on, anything else gets a line saying the bot only sends notifications. Groups are ignored.
 - **`/confirm-email?token=…`** — the page the confirmation e-mail links to, in the `(auth)` layout, `noindex`. Opening it changes nothing — mail scanners follow links, and an address must be confirmed by someone who read the message — it shows the address and a **Confirm address** button, or why the link no longer works (expired, replaced by a newer one, the address changed), or that the address is confirmed already. The button posts the token to the server action `confirmEmailAction`, which confirms the address the token was made for and lands on `/settings?tab=notifications&email=confirmed` (or `link-invalid`); Settings says how it went. Pressing it twice still says confirmed.
 
 ## Notes
 
-- Messages are rendered from the data at send time, in Turkish (decision 14): `src/lib/notify/render.ts`. Links in them use the request's public origin (`appOrigin`).
+- Messages are rendered from the data at send time, in Turkish (decision 14): `src/lib/notify/render.ts`. Links in them use the request's public origin (`appOrigin`); the cron's use the production address.
 - Each send is a `notifications` row first ([[../schema/notifications]]); a "Send to me" or a test is a new row every time (a fresh request id in its key), so pressing it again sends again.
 - A channel connected in the database but without the provider's keys on this server (a preview deployment has no Telegram bot, decision 13) is `not_connected`.

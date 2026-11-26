@@ -2,8 +2,8 @@
 title: Settings components
 type: component
 domain: frontend
-version: 1.9.0
-last_updated: 25.11.2026
+version: 1.10.1
+last_updated: 26.11.2026
 status: stable
 sources:
   - src/components/settings/api-keys-manager.tsx
@@ -12,6 +12,8 @@ sources:
   - src/components/settings/ai-suggestions-queue.tsx
   - src/components/settings/backfill-profiles-panel.tsx
   - src/components/settings/notification-settings.tsx
+  - src/components/settings/notification-schedule.tsx
+  - src/components/ui/switch.tsx
   - src/app/(app)/settings/page.tsx
 related:
   - "[[_README]]"
@@ -74,7 +76,7 @@ Six components powering the Settings page tabs. All `"use client"`.
 - **Hooks:** `useState`, `useEffect` — loads once on mount; the loader sits inside the effect (React's immutability lint rule rejects a call to a function declared below it, v1.43.0) and drops a late answer after unmount. Optimistic-update + rollback-on-error pattern.
 - **API calls:** `GET` and `PUT` `/api/user/ai-settings`.
 - **State:** `{ enabled: boolean, aiAvailable: boolean, assistantAvailable: boolean, cronRefreshEnabled: boolean } | null` + `loading` + `saving` — `aiAvailable` (v1.56.0) is Claude being set up, which every AI feature runs on (the Gemini flag `available` went in v1.54.0); `assistantAvailable` is per account since v1.56.0 — an owner may use the assistant — and only the description reads it: it names the assistant for an owner alone.
-- **Renders:** Master toggle (rounded switch, accessible `role="switch"`/`aria-checked`). Always below it (independent of the AI master — the data half isn't AI): the **"Background data refresh" toggle** (15.07.2026 — opt-in for the whole periodic sweep, default off; see [[../../06-ops/runbooks/periodic-refresh]]). Then, when **enabled** and Claude is set up (`aiAvailable`; `assistantAvailable` until v1.56.0 — Claude writes the profiles and with them the suggestions; v1.51.0, it was the Gemini flag before): `BackfillProfilesPanel` and `AiSuggestionsQueue`. An amber banner when the server has no `ANTHROPIC_API_KEY` ("AI features are not configured…"), and the master switch is disabled then (v1.54.0; v1.51.0–v1.53.0 a banner per provider, the switch disabled only when both were missing). A change of the switch refreshes `["ai-settings"]`, so the assistant's button and the screens' assistant entries follow without a reload (v1.52.0).
+- **Renders:** Master toggle (the shared `Switch`, below — v1.58.0; until then a hand-built copy of it, twice in this file). Always below it (independent of the AI master — the data half isn't AI): the **"Background data refresh" toggle** (15.07.2026 — opt-in for the whole periodic sweep, default off; see [[../../06-ops/runbooks/periodic-refresh]]). Then, when **enabled** and Claude is set up (`aiAvailable`; `assistantAvailable` until v1.56.0 — Claude writes the profiles and with them the suggestions; v1.51.0, it was the Gemini flag before): `BackfillProfilesPanel` and `AiSuggestionsQueue`. An amber banner when the server has no `ANTHROPIC_API_KEY` ("AI features are not configured…"), and the master switch is disabled then (v1.54.0; v1.51.0–v1.53.0 a banner per provider, the switch disabled only when both were missing). A change of the switch refreshes `["ai-settings"]`, so the assistant's button and the screens' assistant entries follow without a reload (v1.52.0).
 - **Used by:** `/settings` page (AI tab).
 
 ## `AiSuggestionsQueue`
@@ -118,12 +120,30 @@ Six components powering the Settings page tabs. All `"use client"`.
 - **Props:** none.
 - **Hooks:** `useNotificationSettings` (polls every 3 s while waiting for Telegram's Start), `useSetEmail`, `useRemoveEmail`, `useTelegramLink`, `useUnlinkTelegram`, `useSendTest` — [[../hooks/use-notifications]].
 - **Renders:**
-  - Heading "Notifications": "Where the app sends your plans. Messages are in Turkish; nothing goes anywhere until you ask." For an account that isn't the owner's (`open: false`): "Notifications are only open to this app's owner." and nothing else.
+  - Heading "Notifications": "Where the app sends your plans, their reminders and a weekly summary — in Turkish. Nothing goes out before you connect a channel." (v1.58.2; until then "…nothing goes anywhere until you ask", untrue once reminders go by themselves.) For an account that isn't the owner's (`open: false`): "Notifications are only open to this app's owner." and nothing else.
   - **E-mail:** a labelled address field and Save ("We'll send a link to confirm it first"); then the address with a badge — *Waiting for confirmation* (amber) or *Confirmed* (emerald, check) — and **Send test** (confirmed) or **Send the link again** (unconfirmed), **Change**, **Remove**. "E-mail isn't set up on this server" without the server's keys.
   - **Telegram:** **Connect Telegram** → **Open Telegram** (the bot's start link, new tab) and "Waiting for Start…" (spinner, `role="status"`), for at most 15 minutes — the link's life; when the poll sees the chat: "Telegram connected" toast, *Connected* badge, `@username`, **Send test**, **Disconnect**. Blocked in Telegram: an amber badge, "Unblock it, or connect again", **Connect again**, **Disconnect**. "Telegram isn't set up on this server" without the bot (preview, local).
   - Back from the confirmation page (`?email=confirmed` / `link-invalid`): a toast, then the flag is removed from the address so a refresh doesn't repeat it.
+  - Then `NotificationSchedule` (v1.58.0), below a separator.
 - Buttons are at least 36 px tall (`min-h-9`); busy buttons show a spinner and are disabled.
 - **Used by:** `/settings` page (Notifications tab).
+
+## `NotificationSchedule`
+
+- **File:** `src/components/settings/notification-schedule.tsx` (v1.58.0, Phase 3 slice 2). The flow: [[../../05-flows/notifications-flow#Scheduled sends]].
+- **Props:** `view` — the open `NotificationSettingsView` (`schedule`, `timeZone`, the channels).
+- **Hooks:** `useSaveSchedule` (every change saved at once — shown first, put back with a toast if refused), `useSetTimeZone` — [[../hooks/use-notifications]].
+- **Renders:**
+  - **Reminders** (alarm clock): "Before each plan: its first day's stops, times and map links. Times are where the plan takes place." Two rows — *The evening before*, *The morning of* — each a `Switch` named by its `<label htmlFor>` (the whole row is the target) and a time select; off keeps the select disabled at the default time. *Send to* E-mail / Telegram checkboxes in a `fieldset` (legend for screen readers): a channel not connected stays as chosen, disabled, "(not connected)".
+  - **Weekly summary** (calendar): "Your plans for the seven days ahead, on the day you choose, in your time zone. Nothing is sent when there are none." A `Switch` ("Send the weekly summary"), *Every* weekday select *at* time select — on a phone *at* and its time wrap to the next line together — and *Send to*.
+  - **Time zone** (globe): a popover with a searchable list of every zone the browser knows (`Intl.supportedValuesOf("timeZone")`, cmdk), each with its offset now ("GMT+1"); the current one ticked; "Not set yet — UTC is used" before the browser has said it. "This device is set to X. **Use it**" when the device's zone differs.
+  - A note above everything when no channel is connected: connect one first.
+- Times are quarter hours (`00:00`…`23:45`): the scheduler runs every 15 minutes. A time saved by another client off the quarter shows as itself.
+- Every control is 44 px tall (selects `h-11`, rows `min-h-11`); the switches' 24 px track has a 44 px touch area.
+
+## `Switch` (shared)
+
+- **File:** `src/components/ui/switch.tsx` (v1.58.0). The one on/off shape every setting uses — Settings → AI (both toggles) and Notifications. A `button` with `role="switch"` and `aria-checked`, emerald when on; a focus ring; disabled at half opacity. Name it with `aria-label`, or with an `id` that a `<label htmlFor>` points at. An invisible pseudo-element makes its touch area 44 × 44 px around the 24 px track.
 
 ## Notes
 

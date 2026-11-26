@@ -3,6 +3,7 @@ import { AppSidebar } from "@/components/layout/app-sidebar";
 import { AppHeader } from "@/components/layout/app-header";
 import { MobileNav } from "@/components/layout/mobile-nav";
 import { OfflineBanner } from "@/components/layout/offline-banner";
+import { TimeZoneSync } from "@/components/layout/time-zone-sync";
 
 /**
  * Both AppSidebar and MobileNav use `useSearchParams()` to preserve the
@@ -32,6 +33,7 @@ export default function AppLayout({
       <div className="flex flex-1 flex-col min-w-0">
         <AppHeader />
         <OfflineBanner />
+        <TimeZoneSync />
         <main className="flex-1 overflow-auto pb-14 lg:pb-0">{children}</main>
         <Suspense fallback={null}>
           <MobileNav />

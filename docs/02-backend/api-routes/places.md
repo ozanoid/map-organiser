@@ -2,8 +2,8 @@
 title: Places routes
 type: route-group
 domain: backend
-version: 2.5.6
-last_updated: 24.11.2026
+version: 2.5.7
+last_updated: 26.11.2026
 status: stable
 sources:
   - src/lib/places/query-places.ts
@@ -197,7 +197,7 @@ All require auth except `drain-imports`, which is bearer-authed with `CRON_SECRE
 ### `GET /api/cron/drain-imports`
 
 - **Source:** `src/app/api/cron/drain-imports/route.ts`
-- **Auth:** `Authorization: Bearer ${CRON_SECRET}` — Vercel Cron (every minute), the kick from both create paths (Takeout route, Instagram job) and from the Instagram branch pick (v1.28.1), and its own self-chain.
+- **Auth:** `Authorization: Bearer ${CRON_SECRET}`, compared in constant time (`bearerMatches`, v1.58.1; a plain `!==` before) — Vercel Cron (every minute), the kick from both create paths (Takeout route, Instagram job) and from the Instagram branch pick (v1.28.1), and its own self-chain.
 - **DB:** `claim_import_items` RPC; `import_job_items` UPDATE; `places`/`list_places`/`place_tags` writes via `importPlace`.
 - **External:** DataForSEO business-info + reviews, Claude via `generatePlaceProfile` (Sonnet 5.5, v1.51.0; Gemini before).
 - **Response:** `{ ok, claimed, processed, released, chained, imported, photographed, skipped, failed, reviewed, profiled, done, elapsed_ms }`.

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse, after } from "next/server";
 import { propagateAttributes } from "@langfuse/tracing";
+import { bearerMatches } from "@/lib/api/bearer";
 import { createServiceClient } from "@/lib/supabase/server";
 import { refreshPlaceGoogleData } from "@/lib/places/refresh-google-data";
 import { generatePlaceProfile } from "@/lib/ai/generate-profile";
@@ -31,7 +32,8 @@ import { flushLangfuse } from "@/lib/telemetry/langfuse";
  *      applies as everywhere else.
  *
  * Auth: Vercel sends `Authorization: Bearer ${CRON_SECRET}` on cron
- * invocations when the env var is set. Runs on the service-role client —
+ * invocations when the env var is set; compared in constant time
+ * (`bearerMatches`, v1.58.1). Runs on the service-role client —
  * both lib functions filter by userId explicitly (no RLS reliance).
  *
  * Throughput: UP TO BATCH_SIZE places/run with CONCURRENCY workers.
@@ -74,7 +76,7 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
-  if (request.headers.get("authorization") !== `Bearer ${secret}`) {
+  if (!bearerMatches(request, secret)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

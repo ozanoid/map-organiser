@@ -3,6 +3,8 @@
  * owner and where. Shared with the browser — no server-only imports here.
  */
 
+import type { ScheduleSettings } from "@/lib/notify/schedule";
+
 export type ChannelKind = "email" | "telegram";
 export const CHANNEL_KINDS: readonly ChannelKind[] = ["email", "telegram"];
 
@@ -51,7 +53,15 @@ export interface ChannelsView {
  * (ASSISTANT_OWNER_EMAILS): in v1 the app sends only to the owner (Phase 3,
  * decision 7), so there is nothing to set up.
  */
-export type NotificationSettingsView = { open: false } | ({ open: true } & ChannelsView);
+export type NotificationSettingsView =
+  | { open: false }
+  | ({
+      open: true;
+      /** Reminders and the weekly summary (Phase 3, slice 2). */
+      schedule: ScheduleSettings;
+      /** The user's IANA time zone, or null until the browser has said it. */
+      timeZone: string | null;
+    } & ChannelsView);
 
 /** How a send to one channel went (POST /api/plans/[id]/send, send_plan). */
 export interface ChannelResult {

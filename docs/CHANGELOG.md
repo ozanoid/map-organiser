@@ -6,6 +6,129 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 26.11.2026 — v1.58.2 — Settings says what goes out by itself
+
+- Ozan: both test e-mails arrived (the reminder and the weekly summary).
+- Found in the merge check (copy the branch's change made untrue): Settings →
+  Notifications still said "nothing goes anywhere until you ask" — no longer
+  so, since reminders and the weekly summary go by themselves, on by default.
+  Now: "Where the app sends your plans, their reminders and a weekly summary —
+  in Turkish. Nothing goes out before you connect a channel." The other
+  sentences of the kind still hold: the assistant's approval card
+  ("Nothing is sent until you choose." — `send_plan`), the confirmation page
+  (nothing goes to an unconfirmed address), the bot's greeting (it already
+  names the reminders).
+- Docs: [[03-frontend/components/settings]], [[_plans/phase-3-communication]],
+  [[05-flows/notifications-flow]].
+
+---
+
+## 26.11.2026 — v1.58.1 — Reminders sent for real; every cron's secret in constant time
+
+- Ozan's answers: the weekly summary covering the seven days from its day
+  stays (decision recorded as approved); a real send on the test account;
+  the old crons' secret check fixed on this branch.
+- **Real send (02:24 UTC, the test account only, e-mail to Ozan's Gmail):**
+  the scheduler itself (`runScheduler`, real store and outbox) from a local
+  script, with the clock set to 26.11 18:05 and then 30.11 08:05, over a
+  4-day test plan from 27.11 made through `createPlan`. "Yarın: Mappy
+  hatırlatma denemesi (4 gün)" (the first day's stops) and "Bu hafta: 1 plan
+  · 30 Kasım Pazartesi – 6 Aralık Pazar" went, both `sent` on the first
+  attempt; this week's missed Monday summary was recorded `late`; the same
+  runs again would send nothing. The test plan was deleted; its records stay
+  with the plan link cleared.
+- **The crons' secret:** `refresh-places` and `drain-imports` compared
+  `CRON_SECRET` with a plain `!==` — a comparison whose time leaks how much of
+  a guess was right. Both now use `bearerMatches` (constant time), as
+  `notify` does; all three answer 401 to no header, a wrong bearer and a
+  malformed one (local server, throwaway secret). The Telegram webhook
+  already compared in constant time. `kickDrain` and the drain's self-chain
+  send `Bearer <secret>` exactly, as the check expects.
+- Checks: `npm run check:notify` 195 (+6: the bearer).
+- Docs: [[_plans/phase-3-communication]], [[_plans/personal-assistant]],
+  [[05-flows/notifications-flow]], [[06-ops/env-vars]],
+  [[06-ops/deployment]], [[06-ops/runbooks/periodic-refresh]],
+  [[02-backend/api-routes/_README]], [[02-backend/api-routes/places]],
+  [[00-overview/repo-structure]].
+
+---
+
+## 26.11.2026 — v1.58.0 — Phase 3 slice 2: reminders and the weekly summary (on the branch)
+
+- Ozan's decisions (26.11.2026, all as recommended; recorded as Phase 3
+  decisions 15–19): a plan made or changed after a reminder's time skips that
+  reminder; no weekly summary for a week without plans; a reminder holds the
+  first day's stops only; reminder times are the plan's local time; on by
+  default — the evening before at 18:00, the morning of at 08:00, the weekly
+  summary on Mondays at 08:00, every connected channel.
+- Schema, applied with Ozan's approval after a rolled-back dry-run (version
+  20261126013719): `profiles.time_zone`, `notification_settings` (users read
+  their own, the server writes; no row = the defaults, which live in the code
+  alone), `notifications.skip_reason` (`late` | `changed` | `empty`, set
+  exactly when a record is `skipped`). Advisors: nothing new.
+- The scheduler: `GET /api/cron/notify` every 15 minutes (`vercel.json`;
+  `CRON_SECRET` compared in constant time, `bearerMatches`). The rules are
+  pure (`src/lib/notify/schedule.ts`): reminders are derived from the plans at
+  every run, never queued — timed in the plan's zone (its first stop at a
+  place with one, else the user's, else UTC), one `dedupe_key` per plan, start
+  date, slot and channel; the weekly summary covers the seven days from its
+  day ("Bu hafta" on a Monday, "Önümüzdeki 7 gün" otherwise), once per ISO
+  week; more than 3 hours past its time a message is recorded `late`, and a
+  failed one is tried up to 3 times within them. `runScheduler` +
+  `supabaseSchedulerStore`; Turkish `reminderMessage` and `weeklyMessage`;
+  the outbox records each message's time as `due_at`.
+- Settings → Notifications: **Reminders**, **Weekly summary**, **Time zone** —
+  every change saved at once (shown first, put back if refused), times in
+  quarter hours; `TimeZoneSync` stores the browser's zone once, only while the
+  profile has none. Routes: `PUT /api/notifications/schedule` (owners),
+  `PUT /api/user/time-zone`.
+- A shared `Switch` (`src/components/ui/switch.tsx`, 44 px touch area):
+  Settings → AI's two hand-built switches now use it.
+- Found in the review before the commit and fixed: on a day other than
+  Monday the weekly summary listed the week's days already past — it now
+  covers the seven days ahead; a Sunday-night summary missed by one run still
+  goes just after midnight; the code's decision numbers are Phase 3's
+  (15–19) — slice-local 1–5 clashed with slice 1's references.
+- Docs found stale on the way and corrected: the service-role file list
+  ([[02-backend/supabase-clients]]) stopped at v1.41.0 — now all 20 files with
+  their reasons; `OfflineBanner` sits in the `(app)` layout, not the root;
+  deployment's open question said there is no `vercel.json`.
+- Checks: `npm run check:notify` 189 (+55), `npm run check:notify:db` 23
+  (+8), `npm run check:agent` 165, `next build`; the settings in Chrome
+  (desktop and 375 px). A dry run on the live data, nothing written or sent:
+  the first production run will record this week's missed Monday summary as
+  `late`, one record per owner, and send nothing.
+- Not yet: a real send (a reminder reaching e-mail or Telegram) and the
+  merge to main — both wait for Ozan.
+- Docs: [[_plans/phase-3-communication]], [[_plans/personal-assistant]],
+  [[02-backend/schema/notifications]], [[02-backend/schema/profiles]],
+  [[02-backend/api-routes/notifications]], [[02-backend/api-routes/user]],
+  [[02-backend/api-routes/_README]], [[02-backend/supabase-clients]],
+  [[02-backend/rls-policies]], [[05-flows/notifications-flow]], [[03-frontend/components/settings]],
+  [[03-frontend/components/layout]], [[03-frontend/components/ui-shadcn]],
+  [[03-frontend/layouts]], [[03-frontend/hooks/use-notifications]],
+  [[04-integrations/resend]], [[04-integrations/telegram]],
+  [[06-ops/env-vars]], [[06-ops/deployment]], [[00-overview/tech-stack]],
+  [[00-overview/repo-structure]].
+
+---
+
+## 26.11.2026 — v1.57.10 — Telegram works in production
+
+- Ozan corrected `TELEGRAM_BOT_TOKEN` in Vercel; Connect then linked his
+  Telegram (Mappy, 01:00 UTC) and **Send test** arrived. The database shows
+  the chat linked and active, one start link made and used, one Telegram
+  record `sent`, none failed.
+- v1.57.8–v1.57.9 merged to main with Ozan's approval: 265999e → 76d9204
+  (main and the branch tip checked unmoved before the push).
+- Phase 3 slice 1: Telegram tried and working in production; e-mail tried end
+  to end on the local server with the same Resend setup (25.11.2026) —
+  e-mail from production not tried yet.
+- Docs: [[_plans/phase-3-communication]], [[_plans/personal-assistant]],
+  [[05-flows/notifications-flow]], [[04-integrations/telegram]].
+
+---
+
 ## 26.11.2026 — v1.57.9 — Telegram settings: trimmed, and a malformed one named
 
 - The first "Connect Telegram" in production was refused with "Telegram

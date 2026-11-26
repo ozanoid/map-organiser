@@ -2,8 +2,8 @@
 title: shadcn UI primitives
 type: component
 domain: frontend
-version: 1.1.0
-last_updated: 18.07.2026
+version: 1.2.0
+last_updated: 26.11.2026
 status: stable
 sources:
   - src/components/ui/
@@ -19,7 +19,7 @@ Components in `src/components/ui/`. Installed via the **shadcn CLI** with the `b
 
 ## What's installed
 
-21 primitives as of `last_updated`:
+21 files as of `last_updated` (20 components and `icon-button.ts`, a class):
 
 | File | Component | Common uses |
 |---|---|---|
@@ -32,6 +32,7 @@ Components in `src/components/ui/`. Installed via the **shadcn CLI** with the `b
 | `dialog.tsx` | `Dialog` family | `AddPlaceDialog`, confirm modals |
 | `drawer.tsx` | `Drawer` family | base-ui Drawer wrapper (`BottomSheet` builds on it) |
 | `dropdown-menu.tsx` | `DropdownMenu` family | Header user menu, action menus |
+| `icon-button.ts` | `ICON_BUTTON` (class string) | Icon-only buttons: 36 px visible, 44 px hit area (an `after` layer) |
 | `input-group.tsx` | `InputGroup` | Search input wrapper |
 | `input.tsx` | `Input` | Forms |
 | `popover.tsx` | `Popover` family | Inline creators, color pickers |
@@ -40,6 +41,7 @@ Components in `src/components/ui/`. Installed via the **shadcn CLI** with the `b
 | `sheet.tsx` | `Sheet` family | Legacy side/overlay sheet (the mobile filter sheet moved to `BottomSheet` in v1.24.0) |
 | `skeleton.tsx` | `Skeleton` | Loading placeholders |
 | `sonner.tsx` | `Toaster` wrapper | Wired in root layout |
+| `switch.tsx` | `Switch` | Every on/off setting — Settings → AI and Notifications (v1.58.0; not shadcn's: a `role="switch"` button, emerald, 44 px touch area by a `before` layer). See [[settings#Switch (shared)]] |
 | `tabs.tsx` | `Tabs` family | Settings tabs, Lists/Trips tabs |
 | `textarea.tsx` | `Textarea` | Notes inputs |
 

@@ -5,6 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Sparkles, Loader2, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Separator } from "@/components/ui/separator";
+import { Switch } from "@/components/ui/switch";
 import { AiSuggestionsQueue } from "@/components/settings/ai-suggestions-queue";
 import { BackfillProfilesPanel } from "@/components/settings/backfill-profiles-panel";
 import { AI_SETTINGS_KEY } from "@/lib/hooks/use-assistant-availability";
@@ -143,23 +144,12 @@ export function AiSettings() {
         </div>
 
         {/* Toggle */}
-        <button
-          type="button"
-          role="switch"
-          aria-checked={state.enabled}
-          aria-label="Enable AI features"
+        <Switch
+          checked={state.enabled}
+          onCheckedChange={handleToggle}
           disabled={disabled}
-          onClick={() => handleToggle(!state.enabled)}
-          className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200 ${
-            state.enabled ? "bg-emerald-600" : "bg-gray-200 dark:bg-gray-700"
-          } ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
-        >
-          <span
-            className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${
-              state.enabled ? "translate-x-5" : "translate-x-0.5"
-            }`}
-          />
-        </button>
+          aria-label="Enable AI features"
+        />
       </div>
 
       {PROVIDERS.filter((p) => !state[p.flag]).map((p) => (
@@ -195,25 +185,12 @@ export function AiSettings() {
             never auto-refreshed.
           </p>
         </div>
-        <button
-          type="button"
-          role="switch"
-          aria-checked={state.cronRefreshEnabled}
-          aria-label="Background data refresh"
+        <Switch
+          checked={state.cronRefreshEnabled}
+          onCheckedChange={handleCronToggle}
           disabled={saving}
-          onClick={() => handleCronToggle(!state.cronRefreshEnabled)}
-          className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200 ${
-            state.cronRefreshEnabled
-              ? "bg-emerald-600"
-              : "bg-gray-200 dark:bg-gray-700"
-          } ${saving ? "opacity-50 cursor-not-allowed" : ""}`}
-        >
-          <span
-            className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${
-              state.cronRefreshEnabled ? "translate-x-5" : "translate-x-0.5"
-            }`}
-          />
-        </button>
+          aria-label="Background data refresh"
+        />
       </div>
 
       {/* Phase 5: moderation queue + Phase 6 follow-up: profile backfill.
