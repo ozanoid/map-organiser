@@ -2,7 +2,7 @@
 title: Notifications flow (channels and "Send to me")
 type: flow
 domain: sharing
-version: 1.3.0
+version: 1.4.0
 last_updated: 26.11.2026
 status: draft
 sources:
@@ -86,3 +86,4 @@ The owner (an account in `ASSISTANT_OWNER_EMAILS`) in Settings → Notifications
 - `npm run check:notify` — offline: the Turkish messages and their escaping, Telegram's 4,096 characters, the bot's updates, tokens, the outbox, connecting both channels, sending, `send_plan`'s answer and card (134 checks, in-memory tables, stand-in providers and a stand-in for the Bot API).
 - `npm run check:notify:db` — the same queries against the live schema, writing nothing (15 of 15 on 25.11.2026, after the migration was applied).
 - **End to end, e-mail (25.11.2026, local dev server on the branch, the test account `admin@maporganiser.com` in Chrome, Resend with `hello@mappy.site`, to Ozan's own Gmail with his OK):** Settings → Notifications → address saved → "Confirmation link sent" and a `sent` record (the token masked in its copy) → the confirmation page showed the address and **Confirm address**; pressed → back on Settings, "E-mail address confirmed", *Confirmed* → **Send test** → "Test e-mail sent" → the plan *Summer in Amsterdam* (4 days, 19 stops) → **Send to me…** (e-mail ticked, Telegram "Not connected") → "Sent to E-mail". Three records, each `sent` on its first attempt with Resend's id, no error; the requests took 0.4–1.6 s; no console or server errors. The confirmation link was made for the test with `createLinkToken` (the key is sending-only, so the sent e-mail can't be read back); the used link opened again shows "Address confirmed". The plan e-mail, rendered again from the same plan, looked right (Turkish dates and parts of the day, notes, map links, **Planı aç**). In a local run the e-mail's links point at `localhost:3001`. Ozan: all three e-mails arrived in his Gmail.
+- **Telegram in production (26.11.2026, Ozan's account):** the first Connect was refused — "Telegram: Not Found", Telegram's answer to a token that isn't BotFather's shape; Ozan corrected `TELEGRAM_BOT_TOKEN` in Vercel, then Connect, Start in Mappy and **Send test** worked: the chat linked at 01:00 UTC, one start link made and used, one Telegram record `sent`. v1.57.9 (trimmed settings, the malformed one named) went to main after (76d9204).

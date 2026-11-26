@@ -2,7 +2,7 @@
 title: "Faz 3 — İletişim: tasarım"
 type: plan
 domain: sharing
-version: 0.5.1
+version: 0.6.0
 last_updated: 26.11.2026
 status: draft
 related:
@@ -19,7 +19,7 @@ related:
 
 # Faz 3 — İletişim: tasarım
 
-> [[personal-assistant]] planının Faz 3'ü. **14 karar onaylandı (25.11.2026, hepsi önerildiği gibi).** **Dilim 1 main'de (merge 265999e, 26.11.2026; v1.57.0–v1.57.7)**; migration'ı deneme çalıştırmasından geçti ve **Ozan'ın onayıyla uygulandı (25.11.2026, sürüm 20261125203540)**; ardından `notifications.plan_id` indeksi de uygulandı (sürüm 20261125224149) — durum ve tasarımdan sapmalar: [[#Dilim 1 — durum (25.11.2026)]]. Şema SQL'i her dilimin başında `supabase/migrations/` altında yazılır, Ozan'a gösterilir, onayıyla uygulanır.
+> [[personal-assistant]] planının Faz 3'ü. **14 karar onaylandı (25.11.2026, hepsi önerildiği gibi).** **Dilim 1 main'de (merge 265999e ve 76d9204, 26.11.2026; v1.57.0–v1.57.9) ve production'da iki kanalıyla çalışıyor**; migration'ı deneme çalıştırmasından geçti ve **Ozan'ın onayıyla uygulandı (25.11.2026, sürüm 20261125203540)**; ardından `notifications.plan_id` indeksi de uygulandı (sürüm 20261125224149) — durum ve tasarımdan sapmalar: [[#Dilim 1 — durum (25.11.2026)]]. Şema SQL'i her dilimin başında `supabase/migrations/` altında yazılır, Ozan'a gösterilir, onayıyla uygulanır.
 
 ## Ne anladım
 
@@ -220,7 +220,7 @@ Hatırlatmalar plan tablosundan **türetilir**, önceden kuyruğa yazılmaz: pla
 1. ~~Migration'ın uygulanması~~ — uygulandı (25.11.2026, sürüm 20261125203540); `npm run check:notify:db` 15/15. Ek: `notifications.plan_id` indeksi (Supabase'in performans uyarısı) — Ozan'ın onayıyla uygulandı (25.11.2026, sürüm 20261125224149); uyarı kalktı.
 2. Ozan'ın dashboard adımları (aşağıda): Resend alanı ve anahtarı → Vercel + worktree `.env.local`; BotFather → Vercel Production.
 3. ~~E-posta uçtan uca~~ — yerelde test hesabıyla, Chrome'da, Ozan'ın Gmail'ine denendi (25.11.2026): onay, test e-postası ve bir planın özeti gitti; üç kayıt `sent`. Üç e-posta da Ozan'ın Gmail'ine geldi. Ayrıntı: [[../05-flows/notifications-flow#Checks]].
-4. Telegram: yalnız production'da (karar 13). Bot ve Vercel değişkenleri hazır (26.11.2026); dilim 1 main'de. **İlk Connect (26.11.2026) "Telegram: Not Found" ile reddedildi** — Telegram'ın biçimsiz bir anahtara verdiği cevap (ölçüldü). v1.57.9 değerleri kırpıyor ve biçimi Telegram'a gitmeden kontrol edip hangi değişkende ne yanlış olduğunu söylüyor; Ozan Vercel'deki değeri kontrol ediyor, ardından merge ve yeniden Connect.
+4. ~~Telegram~~ — production'da bağlandı (26.11.2026, 01:00 UTC): ilk Connect "Telegram: Not Found" ile reddedilmişti (Vercel'deki anahtar değeri BotFather biçiminde değildi; Telegram'ın biçimsiz anahtara cevabı, ölçüldü). Ozan değeri düzeltti, bağlantı kuruldu ve test mesajı gitti. Değerleri kırpan ve biçimi adlandıran düzeltme (v1.57.9) main'de (merge 76d9204).
 
 ## Dilimler ve geçiş yolu
 

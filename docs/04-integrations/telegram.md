@@ -2,7 +2,7 @@
 title: Telegram (notification bot)
 type: integration
 domain: integrations
-version: 1.2.0
+version: 1.2.1
 last_updated: 26.11.2026
 status: draft
 sources:
@@ -32,7 +32,7 @@ tags:
 
 - **Provider:** the [Telegram Bot API](https://core.telegram.org/bots/api), plain HTTPS. Free.
 - **Account owner:** Ozan — the bot is made with @BotFather (`/newbot`); its username ends in `bot` and can't change later. Whoever has the token controls the bot; a leaked token is replaced with `/token` in @BotFather.
-- **The bot:** **Mappy**, `@mappysitebot` (made by Ozan with @BotFather, 26.11.2026). `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME` (`mappysitebot`) and `TELEGRAM_WEBHOOK_SECRET` are set in Vercel, Production only (26.11.2026).
+- **The bot:** **Mappy**, `@mappysitebot` (made by Ozan with @BotFather, 26.11.2026). `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME` (`mappysitebot`) and `TELEGRAM_WEBHOOK_SECRET` are set in Vercel, Production only (26.11.2026). Linked to Ozan's account in production on 26.11.2026 (after the token value in Vercel was corrected).
 - **Production only** (decision 13): a bot has one webhook address, so the bot lives on the production deployment. Preview and local servers have no `TELEGRAM_BOT_TOKEN`: Settings shows "Telegram isn't set up on this server", and a send lists Telegram as `not_connected`. A second, test bot is the way to try it elsewhere.
 
 ## NPM packages

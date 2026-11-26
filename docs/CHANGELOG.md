@@ -6,6 +6,20 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 26.11.2026 — v1.57.10 — Telegram works in production
+
+- Ozan corrected `TELEGRAM_BOT_TOKEN` in Vercel; Connect then linked his
+  Telegram (Mappy, 01:00 UTC) and **Send test** arrived. The database shows
+  the chat linked and active, one start link made and used, one Telegram
+  record `sent`, none failed.
+- v1.57.8–v1.57.9 merged to main with Ozan's approval: 265999e → 76d9204
+  (main and the branch tip checked unmoved before the push).
+- Phase 3 slice 1 is done: e-mail and Telegram both working in production.
+- Docs: [[_plans/phase-3-communication]], [[_plans/personal-assistant]],
+  [[05-flows/notifications-flow]], [[04-integrations/telegram]].
+
+---
+
 ## 26.11.2026 — v1.57.9 — Telegram settings: trimmed, and a malformed one named
 
 - The first "Connect Telegram" in production was refused with "Telegram
