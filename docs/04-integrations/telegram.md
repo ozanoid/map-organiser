@@ -2,7 +2,7 @@
 title: Telegram (notification bot)
 type: integration
 domain: integrations
-version: 1.1.0
+version: 1.2.0
 last_updated: 26.11.2026
 status: draft
 sources:
@@ -57,6 +57,7 @@ None — `fetch` from `src/lib/notify/telegram.ts` (`import "server-only"`).
 
 **The app does it** (Ozan's choice, 26.11.2026 — so the token and the secret live only in BotFather and Vercel, never on a laptop): every "Connect Telegram" (`POST /api/notifications/telegram` → `telegramStartLink`) first runs `registerWebhook(origin)`:
 
+0. The three settings, trimmed, must have their shape (`telegramSettingsProblem`): the token BotFather's `<number>:<about 35 characters>`, a username, a secret of `A–Z a–z 0–9 _ -` — else the problem is named.
 1. Only when `VERCEL_ENV` is `production` (decision 13) — anywhere else it is skipped, and a Start still reaches production's webhook (one database).
 2. `getMe`: the token's bot must be the one `TELEGRAM_BOT_USERNAME` names (case aside) — a mistyped username would send the start link to another bot; refused with both names otherwise.
 3. `setWebhook` with this deployment's `https://<origin>/api/telegram/webhook`, `secret_token` = `TELEGRAM_WEBHOOK_SECRET` and `allowed_updates` `["message", "my_chat_member"]`. Idempotent: a new address or a rotated secret is picked up on the next Connect. Logged as `telegram.webhook_registered` (address and bot, never the secret).
@@ -76,6 +77,7 @@ A refusal comes back to Settings as "Telegram couldn't be set up: …" (Telegram
 | 403 (blocked by the user, account deleted) | `TelegramChatGone` → the record is `failed`, the channel gets `disabled_at` (shown "Blocked in Telegram"); nothing more is sent there until it is unblocked or linked again. |
 | 429, 5xx, timeout (15 s), network | `NotifyError` (retryable); the record is `failed`. |
 | Other 4xx | `NotifyError` with Telegram's description, not retryable. |
+| A malformed token — no colon, the username or the secret in its place, a space around it | Telegram answers a bare 404 "Not Found" (a well-formed but wrong token: 401 "Unauthorized"; measured 26.11.2026). The first production Connect got exactly this. Since v1.57.9 the settings are trimmed and `telegramSettingsProblem` (`config.ts`) checks their shape before Telegram is called, naming the variable and what looks wrong — never the value. |
 | Webhook: wrong or missing secret | `401`; nothing done. |
 | Webhook: an update fails inside | Logged as `telegram.update_failed`, answered `200` so Telegram doesn't resend it forever. |
 

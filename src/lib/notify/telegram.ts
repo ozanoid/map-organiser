@@ -1,5 +1,5 @@
 import "server-only";
-import { telegramBotUsername } from "@/lib/notify/config";
+import { telegramBotUsername, telegramSettingsProblem, telegramToken, telegramWebhookSecret } from "@/lib/notify/config";
 import { NotifyError, TelegramChatGone } from "@/lib/notify/errors";
 import { log } from "@/lib/telemetry/logger";
 
@@ -22,7 +22,7 @@ interface ApiAnswer<T> {
 }
 
 export async function telegramCall<T>(method: string, body: Record<string, unknown>): Promise<T> {
-  const token = process.env.TELEGRAM_BOT_TOKEN;
+  const token = telegramToken();
   if (!token) throw new NotifyError("Telegram isn't set up on this server (TELEGRAM_BOT_TOKEN).", false);
   let res: Response;
   try {
@@ -73,9 +73,12 @@ export const TELEGRAM_UPDATES = ["message", "my_chat_member"] as const;
  * Start still reaches production's webhook.
  */
 export async function registerWebhook(origin: string): Promise<"registered" | "skipped"> {
+  // A malformed setting is named before Telegram is asked — its own answer
+  // to a malformed token is a bare "Not Found".
+  const problem = telegramSettingsProblem();
+  if (problem) throw new NotifyError(problem, false);
   if (process.env.VERCEL_ENV !== "production") return "skipped";
-  const secret = process.env.TELEGRAM_WEBHOOK_SECRET;
-  if (!secret) throw new NotifyError("Telegram isn't set up on this server (TELEGRAM_WEBHOOK_SECRET).", false);
+  const secret = telegramWebhookSecret()!;
   const url = new URL("/api/telegram/webhook", origin);
   if (url.protocol !== "https:") throw new NotifyError(`Telegram needs an https address, not ${url.origin}.`, false);
 

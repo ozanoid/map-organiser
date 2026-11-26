@@ -2,7 +2,7 @@
 title: "Faz 3 — İletişim: tasarım"
 type: plan
 domain: sharing
-version: 0.5.0
+version: 0.5.1
 last_updated: 26.11.2026
 status: draft
 related:
@@ -220,7 +220,7 @@ Hatırlatmalar plan tablosundan **türetilir**, önceden kuyruğa yazılmaz: pla
 1. ~~Migration'ın uygulanması~~ — uygulandı (25.11.2026, sürüm 20261125203540); `npm run check:notify:db` 15/15. Ek: `notifications.plan_id` indeksi (Supabase'in performans uyarısı) — Ozan'ın onayıyla uygulandı (25.11.2026, sürüm 20261125224149); uyarı kalktı.
 2. Ozan'ın dashboard adımları (aşağıda): Resend alanı ve anahtarı → Vercel + worktree `.env.local`; BotFather → Vercel Production.
 3. ~~E-posta uçtan uca~~ — yerelde test hesabıyla, Chrome'da, Ozan'ın Gmail'ine denendi (25.11.2026): onay, test e-postası ve bir planın özeti gitti; üç kayıt `sent`. Üç e-posta da Ozan'ın Gmail'ine geldi. Ayrıntı: [[../05-flows/notifications-flow#Checks]].
-4. Telegram: yalnız production'da (karar 13). Bot ve Vercel değişkenleri hazır (26.11.2026); main'e merge ve deploy'dan sonra production'da Ayarlar → Connect Telegram (webhook'u uygulama kaydeder), sonra test.
+4. Telegram: yalnız production'da (karar 13). Bot ve Vercel değişkenleri hazır (26.11.2026); dilim 1 main'de. **İlk Connect (26.11.2026) "Telegram: Not Found" ile reddedildi** — Telegram'ın biçimsiz bir anahtara verdiği cevap (ölçüldü). v1.57.9 değerleri kırpıyor ve biçimi Telegram'a gitmeden kontrol edip hangi değişkende ne yanlış olduğunu söylüyor; Ozan Vercel'deki değeri kontrol ediyor, ardından merge ve yeniden Connect.
 
 ## Dilimler ve geçiş yolu
 

@@ -1,5 +1,6 @@
 import "server-only";
 import { Resend } from "resend";
+import { emailSender, resendApiKey } from "@/lib/notify/config";
 import { NotifyError } from "@/lib/notify/errors";
 import { SENDER_NAME } from "@/lib/notify/render";
 
@@ -12,7 +13,7 @@ import { SENDER_NAME } from "@/lib/notify/render";
 let client: Resend | null = null;
 
 function resend(): Resend {
-  const key = process.env.RESEND_API_KEY;
+  const key = resendApiKey();
   if (!key) throw new NotifyError("E-mail isn't set up on this server (RESEND_API_KEY).", false);
   client ??= new Resend(key);
   return client;
@@ -37,7 +38,7 @@ export async function sendEmail(
   message: { to: string; subject: string; html: string; text: string },
   idempotencyKey: string
 ): Promise<string> {
-  const sender = process.env.EMAIL_FROM?.trim();
+  const sender = emailSender();
   if (!sender) throw new NotifyError("E-mail isn't set up on this server (EMAIL_FROM).", false);
   const from = fromHeader(sender);
   let result;

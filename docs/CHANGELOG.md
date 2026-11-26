@@ -6,6 +6,27 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 26.11.2026 — v1.57.9 — Telegram settings: trimmed, and a malformed one named
+
+- The first "Connect Telegram" in production was refused with "Telegram
+  couldn't be set up: Telegram: Not Found". Measured against the Bot API:
+  "Not Found" is its answer to a malformed token — no colon, the username or
+  another value in its place, a space after it — while a well-formed but
+  wrong token gets "Unauthorized". So the production `TELEGRAM_BOT_TOKEN`,
+  as the server reads it, isn't BotFather's shape.
+- Fix (the class: a setting pasted wrong reaches the provider and comes back
+  as its opaque error): every notification setting is read through
+  `config.ts`, trimmed (a space or a line break around a pasted value no
+  longer matters), and `telegramSettingsProblem` checks the three Telegram
+  settings' shape before Telegram is called — naming the variable and what
+  looks wrong ("it holds the bot's username", "it has no colon", "it has
+  quotes around it", …), never the value. Connect needs all three values.
+- Checks: `npm run check:notify` 134 (+12).
+- Docs: [[04-integrations/telegram]], [[06-ops/env-vars]],
+  [[05-flows/notifications-flow]], [[_plans/phase-3-communication]].
+
+---
+
 ## 26.11.2026 — v1.57.8 — Phase 3 slice 1 on main
 
 - Merged with Ozan's approval: main e92e9fa → 265999e (a local merge

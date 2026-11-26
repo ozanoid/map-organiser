@@ -2,7 +2,7 @@
 title: Env Vars
 type: overview
 domain: ops
-version: 1.13.1
+version: 1.13.2
 last_updated: 26.11.2026
 status: stable
 sources:
@@ -61,7 +61,7 @@ Every environment variable the app reads, where it lives, and who depends on it.
 | `ANTHROPIC_API_KEY` | ❌ server-only | required for every AI feature (the assistant, place profiles, the Instagram import) | Claude Console → API keys | The Claude API (`src/lib/agent/client.ts`): the platform's agent core and the app's assistant (v1.47.x–v1.48.0; on main since 25.11.2026) — without it the assistant button stays hidden; one-shot structured calls (`structured.ts`, the 6.2 measurement); `npm run eval:assistant`, `eval:profiles`, `eval:instagram`. Since v1.51.0 also place profiles (Sonnet 5.5) and Instagram post reads (Haiku 5.5) — the Instagram import refuses to start without it, `step=profile` answers 503, and Settings → AI disables the AI switch with a banner and hides the profile backfill and the suggestions queue. Set in Vercel Production + Preview on 17.11.2026. Monthly spend is capped at organization level in the Claude Console and by the platform's own ledger ($100, `assistant_spend`). |
 | `RESEND_API_KEY` | ❌ server-only | optional (required for e-mail) | resend.com → API Keys (Ozan) — a sending-only key is enough | `src/lib/notify/email.ts` — every e-mail: the address confirmation, Settings' test, "Send to me" (v1.57.0). With `EMAIL_FROM` it makes `emailConfigured()` true; without either, Settings says "E-mail isn't set up on this server", `PUT /api/notifications/email` answers 503 and sends list e-mail as `not_connected`. Production + Preview + `.env.local`. See [[../04-integrations/resend]]. |
 | `EMAIL_FROM` | ❌ server-only | optional (with `RESEND_API_KEY`) | A sender on the domain verified in Resend | The sender of every e-mail: `hello@mappy.site` (v1.57.0; Ozan's domain, 25.11.2026). A bare address goes out as `Mappy <hello@mappy.site>` (`fromHeader`, `src/lib/notify/email.ts`; the name is `SENDER_NAME` in `render.ts`, 26.11.2026); "Name <address>" is used as it is. |
-| `TELEGRAM_BOT_TOKEN` | ❌ server-only | optional (required for Telegram) | @BotFather (Ozan) | `src/lib/notify/telegram.ts` — every Bot API call (v1.57.0). **Production only** (Phase 3, decision 13: a bot has one webhook address) — set there on 26.11.2026 (the bot is `@mappysitebot`); with `TELEGRAM_BOT_USERNAME` it makes `telegramConfigured()` true. Whoever has it controls the bot: if it leaks, `/token` in @BotFather replaces it. See [[../04-integrations/telegram]]. |
+| `TELEGRAM_BOT_TOKEN` | ❌ server-only | optional (required for Telegram) | @BotFather (Ozan) — `<number>:<about 35 characters>`, nothing around it | `src/lib/notify/telegram.ts` — every Bot API call (v1.57.0). **Production only** (Phase 3, decision 13: a bot has one webhook address) — set there on 26.11.2026 (the bot is `@mappysitebot`); with `TELEGRAM_BOT_USERNAME` it makes `telegramConfigured()` true. Whoever has it controls the bot: if it leaks, `/token` in @BotFather replaces it. See [[../04-integrations/telegram]]. |
 | `TELEGRAM_BOT_USERNAME` | ❌ server-only | optional (with the token) | The bot's username, `@` optional — `mappysitebot` | The start link `https://t.me/<username>?start=<token>` (v1.57.0). Checked against the token's bot (`getMe`) on every Connect in production; a mismatch is refused (v1.57.6). |
 | `TELEGRAM_WEBHOOK_SECRET` | ❌ server-only | optional (required for the webhook) | Generated: `openssl rand -hex 32` | `src/app/api/telegram/webhook/route.ts` compares Telegram's `X-Telegram-Bot-Api-Secret-Token` header with it in constant time; the app gives the same value to `setWebhook` as `secret_token` when Connect registers the webhook (`registerWebhook`, v1.57.6). Unset → the webhook answers 404 (v1.57.0). |
 | `VERCEL_ENV` | set by Vercel (system variable) | — | Vercel | `registerWebhook` (`src/lib/notify/telegram.ts`) points the bot at the webhook only when it is `production` (Phase 3, decision 13); unset (local) or `preview` → skipped. The first code to read it (v1.57.6). |
@@ -71,6 +71,8 @@ Every environment variable the app reads, where it lives, and who depends on it.
 | `LANGFUSE_PUBLIC_KEY` | ❌ server-only | optional (required for the Langfuse pipe) | cloud.langfuse.com → Settings → API Keys | `src/lib/telemetry/langfuse.ts` — LLM span export. Absent (with the secret) → processor skipped entirely. |
 | `LANGFUSE_SECRET_KEY` | ❌ server-only | optional (same) | Same | Same. |
 | `LANGFUSE_BASE_URL` | ❌ server-only | optional | — | Read by the Langfuse SDK itself; EU cloud default `https://cloud.langfuse.com`. |
+
+The notification settings (`RESEND_API_KEY`, `EMAIL_FROM`, `TELEGRAM_*`) are read through `src/lib/notify/config.ts`, trimmed — a value pasted with a space or a line break around it still works (v1.57.9) — and the Telegram ones checked for their shape before Telegram is called (`telegramSettingsProblem`: the variable and what looks wrong are named, the value never). Connect needs all three Telegram values.
 
 ## Where they're set
 
