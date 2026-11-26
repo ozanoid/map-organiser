@@ -141,7 +141,7 @@ src/
     ├── db/                    context.ts (UserContext — who a data call runs for), errors.ts (InputError, NotFoundError,
     │                          classifyPostgrestError) — shared by plans/, visits/, assistant/
     ├── api/                   http.ts — requestContext, unauthorized, errorResponse for routes over the data modules;
-    │                          bearer.ts — the cron bearer in constant time (v1.58.0)
+    │                          bearer.ts — the crons' bearer in constant time (v1.58.0; all three crons since v1.58.1)
     ├── notify/                Phase 3 notifications (v1.57.0): access, config, channels, tokens, outbox (deliver), render
     │                          (Turkish messages), email (Resend), telegram, telegram-updates, send; v1.58.0: schedule.ts
     │                          (pure: what is due when), scheduler.ts + scheduler-store.ts (a cron run), schedule-store.ts

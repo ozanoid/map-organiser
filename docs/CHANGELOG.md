@@ -6,6 +6,36 @@ Format: `## DD.MM.YYYY — vX.Y.Z — short title` followed by bullets.
 
 ---
 
+## 26.11.2026 — v1.58.1 — Reminders sent for real; every cron's secret in constant time
+
+- Ozan's answers: the weekly summary covering the seven days from its day
+  stays (decision recorded as approved); a real send on the test account;
+  the old crons' secret check fixed on this branch.
+- **Real send (02:24 UTC, the test account only, e-mail to Ozan's Gmail):**
+  the scheduler itself (`runScheduler`, real store and outbox) from a local
+  script, with the clock set to 26.11 18:05 and then 30.11 08:05, over a
+  4-day test plan from 27.11 made through `createPlan`. "Yarın: Mappy
+  hatırlatma denemesi (4 gün)" (the first day's stops) and "Bu hafta: 1 plan
+  · 30 Kasım Pazartesi – 6 Aralık Pazar" went, both `sent` on the first
+  attempt; this week's missed Monday summary was recorded `late`; the same
+  runs again would send nothing. The test plan was deleted; its records stay
+  with the plan link cleared.
+- **The crons' secret:** `refresh-places` and `drain-imports` compared
+  `CRON_SECRET` with a plain `!==` — a comparison whose time leaks how much of
+  a guess was right. Both now use `bearerMatches` (constant time), as
+  `notify` does; all three answer 401 to no header, a wrong bearer and a
+  malformed one (local server, throwaway secret). The Telegram webhook
+  already compared in constant time. `kickDrain` and the drain's self-chain
+  send `Bearer <secret>` exactly, as the check expects.
+- Checks: `npm run check:notify` 195 (+6: the bearer).
+- Docs: [[_plans/phase-3-communication]], [[_plans/personal-assistant]],
+  [[05-flows/notifications-flow]], [[06-ops/env-vars]],
+  [[06-ops/deployment]], [[06-ops/runbooks/periodic-refresh]],
+  [[02-backend/api-routes/_README]], [[02-backend/api-routes/places]],
+  [[00-overview/repo-structure]].
+
+---
+
 ## 26.11.2026 — v1.58.0 — Phase 3 slice 2: reminders and the weekly summary (on the branch)
 
 - Ozan's decisions (26.11.2026, all as recommended; recorded as Phase 3

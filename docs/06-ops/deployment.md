@@ -2,7 +2,7 @@
 title: Deployment
 type: overview
 domain: ops
-version: 1.3.0
+version: 1.3.1
 last_updated: 26.11.2026
 status: stable
 sources:
@@ -145,7 +145,7 @@ Configured in `vercel.json` (Vercel Cron fires on **production only**):
 | `/api/cron/drain-imports` | `* * * * *` | the import queue (Takeout and Instagram jobs) — [[../05-flows/place-import-flow]] |
 | `/api/cron/notify` | `*/15 * * * *` | the plans' reminders and the weekly summaries (v1.58.0) — [[../05-flows/notifications-flow#Scheduled sends]] |
 
-All three require `CRON_SECRET`. On preview deployments the drain only runs from the
+All three require `CRON_SECRET` and compare it in constant time (`bearerMatches`). On preview deployments the drain only runs from the
 kick at job creation and its own self-chain; reminders and summaries are never sent
 from a preview or a local server — only production's cron sends them.
 

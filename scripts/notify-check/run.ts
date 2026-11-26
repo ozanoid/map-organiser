@@ -12,6 +12,7 @@
  * Progress goes to stderr; stdout carries the modules' JSON log lines.
  */
 import { FakeDb } from "./fake-db";
+import { bearerMatches } from "@/lib/api/bearer";
 import { uiToolOutput } from "@/lib/agent/ui";
 import { ToolInputError } from "@/lib/assistant/library";
 import { planSendOutcome } from "@/lib/assistant/tools/send-plan";
@@ -912,6 +913,18 @@ async function main() {
     expect("saved, and read back as saved", saved.morningTime === null && saved.weeklyDay === 7 && JSON.stringify(await readSchedule(admin, USER)) === JSON.stringify(saved), saved);
     const view = await settingsView(admin, USER);
     expect("Settings shows the schedule and the zone", view.schedule.weeklyDay === 7 && view.timeZone === null, { schedule: view.schedule, timeZone: view.timeZone });
+  }
+
+  say("## the crons' bearer (constant time; all three crons)");
+  {
+    const SECRET = "s3cret-value-for-the-check";
+    const call = (auth?: string) => new Request("https://example.invalid/api/cron/notify", { headers: auth === undefined ? {} : { authorization: auth } });
+    expect("the right bearer: let in", bearerMatches(call(`Bearer ${SECRET}`), SECRET));
+    expect("a wrong one of the same length: refused", !bearerMatches(call(`Bearer ${SECRET.replace("s", "x")}`), SECRET));
+    expect("shorter or longer: refused", !bearerMatches(call(`Bearer ${SECRET.slice(1)}`), SECRET) && !bearerMatches(call(`Bearer ${SECRET}x`), SECRET));
+    expect("no header: refused", !bearerMatches(call(), SECRET));
+    expect("the secret without 'Bearer ': refused", !bearerMatches(call(SECRET), SECRET));
+    expect("no secret on the server: nothing matches", !bearerMatches(call("Bearer "), "") && !bearerMatches(call("Bearer undefined"), undefined));
   }
 
   setSenders(null);

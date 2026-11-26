@@ -2,7 +2,7 @@
 title: API Routes
 type: overview
 domain: backend
-version: 1.15.0
+version: 1.15.1
 last_updated: 26.11.2026
 status: stable
 sources:
@@ -38,7 +38,7 @@ All Next.js route handlers grouped by area. Each linked doc is the canonical ref
 | Telegram webhook | `/api/telegram/webhook` (POST — the bot's updates; v1.57.0) | **`X-Telegram-Bot-Api-Secret-Token`**, public in the proxy | [[notifications]] |
 | Search | `/api/search/*` (Mapbox geocoder proxy) | Required | [[search]] |
 | Instagram | `/api/instagram/import` (POST — start an import from a post URL, work runs in `after()`) + `/api/instagram/import/[id]` (GET — the dialog's progress view) — v1.28.0; `/api/instagram/import/[id]/pick` (POST — add the place picked for a skipped venue) — v1.28.1 | Required | [[instagram]] |
-| Cron | `/api/cron/refresh-places` (15.07.2026) — daily periodic-refresh sweep; `/api/cron/drain-imports` (v1.26.0) — every minute, drains the import queue for Takeout and Instagram jobs; `/api/cron/notify` (v1.58.0) — every 15 minutes, the plans' reminders and the weekly summaries | **`CRON_SECRET` bearer** (service-role; `notify` compares it in constant time, `bearerMatches`) | [[../../06-ops/runbooks/periodic-refresh]], [[places]], [[notifications]] |
+| Cron | `/api/cron/refresh-places` (15.07.2026) — daily periodic-refresh sweep; `/api/cron/drain-imports` (v1.26.0) — every minute, drains the import queue for Takeout and Instagram jobs; `/api/cron/notify` (v1.58.0) — every 15 minutes, the plans' reminders and the weekly summaries | **`CRON_SECRET` bearer**, compared in constant time by all three (`bearerMatches`; v1.58.1 for the first two) (service-role) | [[../../06-ops/runbooks/periodic-refresh]], [[places]], [[notifications]] |
 | Claude connector | `/api/mcp` (GET/POST/DELETE — MCP Streamable HTTP, stateless; 17.11.2026) | **Bearer** — Supabase OAuth access token, owner accounts only (`withMcpAuth`); skips the session proxy | [[../../04-integrations/claude-mcp]] |
 | Share target | `/api/share-target` | **None** (PWA inbound) | [[share-target]] |
 | Auth callback | `/auth/callback` | **None** (OAuth handshake) | [[auth-callback]] |

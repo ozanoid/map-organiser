@@ -2,8 +2,8 @@
 title: Periodic place refresh (cron)
 type: runbook
 domain: ops
-version: 1.2.1
-last_updated: 25.11.2026
+version: 1.2.2
+last_updated: 26.11.2026
 status: stable
 sources:
   - src/app/api/cron/refresh-places/route.ts
@@ -73,7 +73,7 @@ the next run). A ~500-place library cycles in roughly 5-8 weeks.
 
 | Env var | Status | Note |
 |---|---|---|
-| `CRON_SECRET` | **must be added** (Vercel → Settings → Env) | Any long random string. Vercel automatically sends it as `Authorization: Bearer …` on cron invocations. Route returns 500 until set. |
+| `CRON_SECRET` | **must be added** (Vercel → Settings → Env) | Any long random string. Vercel automatically sends it as `Authorization: Bearer …` on cron invocations; the route compares it in constant time (`bearerMatches`, v1.58.1). Route returns 500 until set. |
 | Per-user opt-in | Settings → AI → "Background data refresh" | Default off — until at least one user enables it, every run exits with `scanned: 0, message: "no users opted into background refresh"`. |
 | `SUPABASE_SERVICE_ROLE_KEY` | already set (sharing uses it) | Service client for the cross-user scan. |
 | `DATAFORSEO_*`, `ANTHROPIC_API_KEY` | already set | Same as the interactive flows (the profile pass needs the Claude key since v1.51.0). |

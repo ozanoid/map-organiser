@@ -2,7 +2,7 @@
 title: "Faz 3 — İletişim: tasarım"
 type: plan
 domain: sharing
-version: 0.7.0
+version: 0.7.1
 last_updated: 26.11.2026
 status: draft
 related:
@@ -19,7 +19,7 @@ related:
 
 # Faz 3 — İletişim: tasarım
 
-> [[personal-assistant]] planının Faz 3'ü. **14 karar onaylandı (25.11.2026, hepsi önerildiği gibi).** **Dilim 1 main'de (merge 265999e ve 76d9204, 26.11.2026; v1.57.0–v1.57.9) — Telegram production'da denendi ve çalışıyor; e-posta yerelde denendi, production'dan henüz gönderilmedi**; migration'ı deneme çalıştırmasından geçti ve **Ozan'ın onayıyla uygulandı (25.11.2026, sürüm 20261125203540)**; ardından `notifications.plan_id` indeksi de uygulandı (sürüm 20261125224149) — durum ve tasarımdan sapmalar: [[#Dilim 1 — durum (25.11.2026)]]. **Dilim 2 (hatırlatmalar ve haftalık özet) dalda, v1.58.0:** 5 kararı alındı (26.11.2026, hepsi önerildiği gibi — tabloda 15–19), migration'ı **Ozan'ın onayıyla uygulandı (26.11.2026, sürüm 20261126013719)**, kod yazıldı ve denendi; gerçek gönderimle deneme ve main'e geçiş Ozan'ın onayını bekliyor — [[#Dilim 2 — durum (26.11.2026)]]. Şema SQL'i her dilimin başında `supabase/migrations/` altında yazılır, Ozan'a gösterilir, onayıyla uygulanır.
+> [[personal-assistant]] planının Faz 3'ü. **14 karar onaylandı (25.11.2026, hepsi önerildiği gibi).** **Dilim 1 main'de (merge 265999e ve 76d9204, 26.11.2026; v1.57.0–v1.57.9) — Telegram production'da denendi ve çalışıyor; e-posta yerelde denendi, production'dan henüz gönderilmedi**; migration'ı deneme çalıştırmasından geçti ve **Ozan'ın onayıyla uygulandı (25.11.2026, sürüm 20261125203540)**; ardından `notifications.plan_id` indeksi de uygulandı (sürüm 20261125224149) — durum ve tasarımdan sapmalar: [[#Dilim 1 — durum (25.11.2026)]]. **Dilim 2 (hatırlatmalar ve haftalık özet) dalda, v1.58.0:** 5 kararı alındı (26.11.2026, hepsi önerildiği gibi — tabloda 15–19), migration'ı **Ozan'ın onayıyla uygulandı (26.11.2026, sürüm 20261126013719)**, kod yazıldı ve denendi; gerçek gönderim test hesabıyla e-postada denendi ve çalıştı (v1.58.1); main'e geçiş Ozan'ın onayını bekliyor — [[#Dilim 2 — durum (26.11.2026)]]. Şema SQL'i her dilimin başında `supabase/migrations/` altında yazılır, Ozan'a gösterilir, onayıyla uygulanır.
 
 ## Ne anladım
 
@@ -230,7 +230,7 @@ Hatırlatmalar plan tablosundan **türetilir**, önceden kuyruğa yazılmaz: pla
 
 **Tasarımdan sapmalar ve yorumlar (gerekçeli):**
 
-1. **Haftalık özet, gönderildiği günden başlayan 7 günü kapsar.** Tasarım "pazartesi sabahı: bu haftanın planları" diyordu; gün seçilebilir olunca, örneğin pazar seçilirse biten haftayı (çoğu geçmiş günler) listelemek anlamsız olurdu. Pazartesi = o hafta ("Bu hafta: N plan"), başka bir gün = önümüzdeki 7 gün ("Önümüzdeki 7 gün: N plan"). Haftada bir kez: anahtar ISO haftası. Kod incelemesinde bulundu ve düzeltildi; Ozan farklı isterse kural tek yerde (`candidates`).
+1. **Haftalık özet, gönderildiği günden başlayan 7 günü kapsar.** Tasarım "pazartesi sabahı: bu haftanın planları" diyordu; gün seçilebilir olunca, örneğin pazar seçilirse biten haftayı (çoğu geçmiş günler) listelemek anlamsız olurdu. Pazartesi = o hafta ("Bu hafta: N plan"), başka bir gün = önümüzdeki 7 gün ("Önümüzdeki 7 gün: N plan"). Haftada bir kez: anahtar ISO haftası. Kod incelemesinde bulundu ve düzeltildi; **Ozan onayladı (26.11.2026).**
 2. **Geçen haftanın özeti yalnız hâlâ gönderilebilirken hesaba katılır:** pazar 23:45'e ayarlı özetin çalışması kaçarsa gece yarısından sonra da gider (3 saatlik pay içinde); daha eskisine hiç bakılmaz.
 3. **Kaçan mesajın payı 3 saat** (`GRACE_MS`): Vercel bir çalışmayı atlarsa sonraki çalışma gönderir; daha geç bir hatırlatma gürültü olur, `late` diye kaydedilir. Başarısız gönderim aynı 3 saat içinde toplam 3 kez denenir.
 4. **"Ne zaman ne gidecek" sorusunu `dedupe_key` cevaplıyor, tasarımdaki `due_at` indeksi değil:** mesajlar her çalışmada planlardan ve ayarlardan türetiliyor ve anahtarıyla aranıyor; ayrı bir "yeniden dene" taraması da gerekmedi (başarısız mesaj aday olmaya devam ettiği için yeniden deneniyor). Bu yüzden `notifications_due_idx` kullanılmıyor (performans danışmanı `unused_index` diyor). Kaldırmak ayrı bir migration — dokunulmadı.
@@ -238,14 +238,16 @@ Hatırlatmalar plan tablosundan **türetilir**, önceden kuyruğa yazılmaz: pla
 6. **Saat dilimi tarayıcıdan bir kez alınır,** sunucu yalnız profilde dilim yokken yazar — Ayarlar'dan seçilen kalır. Seyahatte plan hatırlatmaları zaten planın yerinin saatine göre; haftalık özet ev diliminde kalır. Dilim kaydolana kadar UTC kullanılır.
 7. **Mesajlardaki linkler production adresine gider** (`VERCEL_PROJECT_PRODUCTION_URL`), cron'un çağrıldığı adrese değil.
 8. **Ortak `Switch`:** AI ayarlarındaki iki anahtar da aynı bileşene geçti; görünüm aynı, dokunma alanı 44 px, klavye odak halkası eklendi.
-9. **Cron'un sırrı sabit zamanlı karşılaştırılıyor** (`bearerMatches`, `src/lib/api/bearer.ts`). Eski iki cron (`refresh-places`, `drain-imports`) hâlâ düz `!==` ile karşılaştırıyor — aynı sınıftan bir eksik; düzeltmesi için Ozan'ın kararı bekleniyor.
+9. **Cron'ların sırrı sabit zamanlı karşılaştırılıyor** (`bearerMatches`, `src/lib/api/bearer.ts`). Eski iki cron (`refresh-places`, `drain-imports`) düz `!==` ile karşılaştırıyordu — aynı sınıftan bir eksik; Ozan'ın onayıyla onlar da `bearerMatches`'e geçti (v1.58.1; üçü de yerelde anahtarsız, yanlış ve bozuk anahtarla 401 döndü). Telegram webhook'u zaten sabit zamanlıydı.
 
-**Doğrulama:** `npm run check:notify` 189 kontrol (saat dilimleri ve saat değişimi, ISO haftası, her mesajın akıbeti, adaylar, Türkçe mesajlar, sahte depoyla tam bir çalışma, ayar deposu); `npm run check:notify:db` 23/23 (canlı şemada, hiçbir şey yazmadan); `npm run check:agent`; `next build`; Chrome'da test hesabıyla ayarlar (masaüstü ve 375 px, her ayar kaydedilip geri okundu; test hesabının ayarları varsayılana döndürüldü); güvenlik ve performans danışmanı — yeni tablo ve kolonlar için bulgu yok. **Gerçek veriyle kuru çalıştırma** (gönderim ve yazma sahte, 26.11.2026 02:04 UTC): iki sahip — Ozan'ın hesabı (Telegram bağlı, saat dilimi henüz yok, ayar satırı yok → varsayılanlar) ve test hesabı (e-postası Ozan'ın Gmail'i, dilimi Europe/London); önümüzdeki günlerde ikisinin de planlı planı yok. Production'daki ilk çalışma bu haftanın kaçan pazartesi özetini hesap başına bir `late` kaydı olarak yazacak, hiçbir şey göndermeyecek; 30.11 pazartesi 08:05 UTC'de ikisi de `empty` (7 günde plan yok).
+**Doğrulama:** `npm run check:notify` 189 kontrol (v1.58.1: 195 — cron anahtarı kontrolleri eklendi) (saat dilimleri ve saat değişimi, ISO haftası, her mesajın akıbeti, adaylar, Türkçe mesajlar, sahte depoyla tam bir çalışma, ayar deposu); `npm run check:notify:db` 23/23 (canlı şemada, hiçbir şey yazmadan); `npm run check:agent`; `next build`; Chrome'da test hesabıyla ayarlar (masaüstü ve 375 px, her ayar kaydedilip geri okundu; test hesabının ayarları varsayılana döndürüldü); güvenlik ve performans danışmanı — yeni tablo ve kolonlar için bulgu yok. **Gerçek veriyle kuru çalıştırma** (gönderim ve yazma sahte, 26.11.2026 02:04 UTC): iki sahip — Ozan'ın hesabı (Telegram bağlı, saat dilimi henüz yok, ayar satırı yok → varsayılanlar) ve test hesabı (e-postası Ozan'ın Gmail'i, dilimi Europe/London); önümüzdeki günlerde ikisinin de planlı planı yok. Production'daki ilk çalışma bu haftanın kaçan pazartesi özetini hesap başına bir `late` kaydı olarak yazacak, hiçbir şey göndermeyecek; 30.11 pazartesi 08:05 UTC'de ikisi de `empty` (7 günde plan yok).
 
-**Henüz denenmeyen:** gerçek gönderim — bir hatırlatmanın ya da özetin e-postaya veya Telegram'a gerçekten gitmesi.
+**Gerçek gönderim (26.11.2026, 02:24 UTC, Ozan'ın onayıyla; yerel betik, zamanlayıcının kendisi — `runScheduler`, gerçek veri deposu ve gerçek outbox — yalnız test hesabıyla sınırlı):** test hesabında uygulamanın yazma yoluyla (`createPlan`) 27.11'de başlayan 4 günlük bir plan açıldı (Londra'daki 5 durak). Zamanlayıcı saati "26.11 18:05" verilerek çalıştırıldı: "Yarın: Mappy hatırlatma denemesi (4 gün)" e-postası gitti — 18:00 Londra, ilk günün 3 durağı, saatler ve "Öğleden sonra", harita linkleri — ve bu haftanın kaçan pazartesi özeti `late` kaydedildi. Saat "30.11 08:05" verilince "Bu hafta: 1 plan · 30 Kasım Pazartesi – 6 Aralık Pazar" gitti (plan satırı: "27 Kasım Cuma – 30 Kasım Pazartesi · 4 gün · 5 durak"). İki kayıt da ilk denemede `sent`, Resend kimliğiyle, hatasız; aynı saatlerde bir sonraki çalışma hiçbir şeyi tekrar göndermiyor (kuru çalıştırmayla doğrulandı). Test planı sonra silindi; üç kayıt duruyor, plana bağları boşaldı (`ON DELETE SET NULL`). E-postalardaki linkler yerel adrese (`localhost:3001`) gidiyor — yerel çalıştırma.
+
+**Henüz denenmeyen:** Telegram'a zamanlanmış gönderim (bot yalnız production'da) ve production'dan giden e-posta.
 
 **Açık adımlar (sırayla):**
-1. Yerelde gerçek gönderimle deneme: test hesabında yarına tarihli bir plan, zamanlayıcı yerelde elle çalıştırılır, hatırlatma Ozan'ın Gmail'ine gider — Ozan'ın onayı bekleniyor.
+1. ~~Yerelde gerçek gönderimle deneme~~ — yapıldı (yukarıda).
 2. main'e merge — Ozan'ın onayı bekleniyor. Merge'den sonra production'da cron başlar: Ozan'ın hesabında varsayılanlar açık, hatırlatmalar ve haftalık özet Telegram'a gider (e-posta hesabına bağlı değil).
 3. Merge'den sonra: Ozan production'da uygulamayı bir kez açınca saat dilimi kaydolur; Vercel → Cron Jobs'ta `/api/cron/notify` görünmeli; ilk çalışmanın kayıtları (`late`) ve `notify.run` logu kontrol edilir.
 

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { bearerMatches } from "@/lib/api/bearer";
 import { createServiceClient } from "@/lib/supabase/server";
 import { DataForSEOClient, isServiceFailure } from "@/lib/dataforseo/client";
 import { parsePostgisPoint } from "@/lib/geo";
@@ -29,8 +30,9 @@ import type { Category, GoogleReview } from "@/lib/types";
  * cleanly wherever it lands. Unclaimed items simply wait for the next run,
  * which is the same resumability `cron/refresh-places` relies on.
  *
- * Auth: `Authorization: Bearer ${CRON_SECRET}`, matching the refresh sweep.
- * Both the minute cron and the kick fired at job creation use it.
+ * Auth: `Authorization: Bearer ${CRON_SECRET}`, matching the refresh sweep,
+ * compared in constant time (`bearerMatches`, v1.58.1). Both the minute cron
+ * and the kick fired at job creation use it.
  */
 /**
  * Headroom, not more work (v1.46.0; was 300): the soft deadline below still
@@ -109,7 +111,7 @@ export async function GET(request: NextRequest) {
   if (!secret) {
     return NextResponse.json({ error: "CRON_SECRET not configured" }, { status: 500 });
   }
-  if (request.headers.get("authorization") !== `Bearer ${secret}`) {
+  if (!bearerMatches(request, secret)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
